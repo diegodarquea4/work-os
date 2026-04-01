@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Project } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
+import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
 
 const EJE_COLORS: Record<string, string> = {
@@ -20,6 +21,16 @@ function ejeColor(eje: string) {
   return EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-600'
 }
 
+function pct(val: number | null | undefined) {
+  if (val === null || val === undefined) return '—'
+  return `${String(val).replace('.', ',')}%`
+}
+
+function num(val: number | null | undefined) {
+  if (val === null || val === undefined) return '—'
+  return val.toLocaleString('es-CL')
+}
+
 type Props = {
   region: Region
   projects: Project[]
@@ -28,9 +39,18 @@ type Props = {
 
 export default function ProjectsPanel({ region, projects, onClose }: Props) {
   const zoneColor = ZONA_COLORS[region.zona] ?? '#6B7280'
-  const alta = projects.filter(p => p.prioridad === 'Alta').length
+  const alta  = projects.filter(p => p.prioridad === 'Alta').length
   const media = projects.filter(p => p.prioridad === 'Media').length
   const [downloading, setDownloading] = useState(false)
+  const [metrics, setMetrics] = useState<Partial<RegionMetrics> | null>(null)
+
+  useEffect(() => {
+    setMetrics(null)
+    fetch(`/api/metrics/${region.cod}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setMetrics(data))
+      .catch(() => setMetrics(null))
+  }, [region.cod])
 
   async function handleDownload() {
     setDownloading(true)
@@ -43,7 +63,7 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
       const res = await fetch('/api/minuta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, projects, fecha }),
+        body: JSON.stringify({ region, fecha }),
       })
       if (!res.ok) throw new Error('Error generando minuta')
 
@@ -112,7 +132,7 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Priority stats */}
         <div className="flex gap-3 mt-3">
           <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5">
             <span className="text-sm font-bold text-gray-900">{projects.length}</span>
@@ -130,6 +150,29 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Metrics summary */}
+      {metrics && (
+        <div className="flex-shrink-0 px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contexto Regional</p>
+          <div className="grid grid-cols-2 gap-2">
+            <MetricCard label="Población" value={num(metrics.poblacion_total)} />
+            <MetricCard label="Pobreza ingresos" value={pct(metrics.pct_pobreza_ingresos)} />
+            <MetricCard label="Desempleo" value={pct(metrics.tasa_desocupacion)} />
+            <MetricCard label="PIB (% nacional)" value={pct(metrics.pct_pib_nacional)} />
+            <MetricCard label="FONASA" value={pct(metrics.pct_fonasa)} />
+            <MetricCard label="Lista espera" value={num(metrics.lista_espera_n)} />
+            <MetricCard label="Escolaridad" value={metrics.anios_escolaridad_promedio != null ? `${metrics.anios_escolaridad_promedio} años` : '—'} />
+            <MetricCard label="Internet hogares" value={pct(metrics.pct_hogares_internet)} />
+          </div>
+          {metrics.vocacion_regional && (
+            <p className="text-xs text-gray-500 mt-2 leading-snug">
+              <span className="font-medium text-gray-600">Vocación: </span>
+              {metrics.vocacion_regional}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Projects list */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -177,6 +220,15 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
           ))
         )}
       </div>
+    </div>
+  )
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+      <div className="text-xs text-gray-400 leading-tight">{label}</div>
+      <div className="text-sm font-bold text-gray-800 mt-0.5">{value}</div>
     </div>
   )
 }

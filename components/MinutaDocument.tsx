@@ -7,6 +7,7 @@ import {
 } from '@react-pdf/renderer'
 import type { Project } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
+import type { RegionMetrics } from '@/lib/types'
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -86,21 +87,10 @@ const s = StyleSheet.create({
     fontSize: 10,
   },
 
-  // Sub-bullet (nivel 2)
-  subBulletRow: {
-    flexDirection: 'row',
-    marginBottom: 2,
-    paddingLeft: 24,
-  },
-  subBulletDot: {
-    width: 14,
+  // Placeholder (sin dato)
+  placeholder: {
     color: '#888',
-    fontSize: 9,
-  },
-  subBulletText: {
-    flex: 1,
-    fontSize: 9,
-    color: '#333',
+    fontStyle: 'italic',
   },
 
   // Tabla de prioridades
@@ -128,12 +118,6 @@ const s = StyleSheet.create({
   colPrioridad: { width: '10%', fontSize: 8, textAlign: 'center' },
   colPlazo: { width: '12%', fontSize: 8, textAlign: 'center' },
   tableHeaderText: { color: '#fff', fontSize: 8, fontFamily: 'Helvetica-Bold' },
-
-  // Placeholder fields
-  placeholder: {
-    color: '#888',
-    fontStyle: 'italic',
-  },
 
   // Footer
   footer: {
@@ -165,11 +149,19 @@ function Bullet({ children }: { children: string }) {
   )
 }
 
-function SubBullet({ children }: { children: string }) {
+function DataBullet({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value === null || value === undefined || value === '') {
+    return (
+      <View style={s.bulletRow}>
+        <Text style={s.bulletDot}>•</Text>
+        <Text style={[s.bulletText, s.placeholder]}>{label}: [sin datos]</Text>
+      </View>
+    )
+  }
   return (
-    <View style={s.subBulletRow}>
-      <Text style={s.subBulletDot}>–</Text>
-      <Text style={s.subBulletText}>{children}</Text>
+    <View style={s.bulletRow}>
+      <Text style={s.bulletDot}>•</Text>
+      <Text style={s.bulletText}>{label}: {value}</Text>
     </View>
   )
 }
@@ -182,13 +174,16 @@ function SectionTitle({ num, title }: { num: string; title: string }) {
   )
 }
 
-function PlaceholderBullet({ label }: { label: string }) {
-  return (
-    <View style={s.bulletRow}>
-      <Text style={s.bulletDot}>•</Text>
-      <Text style={[s.bulletText, s.placeholder]}>{label}: [completar]</Text>
-    </View>
-  )
+// Format number with thousands separator (e.g. 1234567 → "1.234.567")
+function n(val: number | null | undefined): string | null {
+  if (val === null || val === undefined) return null
+  return val.toLocaleString('es-CL')
+}
+
+// Format percentage (e.g. 12.5 → "12,5%")
+function pct(val: number | null | undefined): string | null {
+  if (val === null || val === undefined) return null
+  return `${String(val).replace('.', ',')}%`
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +192,8 @@ function PlaceholderBullet({ label }: { label: string }) {
 type Props = {
   region: Region
   projects: Project[]
-  fecha: string // e.g. "Marzo 2026"
+  metrics?: RegionMetrics | null
+  fecha: string  // e.g. "Abril 2026"
 }
 
 const EJE_PRIORITY_ORDER = [
@@ -211,11 +207,11 @@ const EJE_PRIORITY_ORDER = [
   'Modernización e Innovación',
 ]
 
-export default function MinutaDocument({ region, projects, fecha }: Props) {
-  const alta = projects.filter(p => p.prioridad === 'Alta')
+export default function MinutaDocument({ region, projects, metrics, fecha }: Props) {
+  const alta  = projects.filter(p => p.prioridad === 'Alta')
   const media = projects.filter(p => p.prioridad === 'Media')
+  const m = metrics ?? null
 
-  // Sorted projects: Alta first, then by eje order
   const sorted = [...projects].sort((a, b) => {
     if (a.prioridad !== b.prioridad) return a.prioridad === 'Alta' ? -1 : 1
     return EJE_PRIORITY_ORDER.indexOf(a.eje) - EJE_PRIORITY_ORDER.indexOf(b.eje)
@@ -239,76 +235,83 @@ export default function MinutaDocument({ region, projects, fecha }: Props) {
 
         {/* ── Intro ── */}
         <Text style={s.intro}>
-          La Región de {region.nombre} (la "Región") se ubica en la zona {region.zona} de Chile.
+          La Región de {region.nombre} se ubica en la zona {region.zona} de Chile
+          {m?.superficie_km2 ? `, con una superficie de ${n(m.superficie_km2)} km² (${pct(m.pct_territorio_nacional)} del territorio nacional)` : ''}.
           A continuación se presentan datos relevantes de la Región, incluyendo sus prioridades
           territoriales para el período 2026–2028.
         </Text>
 
         {/* ── I. Geográficos ── */}
         <SectionTitle num="I" title="Geográficos" />
-        <PlaceholderBullet label="Superficie total (km²)" />
-        <PlaceholderBullet label="% del territorio nacional" />
-        <PlaceholderBullet label="Capital regional" />
+        <DataBullet label="Superficie total (km²)" value={m?.superficie_km2 != null ? n(m.superficie_km2) : null} />
+        <DataBullet label="% del territorio nacional" value={pct(m?.pct_territorio_nacional)} />
         <Bullet>{`Capital regional: ${region.capital}`}</Bullet>
-        <PlaceholderBullet label="Número de comunas y provincias" />
+        <DataBullet label="Número de provincias" value={m?.provincias_n} />
+        <DataBullet label="Número de comunas" value={m?.comunas_n} />
 
         {/* ── II. Demográficos ── */}
         <SectionTitle num="II" title="Demográficos" />
-        <PlaceholderBullet label="Población total y % nacional (Censo 2024)" />
-        <PlaceholderBullet label="Distribución por sexo" />
-        <PlaceholderBullet label="Edad promedio" />
-        <PlaceholderBullet label="Distribución etaria (< 15, 15–64, 65+)" />
-        <PlaceholderBullet label="% población inmigrante" />
-        <PlaceholderBullet label="% perteneciente a pueblo indígena" />
+        <DataBullet label="Población total (Censo 2024)" value={m?.poblacion_total != null ? n(m.poblacion_total) : null} />
+        <DataBullet label="Densidad poblacional (hab/km²)" value={m?.densidad_poblacional} />
+        <DataBullet label="% población urbana / rural" value={m?.pct_urbana != null && m?.pct_rural != null ? `${pct(m.pct_urbana)} / ${pct(m.pct_rural)}` : null} />
+        <DataBullet label="Promedio de edad" value={m?.promedio_edad != null ? `${m.promedio_edad} años` : null} />
+        <DataBullet label="% población inmigrante" value={pct(m?.pct_inmigrantes)} />
+        <DataBullet label="% perteneciente a pueblo indígena" value={pct(m?.pct_indigena)} />
 
         {/* ── III. Población Vulnerable ── */}
         <SectionTitle num="III" title="Población Vulnerable" />
-        <PlaceholderBullet label="% con algún tipo de discapacidad (Censo 2024)" />
-        <PlaceholderBullet label="% en el 40% más vulnerable del RSH" />
-        <PlaceholderBullet label="Pobreza severa %" />
-        <PlaceholderBullet label="Pobreza por ingresos % vs. promedio nacional" />
-        <PlaceholderBullet label="Pobreza multidimensional %" />
+        <DataBullet label="Pobreza por ingresos (%)" value={pct(m?.pct_pobreza_ingresos)} />
+        <DataBullet label="Pobreza extrema (%)" value={pct(m?.pct_pobreza_extrema)} />
+        <DataBullet label="Pobreza multidimensional (%)" value={pct(m?.pct_pobreza_multidimensional)} />
+        <DataBullet label="Pobreza severa (%)" value={pct(m?.pct_pobreza_severa)} />
+        <DataBullet label="% hogares en tramo 40 del RSH" value={pct(m?.pct_rsh_tramo40)} />
 
         {/* ── IV. Economía ── */}
         <SectionTitle num="IV" title="Economía" />
-        <PlaceholderBullet label="PIB regional (billones de pesos, 2024)" />
-        <PlaceholderBullet label="Principales sectores productivos" />
-        <PlaceholderBullet label="Tasa de participación laboral % vs. nacional" />
-        <PlaceholderBullet label="Ingreso monetario promedio" />
+        <DataBullet label="PIB regional (miles de millones de pesos)" value={m?.pib_regional != null ? n(m.pib_regional) : null} />
+        <DataBullet label="% del PIB nacional" value={pct(m?.pct_pib_nacional)} />
+        <DataBullet label="Variación interanual actividad económica" value={m?.variacion_interanual != null ? `${m.variacion_interanual}%` : null} />
+        <DataBullet label="Tasa de desocupación (%)" value={pct(m?.tasa_desocupacion)} />
+        <DataBullet label="Tasa de participación laboral (%)" value={pct(m?.tasa_participacion_laboral)} />
+        <DataBullet label="Tasa de ocupación informal (%)" value={pct(m?.tasa_ocupacion_informal)} />
+        {m?.sectores_productivos_principales ? (
+          <Bullet>{`Sectores productivos: ${m.sectores_productivos_principales}`}</Bullet>
+        ) : (
+          <DataBullet label="Sectores productivos principales" value={null} />
+        )}
+        {m?.vocacion_regional ? (
+          <Bullet>{`Vocación regional: ${m.vocacion_regional}`}</Bullet>
+        ) : null}
 
         {/* ── V. Educación ── */}
         <SectionTitle num="V" title="Educación" />
-        <PlaceholderBullet label="Años de escolaridad promedio" />
-        <PlaceholderBullet label="% con escolaridad completa" />
-        <PlaceholderBullet label="Establecimientos de educación básica y media" />
-        <PlaceholderBullet label="Cobertura matrícula parvularia %" />
+        <DataBullet label="Años de escolaridad promedio" value={m?.anios_escolaridad_promedio != null ? `${m.anios_escolaridad_promedio} años` : null} />
+        <DataBullet label="Tasa de alfabetismo (15 años o más)" value={pct(m?.tasa_alfabetismo)} />
+        <DataBullet label="Matrícula escolar total" value={m?.matricula_escolar_total != null ? n(m.matricula_escolar_total) : null} />
+        <DataBullet label="Cobertura educación parvularia (%)" value={pct(m?.cobertura_parvularia_pct)} />
 
         {/* ── VI. Salud ── */}
         <SectionTitle num="VI" title="Salud" />
-        <PlaceholderBullet label="Total establecimientos de salud" />
-        <PlaceholderBullet label="Hospitales (alta y mediana complejidad)" />
-        <PlaceholderBullet label="CESFAM y CECOSF" />
-        <PlaceholderBullet label="Cobertura atención primaria %" />
-        <PlaceholderBullet label="% adscrito a FONASA / Isapre" />
+        <DataBullet label="Población FONASA (%)" value={pct(m?.pct_fonasa)} />
+        <DataBullet label="Hospitales / establecimientos hospitalarios" value={m?.hospitales_n} />
+        <DataBullet label="Camas hospitalarias por 1.000 hab." value={m?.camas_por_1000_hab} />
+        <DataBullet label="Lista de espera (N° personas)" value={m?.lista_espera_n != null ? n(m.lista_espera_n) : null} />
 
         {/* ── VII. Vivienda ── */}
         <SectionTitle num="VII" title="Vivienda" />
-        <PlaceholderBullet label="Total viviendas (Censo 2024)" />
-        <PlaceholderBullet label="% hogares con niños menores de 15 años" />
-        <PlaceholderBullet label="% hogares de adultos mayores" />
-        <PlaceholderBullet label="Número de campamentos y familias (TECHO)" />
+        <DataBullet label="Déficit habitacional" value={m?.deficit_habitacional != null ? n(m.deficit_habitacional) : null} />
+        <DataBullet label="Hogares con hacinamiento (%)" value={pct(m?.pct_hacinamiento)} />
+        <DataBullet label="% acceso a red pública de agua" value={pct(m?.pct_acceso_agua_publica)} />
 
         {/* ── VIII. Seguridad ── */}
         <SectionTitle num="VIII" title="Seguridad" />
-        <PlaceholderBullet label="Tasa de victimización ENUSC 2024" />
-        <PlaceholderBullet label="Delitos contra la vida o integridad (por 100.000 hab.)" />
-        <PlaceholderBullet label="Delitos asociados a drogas" />
-        <PlaceholderBullet label="Contra la propiedad no violentos" />
-        <PlaceholderBullet label="Violencia intrafamiliar" />
+        <DataBullet label="Hogares víctimas DMCS (%)" value={pct(m?.pct_hogares_victimas_dmcs)} />
+        <DataBullet label="Percepción de inseguridad (%)" value={pct(m?.pct_percepcion_inseguridad)} />
+        <DataBullet label="Tasa de denuncias por 100.000 hab." value={m?.tasa_denuncias_100k} />
+        <DataBullet label="Tasa de registro delitos por 100.000 hab." value={m?.tasa_delitos_100k} />
 
         {/* ── IX. Prioridades Territoriales ── */}
         <SectionTitle num="IX" title="Prioridades Territoriales 2026–2028" />
-
         <Bullet>{`Total prioridades: ${projects.length} (${alta.length} alta prioridad, ${media.length} media prioridad)`}</Bullet>
 
         {/* Table header */}
@@ -332,14 +335,10 @@ export default function MinutaDocument({ region, projects, fecha }: Props) {
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>
-            Ministerio del Interior — Uso interno
-          </Text>
+          <Text style={s.footerText}>Ministerio del Interior — Uso interno</Text>
           <Text
             style={s.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Página ${pageNumber} de ${totalPages}`
-            }
+            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
           />
         </View>
       </Page>

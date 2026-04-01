@@ -1,0 +1,106 @@
+import { getSupabase } from './supabase'
+import type { Prioridad, RegionMetrics } from './types'
+import type { Project } from './projects'
+
+// ---------------------------------------------------------------------------
+// Prioridades
+// ---------------------------------------------------------------------------
+
+/** All 63 priorities — used for the initial page load (replaces getProjects). */
+export async function getAllPrioridades(): Promise<Project[]> {
+  const { data, error } = await getSupabase()
+    .from('prioridades_territoriales')
+    .select('*')
+    .order('n', { ascending: true })
+
+  if (error) throw new Error(`DB error (prioridades): ${error.message}`)
+
+  return (data as Prioridad[]).map(row => ({
+    n: row.n,
+    region: row.region,
+    cod: row.cod,
+    capital: row.capital,
+    zona: row.zona,
+    eje: row.eje,
+    meta: row.meta,
+    ministerios: row.ministerios
+      .split('\n')
+      .map((m: string) => m.trim())
+      .filter(Boolean),
+    prioridad: row.prioridad as 'Alta' | 'Media',
+    plazo: row.plazo,
+  }))
+}
+
+/** Priorities for one region — used by the PDF minuta route. */
+export async function getPrioridadesByCod(cod: string): Promise<Project[]> {
+  const { data, error } = await getSupabase()
+    .from('prioridades_territoriales')
+    .select('*')
+    .eq('cod', cod)
+    .order('n', { ascending: true })
+
+  if (error) throw new Error(`DB error (prioridades by cod): ${error.message}`)
+
+  return (data as Prioridad[]).map(row => ({
+    n: row.n,
+    region: row.region,
+    cod: row.cod,
+    capital: row.capital,
+    zona: row.zona,
+    eje: row.eje,
+    meta: row.meta,
+    ministerios: row.ministerios
+      .split('\n')
+      .map((m: string) => m.trim())
+      .filter(Boolean),
+    prioridad: row.prioridad as 'Alta' | 'Media',
+    plazo: row.plazo,
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// Region Metrics
+// ---------------------------------------------------------------------------
+
+/** Full metrics row — used by the PDF minuta route. */
+export async function getMetricsByCod(cod: string): Promise<RegionMetrics | null> {
+  const { data, error } = await getSupabase()
+    .from('region_metrics')
+    .select('*')
+    .eq('region_cod', cod)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null  // row not found
+    throw new Error(`DB error (metrics): ${error.message}`)
+  }
+  return data as RegionMetrics
+}
+
+/** Light metrics subset — used by the ProjectsPanel summary cards. */
+export async function getMetricsSummaryByCod(cod: string): Promise<Partial<RegionMetrics> | null> {
+  const { data, error } = await getSupabase()
+    .from('region_metrics')
+    .select(`
+      region_cod, region_nombre,
+      poblacion_total, densidad_poblacional, pct_urbana, pct_rural,
+      pct_pobreza_ingresos, pct_pobreza_multidimensional, pct_rsh_tramo40,
+      tasa_desocupacion, tasa_participacion_laboral, tasa_ocupacion_informal,
+      pib_regional, pct_pib_nacional, variacion_interanual,
+      pct_fonasa, hospitales_n, lista_espera_n, camas_por_1000_hab,
+      anios_escolaridad_promedio, tasa_alfabetismo,
+      deficit_habitacional, pct_hacinamiento,
+      pct_hogares_victimas_dmcs, pct_percepcion_inseguridad,
+      pct_hogares_internet, localidades_aisladas_n,
+      sectores_productivos_principales, vocacion_regional
+    `)
+    .eq('region_cod', cod)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw new Error(`DB error (metrics summary): ${error.message}`)
+  }
+  return data as Partial<RegionMetrics>
+}

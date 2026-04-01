@@ -1,13 +1,22 @@
 import fs from 'fs'
 import path from 'path'
 import type { GeoJsonObject } from 'geojson'
-import { getProjects } from '@/lib/projects'
 import WorkOSApp from '@/components/WorkOSApp'
 
-export default function Home() {
-  const projects = getProjects()
+export default async function Home() {
+  // Load projects: Supabase when env vars are set, CSV file as fallback
+  let projects
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    const { getAllPrioridades } = await import('@/lib/db')
+    projects = await getAllPrioridades()
+  } else {
+    const { getProjects } = await import('@/lib/projects')
+    projects = getProjects()
+  }
+
   const geoData: GeoJsonObject = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), 'public', 'chile-regiones.geojson'), 'utf-8')
   )
+
   return <WorkOSApp projects={projects} geoData={geoData} />
 }
