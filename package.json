@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.2",
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
     "@types/leaflet": "^1.9.21",
     "leaflet": "^1.9.4",
