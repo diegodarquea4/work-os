@@ -6,7 +6,7 @@ import WorkOSApp from '@/components/WorkOSApp'
 export default async function Home() {
   // Load projects: Supabase when env vars are set, CSV file as fallback
   let projects
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getAllPrioridades } = await import('@/lib/db')
     projects = await getAllPrioridades()
   } else {

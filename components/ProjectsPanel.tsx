@@ -5,6 +5,7 @@ import type { Project } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
+import ProjectTrackerModal from './ProjectTrackerModal'
 
 const EJE_COLORS: Record<string, string> = {
   'Seguridad y Orden Público':      'bg-red-100 text-red-700',
@@ -43,6 +44,7 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
   const media = projects.filter(p => p.prioridad === 'Media').length
   const [downloading, setDownloading] = useState(false)
   const [metrics, setMetrics] = useState<Partial<RegionMetrics> | null>(null)
+  const [selectedPrioridad, setSelectedPrioridad] = useState<Project | null>(null)
 
   useEffect(() => {
     setMetrics(null)
@@ -180,7 +182,7 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
           <p className="text-gray-400 text-sm text-center mt-8">Sin prioridades registradas</p>
         ) : (
           projects.map(p => (
-            <div key={p.n} className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 hover:shadow-sm transition-all">
+            <div key={p.n} onClick={() => setSelectedPrioridad(p)} className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
               {/* Eje + prioridad */}
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ejeColor(p.eje)}`}>
@@ -220,6 +222,13 @@ export default function ProjectsPanel({ region, projects, onClose }: Props) {
           ))
         )}
       </div>
+
+      {selectedPrioridad && (
+        <ProjectTrackerModal
+          prioridad={selectedPrioridad}
+          onClose={() => setSelectedPrioridad(null)}
+        />
+      )}
     </div>
   )
 }

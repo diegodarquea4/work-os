@@ -91,3 +91,26 @@ export type RegionMetrics = {
 
   updated_at: string
 }
+
+// ── Project Tracker ───────────────────────────────────────────────────────────
+export type Seguimiento = {
+  id: number
+  prioridad_id: number
+  fecha: string
+  tipo: 'avance' | 'reunion' | 'hito' | 'alerta'
+  descripcion: string
+  autor: string | null
+  estado: 'en_curso' | 'completado' | 'bloqueado' | 'pendiente' | null
+  created_at: string
+}
+
+export type Documento = {
+  id: number
+  prioridad_id: number
+  nombre: string
+  url: string
+  tipo_archivo: string | null
+  tamano_bytes: number | null
+  subido_por: string | null
+  created_at: string
+}

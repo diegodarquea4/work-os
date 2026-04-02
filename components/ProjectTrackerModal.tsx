@@ -1,0 +1,419 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import type { Project } from '@/lib/projects'
+import type { Seguimiento, Documento } from '@/lib/types'
+import { getSupabase } from '@/lib/supabase'
+
+const TIPO_CONFIG = {
+  avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'   },
+  reunion: { label: 'Reunión', color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
+  hito:    { label: 'Hito',    color: 'bg-green-100 text-green-700',  dot: 'bg-green-500'  },
+  alerta:  { label: 'Alerta',  color: 'bg-red-100 text-red-700',      dot: 'bg-red-500'    },
+} as const
+
+const ESTADO_CONFIG = {
+  en_curso:   { label: 'En curso',   color: 'bg-blue-100 text-blue-700'   },
+  completado: { label: 'Completado', color: 'bg-green-100 text-green-700' },
+  bloqueado:  { label: 'Bloqueado',  color: 'bg-red-100 text-red-700'     },
+  pendiente:  { label: 'Pendiente',  color: 'bg-gray-100 text-gray-600'   },
+} as const
+
+const EJE_COLORS: Record<string, string> = {
+  'Seguridad y Orden Público':       'bg-red-100 text-red-700',
+  'Infraestructura y Conectividad':  'bg-blue-100 text-blue-700',
+  'Desarrollo Económico y Empleo':   'bg-green-100 text-green-700',
+  'Vivienda y Urbanismo':            'bg-orange-100 text-orange-700',
+  'Energía y Transición Energética': 'bg-yellow-100 text-yellow-700',
+  'Medio Ambiente y Territorio':     'bg-teal-100 text-teal-700',
+  'Desarrollo Social y Familia':     'bg-pink-100 text-pink-700',
+  'Modernización e Innovación':      'bg-purple-100 text-purple-700',
+}
+
+type Tab = 'seguimiento' | 'documentos'
+
+type Props = {
+  prioridad: Project
+  onClose: () => void
+}
+
+export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
+  const [tab, setTab]                   = useState<Tab>('seguimiento')
+  const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
+  const [documentos, setDocumentos]     = useState<Documento[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [uploading, setUploading]       = useState(false)
+  const fileInputRef                    = useRef<HTMLInputElement>(null)
+
+  // New entry form
+  const [showForm, setShowForm]   = useState(false)
+  const [formDesc, setFormDesc]   = useState('')
+  const [formTipo, setFormTipo]   = useState<keyof typeof TIPO_CONFIG>('avance')
+  const [formEstado, setFormEstado] = useState('')
+  const [formAutor, setFormAutor] = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
+  const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
+
+  useEffect(() => { loadData() }, [prioridad.n])
+
+  async function loadData() {
+    setLoading(true)
+    const sb = getSupabase()
+    const [segRes, docRes] = await Promise.all([
+      sb.from('seguimientos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
+      sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
+    ])
+    setSeguimientos((segRes.data ?? []) as Seguimiento[])
+    setDocumentos((docRes.data ?? []) as Documento[])
+    setLoading(false)
+  }
+
+  async function handleSave() {
+    if (!formDesc.trim()) return
+    setSaving(true)
+    const { error } = await getSupabase().from('seguimientos').insert({
+      prioridad_id: prioridad.n,
+      tipo:         formTipo,
+      descripcion:  formDesc.trim(),
+      autor:        formAutor.trim() || null,
+      estado:       formEstado || null,
+      fecha:        new Date().toISOString().split('T')[0],
+    })
+    if (!error) {
+      setFormDesc(''); setFormEstado(''); setFormAutor(''); setShowForm(false)
+      await loadData()
+    }
+    setSaving(false)
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const sb   = getSupabase()
+    const path = `${prioridad.n}/${Date.now()}_${file.name}`
+
+    const { error: storageErr } = await sb.storage.from('project-docs').upload(path, file)
+    if (storageErr) {
+      alert(`Error subiendo archivo: ${storageErr.message}`)
+      setUploading(false)
+      return
+    }
+    const { data: { publicUrl } } = sb.storage.from('project-docs').getPublicUrl(path)
+    await sb.from('documentos_prioridad').insert({
+      prioridad_id: prioridad.n,
+      nombre:       file.name,
+      url:          publicUrl,
+      tipo_archivo: file.type || null,
+      tamano_bytes: file.size,
+    })
+    await loadData()
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleDeleteDoc(doc: Documento) {
+    if (!confirm(`¿Eliminar "${doc.nombre}"?`)) return
+    await getSupabase().from('documentos_prioridad').delete().eq('id', doc.id)
+    await loadData()
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  function fmtBytes(b: number | null) {
+    if (!b) return ''
+    if (b < 1024) return `${b} B`
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  function fileIcon(tipo: string | null) {
+    if (!tipo) return '📎'
+    if (tipo.includes('pdf'))                                          return '📄'
+    if (tipo.includes('sheet') || tipo.includes('excel') || tipo.includes('csv')) return '📊'
+    if (tipo.includes('word') || tipo.includes('doc'))                 return '📝'
+    if (tipo.includes('image'))                                        return '🖼️'
+    if (tipo.includes('presentation') || tipo.includes('powerpoint'))  return '📑'
+    return '📎'
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+      <div
+        className="relative w-full max-w-2xl max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="flex-shrink-0 px-6 pt-5 pb-0 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ejeColor}`}>
+                  {prioridad.eje}
+                </span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  prioridad.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {prioridad.prioridad}
+                </span>
+                {currentEstado && ESTADO_CONFIG[currentEstado] && (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_CONFIG[currentEstado].color}`}>
+                    {ESTADO_CONFIG[currentEstado].label}
+                  </span>
+                )}
+              </div>
+              <p className="text-base font-semibold text-gray-900 leading-snug">{prioridad.meta}</p>
+              <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                <span className="flex items-center gap-1">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="1" y="2" width="10" height="9" rx="1.5"/>
+                    <path d="M4 1v2M8 1v2M1 5h10"/>
+                  </svg>
+                  {prioridad.plazo}
+                </span>
+                <span>·</span>
+                <span>{prioridad.region}</span>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4l12 12M16 4L4 16"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Ministerios */}
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {prioridad.ministerios.map((m, i) => (
+              <span key={i} className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md border border-gray-100">
+                {m}
+              </span>
+            ))}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex">
+            {(['seguimiento', 'documentos'] as Tab[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                  tab === t
+                    ? 'border-slate-900 text-slate-900'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {t === 'seguimiento'
+                  ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}`
+                  : `Documentos${documentos.length ? ` (${documentos.length})` : ''}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Content ── */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
+          ) : tab === 'seguimiento' ? (
+            <div className="px-6 py-4">
+
+              {/* Add button */}
+              {!showForm && (
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mb-5"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+                  </svg>
+                  Agregar actualización
+                </button>
+              )}
+
+              {/* Form */}
+              {showForm && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                  <div className="flex gap-2 flex-wrap">
+                    {(Object.entries(TIPO_CONFIG) as [keyof typeof TIPO_CONFIG, typeof TIPO_CONFIG[keyof typeof TIPO_CONFIG]][]).map(([key, cfg]) => (
+                      <button
+                        key={key}
+                        onClick={() => setFormTipo(key)}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                          formTipo === key ? cfg.color : 'bg-white text-gray-400 border border-gray-200'
+                        }`}
+                      >
+                        {cfg.label}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    placeholder="Describe el avance, reunión, hito o alerta..."
+                    value={formDesc}
+                    onChange={e => setFormDesc(e.target.value)}
+                    rows={3}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Autor (opcional)"
+                      value={formAutor}
+                      onChange={e => setFormAutor(e.target.value)}
+                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                    />
+                    <select
+                      value={formEstado}
+                      onChange={e => setFormEstado(e.target.value)}
+                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
+                    >
+                      <option value="">Estado (sin cambio)</option>
+                      {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
+                        <option key={key} value={key}>{cfg.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !formDesc.trim()}
+                      className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                    >
+                      {saving ? 'Guardando...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline */}
+              {seguimientos.length === 0 ? (
+                <div className="text-center py-10 text-gray-300">
+                  <svg className="mx-auto mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v4l3 3" strokeLinecap="round"/>
+                  </svg>
+                  <p className="text-sm">Sin actualizaciones aún</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
+                  <div className="space-y-5">
+                    {seguimientos.map(s => {
+                      const cfg = TIPO_CONFIG[s.tipo] ?? TIPO_CONFIG.avance
+                      const est = s.estado ? ESTADO_CONFIG[s.estado] : null
+                      return (
+                        <div key={s.id} className="flex gap-4 pl-1">
+                          <div className={`w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot} ring-2 ring-white`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
+                                {cfg.label}
+                              </span>
+                              {est && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>
+                                  {est.label}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400 ml-auto">{fmtDate(s.created_at)}</span>
+                            </div>
+                            <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
+                            {s.autor && <p className="text-xs text-gray-400 mt-1">{s.autor}</p>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            // ── Documentos tab ──
+            <div className="px-6 py-4">
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors disabled:opacity-50 mb-4"
+              >
+                {uploading ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                      <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4"/>
+                    </svg>
+                    Subiendo...
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M7 10V2M3 6l4-4 4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M2 11h10" strokeLinecap="round"/>
+                    </svg>
+                    Subir archivo (minuta, Excel, PDF…)
+                  </>
+                )}
+              </button>
+
+              {documentos.length === 0 ? (
+                <div className="text-center py-10 text-gray-300">
+                  <svg className="mx-auto mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                  </svg>
+                  <p className="text-sm">Sin documentos adjuntos</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documentos.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all group">
+                      <span className="text-xl flex-shrink-0">{fileIcon(doc.tipo_archivo)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{doc.nombre}</p>
+                        <p className="text-xs text-gray-400">
+                          {fmtDate(doc.created_at)}
+                          {doc.tamano_bytes ? ` · ${fmtBytes(doc.tamano_bytes)}` : ''}
+                          {doc.subido_por ? ` · ${doc.subido_por}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-gray-400 hover:text-slate-700 transition-colors rounded-lg hover:bg-gray-50"
+                          title="Abrir"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M11 9v3a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1h3"/>
+                            <path d="M8 1h5v5M5.5 8.5L13 1"/>
+                          </svg>
+                        </a>
+                        <button
+                          onClick={() => handleDeleteDoc(doc)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+                          title="Eliminar"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
