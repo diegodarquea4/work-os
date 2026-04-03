@@ -29,6 +29,8 @@ export async function getAllPrioridades(): Promise<Project[]> {
       .filter(Boolean),
     prioridad: row.prioridad as 'Alta' | 'Media',
     plazo: row.plazo,
+    estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
+    pct_avance: row.pct_avance ?? 0,
   }))
 }
 
@@ -56,6 +58,8 @@ export async function getPrioridadesByCod(cod: string): Promise<Project[]> {
       .filter(Boolean),
     prioridad: row.prioridad as 'Alta' | 'Media',
     plazo: row.plazo,
+    estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
+    pct_avance: row.pct_avance ?? 0,
   }))
 }
 

@@ -11,6 +11,8 @@ export type Prioridad = {
   ministerios: string  // newline-separated; split('\n') where needed
   prioridad: 'Alta' | 'Media'
   plazo: string
+  estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris' | null
+  pct_avance: number | null
 }
 
 // ── Region Metrics ───────────────────────────────────────────────────────────

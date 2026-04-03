@@ -32,12 +32,22 @@ const EJE_COLORS: Record<string, string> = {
 
 type Tab = 'seguimiento' | 'documentos'
 
+const SEMAFORO_CONFIG = {
+  verde: { dot: 'bg-green-500',  ring: 'ring-green-300',  label: 'En verde'    },
+  ambar: { dot: 'bg-amber-400',  ring: 'ring-amber-300',  label: 'En revisión' },
+  rojo:  { dot: 'bg-red-500',    ring: 'ring-red-300',    label: 'Bloqueado'   },
+  gris:  { dot: 'bg-gray-300',   ring: 'ring-gray-200',   label: 'Sin evaluar' },
+} as const
+
+type SemaforoKey = keyof typeof SEMAFORO_CONFIG
+
 type Props = {
   prioridad: Project
   onClose: () => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) => void
 }
 
-export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
+export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
   const [tab, setTab]                   = useState<Tab>('seguimiento')
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
@@ -60,6 +70,11 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
   const [editEstado, setEditEstado]     = useState('')
   const [editAutor, setEditAutor]       = useState('')
   const [editSaving, setEditSaving]     = useState(false)
+
+  // Semáforo + % avance (local state, synced to DB on change)
+  const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
+  const [pctAvance, setPctAvance]     = useState<number>(prioridad.pct_avance ?? 0)
+  const [savingSem, setSavingSem]     = useState(false)
 
   const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
@@ -122,6 +137,27 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
       await loadData()
     }
     setEditSaving(false)
+  }
+
+  async function handleSaveSemaforo(newSem: SemaforoKey) {
+    setSemaforo(newSem)
+    setSavingSem(true)
+    await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ estado_semaforo: newSem })
+      .eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, { estado_semaforo: newSem })
+    setSavingSem(false)
+  }
+
+  async function handleSavePct(value: number) {
+    const clamped = Math.max(0, Math.min(100, value))
+    setPctAvance(clamped)
+    await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ pct_avance: clamped })
+      .eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
   }
 
   async function handleDeleteSeg(id: number) {
@@ -211,7 +247,7 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                 )}
               </div>
               <p className="text-base font-semibold text-gray-900 leading-snug">{prioridad.meta}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+              <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
                 <span className="flex items-center gap-1">
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <rect x="1" y="2" width="10" height="9" rx="1.5"/>
@@ -237,6 +273,51 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                 {m}
               </span>
             ))}
+          </div>
+
+          {/* Semáforo + % avance */}
+          <div className="flex items-center gap-3 mb-3 py-2.5 px-3 bg-gray-50 rounded-xl">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600 mr-0.5">Estado</span>
+              {(Object.keys(SEMAFORO_CONFIG) as SemaforoKey[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => handleSaveSemaforo(s)}
+                  disabled={savingSem}
+                  title={SEMAFORO_CONFIG[s].label}
+                  className={`w-5 h-5 rounded-full transition-all disabled:opacity-50 ${SEMAFORO_CONFIG[s].dot} ${
+                    semaforo === s
+                      ? `ring-2 ring-offset-1 ${SEMAFORO_CONFIG[s].ring} scale-110`
+                      : 'opacity-30 hover:opacity-60'
+                  }`}
+                />
+              ))}
+              <span className="text-xs text-gray-700 ml-1">{SEMAFORO_CONFIG[semaforo].label}</span>
+            </div>
+
+            <div className="w-px h-4 bg-gray-200"/>
+
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-xs text-gray-600 flex-shrink-0">Avance</span>
+              <input
+                type="range"
+                min={0} max={100} step={5}
+                value={pctAvance}
+                onChange={e => setPctAvance(Number(e.target.value))}
+                onMouseUp={e => handleSavePct(Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={e => handleSavePct(Number((e.target as HTMLInputElement).value))}
+                className="flex-1 accent-slate-900 h-1.5"
+              />
+              <input
+                type="number"
+                min={0} max={100}
+                value={pctAvance}
+                onChange={e => setPctAvance(Number(e.target.value))}
+                onBlur={e => handleSavePct(Number(e.target.value))}
+                className="w-12 text-xs border border-gray-200 rounded px-1.5 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-slate-300"
+              />
+              <span className="text-xs text-gray-600">%</span>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -421,7 +502,7 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                                       {est.label}
                                     </span>
                                   )}
-                                  <span className="text-xs text-gray-400 ml-auto">{fmtDate(s.created_at)}</span>
+                                  <span className="text-xs text-gray-500 ml-auto">{fmtDate(s.created_at)}</span>
                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                       onClick={() => startEdit(s)}
@@ -444,7 +525,7 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                                   </div>
                                 </div>
                                 <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
-                                {s.autor && <p className="text-xs text-gray-400 mt-1">{s.autor}</p>}
+                                {s.autor && <p className="text-xs text-gray-500 mt-1">{s.autor}</p>}
                               </>
                             )}
                           </div>
@@ -497,7 +578,7 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                       <span className="text-xl flex-shrink-0">{fileIcon(doc.tipo_archivo)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{doc.nombre}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500">
                           {fmtDate(doc.created_at)}
                           {doc.tamano_bytes ? ` · ${fmtBytes(doc.tamano_bytes)}` : ''}
                           {doc.subido_por ? ` · ${doc.subido_por}` : ''}

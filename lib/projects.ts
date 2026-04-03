@@ -12,6 +12,8 @@ export type Project = {
   ministerios: string[]
   prioridad: 'Alta' | 'Media'
   plazo: string
+  estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris'
+  pct_avance: number
 }
 
 export function getProjects(): Project[] {
@@ -74,5 +76,7 @@ function parseCSV(content: string): Project[] {
     ministerios: (f[7] || '').split('\n').map(m => m.trim()).filter(Boolean),
     prioridad: (f[8] || 'Media') as 'Alta' | 'Media',
     plazo: f[9] || '',
+    estado_semaforo: 'gris' as const,
+    pct_avance: 0,
   }))
 }
