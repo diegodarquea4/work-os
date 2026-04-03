@@ -53,6 +53,14 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
   const [formAutor, setFormAutor] = useState('')
   const [saving, setSaving]       = useState(false)
 
+  // Edit entry
+  const [editingId, setEditingId]       = useState<number | null>(null)
+  const [editDesc, setEditDesc]         = useState('')
+  const [editTipo, setEditTipo]         = useState<keyof typeof TIPO_CONFIG>('avance')
+  const [editEstado, setEditEstado]     = useState('')
+  const [editAutor, setEditAutor]       = useState('')
+  const [editSaving, setEditSaving]     = useState(false)
+
   const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
 
@@ -86,6 +94,40 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
       await loadData()
     }
     setSaving(false)
+  }
+
+  function startEdit(s: Seguimiento) {
+    setEditingId(s.id)
+    setEditDesc(s.descripcion)
+    setEditTipo(s.tipo)
+    setEditEstado(s.estado ?? '')
+    setEditAutor(s.autor ?? '')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
+
+  async function handleUpdate() {
+    if (!editDesc.trim() || editingId === null) return
+    setEditSaving(true)
+    const { error } = await getSupabase().from('seguimientos').update({
+      tipo:        editTipo,
+      descripcion: editDesc.trim(),
+      autor:       editAutor.trim() || null,
+      estado:      editEstado || null,
+    }).eq('id', editingId)
+    if (!error) {
+      setEditingId(null)
+      await loadData()
+    }
+    setEditSaving(false)
+  }
+
+  async function handleDeleteSeg(id: number) {
+    if (!confirm('¿Eliminar esta actualización?')) return
+    await getSupabase().from('seguimientos').delete().eq('id', id)
+    await loadData()
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -310,23 +352,101 @@ export default function ProjectTrackerModal({ prioridad, onClose }: Props) {
                     {seguimientos.map(s => {
                       const cfg = TIPO_CONFIG[s.tipo] ?? TIPO_CONFIG.avance
                       const est = s.estado ? ESTADO_CONFIG[s.estado] : null
+                      const isEditing = editingId === s.id
                       return (
-                        <div key={s.id} className="flex gap-4 pl-1">
+                        <div key={s.id} className="flex gap-4 pl-1 group">
                           <div className={`w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot} ring-2 ring-white`} />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
-                                {cfg.label}
-                              </span>
-                              {est && (
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>
-                                  {est.label}
-                                </span>
-                              )}
-                              <span className="text-xs text-gray-400 ml-auto">{fmtDate(s.created_at)}</span>
-                            </div>
-                            <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
-                            {s.autor && <p className="text-xs text-gray-400 mt-1">{s.autor}</p>}
+                            {isEditing ? (
+                              <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+                                <div className="flex gap-2 flex-wrap">
+                                  {(Object.entries(TIPO_CONFIG) as [keyof typeof TIPO_CONFIG, typeof TIPO_CONFIG[keyof typeof TIPO_CONFIG]][]).map(([key, c]) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => setEditTipo(key)}
+                                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                                        editTipo === key ? c.color : 'bg-white text-gray-400 border border-gray-200'
+                                      }`}
+                                    >
+                                      {c.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <textarea
+                                  value={editDesc}
+                                  onChange={e => setEditDesc(e.target.value)}
+                                  rows={3}
+                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                                />
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Autor (opcional)"
+                                    value={editAutor}
+                                    onChange={e => setEditAutor(e.target.value)}
+                                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                                  />
+                                  <select
+                                    value={editEstado}
+                                    onChange={e => setEditEstado(e.target.value)}
+                                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
+                                  >
+                                    <option value="">Sin estado</option>
+                                    {Object.entries(ESTADO_CONFIG).map(([key, c]) => (
+                                      <option key={key} value={key}>{c.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <button onClick={cancelEdit} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={handleUpdate}
+                                    disabled={editSaving || !editDesc.trim()}
+                                    className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                                  >
+                                    {editSaving ? 'Guardando...' : 'Guardar'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
+                                    {cfg.label}
+                                  </span>
+                                  {est && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>
+                                      {est.label}
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-400 ml-auto">{fmtDate(s.created_at)}</span>
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => startEdit(s)}
+                                      className="p-1 text-gray-400 hover:text-slate-700 rounded hover:bg-gray-100 transition-colors"
+                                      title="Editar"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" strokeLinejoin="round"/>
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteSeg(s.id)}
+                                      className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+                                      title="Eliminar"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
+                                {s.autor && <p className="text-xs text-gray-400 mt-1">{s.autor}</p>}
+                              </>
+                            )}
                           </div>
                         </div>
                       )
