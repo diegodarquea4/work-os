@@ -31,6 +31,12 @@ function ejeColor(eje: string) {
   return EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-600'
 }
 
+function diasSinActividad(lastIso: string | null | undefined): number | null {
+  if (!lastIso) return null
+  const diff = Date.now() - new Date(lastIso).getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
+
 function pct(val: number | null | undefined) {
   if (val === null || val === undefined) return '—'
   return `${String(val).replace('.', ',')}%`
@@ -44,7 +50,7 @@ function num(val: number | null | undefined) {
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type FilterSemaforo = SemaforoKey | 'todos'
 type FilterPrioridad = 'Alta' | 'Media' | 'todas'
-type SortBy = 'semaforo' | 'prioridad' | 'avance'
+type SortBy = 'semaforo' | 'prioridad' | 'avance' | 'actividad'
 
 type Props = {
   region: Region
@@ -59,6 +65,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [metrics, setMetrics]               = useState<Partial<RegionMetrics> | null>(null)
   const [selectedPrioridad, setSelectedPrioridad] = useState<Project | null>(null)
   const [metricsOpen, setMetricsOpen]       = useState(true)
+  const [actividad, setActividad]           = useState<Record<number, string | null>>({})
 
   // Filters
   const [search, setSearch]                     = useState('')
@@ -68,10 +75,15 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
 
   useEffect(() => {
     setMetrics(null)
+    setActividad({})
     fetch(`/api/metrics/${region.cod}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setMetrics(data))
       .catch(() => setMetrics(null))
+    fetch(`/api/actividad/${region.cod}`)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setActividad(data))
+      .catch(() => setActividad({}))
   }, [region.cod])
 
   // RAG counts
@@ -96,9 +108,15 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
       return true
     })
     .sort((a, b) => {
-      if (sortBy === 'semaforo') return SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
+      if (sortBy === 'semaforo')  return SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
       if (sortBy === 'prioridad') return (a.prioridad === 'Alta' ? 0 : 1) - (b.prioridad === 'Alta' ? 0 : 1)
-      if (sortBy === 'avance')   return a.pct_avance - b.pct_avance
+      if (sortBy === 'avance')    return a.pct_avance - b.pct_avance
+      if (sortBy === 'actividad') {
+        // nulls (never updated) go first — they are the most stale
+        const da = actividad[a.n] ? new Date(actividad[a.n]!).getTime() : 0
+        const db = actividad[b.n] ? new Date(actividad[b.n]!).getTime() : 0
+        return da - db
+      }
       return 0
     })
 
@@ -334,6 +352,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
               <option value="semaforo">↑ Semáforo</option>
               <option value="prioridad">↑ Prioridad</option>
               <option value="avance">↑ Menor avance</option>
+              <option value="actividad">↑ Sin actividad</option>
             </select>
           </div>
         </div>
@@ -413,6 +432,22 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
                       style={{ width: `${p.pct_avance}%` }}
                     />
                   </div>
+                  {/* Última actividad */}
+                  {(() => {
+                    const dias = diasSinActividad(actividad[p.n])
+                    if (dias === null) return (
+                      <p className="text-xs text-red-500 mt-1.5 font-medium">Sin actividad registrada</p>
+                    )
+                    if (dias > 15) return (
+                      <p className="text-xs text-red-500 mt-1.5">Sin actividad hace <span className="font-semibold">{dias} días</span></p>
+                    )
+                    if (dias > 7) return (
+                      <p className="text-xs text-amber-600 mt-1.5">Última actividad hace {dias} días</p>
+                    )
+                    return (
+                      <p className="text-xs text-gray-500 mt-1.5">Última actividad hace {dias === 0 ? 'hoy' : `${dias} día${dias > 1 ? 's' : ''}`}</p>
+                    )
+                  })()}
                 </div>
               </div>
             )

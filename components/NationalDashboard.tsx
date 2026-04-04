@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { Project } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -26,7 +26,7 @@ const EJE_COLORS: Record<string, string> = {
 }
 
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
-type SortCol = 'n' | 'region' | 'eje' | 'semaforo' | 'avance' | 'prioridad'
+type SortCol = 'n' | 'region' | 'eje' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
 type SortDir = 'asc' | 'desc'
 
 type Props = {
@@ -40,7 +40,13 @@ const EJES = Array.from(new Set(
    'Desarrollo Social y Familia', 'Modernización e Innovación']
 ))
 
+function diasSinActividad(lastIso: string | null | undefined): number | null {
+  if (!lastIso) return null
+  return Math.floor((Date.now() - new Date(lastIso).getTime()) / (1000 * 60 * 60 * 24))
+}
+
 export default function NationalDashboard({ projects, onUpdatePrioridad }: Props) {
+  const [actividad, setActividad]             = useState<Record<number, string | null>>({})
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -49,6 +55,13 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Project | null>(null)
+
+  useEffect(() => {
+    fetch('/api/actividad/all')
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setActividad(data))
+      .catch(() => setActividad({}))
+  }, [])
 
   // Sync selected when projects update (after modal saves)
   const selectedSynced = selected
@@ -91,6 +104,11 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
       if (sortCol === 'semaforo')  cmp = SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
       if (sortCol === 'avance')    cmp = a.pct_avance - b.pct_avance
       if (sortCol === 'prioridad') cmp = (a.prioridad === 'Alta' ? 0 : 1) - (b.prioridad === 'Alta' ? 0 : 1)
+      if (sortCol === 'actividad') {
+        const da = actividad[a.n] ? new Date(actividad[a.n]!).getTime() : 0
+        const db = actividad[b.n] ? new Date(actividad[b.n]!).getTime() : 0
+        cmp = da - db
+      }
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
@@ -230,13 +248,14 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
               <ColHeader col="semaforo" label="Estado" />
               <ColHeader col="avance" label="Avance" />
               <ColHeader col="prioridad" label="Prioridad" />
+              <ColHeader col="actividad" label="Actividad" />
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Plazo</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-16 text-center text-gray-400 text-sm">
+                <td colSpan={9} className="px-6 py-16 text-center text-gray-400 text-sm">
                   Sin prioridades con estos filtros.{' '}
                   <button onClick={clearFilters} className="underline text-slate-600">Limpiar filtros</button>
                 </td>
@@ -296,6 +315,15 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
                     }`}>
                       {p.prioridad}
                     </span>
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {(() => {
+                      const dias = diasSinActividad(actividad[p.n])
+                      if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
+                      if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>
+                      if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
+                      return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
+                    })()}
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{p.plazo}</td>
                 </tr>

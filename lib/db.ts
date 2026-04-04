@@ -82,6 +82,54 @@ export async function getMetricsByCod(cod: string): Promise<RegionMetrics | null
   return data as RegionMetrics
 }
 
+/** Last seguimiento date per prioridad for a region — used by ProjectsPanel activity indicators. */
+export async function getLastActividadByCod(cod: string): Promise<Record<number, string | null>> {
+  // Get prioridad IDs for this region
+  const { data: prioridades, error: pErr } = await getSupabase()
+    .from('prioridades_territoriales')
+    .select('n')
+    .eq('cod', cod)
+
+  if (pErr || !prioridades?.length) return {}
+
+  const ids = prioridades.map((p: { n: number }) => p.n)
+
+  const { data, error } = await getSupabase()
+    .from('seguimientos')
+    .select('prioridad_id, created_at')
+    .in('prioridad_id', ids)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return {}
+
+  // Keep only the most recent entry per prioridad_id
+  const result: Record<number, string | null> = {}
+  for (const row of data as { prioridad_id: number; created_at: string }[]) {
+    if (!(row.prioridad_id in result)) {
+      result[row.prioridad_id] = row.created_at
+    }
+  }
+  return result
+}
+
+/** Last seguimiento date for ALL prioridades — used by NationalDashboard. */
+export async function getLastActividadAll(): Promise<Record<number, string | null>> {
+  const { data, error } = await getSupabase()
+    .from('seguimientos')
+    .select('prioridad_id, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return {}
+
+  const result: Record<number, string | null> = {}
+  for (const row of data as { prioridad_id: number; created_at: string }[]) {
+    if (!(row.prioridad_id in result)) {
+      result[row.prioridad_id] = row.created_at
+    }
+  }
+  return result
+}
+
 /** Light metrics subset — used by the ProjectsPanel summary cards. */
 export async function getMetricsSummaryByCod(cod: string): Promise<Partial<RegionMetrics> | null> {
   const { data, error } = await getSupabase()
