@@ -233,7 +233,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       <div
-        className="relative w-full max-w-2xl max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full max-w-4xl max-h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -474,12 +474,32 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                             const cfg = TIPO_CONFIG[s.tipo] ?? TIPO_CONFIG.avance
                             const est = s.estado ? ESTADO_CONFIG[s.estado] : null
                             return (
-                              <div key={s.id} className="flex gap-3 items-start p-2.5 rounded-lg bg-gray-50">
+                              <div key={s.id} className="flex gap-3 items-start p-2.5 rounded-lg bg-gray-50 group">
                                 <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot}`} />
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
                                     {est && <span className={`text-xs px-1.5 py-0.5 rounded-full ${est.color}`}>{est.label}</span>}
+                                    <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => { startEdit(s); setTab('seguimiento') }}
+                                        className="p-1 text-gray-400 hover:text-slate-700 rounded hover:bg-white transition-colors"
+                                        title="Editar"
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                          <path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" strokeLinejoin="round"/>
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteSeg(s.id)}
+                                        className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-white transition-colors"
+                                        title="Eliminar"
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                          <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>
+                                        </svg>
+                                      </button>
+                                    </div>
                                   </div>
                                   <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
                                   {s.autor && <p className="text-xs text-gray-500 mt-0.5">{s.autor}</p>}
