@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import type { Project } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import * as XLSX from 'xlsx'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200'  },
@@ -119,6 +120,27 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
     setFilterSemaforo('todos'); setFilterPrioridad('todas')
   }
 
+  function exportExcel() {
+    const rows = filtered.map(p => ({
+      '#': p.n,
+      Región: p.region,
+      Capital: p.capital,
+      Zona: p.zona,
+      Eje: p.eje,
+      Meta: p.meta,
+      Ministerios: p.ministerios.join('; '),
+      Prioridad: p.prioridad,
+      Plazo: p.plazo,
+      Semáforo: SEMAFORO_CONFIG[p.estado_semaforo]?.label ?? p.estado_semaforo,
+      'Avance (%)': p.pct_avance,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Prioridades')
+    const fecha = new Date().toISOString().split('T')[0]
+    XLSX.writeFile(wb, `prioridades-territoriales-${fecha}.xlsx`)
+  }
+
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
     filterSemaforo !== 'todos' || filterPrioridad !== 'todas'
 
@@ -232,7 +254,18 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
             </button>
           )}
 
-          <span className="ml-auto text-xs text-gray-500">{filtered.length} prioridades</span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-gray-500">{filtered.length} prioridades</span>
+            <button
+              onClick={exportExcel}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
+              </svg>
+              Excel
+            </button>
+          </div>
         </div>
       </div>
 

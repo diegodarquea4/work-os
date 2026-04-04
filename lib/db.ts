@@ -130,6 +130,28 @@ export async function getLastActividadAll(): Promise<Record<number, string | nul
   return result
 }
 
+// ---------------------------------------------------------------------------
+// Semáforo log — audit trail for semáforo and % avance changes
+// ---------------------------------------------------------------------------
+
+export async function logSemaforoChange(
+  prioridadId: number,
+  campo: 'semaforo' | 'pct_avance',
+  valorAnterior: string | number | null,
+  valorNuevo: string | number,
+  cambiadoPor: string | null,
+): Promise<void> {
+  await getSupabase().from('semaforo_log').insert({
+    prioridad_id:   prioridadId,
+    campo,
+    valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
+    valor_nuevo:    String(valorNuevo),
+    cambiado_por:   cambiadoPor,
+  })
+}
+
+// ---------------------------------------------------------------------------
+
 /** Light metrics subset — used by the ProjectsPanel summary cards. */
 export async function getMetricsSummaryByCod(cod: string): Promise<Partial<RegionMetrics> | null> {
   const { data, error } = await getSupabase()

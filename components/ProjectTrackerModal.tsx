@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { Project } from '@/lib/projects'
 import type { Seguimiento, Documento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
+import { logSemaforoChange } from '@/lib/db'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'   },
@@ -149,23 +150,29 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   }
 
   async function handleSaveSemaforo(newSem: SemaforoKey) {
+    const anterior = semaforo
     setSemaforo(newSem)
     setSavingSem(true)
-    await getSupabase()
-      .from('prioridades_territoriales')
-      .update({ estado_semaforo: newSem })
-      .eq('n', prioridad.n)
+    const sb = getSupabase()
+    const { data: { session } } = await sb.auth.getSession()
+    await Promise.all([
+      sb.from('prioridades_territoriales').update({ estado_semaforo: newSem }).eq('n', prioridad.n),
+      logSemaforoChange(prioridad.n, 'semaforo', anterior, newSem, session?.user?.email ?? null),
+    ])
     onUpdatePrioridad(prioridad.n, { estado_semaforo: newSem })
     setSavingSem(false)
   }
 
   async function handleSavePct(value: number) {
     const clamped = Math.max(0, Math.min(100, value))
+    const anterior = pctAvance
     setPctAvance(clamped)
-    await getSupabase()
-      .from('prioridades_territoriales')
-      .update({ pct_avance: clamped })
-      .eq('n', prioridad.n)
+    const sb = getSupabase()
+    const { data: { session } } = await sb.auth.getSession()
+    await Promise.all([
+      sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
+      logSemaforoChange(prioridad.n, 'pct_avance', anterior, clamped, session?.user?.email ?? null),
+    ])
     onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
   }
 
