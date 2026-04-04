@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   let projects: Project[]
   let metrics: RegionMetrics | null = null
 
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getPrioridadesByCod, getMetricsByCod } = await import('@/lib/db')
     ;[projects, metrics] = await Promise.all([
       getPrioridadesByCod(body.region.cod),
