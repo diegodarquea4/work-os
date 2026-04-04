@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { Project } from '@/lib/projects'
-import type { Seguimiento, Documento } from '@/lib/types'
+import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { logSemaforoChange } from '@/lib/db'
 
@@ -31,7 +31,7 @@ const EJE_COLORS: Record<string, string> = {
   'Modernización e Innovación':      'bg-purple-100 text-purple-700',
 }
 
-type Tab = 'seguimiento' | 'documentos' | 'calendario'
+type Tab = 'seguimiento' | 'documentos' | 'calendario' | 'historial'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500',  ring: 'ring-green-300',  label: 'En verde'    },
@@ -52,6 +52,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [tab, setTab]                   = useState<Tab>('seguimiento')
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
+  const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
   const [loading, setLoading]           = useState(true)
   const [uploading, setUploading]       = useState(false)
   const fileInputRef                    = useRef<HTMLInputElement>(null)
@@ -83,6 +84,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [pctAvance, setPctAvance]     = useState<number>(prioridad.pct_avance ?? 0)
   const [savingSem, setSavingSem]     = useState(false)
 
+  // Fecha límite
+  const [fechaLimite, setFechaLimite]         = useState<string>(prioridad.fecha_limite ?? '')
+  const [editingFecha, setEditingFecha]       = useState(false)
+  const [savingFecha, setSavingFecha]         = useState(false)
+
   // Responsable
   const [responsable, setResponsable]         = useState<string>(prioridad.responsable ?? '')
   const [editingResponsable, setEditingResponsable] = useState(false)
@@ -96,12 +102,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   async function loadData() {
     setLoading(true)
     const sb = getSupabase()
-    const [segRes, docRes] = await Promise.all([
+    const [segRes, docRes, logRes] = await Promise.all([
       sb.from('seguimientos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
+      sb.from('semaforo_log').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
     ])
     setSeguimientos((segRes.data ?? []) as Seguimiento[])
     setDocumentos((docRes.data ?? []) as Documento[])
+    setSemaforoLog((logRes.data ?? []) as SemaforoLog[])
     setLoading(false)
   }
 
@@ -190,6 +198,17 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     onUpdatePrioridad(prioridad.n, { responsable: responsable.trim() || null })
     setEditingResponsable(false)
     setSavingResponsable(false)
+  }
+
+  async function handleSaveFechaLimite(value: string) {
+    setSavingFecha(true)
+    await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ fecha_limite: value || null })
+      .eq('n', prioridad.n)
+    setFechaLimite(value)
+    setEditingFecha(false)
+    setSavingFecha(false)
   }
 
   async function handleDeleteSeg(id: number) {
@@ -385,9 +404,44 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             )}
           </div>
 
+          {/* Fecha límite */}
+          <div className="px-5 py-2 border-t border-gray-100 flex items-center gap-2">
+            <span className="text-xs text-gray-500 w-24 flex-shrink-0">Fecha límite</span>
+            {editingFecha ? (
+              <div className="flex items-center gap-1.5 flex-1">
+                <input
+                  type="date"
+                  value={fechaLimite}
+                  onChange={e => setFechaLimite(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveFechaLimite(fechaLimite); if (e.key === 'Escape') setEditingFecha(false) }}
+                  autoFocus
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-300 text-gray-700"
+                />
+                <button onClick={() => handleSaveFechaLimite(fechaLimite)} disabled={savingFecha}
+                  className="text-xs px-2 py-1 bg-slate-900 text-white rounded hover:bg-slate-700 disabled:opacity-50">
+                  {savingFecha ? '...' : 'Guardar'}
+                </button>
+                <button onClick={() => { setFechaLimite(prioridad.fecha_limite ?? ''); setEditingFecha(false) }}
+                  className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700">
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingFecha(true)}
+                className="flex-1 text-left text-xs text-gray-700 hover:text-slate-900 group"
+              >
+                {fechaLimite
+                  ? new Date(fechaLimite + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+                  : <span className="text-gray-400 group-hover:text-gray-500">Sin fecha — clic para editar</span>
+                }
+              </button>
+            )}
+          </div>
+
           {/* Tabs */}
-          <div className="flex">
-            {(['seguimiento', 'calendario', 'documentos'] as Tab[]).map(t => (
+          <div className="flex mt-1">
+            {(['seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -399,6 +453,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               >
                 {t === 'seguimiento'
                   ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}`
+                  : t === 'historial'
+                  ? 'Historial'
                   : t === 'calendario'
                   ? 'Calendario'
                   : `Documentos${documentos.length ? ` (${documentos.length})` : ''}`}
@@ -411,6 +467,239 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
+          ) : tab === 'historial' ? (
+            // ── Historial tab ──
+            <div className="px-6 py-5 space-y-6">
+
+              {/* ── Barra de progreso con tiempo ── */}
+              {(() => {
+                const pct = pctAvance
+                const limite = prioridad.fecha_limite ?? fechaLimite
+                let tiempoPct: number | null = null
+                let diasRestantes: number | null = null
+                let atrasado = false
+
+                if (limite) {
+                  const inicio = new Date(prioridad.plazo?.match(/\d{4}/)?.[0] + '-01-01') ?? new Date()
+                  const fin = new Date(limite + 'T12:00:00')
+                  const hoy = new Date()
+                  const total = fin.getTime() - inicio.getTime()
+                  const transcurrido = hoy.getTime() - inicio.getTime()
+                  tiempoPct = Math.max(0, Math.min(100, Math.round((transcurrido / total) * 100)))
+                  diasRestantes = Math.ceil((fin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
+                  atrasado = diasRestantes < 0
+                }
+
+                return (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Progreso</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                      {/* % Avance */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-600">Avance del proyecto</span>
+                          <span className="text-xs font-bold text-gray-800">{pct}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              semaforo === 'rojo' ? 'bg-red-400' :
+                              semaforo === 'ambar' ? 'bg-amber-400' :
+                              semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-400'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tiempo transcurrido */}
+                      {tiempoPct !== null && (
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600">Tiempo transcurrido</span>
+                            <span className={`text-xs font-bold ${atrasado ? 'text-red-600' : tiempoPct > pct + 20 ? 'text-amber-600' : 'text-gray-800'}`}>
+                              {tiempoPct}%
+                              {diasRestantes !== null && (
+                                <span className="font-normal text-gray-500 ml-1">
+                                  {atrasado
+                                    ? `· venció hace ${Math.abs(diasRestantes)}d`
+                                    : `· ${diasRestantes}d restantes`}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full transition-all ${atrasado ? 'bg-red-400' : tiempoPct > pct + 20 ? 'bg-amber-400' : 'bg-blue-400'}`}
+                              style={{ width: `${Math.min(tiempoPct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {!limite && (
+                        <p className="text-xs text-gray-400">
+                          Agrega una fecha límite para ver el progreso de tiempo
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* ── Historial de semáforo ── */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trayectoria del semáforo</h3>
+                {semaforoLog.length === 0 ? (
+                  <p className="text-xs text-gray-400">Sin cambios registrados aún</p>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Sparkline de semáforos */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {semaforoLog.filter(l => l.campo === 'semaforo').map((l, i) => {
+                        const colorMap: Record<string, string> = {
+                          verde: 'bg-green-500', ambar: 'bg-amber-400',
+                          rojo: 'bg-red-500', gris: 'bg-gray-300',
+                        }
+                        return (
+                          <div key={l.id} className="flex items-center gap-1">
+                            {i > 0 && <span className="text-gray-300 text-xs">→</span>}
+                            <div className="flex flex-col items-center gap-0.5" title={`${new Date(l.created_at).toLocaleDateString('es-CL')}${l.cambiado_por ? ` · ${l.cambiado_por}` : ''}`}>
+                              <span className={`w-5 h-5 rounded-full ${colorMap[l.valor_nuevo] ?? 'bg-gray-300'}`} />
+                              <span className="text-xs text-gray-400" style={{ fontSize: '9px' }}>
+                                {new Date(l.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {/* Estado actual */}
+                      {semaforoLog.some(l => l.campo === 'semaforo') && (() => {
+                        const colorMap: Record<string, string> = {
+                          verde: 'bg-green-500', ambar: 'bg-amber-400',
+                          rojo: 'bg-red-500', gris: 'bg-gray-300',
+                        }
+                        return (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-300 text-xs">→</span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className={`w-5 h-5 rounded-full ring-2 ring-offset-1 ring-gray-400 ${colorMap[semaforo]}`} />
+                              <span className="text-xs text-gray-500 font-medium" style={{ fontSize: '9px' }}>hoy</span>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* Log de cambios */}
+                    <div className="space-y-1.5 mt-2">
+                      {semaforoLog.map(l => {
+                        const colorMap: Record<string, string> = {
+                          verde: 'text-green-600', ambar: 'text-amber-600',
+                          rojo: 'text-red-600', gris: 'text-gray-500',
+                        }
+                        const labelMap: Record<string, string> = {
+                          verde: 'En verde', ambar: 'En revisión', rojo: 'Bloqueado', gris: 'Sin evaluar',
+                        }
+                        return (
+                          <div key={l.id} className="flex items-start gap-2 text-xs text-gray-600">
+                            <span className="text-gray-400 flex-shrink-0 w-20 mt-0.5">
+                              {new Date(l.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: '2-digit' })}
+                            </span>
+                            {l.campo === 'semaforo' ? (
+                              <span>
+                                Semáforo:&nbsp;
+                                <span className="text-gray-500">{labelMap[l.valor_anterior ?? ''] ?? l.valor_anterior ?? '—'}</span>
+                                &nbsp;→&nbsp;
+                                <span className={`font-semibold ${colorMap[l.valor_nuevo] ?? ''}`}>{labelMap[l.valor_nuevo] ?? l.valor_nuevo}</span>
+                              </span>
+                            ) : (
+                              <span>
+                                Avance:&nbsp;
+                                <span className="text-gray-500">{l.valor_anterior ?? '—'}%</span>
+                                &nbsp;→&nbsp;
+                                <span className="font-semibold text-slate-700">{l.valor_nuevo}%</span>
+                              </span>
+                            )}
+                            {l.cambiado_por && <span className="text-gray-400 ml-auto">{l.cambiado_por}</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Timeline de seguimientos por mes ── */}
+              {seguimientos.length > 0 && (() => {
+                const byMonth: Record<string, Seguimiento[]> = {}
+                for (const s of seguimientos) {
+                  const d = new Date(s.fecha ? s.fecha + 'T12:00:00' : s.created_at)
+                  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                  if (!byMonth[key]) byMonth[key] = []
+                  byMonth[key].push(s)
+                }
+                const months = Object.keys(byMonth).sort().reverse()
+
+                return (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                      Actividad por mes
+                    </h3>
+                    <div className="space-y-4">
+                      {months.map(monthKey => {
+                        const [y, m] = monthKey.split('-')
+                        const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+                        const entries = byMonth[monthKey]
+                        const counts = { avance: 0, reunion: 0, hito: 0, alerta: 0 }
+                        entries.forEach(s => counts[s.tipo] = (counts[s.tipo] ?? 0) + 1)
+                        return (
+                          <div key={monthKey}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-gray-700 capitalize">{label}</span>
+                              <div className="flex items-center gap-1 ml-auto">
+                                {(Object.entries(counts) as [keyof typeof TIPO_CONFIG, number][])
+                                  .filter(([, n]) => n > 0)
+                                  .map(([tipo, n]) => (
+                                    <span key={tipo} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${TIPO_CONFIG[tipo].color}`}>
+                                      {n} {TIPO_CONFIG[tipo].label}
+                                    </span>
+                                  ))}
+                              </div>
+                            </div>
+                            <div className="relative pl-4">
+                              <div className="absolute left-[5px] top-1 bottom-1 w-px bg-gray-100" />
+                              <div className="space-y-2">
+                                {entries.map(s => {
+                                  const cfg = TIPO_CONFIG[s.tipo]
+                                  const est = s.estado ? ESTADO_CONFIG[s.estado] : null
+                                  return (
+                                    <div key={s.id} className="flex gap-2 items-start">
+                                      <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot} ring-2 ring-white`} />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
+                                          {est && <span className={`text-xs px-1.5 py-0.5 rounded-full ${est.color}`}>{est.label}</span>}
+                                          <span className="text-xs text-gray-400 ml-auto">
+                                            {new Date((s.fecha ?? s.created_at) + (s.fecha ? 'T12:00:00' : '')).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-gray-700 leading-snug">{s.descripcion}</p>
+                                        {s.autor && <p className="text-xs text-gray-400 mt-0.5">{s.autor}</p>}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
           ) : tab === 'calendario' ? (
             // ── Calendario tab ──
             (() => {

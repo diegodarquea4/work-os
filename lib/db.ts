@@ -32,6 +32,7 @@ export async function getAllPrioridades(): Promise<Project[]> {
     estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
     pct_avance: row.pct_avance ?? 0,
     responsable: row.responsable ?? null,
+    fecha_limite: row.fecha_limite ?? null,
   }))
 }
 
@@ -62,6 +63,7 @@ export async function getPrioridadesByCod(cod: string): Promise<Project[]> {
     estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
     pct_avance: row.pct_avance ?? 0,
     responsable: row.responsable ?? null,
+    fecha_limite: row.fecha_limite ?? null,
   }))
 }
 

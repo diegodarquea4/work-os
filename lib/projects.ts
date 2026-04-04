@@ -15,6 +15,7 @@ export type Project = {
   estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris'
   pct_avance: number
   responsable: string | null
+  fecha_limite: string | null
 }
 
 export function getProjects(): Project[] {
@@ -80,5 +81,6 @@ function parseCSV(content: string): Project[] {
     estado_semaforo: 'gris' as const,
     pct_avance: 0,
     responsable: null,
+    fecha_limite: null,
   }))
 }

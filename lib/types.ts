@@ -14,6 +14,18 @@ export type Prioridad = {
   estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris' | null
   pct_avance: number | null
   responsable: string | null
+  fecha_limite: string | null  // ISO date YYYY-MM-DD
+}
+
+// ── Semáforo Log ─────────────────────────────────────────────────────────────
+export type SemaforoLog = {
+  id: number
+  prioridad_id: number
+  campo: 'semaforo' | 'pct_avance'
+  valor_anterior: string | null
+  valor_nuevo: string
+  cambiado_por: string | null
+  created_at: string
 }
 
 // ── Region Metrics ───────────────────────────────────────────────────────────

@@ -10,10 +10,11 @@ import { getRegionColor } from '@/lib/regionColors'
 import ProjectsPanel from './ProjectsPanel'
 import NationalDashboard from './NationalDashboard'
 import AttentionTray from './AttentionTray'
+import KanbanView from './KanbanView'
 
 const ChileMap = dynamic(() => import('./ChileMap'), { ssr: false })
 
-type View = 'mapa' | 'dashboard' | 'atencion'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban'
 
 type Props = {
   projects: Project[]
@@ -148,6 +149,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Atención
             </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'kanban' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="1" y="1" width="3" height="10" rx="0.8"/>
+                <rect x="5" y="1" width="3" height="7" rx="0.8"/>
+                <rect x="9" y="1" width="2" height="5" rx="0.8"/>
+              </svg>
+              Kanban
+            </button>
           </div>
 
           <div className="text-slate-400 text-xs">
@@ -163,6 +177,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             projects={localProjects}
             actividad={actividad}
             actividadLoading={actividadLoading}
+            onUpdatePrioridad={handleUpdatePrioridad}
+          />
+        </div>
+      )}
+
+      {/* Kanban view */}
+      {view === 'kanban' && (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <KanbanView
+            projects={localProjects}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
         </div>
