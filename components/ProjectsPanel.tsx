@@ -64,7 +64,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [downloading, setDownloading]       = useState(false)
   const [metrics, setMetrics]               = useState<Partial<RegionMetrics> | null>(null)
   const [selectedPrioridad, setSelectedPrioridad] = useState<Project | null>(null)
-  const [metricsOpen, setMetricsOpen]       = useState(true)
+  const [metricsOpen, setMetricsOpen]       = useState(false)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
 
   // Filters

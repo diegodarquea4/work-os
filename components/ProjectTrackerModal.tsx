@@ -380,7 +380,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               }
               while (cells.length % 7 !== 0) cells.push(null)
 
-              const monthLabel = calMonth.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+              const _mn = calMonth.toLocaleDateString('es-CL', { month: 'long' })
+              const monthLabel = `${_mn.charAt(0).toUpperCase() + _mn.slice(1)} ${calMonth.getFullYear()}`
               const dayNames   = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
               const selectedEntries = calDay ? (byDate[calDay] ?? []) : []
@@ -551,7 +552,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     value={formDesc}
                     onChange={e => setFormDesc(e.target.value)}
                     rows={3}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                    className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                   />
                   <div className="flex gap-2">
                     <input
@@ -559,7 +560,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                       placeholder="Autor (opcional)"
                       value={formAutor}
                       onChange={e => setFormAutor(e.target.value)}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                      className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                     />
                     <select
                       value={formEstado}
@@ -636,7 +637,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                                   value={editDesc}
                                   onChange={e => setEditDesc(e.target.value)}
                                   rows={3}
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                                  className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                                 />
                                 <div className="flex gap-2">
                                   <input
@@ -644,7 +645,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                                     placeholder="Autor (opcional)"
                                     value={editAutor}
                                     onChange={e => setEditAutor(e.target.value)}
-                                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                                    className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                                   />
                                   <select
                                     value={editEstado}
