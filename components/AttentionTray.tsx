@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { Project } from '@/lib/projects'
 import ProjectTrackerModal from './ProjectTrackerModal'
 
 type Props = {
   projects: Project[]
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) => void
+  actividad: Record<number, string | null>
+  actividadLoading: boolean
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 const SEMAFORO_DOT: Record<string, string> = {
@@ -16,18 +18,9 @@ const SEMAFORO_DOT: Record<string, string> = {
   gris:  'bg-gray-300',
 }
 
-export default function AttentionTray({ projects, onUpdatePrioridad }: Props) {
-  const [actividad, setActividad]           = useState<Record<number, string | null>>({})
-  const [loading, setLoading]               = useState(true)
+export default function AttentionTray({ projects, actividad, actividadLoading: loading, onUpdatePrioridad }: Props) {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [collapsed, setCollapsed]           = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    fetch('/api/actividad/all')
-      .then(r => r.ok ? r.json() : {})
-      .then(data => { setActividad(data); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
 
   function diasSinActividad(n: number): number | null {
     const last = actividad[n]

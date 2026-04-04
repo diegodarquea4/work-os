@@ -45,7 +45,7 @@ type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type Props = {
   prioridad: Project
   onClose: () => void
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
@@ -82,6 +82,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
   const [pctAvance, setPctAvance]     = useState<number>(prioridad.pct_avance ?? 0)
   const [savingSem, setSavingSem]     = useState(false)
+
+  // Responsable
+  const [responsable, setResponsable]         = useState<string>(prioridad.responsable ?? '')
+  const [editingResponsable, setEditingResponsable] = useState(false)
+  const [savingResponsable, setSavingResponsable]   = useState(false)
 
   const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
@@ -174,6 +179,17 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       logSemaforoChange(prioridad.n, 'pct_avance', anterior, clamped, session?.user?.email ?? null),
     ])
     onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
+  }
+
+  async function handleSaveResponsable() {
+    setSavingResponsable(true)
+    await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ responsable: responsable.trim() || null })
+      .eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, { responsable: responsable.trim() || null })
+    setEditingResponsable(false)
+    setSavingResponsable(false)
   }
 
   async function handleDeleteSeg(id: number) {
@@ -334,6 +350,39 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               />
               <span className="text-xs text-gray-600">%</span>
             </div>
+          </div>
+
+          {/* Responsable */}
+          <div className="px-5 py-2 border-t border-gray-100 flex items-center gap-2">
+            <span className="text-xs text-gray-500 w-24 flex-shrink-0">Responsable</span>
+            {editingResponsable ? (
+              <div className="flex items-center gap-1.5 flex-1">
+                <input
+                  type="text"
+                  value={responsable}
+                  onChange={e => setResponsable(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveResponsable(); if (e.key === 'Escape') setEditingResponsable(false) }}
+                  placeholder="Nombre del responsable"
+                  autoFocus
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                />
+                <button onClick={handleSaveResponsable} disabled={savingResponsable}
+                  className="text-xs px-2 py-1 bg-slate-900 text-white rounded hover:bg-slate-700 disabled:opacity-50">
+                  {savingResponsable ? '...' : 'Guardar'}
+                </button>
+                <button onClick={() => setEditingResponsable(false)}
+                  className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700">
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingResponsable(true)}
+                className="flex-1 text-left text-xs text-gray-700 hover:text-slate-900 group"
+              >
+                {responsable || <span className="text-gray-400 group-hover:text-gray-500">Sin asignar — clic para editar</span>}
+              </button>
+            )}
           </div>
 
           {/* Tabs */}

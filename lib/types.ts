@@ -13,6 +13,7 @@ export type Prioridad = {
   plazo: string
   estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris' | null
   pct_avance: number | null
+  responsable: string | null
 }
 
 // ── Region Metrics ───────────────────────────────────────────────────────────

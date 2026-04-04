@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import type { Project } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -32,7 +32,8 @@ type SortDir = 'asc' | 'desc'
 
 type Props = {
   projects: Project[]
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) => void
+  actividad: Record<number, string | null>
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 const EJES = Array.from(new Set(
@@ -46,8 +47,7 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
   return Math.floor((Date.now() - new Date(lastIso).getTime()) / (1000 * 60 * 60 * 24))
 }
 
-export default function NationalDashboard({ projects, onUpdatePrioridad }: Props) {
-  const [actividad, setActividad]             = useState<Record<number, string | null>>({})
+export default function NationalDashboard({ projects, actividad, onUpdatePrioridad }: Props) {
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -56,13 +56,6 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Project | null>(null)
-
-  useEffect(() => {
-    fetch('/api/actividad/all')
-      .then(r => r.ok ? r.json() : {})
-      .then(data => setActividad(data))
-      .catch(() => setActividad({}))
-  }, [])
 
   // Sync selected when projects update (after modal saves)
   const selectedSynced = selected
@@ -133,6 +126,7 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
       Plazo: p.plazo,
       Semáforo: SEMAFORO_CONFIG[p.estado_semaforo]?.label ?? p.estado_semaforo,
       'Avance (%)': p.pct_avance,
+      Responsable: p.responsable ?? '',
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -281,6 +275,7 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
               <ColHeader col="semaforo" label="Estado" />
               <ColHeader col="avance" label="Avance" />
               <ColHeader col="prioridad" label="Prioridad" />
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Responsable</th>
               <ColHeader col="actividad" label="Actividad" />
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Plazo</th>
             </tr>
@@ -348,6 +343,11 @@ export default function NationalDashboard({ projects, onUpdatePrioridad }: Props
                     }`}>
                       {p.prioridad}
                     </span>
+                  </td>
+                  <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap max-w-[120px]">
+                    {p.responsable
+                      ? <span className="truncate block">{p.responsable}</span>
+                      : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">
                     {(() => {

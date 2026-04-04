@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import type { GeoJsonObject } from 'geojson'
 import type { Project } from '@/lib/projects'
@@ -25,6 +25,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
   const [localProjects, setLocalProjects]     = useState<Project[]>(projects)
   const [panelWidth, setPanelWidth]           = useState(420)
+  const [actividad, setActividad]             = useState<Record<number, string | null>>({})
+  const [actividadLoading, setActividadLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/actividad/all')
+      .then(r => r.ok ? r.json() : {})
+      .then(data => { setActividad(data); setActividadLoading(false) })
+      .catch(() => setActividadLoading(false))
+  }, [])
   const isDragging                            = useRef(false)
   const dragStartX                            = useRef(0)
   const dragStartWidth                        = useRef(420)
@@ -52,7 +61,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  function handleUpdatePrioridad(n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) {
+  function handleUpdatePrioridad(n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) {
     setLocalProjects(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
   }
 
@@ -152,6 +161,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         <div className="flex-1 overflow-hidden">
           <NationalDashboard
             projects={localProjects}
+            actividad={actividad}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
         </div>
@@ -162,6 +172,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         <div className="flex-1 overflow-hidden flex">
           <AttentionTray
             projects={localProjects}
+            actividad={actividad}
+            actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
         </div>
