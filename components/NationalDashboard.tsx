@@ -33,6 +33,7 @@ type SortDir = 'asc' | 'desc'
 type Props = {
   projects: Project[]
   actividad: Record<number, string | null>
+  actividadLoading?: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
@@ -47,7 +48,7 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
   return Math.floor((Date.now() - new Date(lastIso).getTime()) / (1000 * 60 * 60 * 24))
 }
 
-export default function NationalDashboard({ projects, actividad, onUpdatePrioridad }: Props) {
+export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad }: Props) {
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -350,7 +351,9 @@ export default function NationalDashboard({ projects, actividad, onUpdatePriorid
                       : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">
-                    {(() => {
+                    {actividadLoading ? (
+                      <div className="h-3 bg-gray-100 rounded animate-pulse w-14" />
+                    ) : (() => {
                       const dias = diasSinActividad(actividad[p.n])
                       if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
                       if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>

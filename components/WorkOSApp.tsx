@@ -162,6 +162,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           <NationalDashboard
             projects={localProjects}
             actividad={actividad}
+            actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
         </div>

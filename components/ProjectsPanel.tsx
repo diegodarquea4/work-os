@@ -66,6 +66,8 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [selectedPrioridad, setSelectedPrioridad] = useState<Project | null>(null)
   const [metricsOpen, setMetricsOpen]       = useState(false)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [actividadLoading, setActividadLoading] = useState(false)
 
   // Filters
   const [search, setSearch]                     = useState('')
@@ -76,14 +78,18 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   useEffect(() => {
     setMetrics(null)
     setActividad({})
+    setMetricsLoading(true)
+    setActividadLoading(true)
     fetch(`/api/metrics/${region.cod}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setMetrics(data))
       .catch(() => setMetrics(null))
+      .finally(() => setMetricsLoading(false))
     fetch(`/api/actividad/${region.cod}`)
       .then(r => r.ok ? r.json() : {})
       .then(data => setActividad(data))
       .catch(() => setActividad({}))
+      .finally(() => setActividadLoading(false))
   }, [region.cod])
 
   // RAG counts
@@ -247,21 +253,38 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
       </div>
 
       {/* ── Contexto Regional (collapsible) ── */}
-      {metrics && (
+      {(metricsLoading || metrics) && (
         <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
           <button
             onClick={() => setMetricsOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors"
+            disabled={metricsLoading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
           >
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contexto Regional</p>
-            <svg
-              width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-              className={`text-gray-500 transition-transform ${metricsOpen ? 'rotate-90' : '-rotate-90'}`}
-            >
-              <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            {metricsLoading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${metricsOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
           </button>
-          {metricsOpen && (
+          {metricsLoading && (
+            <div className="px-5 pb-3 animate-pulse">
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="h-2.5 bg-gray-200 rounded w-2/3 mb-2" />
+                    <div className="h-4 bg-gray-200 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!metricsLoading && metricsOpen && metrics && (
             <div className="px-5 pb-3">
               <div className="grid grid-cols-2 gap-2">
                 <MetricCard label="Población" value={num(metrics.poblacion_total)} />
@@ -433,7 +456,9 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
                     />
                   </div>
                   {/* Última actividad */}
-                  {(() => {
+                  {actividadLoading ? (
+                    <div className="mt-1.5 h-3 bg-gray-100 rounded animate-pulse w-28" />
+                  ) : (() => {
                     const dias = diasSinActividad(actividad[p.n])
                     if (dias === null) return (
                       <p className="text-xs text-red-500 mt-1.5 font-medium">Sin actividad registrada</p>
