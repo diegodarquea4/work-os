@@ -9,10 +9,11 @@ import { REGIONS } from '@/lib/regions'
 import { getRegionColor } from '@/lib/regionColors'
 import ProjectsPanel from './ProjectsPanel'
 import NationalDashboard from './NationalDashboard'
+import AttentionTray from './AttentionTray'
 
 const ChileMap = dynamic(() => import('./ChileMap'), { ssr: false })
 
-type View = 'mapa' | 'dashboard'
+type View = 'mapa' | 'dashboard' | 'atencion'
 
 type Props = {
   projects: Project[]
@@ -126,6 +127,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Dashboard
             </button>
+            <button
+              onClick={() => setView('atencion')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'atencion' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="6" cy="6" r="5"/>
+                <path d="M6 3.5v3M6 8v.5" strokeLinecap="round"/>
+              </svg>
+              Atención
+            </button>
           </div>
 
           <div className="text-slate-400 text-xs">
@@ -138,6 +151,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'dashboard' && (
         <div className="flex-1 overflow-hidden">
           <NationalDashboard
+            projects={localProjects}
+            onUpdatePrioridad={handleUpdatePrioridad}
+          />
+        </div>
+      )}
+
+      {/* Atención view */}
+      {view === 'atencion' && (
+        <div className="flex-1 overflow-hidden flex">
+          <AttentionTray
             projects={localProjects}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
