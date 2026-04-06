@@ -3,20 +3,46 @@ import React from 'react'
 import MinutaDocument from '@/components/MinutaDocument'
 import type { Region } from '@/lib/regions'
 import type { Project } from '@/lib/projects'
-import type { RegionMetrics } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import { INE_CODE } from '@/lib/regions'
 
 export async function POST(request: Request) {
   const body = await request.json() as { region: Region; fecha: string }
 
   let projects: Project[]
   let metrics: RegionMetrics | null = null
+  let seiaProjects: SeiaProject[] | null = null
+  let mopProjects:  MopProject[]  | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getPrioridadesByCod, getMetricsByCod } = await import('@/lib/db')
-    ;[projects, metrics] = await Promise.all([
+    const { getSupabaseAdmin } = await import('@/lib/supabaseServer')
+    const sb = getSupabaseAdmin()
+    const regionId = INE_CODE[body.region.cod]
+
+    const [prioridades, metricas, seiaRes, mopRes] = await Promise.all([
       getPrioridadesByCod(body.region.cod),
       getMetricsByCod(body.region.cod),
+      regionId !== undefined
+        ? sb.from('seia_projects')
+            .select('id,nombre,estado,inversion_mm,fecha_presentacion')
+            .eq('region_id', regionId)
+            .order('fecha_presentacion', { ascending: false })
+            .limit(15)
+        : Promise.resolve({ data: null }),
+      regionId !== undefined
+        ? sb.from('mop_projects')
+            .select('cod_p,nombre,servicio,etapa,inversion_miles')
+            .eq('region_id', regionId)
+            .order('nombre')
+            .limit(15)
+        : Promise.resolve({ data: null }),
     ])
+
+    projects     = prioridades
+    metrics      = metricas
+    seiaProjects = (seiaRes.data as SeiaProject[] | null)
+    mopProjects  = (mopRes.data  as MopProject[]  | null)
   } else {
     const { getProjects } = await import('@/lib/projects')
     const all = getProjects()
@@ -28,6 +54,8 @@ export async function POST(request: Request) {
     region: body.region,
     projects,
     metrics,
+    seiaProjects,
+    mopProjects,
     fecha: body.fecha,
   })
 

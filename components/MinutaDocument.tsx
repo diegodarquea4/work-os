@@ -7,7 +7,7 @@ import {
 } from '@react-pdf/renderer'
 import type { Project } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import type { RegionMetrics } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -92,6 +92,32 @@ const s = StyleSheet.create({
     color: '#888',
     fontStyle: 'italic',
   },
+
+  // Tabla compacta (SEIA / MOP)
+  compactHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#3a3a3a',
+    color: '#fff',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    marginTop: 6,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+  },
+  compactRowAlt: { backgroundColor: '#f7f7f7' },
+  colNombre:    { flex: 1,      fontSize: 7, paddingRight: 4 },
+  colEstado:    { width: '18%', fontSize: 7 },
+  colInversion: { width: '15%', fontSize: 7, textAlign: 'right' },
+  colFecha:     { width: '13%', fontSize: 7, textAlign: 'center' },
+  colServicio:  { width: '22%', fontSize: 7, paddingRight: 4 },
+  colEtapa:     { width: '14%', fontSize: 7 },
+  compactHeaderText: { color: '#fff', fontSize: 7, fontFamily: 'Helvetica-Bold' },
+  subNote: { fontSize: 8, color: '#555', fontStyle: 'italic', marginBottom: 4 },
 
   // Tabla de prioridades
   tableHeader: {
@@ -186,6 +212,34 @@ function pct(val: number | null | undefined): string | null {
   return `${String(val).replace('.', ',')}%`
 }
 
+function truncStr(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + '…' : s
+}
+
+function fmtMesAnio(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso + 'T12:00:00')
+  return new Intl.DateTimeFormat('es-CL', { month: 'short', year: 'numeric' }).format(d)
+}
+
+function fmtInversionSeia(mm: number | null | undefined): string {
+  if (mm === null || mm === undefined) return '—'
+  if (mm >= 1000) return `$${(mm / 1000).toFixed(1)} MM MM$`
+  return `$${mm.toFixed(1)} MM$`
+}
+
+function fmtInversionMop(miles: number | null | undefined): string {
+  if (miles === null || miles === undefined) return '—'
+  if (miles >= 1_000_000) return `$${(miles / 1_000_000).toFixed(1)} MM MM$`
+  if (miles >= 1_000)     return `$${(miles / 1_000).toFixed(0)} M MM$`
+  return `$${miles.toLocaleString('es-CL')} miles`
+}
+
+function abrevServicio(s: string | null | undefined): string {
+  if (!s) return '—'
+  return s.replace('Dirección de ', 'Dir. ').replace('Subdirección de ', 'Sub. ')
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -193,6 +247,8 @@ type Props = {
   region: Region
   projects: Project[]
   metrics?: RegionMetrics | null
+  seiaProjects?: SeiaProject[] | null
+  mopProjects?: MopProject[] | null
   fecha: string  // e.g. "Abril 2026"
 }
 
@@ -207,7 +263,7 @@ const EJE_PRIORITY_ORDER = [
   'Modernización e Innovación',
 ]
 
-export default function MinutaDocument({ region, projects, metrics, fecha }: Props) {
+export default function MinutaDocument({ region, projects, metrics, seiaProjects, mopProjects, fecha }: Props) {
   const alta  = projects.filter(p => p.prioridad === 'Alta')
   const media = projects.filter(p => p.prioridad === 'Media')
   const m = metrics ?? null
@@ -332,6 +388,58 @@ export default function MinutaDocument({ region, projects, metrics, fecha }: Pro
             <Text style={s.colPlazo}>{p.plazo}</Text>
           </View>
         ))}
+
+        {/* ── X. Proyectos SEIA ── */}
+        <SectionTitle num="X" title="Proyectos en Evaluación Ambiental (SEIA)" />
+        {seiaProjects && seiaProjects.length > 0 ? (
+          <View>
+            <Text style={s.subNote}>
+              Mostrando {seiaProjects.length} proyecto{seiaProjects.length > 1 ? 's' : ''} más recientes registrados en SEIA.
+            </Text>
+            <View style={s.compactHeader}>
+              <Text style={[s.colNombre,    s.compactHeaderText]}>Nombre</Text>
+              <Text style={[s.colEstado,    s.compactHeaderText]}>Estado</Text>
+              <Text style={[s.colInversion, s.compactHeaderText]}>Inversión</Text>
+              <Text style={[s.colFecha,     s.compactHeaderText]}>Presentación</Text>
+            </View>
+            {seiaProjects.map((p, i) => (
+              <View key={p.id} style={[s.compactRow, i % 2 === 1 ? s.compactRowAlt : {}]}>
+                <Text style={s.colNombre}>{truncStr(p.nombre, 60)}</Text>
+                <Text style={s.colEstado}>{truncStr(p.estado ?? '—', 24)}</Text>
+                <Text style={s.colInversion}>{fmtInversionSeia(p.inversion_mm)}</Text>
+                <Text style={s.colFecha}>{fmtMesAnio(p.fecha_presentacion)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={s.subNote}>Sin proyectos registrados en SEIA para esta región.</Text>
+        )}
+
+        {/* ── XI. Proyectos MOP ── */}
+        <SectionTitle num="XI" title="Proyectos de Obras Públicas (MOP)" />
+        {mopProjects && mopProjects.length > 0 ? (
+          <View>
+            <Text style={s.subNote}>
+              Mostrando {mopProjects.length} proyecto{mopProjects.length > 1 ? 's' : ''} registrados en MOP.
+            </Text>
+            <View style={s.compactHeader}>
+              <Text style={[s.colNombre,    s.compactHeaderText]}>Nombre</Text>
+              <Text style={[s.colServicio,  s.compactHeaderText]}>Servicio</Text>
+              <Text style={[s.colEtapa,     s.compactHeaderText]}>Etapa</Text>
+              <Text style={[s.colInversion, s.compactHeaderText]}>Inversión</Text>
+            </View>
+            {mopProjects.map((p, i) => (
+              <View key={p.cod_p} style={[s.compactRow, i % 2 === 1 ? s.compactRowAlt : {}]}>
+                <Text style={s.colNombre}>{truncStr(p.nombre, 60)}</Text>
+                <Text style={s.colServicio}>{abrevServicio(p.servicio)}</Text>
+                <Text style={s.colEtapa}>{p.etapa ?? '—'}</Text>
+                <Text style={s.colInversion}>{fmtInversionMop(p.inversion_miles)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={s.subNote}>Sin proyectos registrados en MOP para esta región.</Text>
+        )}
 
         {/* Footer */}
         <View style={s.footer} fixed>
