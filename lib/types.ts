@@ -146,6 +146,24 @@ export type MetricSeries = {
   data: { period: string; value: number }[]
 }
 
+// ── MOP Projects ──────────────────────────────────────────────────────────────
+export type MopProject = {
+  cod_p:           string
+  bip:             string | null
+  region_id:       number
+  nombre:          string
+  servicio:        string | null
+  programa:        string | null
+  etapa:           string | null
+  financiamiento:  string | null
+  inversion_miles: number | null
+  provincias:      string | null
+  comunas:         string | null
+  planes:          string | null
+  descripcion:     string | null
+  synced_at:       string
+}
+
 // ── SEIA Projects ─────────────────────────────────────────────────────────────
 export type SeiaProject = {
   id: string

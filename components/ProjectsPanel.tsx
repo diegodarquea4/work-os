@@ -7,11 +7,13 @@ import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
 import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
+import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { INE_CODE } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import RegionMetricsChart from './RegionMetricsChart'
 import RegionComparisonModal from './RegionComparisonModal'
 import SeiaProjectsList from './SeiaProjectsList'
+import MopProjectsList from './MopProjectsList'
 
 // ── Regional trend config ────────────────────────────────────────────────────
 // Add new entries here as more series are synced. name must match metric_name in regional_metrics.
@@ -88,9 +90,11 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
   const [comparisonOpen, setComparisonOpen] = useState(false)
   const [seiaOpen, setSeiaOpen]             = useState(false)
+  const [mopOpen, setMopOpen]               = useState(false)
 
   const trendData  = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
   const seiaData   = useSeiaProjects(region.cod)
+  const mopData    = useMopProjects(region.cod)
 
   const availableTabs = TREND_CONFIG.filter(m =>
     trendData.data.some(s => s.metric_name === m.name)
@@ -434,6 +438,46 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
                 loading={seiaData.loading}
                 error={seiaData.error}
                 regionId={INE_CODE[region.cod] ?? 0}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Proyectos MOP (collapsible) ── */}
+      {(mopData.loading || mopData.proyectos.length > 0) && (
+        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50 relative">
+          <button
+            onClick={() => setMopOpen(o => !o)}
+            disabled={mopData.loading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
+          >
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyectos MOP</p>
+              {!mopData.loading && mopData.total > 0 && (
+                <span className="text-[10px] bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded-full">
+                  {mopData.total.toLocaleString('es-CL')}
+                </span>
+              )}
+            </div>
+            {mopData.loading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${mopOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {mopOpen && (
+            <div className="max-h-72 overflow-y-auto">
+              <MopProjectsList
+                proyectos={mopData.proyectos}
+                total={mopData.total}
+                loading={mopData.loading}
+                error={mopData.error}
               />
             </div>
           )}
