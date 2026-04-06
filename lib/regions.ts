@@ -33,3 +33,22 @@ export const ZONA_COLORS: Record<string, string> = {
   'Sur':          '#22C55E',
   'Austral':      '#A855F7',
 }
+
+/** Maps our region codes to INE numeric codes (used for regional_metrics time-series table).
+ *  NAC (0) is a special code for national-level series stored alongside regional data. */
+export const INE_CODE: Record<string, number> = {
+  XV: 15, I: 1,   II: 2,   III: 3,
+  IV: 4,  V: 5,   RM: 13,  VI: 6,
+  VII: 7, XVI: 16, VIII: 8, IX: 9,
+  XIV: 14, X: 10, XI: 11,  XII: 12,
+  NAC: 0,
+}
+
+/** Maps BCCh PIB regional codes (01-16) to our region string codes.
+ *  Used in ine-sync to map F035 series to regionCod. */
+export const BCCh_PIB_CODE: Record<string, string> = {
+  '01': 'I',  '02': 'II',  '03': 'III', '04': 'IV',
+  '05': 'V',  '06': 'VI',  '07': 'VII', '08': 'VIII',
+  '09': 'IX', '10': 'X',   '11': 'XI',  '12': 'XII',
+  '13': 'RM', '14': 'XIV', '15': 'XV',  '16': 'XVI',
+}

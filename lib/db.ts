@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase'
-import type { Prioridad, RegionMetrics } from './types'
+import type { Prioridad, RegionMetrics, RegionalMetric } from './types'
 import type { Project } from './projects'
 
 // ---------------------------------------------------------------------------
@@ -152,6 +152,26 @@ export async function logSemaforoChange(
     valor_nuevo:    String(valorNuevo),
     cambiado_por:   cambiadoPor,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Regional Metrics (time-series) — separate from the static region_metrics table
+// ---------------------------------------------------------------------------
+
+/** Time-series metrics for a region — used by ProjectsPanel trend charts. */
+export async function getRegionalMetricSeries(
+  regionId: number,
+  metricNames: string[],
+): Promise<RegionalMetric[]> {
+  const { data, error } = await getSupabase()
+    .from('regional_metrics')
+    .select('*')
+    .eq('region_id', regionId)
+    .in('metric_name', metricNames)
+    .order('period', { ascending: true })
+
+  if (error) throw new Error(`DB error (regional_metrics): ${error.message}`)
+  return (data ?? []) as RegionalMetric[]
 }
 
 // ---------------------------------------------------------------------------

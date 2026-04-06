@@ -129,3 +129,19 @@ export type Documento = {
   subido_por: string | null
   created_at: string
 }
+
+// ── Regional Metrics (time-series) ────────────────────────────────────────────
+export type RegionalMetric = {
+  id: string
+  region_id: number
+  metric_name: string
+  value: number
+  period: string          // ISO date "2025-01-01" — first day of reference period
+  source_url: string | null
+  updated_at: string
+}
+
+export type MetricSeries = {
+  metric_name: string
+  data: { period: string; value: number }[]
+}

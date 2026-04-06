@@ -5,7 +5,28 @@ import type { Project } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
+import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import RegionMetricsChart from './RegionMetricsChart'
+
+// ── Regional trend config ────────────────────────────────────────────────────
+// Add new entries here as more series are synced. name must match metric_name in regional_metrics.
+const TREND_CONFIG = [
+  { name: 'tasa_desocupacion', label: 'Desocupación', yFmt: (v: number) => `${v.toLocaleString('es-CL')}%` },
+  { name: 'pib_regional',      label: 'PIB Regional', yFmt: (v: number) => `${v.toFixed(0)} MM$` },
+] as const
+
+// ── National trend config ────────────────────────────────────────────────────
+// Stored with region_id = 0 (NAC). IMACEC = índice actividad económica (base 2018=100).
+const NATIONAL_TREND_CONFIG = [
+  { name: 'imacec',            label: 'IMACEC',             yFmt: (v: number) => v.toFixed(1) },
+  { name: 'pib_nacional',      label: 'PIB Nacional',       yFmt: (v: number) => `${v.toFixed(0)} MM$` },
+  { name: 'tasa_desocupacion', label: 'Desocupación Nac.',  yFmt: (v: number) => `${v.toLocaleString('es-CL')}%` },
+] as const
+
+// Stable arrays for hook dependencies — module-level to avoid re-renders.
+const ALL_TREND_METRIC_NAMES         = TREND_CONFIG.map(m => m.name)
+const ALL_NATIONAL_TREND_METRIC_NAMES = NATIONAL_TREND_CONFIG.map(m => m.name)
 
 const EJE_COLORS: Record<string, string> = {
   'Seguridad y Orden Público':      'bg-red-100 text-red-700',
@@ -68,6 +89,28 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [actividadLoading, setActividadLoading] = useState(false)
+  const [trendOpen, setTrendOpen]               = useState(false)
+  const [activeMetric, setActiveMetric]         = useState<string>(TREND_CONFIG[0].name)
+  const [nationalOpen, setNationalOpen]         = useState(false)
+  const [activeNationalMetric, setActiveNationalMetric] = useState<string>(NATIONAL_TREND_CONFIG[0].name)
+
+  // Regional trend data
+  const trendData = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
+  // National trend data (region_id = 0, same hook with special 'NAC' code)
+  const nationalData = useRegionMetrics('NAC', ALL_NATIONAL_TREND_METRIC_NAMES)
+
+  // Only show tabs for metrics that actually have data
+  const availableTabs = TREND_CONFIG.filter(m =>
+    trendData.data.some(s => s.metric_name === m.name)
+  )
+  const activeSeries = trendData.data.filter(s => s.metric_name === activeMetric)
+  const activeConfig = TREND_CONFIG.find(m => m.name === activeMetric) ?? TREND_CONFIG[0]
+
+  const availableNationalTabs = NATIONAL_TREND_CONFIG.filter(m =>
+    nationalData.data.some(s => s.metric_name === m.name)
+  )
+  const activeNationalSeries = nationalData.data.filter(s => s.metric_name === activeNationalMetric)
+  const activeNationalConfig = NATIONAL_TREND_CONFIG.find(m => m.name === activeNationalMetric) ?? NATIONAL_TREND_CONFIG[0]
 
   // Filters
   const [search, setSearch]                     = useState('')
@@ -302,6 +345,112 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
                   {metrics.vocacion_regional}
                 </p>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tendencia de Indicadores (collapsible) ── */}
+      {(trendData.loading || trendData.data.length > 0) && (
+        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
+          <button
+            onClick={() => setTrendOpen(o => !o)}
+            disabled={trendData.loading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
+          >
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tendencia de Indicadores</p>
+            {trendData.loading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${trendOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {trendOpen && (
+            <div className="px-5 pb-4">
+              {/* Metric tabs — only shown when multiple metrics have data */}
+              {availableTabs.length > 1 && (
+                <div className="flex gap-1 mb-3 border-b border-gray-200">
+                  {availableTabs.map(m => (
+                    <button
+                      key={m.name}
+                      onClick={() => setActiveMetric(m.name)}
+                      className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
+                        activeMetric === m.name
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <RegionMetricsChart
+                series={activeSeries}
+                loading={trendData.loading}
+                error={trendData.error}
+                metricLabels={{ [activeMetric]: activeConfig.label }}
+                yFormatter={activeConfig.yFmt}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Contexto Nacional (collapsible) ── */}
+      {(nationalData.loading || nationalData.data.length > 0) && (
+        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
+          <button
+            onClick={() => setNationalOpen(o => !o)}
+            disabled={nationalData.loading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
+          >
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contexto Nacional</p>
+              <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-medium">BCCh</span>
+            </div>
+            {nationalData.loading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${nationalOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {nationalOpen && (
+            <div className="px-5 pb-4">
+              {availableNationalTabs.length > 1 && (
+                <div className="flex gap-1 mb-3 border-b border-gray-200">
+                  {availableNationalTabs.map(m => (
+                    <button
+                      key={m.name}
+                      onClick={() => setActiveNationalMetric(m.name)}
+                      className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
+                        activeNationalMetric === m.name
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <RegionMetricsChart
+                series={activeNationalSeries}
+                loading={nationalData.loading}
+                error={nationalData.error}
+                metricLabels={{ [activeNationalMetric]: activeNationalConfig.label }}
+                yFormatter={activeNationalConfig.yFmt}
+              />
             </div>
           )}
         </div>

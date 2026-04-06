@@ -6,17 +6,33 @@ El sistema es usado exclusivamente por profesionales de la **División de Coordi
 
 ---
 
-## Qué hace hoy
+## Vistas principales
 
-- **Mapa interactivo** de Chile con las 16 regiones. Al seleccionar una región aparece un panel lateral con sus prioridades, métricas de contexto regional y botón para exportar minuta PDF.
-- **Dashboard nacional**: tabla con todas las prioridades del país, filtros por región, eje, semáforo y prioridad, y resumen RAG agregado.
-- **Bandeja de atención**: identifica automáticamente prioridades que requieren acción inmediata — bloqueadas (semáforo rojo), sin actividad reciente (+15 días) o con avance bajo (menos del 30%).
-- **Modal de seguimiento por prioridad**: registro de avances, reuniones, hitos y alertas con fecha, autor y estado. Vista de línea de tiempo y vista de calendario mensual.
-- **Documentos adjuntos**: subida y descarga de archivos por prioridad, almacenados en Supabase Storage.
-- **Semáforo RAG** por prioridad (verde / ámbar / rojo / gris), editable manualmente con persistencia en base de datos.
-- **% de avance** por prioridad, editable con persistencia.
-- **Minuta PDF** descargable por región con contexto regional (métricas) y lista de prioridades.
-- **Autenticación**: acceso restringido por email y contraseña vía Supabase Auth. Los usuarios se crean manualmente.
+| Vista | Descripción |
+|---|---|
+| **Mapa** | Mapa interactivo de Chile. Click en región abre panel lateral con sus prioridades, indicadores RAG y botón de minuta PDF. |
+| **Dashboard nacional** | Tabla de las 63 prioridades con filtros por región, eje, semáforo y nivel de prioridad. Columna de última actividad con indicadores de inactividad. |
+| **Bandeja de atención** | Detecta automáticamente prioridades que requieren acción: semáforo rojo, sin actividad en +15 días, o avance bajo (<30%). |
+| **Kanban** | Portfolio de las 63 prioridades en 4 columnas por estado RAG (Bloqueadas / En revisión / En verde / Sin evaluar). Filtros por región y eje. |
+
+## Seguimiento por prioridad (modal)
+
+Cada prioridad abre un modal con 4 tabs:
+
+| Tab | Contenido |
+|---|---|
+| **Seguimiento** | CRUD de actualizaciones: avance, reunión, hito, alerta. Con fecha, autor, estado y descripción. |
+| **Historial** | Sparkline de trayectoria RAG · Barra dual avance % vs tiempo transcurrido · Log de cambios de semáforo y % avance · Timeline mensual de seguimientos. |
+| **Calendario** | Fecha límite de la prioridad, editable inline con persistencia. |
+| **Documentos** | Adjuntar y descargar archivos por prioridad (Supabase Storage). |
+
+## Otras funcionalidades
+
+- **Semáforo RAG** (verde / ámbar / rojo / gris) por prioridad, editable con persistencia y audit trail automático.
+- **% de avance** y **responsable** por prioridad, editables con persistencia.
+- **Minuta PDF** descargable por región: contexto regional con ~90 métricas + lista de prioridades.
+- **Contexto regional**: al abrir una región en el mapa se cargan métricas socioeconómicas (demografía, pobreza, empleo, salud, vivienda, seguridad) desde la BD.
+- **Autenticación**: acceso restringido por email y contraseña vía Supabase Auth. Usuarios creados manualmente.
 
 ---
 
@@ -51,18 +67,19 @@ app/
     actividad/all/route.ts   # GET fecha última actividad de todas las prioridades
 
 components/
-  WorkOSApp.tsx              # Shell cliente — maneja estado global de proyectos y navegación entre vistas
+  WorkOSApp.tsx              # Shell cliente — estado global de proyectos y actividad, navegación entre 4 vistas
   ChileMap.tsx               # Mapa interactivo (Leaflet, dynamic import)
   ProjectsPanel.tsx          # Panel lateral por región: prioridades + contexto regional + filtros
-  NationalDashboard.tsx      # Tabla nacional con filtros y estadísticas agregadas
-  AttentionTray.tsx          # Bandeja de atención: alertas automáticas agrupadas
-  ProjectTrackerModal.tsx    # Modal de seguimiento: timeline, calendario, documentos
+  NationalDashboard.tsx      # Tabla nacional con filtros, estadísticas agregadas y columna de actividad
+  AttentionTray.tsx          # Bandeja de atención: alertas automáticas agrupadas por tipo
+  KanbanView.tsx             # Portfolio Kanban: 4 columnas por estado RAG, filtros por región y eje
+  ProjectTrackerModal.tsx    # Modal por prioridad: seguimiento, historial RAG, calendario, documentos
   MinutaDocument.tsx         # Documento PDF (react-pdf)
 
 lib/
   supabase.ts                # Cliente Supabase browser (createBrowserClient)
   db.ts                      # Todas las funciones de acceso a datos
-  types.ts                   # Tipos: Prioridad, RegionMetrics, Seguimiento, Documento
+  types.ts                   # Tipos: Prioridad, RegionMetrics, Seguimiento, Documento, SemaforoLog
   regions.ts                 # Catálogo de 16 regiones con código, capital, zona y coordenadas
   projects.ts                # Tipo Project (shape de prioridad usado por componentes)
   regionColors.ts            # Colores por región para el mapa
@@ -95,6 +112,8 @@ La tabla central. 63 filas — una por prioridad territorial definida para el pe
 | `plazo` | text | Plazo definido (ej: "2026", "2026-2027", "2028") |
 | `estado_semaforo` | text | "verde", "ambar", "rojo" o "gris" — estado RAG |
 | `pct_avance` | integer | Porcentaje de avance (0–100), editable manualmente |
+| `responsable` | text | Nombre del funcionario responsable de la prioridad (nullable) |
+| `fecha_limite` | date | Fecha límite asignada a la prioridad (nullable) |
 
 ### Tabla: `region_metrics`
 
@@ -116,6 +135,20 @@ Actualizaciones manuales sobre una prioridad. Registradas por usuarios del siste
 | `estado` | text | "en_curso", "completado", "bloqueado" o "pendiente" |
 | `fecha` | date | Fecha asignada al evento (elegida por el usuario) |
 | `created_at` | timestamptz | Timestamp de creación del registro |
+
+### Tabla: `semaforo_log`
+
+Audit trail automático de cambios de semáforo RAG y % avance. Se escribe en cada actualización.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | integer PK | |
+| `prioridad_id` | integer | FK → `prioridades_territoriales.n` |
+| `campo` | text | "semaforo" o "pct_avance" |
+| `valor_anterior` | text | Valor antes del cambio (nullable) |
+| `valor_nuevo` | text | Valor después del cambio |
+| `cambiado_por` | text | Nombre del usuario que realizó el cambio (nullable) |
+| `created_at` | timestamptz | Timestamp del cambio |
 
 ### Tabla: `documentos_prioridad`
 
@@ -142,20 +175,33 @@ Todas las tablas tienen política de lectura pública (`SELECT USING (true)`). L
 Supabase Postgres
   └─ app/page.tsx (Server Component)
        └─ getAllPrioridades() [lib/db.ts]
-            └─ WorkOSApp (cliente, estado: localProjects)
-                 ├─ ChileMap
-                 ├─ ProjectsPanel
-                 │    ├─ /api/metrics/[cod]   (métricas contexto)
-                 │    ├─ /api/actividad/[cod] (última actividad)
-                 │    └─ ProjectTrackerModal
-                 │         ├─ seguimientos (fetch directo a Supabase desde cliente)
-                 │         └─ documentos (fetch + upload a Supabase Storage)
-                 ├─ NationalDashboard
-                 └─ AttentionTray
-                      └─ /api/actividad/all
+            └─ WorkOSApp (cliente)
+                 │   estado: localProjects + actividad (todas las prioridades)
+                 │   /api/actividad/all → cargado una vez al montar
+                 │
+                 ├─ Vista: Mapa
+                 │    ├─ ChileMap
+                 │    └─ ProjectsPanel (por región seleccionada)
+                 │         ├─ /api/metrics/[cod]   (métricas contexto regional)
+                 │         ├─ /api/actividad/[cod] (última actividad por región)
+                 │         └─ ProjectTrackerModal
+                 │              ├─ seguimientos    (Supabase cliente)
+                 │              ├─ semaforo_log    (Supabase cliente)
+                 │              └─ documentos      (Supabase Storage)
+                 │
+                 ├─ Vista: Dashboard nacional
+                 │    └─ NationalDashboard (recibe actividad desde WorkOSApp)
+                 │
+                 ├─ Vista: Bandeja de atención
+                 │    └─ AttentionTray (recibe actividad desde WorkOSApp)
+                 │         └─ ProjectTrackerModal
+                 │
+                 └─ Vista: Kanban
+                      └─ KanbanView
+                           └─ ProjectTrackerModal
 ```
 
-Cuando el modal guarda un cambio de semáforo o % avance, llama `onUpdatePrioridad(n, patch)` que propaga el cambio hacia arriba en `WorkOSApp.localProjects` — sin recargar la página.
+Cuando el modal guarda un cambio de semáforo, % avance o responsable, llama `onUpdatePrioridad(n, patch)` que propaga el cambio a `WorkOSApp.localProjects` — reflejándose en las 4 vistas sin recargar la página.
 
 ---
 
@@ -163,7 +209,7 @@ Cuando el modal guarda un cambio de semáforo o % avance, llama `onUpdatePriorid
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<proyecto>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_SUPABASE_ANON=<anon key>
 ```
 
 ---
