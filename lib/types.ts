@@ -145,3 +145,19 @@ export type MetricSeries = {
   metric_name: string
   data: { period: string; value: number }[]
 }
+
+// ── SEIA Projects ─────────────────────────────────────────────────────────────
+export type SeiaProject = {
+  id: string
+  region_id: number
+  nombre: string
+  tipo: string | null
+  estado: string | null
+  titular: string | null
+  inversion_mm: number | null
+  fecha_presentacion: string | null
+  fecha_plazo: string | null
+  actividad_actual: string | null
+  url_ficha: string | null
+  synced_at: string
+}

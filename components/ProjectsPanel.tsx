@@ -6,9 +6,12 @@ import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
 import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
+import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
+import { INE_CODE } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import RegionMetricsChart from './RegionMetricsChart'
 import RegionComparisonModal from './RegionComparisonModal'
+import SeiaProjectsList from './SeiaProjectsList'
 
 // ── Regional trend config ────────────────────────────────────────────────────
 // Add new entries here as more series are synced. name must match metric_name in regional_metrics.
@@ -84,8 +87,10 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [trendOpen, setTrendOpen]           = useState(false)
   const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
   const [comparisonOpen, setComparisonOpen] = useState(false)
+  const [seiaOpen, setSeiaOpen]             = useState(false)
 
-  const trendData = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
+  const trendData  = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
+  const seiaData   = useSeiaProjects(region.cod)
 
   const availableTabs = TREND_CONFIG.filter(m =>
     trendData.data.some(s => s.metric_name === m.name)
@@ -388,6 +393,47 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
                 error={trendData.error}
                 metricLabels={{ [activeMetric]: activeConfig.label }}
                 yFormatter={activeConfig.yFmt}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Proyectos SEIA (collapsible) ── */}
+      {(seiaData.loading || seiaData.proyectos.length > 0) && (
+        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50 relative">
+          <button
+            onClick={() => setSeiaOpen(o => !o)}
+            disabled={seiaData.loading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
+          >
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyectos SEIA</p>
+              {!seiaData.loading && seiaData.total > 0 && (
+                <span className="text-[10px] bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-full">
+                  {seiaData.total.toLocaleString('es-CL')}
+                </span>
+              )}
+            </div>
+            {seiaData.loading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${seiaOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {seiaOpen && (
+            <div className="max-h-72 overflow-y-auto">
+              <SeiaProjectsList
+                proyectos={seiaData.proyectos}
+                total={seiaData.total}
+                loading={seiaData.loading}
+                error={seiaData.error}
+                regionId={INE_CODE[region.cod] ?? 0}
               />
             </div>
           )}

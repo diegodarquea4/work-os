@@ -1,8 +1,6 @@
 {
   "crons": [
-    {
-      "path": "/api/ine-sync",
-      "schedule": "0 7 * * 1"
-    }
+    { "path": "/api/ine-sync",  "schedule": "0 7 * * 1" },
+    { "path": "/api/seia-sync", "schedule": "0 8 * * 1" }
   ]
 }
