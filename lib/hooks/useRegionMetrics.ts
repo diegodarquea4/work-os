@@ -18,7 +18,7 @@ export function useRegionMetrics(
 
   useEffect(() => {
     const regionId = INE_CODE[regionCod]
-    if (!regionId || metricNames.length === 0) {
+    if (regionId === undefined || metricNames.length === 0) {
       setData([])
       return
     }
