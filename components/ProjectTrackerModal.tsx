@@ -31,7 +31,7 @@ const EJE_COLORS: Record<string, string> = {
   'Modernización e Innovación':      'bg-purple-100 text-purple-700',
 }
 
-type Tab = 'seguimiento' | 'documentos' | 'calendario' | 'historial'
+type Tab = 'hitos' | 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500',  ring: 'ring-green-300',  label: 'En verde'    },
@@ -49,7 +49,7 @@ type Props = {
 }
 
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
-  const [tab, setTab]                   = useState<Tab>('seguimiento')
+  const [tab, setTab]                   = useState<Tab>('hitos')
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
   const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
@@ -84,20 +84,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [pctAvance, setPctAvance]     = useState<number>(prioridad.pct_avance ?? 0)
   const [savingSem, setSavingSem]     = useState(false)
 
-  // Fecha límite
-  const [fechaLimite, setFechaLimite]         = useState<string>(prioridad.fecha_limite ?? '')
-  const [editingFecha, setEditingFecha]       = useState(false)
-  const [savingFecha, setSavingFecha]         = useState(false)
-
   // Responsable
   const [responsable, setResponsable]         = useState<string>(prioridad.responsable ?? '')
-  const [editingResponsable, setEditingResponsable] = useState(false)
-  const [savingResponsable, setSavingResponsable]   = useState(false)
+  const [usuarios, setUsuarios]               = useState<{email: string; name: string}[]>([])
 
   const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
 
-  useEffect(() => { loadData() }, [prioridad.n])
+  useEffect(() => {
+    loadData()
+    fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
+  }, [prioridad.n])
+
+  function calcPctFromHitos(segs: Seguimiento[]): number {
+    const hitos = segs.filter(s => s.tipo === 'hito')
+    if (!hitos.length) return 0
+    return Math.round((hitos.filter(h => h.estado === 'completado').length / hitos.length) * 100)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -107,9 +110,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('semaforo_log').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
     ])
-    setSeguimientos((segRes.data ?? []) as Seguimiento[])
+    const segsData = (segRes.data ?? []) as Seguimiento[]
+    setSeguimientos(segsData)
     setDocumentos((docRes.data ?? []) as Documento[])
     setSemaforoLog((logRes.data ?? []) as SemaforoLog[])
+
+    const newPct = calcPctFromHitos(segsData)
+    if (newPct !== (prioridad.pct_avance ?? 0)) {
+      setPctAvance(newPct)
+      const sb2 = getSupabase()
+      const { data: { session } } = await sb2.auth.getSession()
+      await Promise.all([
+        sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('n', prioridad.n),
+        logSemaforoChange(prioridad.n, 'pct_avance', prioridad.pct_avance ?? 0, newPct, session?.user?.email ?? null),
+      ])
+      onUpdatePrioridad(prioridad.n, { pct_avance: newPct })
+    }
+
     setLoading(false)
   }
 
@@ -176,39 +193,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingSem(false)
   }
 
-  async function handleSavePct(value: number) {
-    const clamped = Math.max(0, Math.min(100, value))
-    const anterior = pctAvance
-    setPctAvance(clamped)
-    const sb = getSupabase()
-    const { data: { session } } = await sb.auth.getSession()
-    await Promise.all([
-      sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
-      logSemaforoChange(prioridad.n, 'pct_avance', anterior, clamped, session?.user?.email ?? null),
-    ])
-    onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
-  }
-
-  async function handleSaveResponsable() {
-    setSavingResponsable(true)
-    await getSupabase()
-      .from('prioridades_territoriales')
-      .update({ responsable: responsable.trim() || null })
-      .eq('n', prioridad.n)
-    onUpdatePrioridad(prioridad.n, { responsable: responsable.trim() || null })
-    setEditingResponsable(false)
-    setSavingResponsable(false)
-  }
-
-  async function handleSaveFechaLimite(value: string) {
-    setSavingFecha(true)
-    await getSupabase()
-      .from('prioridades_territoriales')
-      .update({ fecha_limite: value || null })
-      .eq('n', prioridad.n)
-    setFechaLimite(value)
-    setEditingFecha(false)
-    setSavingFecha(false)
+  async function handleHitoEstado(id: number, nuevoEstado: string) {
+    await getSupabase().from('seguimientos').update({ estado: nuevoEstado }).eq('id', id)
+    await loadData()
   }
 
   async function handleDeleteSeg(id: number) {
@@ -275,7 +262,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       <div
-        className="relative w-full max-w-4xl max-h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -350,116 +337,61 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
             <div className="flex items-center gap-2 flex-1">
               <span className="text-xs text-gray-600 flex-shrink-0">Avance</span>
-              <input
-                type="range"
-                min={0} max={100} step={5}
-                value={pctAvance}
-                onChange={e => setPctAvance(Number(e.target.value))}
-                onMouseUp={e => handleSavePct(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={e => handleSavePct(Number((e.target as HTMLInputElement).value))}
-                className="flex-1 accent-slate-900 h-1.5"
-              />
-              <input
-                type="number"
-                min={0} max={100}
-                value={pctAvance}
-                onChange={e => setPctAvance(Number(e.target.value))}
-                onBlur={e => handleSavePct(Number(e.target.value))}
-                className="w-12 text-xs border border-gray-200 rounded px-1.5 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-slate-300"
-              />
-              <span className="text-xs text-gray-600">%</span>
+              <div className="w-32 bg-gray-200 rounded-full h-1.5">
+                <div className="bg-slate-700 h-1.5 rounded-full transition-all" style={{ width: `${pctAvance}%` }} />
+              </div>
+              <span className="text-xs font-semibold text-gray-700">{pctAvance}%</span>
+              <span className="text-xs text-gray-400 italic">calculado desde hitos</span>
             </div>
           </div>
 
           {/* Responsable */}
           <div className="px-5 py-2 border-t border-gray-100 flex items-center gap-2">
             <span className="text-xs text-gray-500 w-24 flex-shrink-0">Responsable</span>
-            {editingResponsable ? (
-              <div className="flex items-center gap-1.5 flex-1">
-                <input
-                  type="text"
-                  value={responsable}
-                  onChange={e => setResponsable(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSaveResponsable(); if (e.key === 'Escape') setEditingResponsable(false) }}
-                  placeholder="Nombre del responsable"
-                  autoFocus
-                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                />
-                <button onClick={handleSaveResponsable} disabled={savingResponsable}
-                  className="text-xs px-2 py-1 bg-slate-900 text-white rounded hover:bg-slate-700 disabled:opacity-50">
-                  {savingResponsable ? '...' : 'Guardar'}
-                </button>
-                <button onClick={() => setEditingResponsable(false)}
-                  className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700">
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setEditingResponsable(true)}
-                className="flex-1 text-left text-xs text-gray-700 hover:text-slate-900 group"
-              >
-                {responsable || <span className="text-gray-400 group-hover:text-gray-500">Sin asignar — clic para editar</span>}
-              </button>
-            )}
-          </div>
-
-          {/* Fecha límite */}
-          <div className="px-5 py-2 border-t border-gray-100 flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-24 flex-shrink-0">Fecha límite</span>
-            {editingFecha ? (
-              <div className="flex items-center gap-1.5 flex-1">
-                <input
-                  type="date"
-                  value={fechaLimite}
-                  onChange={e => setFechaLimite(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSaveFechaLimite(fechaLimite); if (e.key === 'Escape') setEditingFecha(false) }}
-                  autoFocus
-                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-300 text-gray-700"
-                />
-                <button onClick={() => handleSaveFechaLimite(fechaLimite)} disabled={savingFecha}
-                  className="text-xs px-2 py-1 bg-slate-900 text-white rounded hover:bg-slate-700 disabled:opacity-50">
-                  {savingFecha ? '...' : 'Guardar'}
-                </button>
-                <button onClick={() => { setFechaLimite(prioridad.fecha_limite ?? ''); setEditingFecha(false) }}
-                  className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700">
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setEditingFecha(true)}
-                className="flex-1 text-left text-xs text-gray-700 hover:text-slate-900 group"
-              >
-                {fechaLimite
-                  ? new Date(fechaLimite + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-                  : <span className="text-gray-400 group-hover:text-gray-500">Sin fecha — clic para editar</span>
-                }
-              </button>
-            )}
+            <select
+              value={responsable}
+              onChange={async e => {
+                const val = e.target.value
+                setResponsable(val)
+                await getSupabase().from('prioridades_territoriales')
+                  .update({ responsable: val || null }).eq('n', prioridad.n)
+                onUpdatePrioridad(prioridad.n, { responsable: val || null })
+              }}
+              className="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+              <option value="">Sin asignar</option>
+              {usuarios.map(u => (
+                <option key={u.email} value={u.email}>
+                  {u.name !== u.email ? `${u.name} (${u.email})` : u.email}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Tabs */}
           <div className="flex mt-1">
-            {(['seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  tab === t
-                    ? 'border-slate-900 text-slate-900'
-                    : 'border-transparent text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {t === 'seguimiento'
-                  ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}`
-                  : t === 'historial'
-                  ? 'Historial'
-                  : t === 'calendario'
-                  ? 'Calendario'
-                  : `Documentos${documentos.length ? ` (${documentos.length})` : ''}`}
-              </button>
-            ))}
+            {(['hitos', 'seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
+              const hitos = seguimientos.filter(s => s.tipo === 'hito')
+              const label =
+                t === 'hitos'       ? `Hitos${hitos.length ? ` (${hitos.length})` : ''}` :
+                t === 'seguimiento' ? `Seguimiento${seguimientos.filter(s => s.tipo !== 'hito').length ? ` (${seguimientos.filter(s => s.tipo !== 'hito').length})` : ''}` :
+                t === 'historial'   ? 'Historial' :
+                t === 'calendario'  ? 'Calendario' :
+                `Documentos${documentos.length ? ` (${documentos.length})` : ''}`
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                    tab === t
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -467,6 +399,167 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
+          ) : tab === 'hitos' ? (
+            // ── Hitos Kanban ──
+            <div className="px-6 py-4">
+              {/* Add hito button */}
+              {!showForm && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => { setFormTipo('hito'); setShowForm(true) }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M6 2v8M2 6h8" strokeLinecap="round"/>
+                    </svg>
+                    Agregar hito
+                  </button>
+                </div>
+              )}
+
+              {/* Inline form (only shown when showForm + tipo=hito) */}
+              {showForm && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                  <div className="flex gap-2 flex-wrap">
+                    {(Object.entries(TIPO_CONFIG) as [keyof typeof TIPO_CONFIG, typeof TIPO_CONFIG[keyof typeof TIPO_CONFIG]][]).map(([key, cfg]) => (
+                      <button
+                        key={key}
+                        onClick={() => setFormTipo(key)}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                          formTipo === key ? cfg.color : 'bg-white text-gray-400 border border-gray-200'
+                        }`}
+                      >
+                        {cfg.label}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    placeholder="Describe el hito..."
+                    value={formDesc}
+                    onChange={e => setFormDesc(e.target.value)}
+                    rows={2}
+                    className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Autor (opcional)"
+                      value={formAutor}
+                      onChange={e => setFormAutor(e.target.value)}
+                      className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                    />
+                    <select
+                      value={formEstado}
+                      onChange={e => setFormEstado(e.target.value)}
+                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
+                    >
+                      <option value="">Estado (opcional)</option>
+                      {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
+                        <option key={key} value={key}>{cfg.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={formFecha}
+                      onChange={e => setFormFecha(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-700"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !formDesc.trim()}
+                      className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                    >
+                      {saving ? 'Guardando...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Kanban columns */}
+              {(() => {
+                const hitos = seguimientos.filter(s => s.tipo === 'hito')
+                const columns: { key: keyof typeof ESTADO_CONFIG; label: string; color: string; header: string }[] = [
+                  { key: 'pendiente',  label: 'Pendiente',  color: 'bg-gray-50 border-gray-200',   header: 'text-gray-500' },
+                  { key: 'en_curso',   label: 'En curso',   color: 'bg-blue-50 border-blue-100',   header: 'text-blue-600' },
+                  { key: 'completado', label: 'Completado', color: 'bg-green-50 border-green-100', header: 'text-green-700' },
+                  { key: 'bloqueado',  label: 'Bloqueado',  color: 'bg-red-50 border-red-100',     header: 'text-red-600' },
+                ]
+
+                if (hitos.length === 0 && !showForm) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                      <svg className="mb-3" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                      </svg>
+                      <p className="text-sm font-medium text-gray-400">Sin hitos definidos</p>
+                      <p className="text-xs text-gray-300 mt-1">Agrega el primero con el botón de arriba</p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="grid grid-cols-4 gap-3">
+                    {columns.map(col => {
+                      const colHitos = hitos.filter(h => (h.estado ?? 'pendiente') === col.key)
+                      return (
+                        <div key={col.key} className={`rounded-xl border p-3 min-h-32 ${col.color}`}>
+                          <div className={`flex items-center justify-between mb-3`}>
+                            <span className={`text-xs font-semibold uppercase tracking-wider ${col.header}`}>
+                              {col.label}
+                            </span>
+                            <span className="text-xs text-gray-400 bg-white rounded-full px-1.5 py-0.5 border border-gray-100">
+                              {colHitos.length}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {colHitos.map(h => (
+                              <div key={h.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 group">
+                                <p className="text-xs text-gray-800 font-medium leading-snug line-clamp-2 mb-2">
+                                  {h.descripcion}
+                                </p>
+                                <div className="flex items-center gap-1 text-gray-400 mb-2" style={{ fontSize: '10px' }}>
+                                  {h.autor && <span>{h.autor}</span>}
+                                  {h.autor && h.fecha && <span>·</span>}
+                                  {h.fecha && <span>{fmtDate(h.fecha)}</span>}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <select
+                                    value={h.estado ?? 'pendiente'}
+                                    onChange={e => handleHitoEstado(h.id, e.target.value)}
+                                    className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                  >
+                                    {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
+                                      <option key={key} value={key}>{cfg.label}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    onClick={() => handleDeleteSeg(h.id)}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all p-0.5"
+                                    title="Eliminar"
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                      <path d="M2 3h8M5 3V2h2v1M4.5 5.5v3M7.5 5.5v3M2.5 3l.7 7h5.6l.7-7"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {colHitos.length === 0 && (
+                              <p className="text-xs text-gray-300 text-center py-4">Sin hitos</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
           ) : tab === 'historial' ? (
             // ── Historial tab ──
             <div className="px-6 py-5 space-y-6">
@@ -474,21 +567,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               {/* ── Barra de progreso con tiempo ── */}
               {(() => {
                 const pct = pctAvance
-                const limite = prioridad.fecha_limite ?? fechaLimite
-                let tiempoPct: number | null = null
-                let diasRestantes: number | null = null
-                let atrasado = false
-
-                if (limite) {
-                  const inicio = new Date(prioridad.plazo?.match(/\d{4}/)?.[0] + '-01-01') ?? new Date()
-                  const fin = new Date(limite + 'T12:00:00')
-                  const hoy = new Date()
-                  const total = fin.getTime() - inicio.getTime()
-                  const transcurrido = hoy.getTime() - inicio.getTime()
-                  tiempoPct = Math.max(0, Math.min(100, Math.round((transcurrido / total) * 100)))
-                  diasRestantes = Math.ceil((fin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-                  atrasado = diasRestantes < 0
-                }
+                const tiempoPct: number | null = null
+                const diasRestantes: number | null = null
+                const atrasado = false
 
                 return (
                   <div>
@@ -537,11 +618,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                         </div>
                       )}
 
-                      {!limite && (
-                        <p className="text-xs text-gray-400">
-                          Agrega una fecha límite para ver el progreso de tiempo
-                        </p>
-                      )}
                     </div>
                   </div>
                 )
