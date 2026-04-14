@@ -10,13 +10,18 @@ type Props = {
 }
 
 const ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
-  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',          dot: '○' },
-  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',         dot: '◐' },
-  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200',         dot: '✓' },
-  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',               dot: '✗' },
+  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',  dot: '○' },
+  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', dot: '◐' },
+  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
+  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
 }
 
 const ESTADOS: PregoEstado[] = ['pendiente', 'en_curso', 'completado', 'bloqueado']
+
+// Derived once from the constant — E3 phases are grouped visually; pre/post appear as regular columns
+const FASES_E3       = PREGO_FASES.filter(f => f.key.startsWith('e3_'))
+const FASES_PRE_E3   = PREGO_FASES.filter(f => !f.key.startsWith('e3_')).slice(0, 3)
+const FASES_POST_E3  = PREGO_FASES.filter(f => !f.key.startsWith('e3_')).slice(3)
 
 function calcAvance(row: PregoRow): number {
   const completadas = PREGO_FASES.filter(f => row[f.key] === 'completado').length
@@ -111,12 +116,11 @@ export default function PregoView({ userName }: Props) {
   }, [])
 
   async function handleChange(regionCod: string, fase: PregoFaseKey, estado: PregoEstado) {
-    const key = `${regionCod}:${fase}`
     const prev = rows.find(r => r.region_cod === regionCod)
     if (!prev) return
 
     setRows(rs => rs.map(r => r.region_cod === regionCod ? { ...r, [fase]: estado } : r))
-    setSaving(key)
+    setSaving(`${regionCod}:${fase}`)
 
     try {
       await updatePregoFase(regionCod, fase, estado, userName)
@@ -127,15 +131,14 @@ export default function PregoView({ userName }: Props) {
     }
   }
 
-  const completadas = rows.filter(r => calcAvance(r) === 100).length
-  const enProceso   = rows.filter(r => { const p = calcAvance(r); return p > 0 && p < 100 }).length
-  const sinIniciar  = rows.filter(r => calcAvance(r) === 0).length
-  const avgAvance   = rows.length > 0
-    ? Math.round(rows.reduce((s, r) => s + calcAvance(r), 0) / rows.length)
+  // Single pass: compute avance per row once, derive all stats from it
+  const avances = rows.map(calcAvance)
+  const completadas = avances.filter(p => p === 100).length
+  const enProceso   = avances.filter(p => p > 0 && p < 100).length
+  const sinIniciar  = avances.filter(p => p === 0).length
+  const avgAvance   = avances.length > 0
+    ? Math.round(avances.reduce((s, p) => s + p, 0) / avances.length)
     : 0
-
-  const fasesE3    = PREGO_FASES.filter(f => f.key.startsWith('e3_'))
-  const fasesOther = PREGO_FASES.filter(f => !f.key.startsWith('e3_'))
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-50">
@@ -143,9 +146,9 @@ export default function PregoView({ userName }: Props) {
       {/* Summary bar */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-3 flex-wrap">
-          <SummaryCard label="Completadas"  value={completadas.toString()} color="text-green-700"  bg="bg-green-50"  dot="bg-green-500" />
-          <SummaryCard label="En proceso"   value={enProceso.toString()}   color="text-amber-700"  bg="bg-amber-50"  dot="bg-amber-400" />
-          <SummaryCard label="Sin iniciar"  value={sinIniciar.toString()}  color="text-gray-600"   bg="bg-gray-100"  dot="bg-gray-300" />
+          <SummaryCard label="Completadas" value={completadas.toString()} color="text-green-700" bg="bg-green-50"  dot="bg-green-500" />
+          <SummaryCard label="En proceso"  value={enProceso.toString()}   color="text-amber-700" bg="bg-amber-50"  dot="bg-amber-400" />
+          <SummaryCard label="Sin iniciar" value={sinIniciar.toString()}  color="text-gray-600"  bg="bg-gray-100" dot="bg-gray-300" />
           <div className="ml-auto flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-2">
             <span className="text-xs text-gray-500">Avance promedio</span>
             <span className="text-lg font-bold text-slate-700">{avgAvance}%</span>
@@ -153,7 +156,6 @@ export default function PregoView({ userName }: Props) {
         </div>
       </div>
 
-      {/* Table */}
       <div className="flex-1 overflow-auto">
         {loading && (
           <div className="flex items-center justify-center h-48 text-gray-400 text-sm">Cargando...</div>
@@ -174,23 +176,20 @@ export default function PregoView({ userName }: Props) {
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider w-36">
                   Región
                 </th>
-                {/* F0, F1, F2 */}
-                {fasesOther.slice(0, 3).map(f => (
+                {FASES_PRE_E3.map(f => (
                   <th key={f.key} className="px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">
                     {f.label}
                   </th>
                 ))}
-                {/* E3 grouped */}
-                <th colSpan={fasesE3.length} className="px-2 py-2 text-center border-l border-r border-gray-100">
+                <th colSpan={FASES_E3.length} className="px-2 py-2 text-center border-l border-r border-gray-100">
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">E3 — Revisiones paralelas</div>
                   <div className="flex justify-around mt-0.5">
-                    {fasesE3.map(f => (
+                    {FASES_E3.map(f => (
                       <span key={f.key} className="text-gray-400 text-xs">{f.label.replace('E3 ', '')}</span>
                     ))}
                   </div>
                 </th>
-                {/* F6, F7 */}
-                {fasesOther.slice(3).map(f => (
+                {FASES_POST_E3.map(f => (
                   <th key={f.key} className="px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">
                     {f.label}
                   </th>
@@ -201,17 +200,15 @@ export default function PregoView({ userName }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {rows.map(row => {
+              {rows.map((row, i) => {
                 const region = REGIONS.find(r => r.cod === row.region_cod)
-                const avance = calcAvance(row)
                 return (
                   <tr key={row.region_cod} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-gray-800 text-xs leading-tight">{region?.nombre ?? row.region_cod}</div>
                       <div className="text-gray-400 text-xs">{region?.capital}</div>
                     </td>
-                    {/* F0, F1, F2 */}
-                    {fasesOther.slice(0, 3).map(f => (
+                    {FASES_PRE_E3.map(f => (
                       <td key={f.key} className="px-2 py-2.5 text-center">
                         <CeldaEstado
                           estado={row[f.key]}
@@ -220,8 +217,7 @@ export default function PregoView({ userName }: Props) {
                         />
                       </td>
                     ))}
-                    {/* E3 */}
-                    {fasesE3.map(f => (
+                    {FASES_E3.map(f => (
                       <td key={f.key} className="px-1 py-2.5 text-center border-l first:border-l-0 border-gray-100">
                         <CeldaEstado
                           estado={row[f.key]}
@@ -230,8 +226,7 @@ export default function PregoView({ userName }: Props) {
                         />
                       </td>
                     ))}
-                    {/* F6, F7 */}
-                    {fasesOther.slice(3).map(f => (
+                    {FASES_POST_E3.map(f => (
                       <td key={f.key} className="px-2 py-2.5 text-center">
                         <CeldaEstado
                           estado={row[f.key]}
@@ -241,7 +236,7 @@ export default function PregoView({ userName }: Props) {
                       </td>
                     ))}
                     <td className="px-4 py-2.5 text-right">
-                      <AvanceBar pct={avance} />
+                      <AvanceBar pct={avances[i]} />
                     </td>
                   </tr>
                 )
