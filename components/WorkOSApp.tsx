@@ -99,14 +99,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="flex-shrink-0 h-14 bg-slate-900 flex items-center justify-between px-6 shadow-md z-10">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-8 w-auto rounded" />
-            <span className="text-white font-bold text-sm tracking-wide">PSG</span>
+      <header className="flex-shrink-0 h-18 bg-slate-900 flex items-center justify-between px-6 shadow-md z-10">
+        <div className="flex items-center gap-4">
+          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-12 w-auto rounded-lg shadow-sm" />
+          <div className="flex flex-col">
+            <span className="text-white font-bold text-sm tracking-wide leading-tight">PSG</span>
+            <span className="text-slate-400 text-xs leading-tight">Panel Seguimiento Gubernamental — Regiones</span>
           </div>
-          <span className="text-slate-600 text-sm">|</span>
-          <span className="text-slate-300 text-sm">Panel Seguimiento Gubernamental — Regiones</span>
         </div>
 
         <div className="flex items-center gap-4">

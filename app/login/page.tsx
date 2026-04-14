@@ -31,14 +31,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm px-4">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-900 mb-4">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Work OS</h1>
-          <p className="text-sm text-gray-500 mt-1">Prioridades Territoriales</p>
+          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-20 w-auto rounded-xl shadow-sm mx-auto mb-5" />
+          <h1 className="text-xl font-bold text-gray-900">Panel Seguimiento Gubernamental</h1>
+          <p className="text-sm text-gray-500 mt-1">Regiones · PSG</p>
         </div>
 
         <form
