@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Work OS | Prioridades Territoriales",
-  description: "Sistema de seguimiento de prioridades territoriales — Ministerio del Interior",
+  title: "PSG · Panel Seguimiento Gubernamental — Regiones",
+  description: "Panel de seguimiento de iniciativas territoriales — División de Coordinación Interregional, Ministerio del Interior",
 };
 
 export default function RootLayout({

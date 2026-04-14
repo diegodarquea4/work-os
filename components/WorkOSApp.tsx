@@ -102,15 +102,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       <header className="flex-shrink-0 h-14 bg-slate-900 flex items-center justify-between px-6 shadow-md z-10">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-blue-500 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="1.8">
-                <path d="M2 2h4v4H2zM8 2h4v4H8zM2 8h4v4H8z" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <span className="text-white font-bold text-sm tracking-wide">Work OS</span>
+            <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-8 w-auto rounded" />
+            <span className="text-white font-bold text-sm tracking-wide">PSG</span>
           </div>
           <span className="text-slate-600 text-sm">|</span>
-          <span className="text-slate-300 text-sm">Iniciativas Territoriales 2026–2028</span>
+          <span className="text-slate-300 text-sm">Panel Seguimiento Gubernamental — Regiones</span>
         </div>
 
         <div className="flex items-center gap-4">
