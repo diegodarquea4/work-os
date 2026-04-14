@@ -96,15 +96,30 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     }
   }
 
+  function avgPctFor(regionName: string): number {
+    const list = projectsByRegion[regionName] ?? []
+    if (!list.length) return 0
+    return Math.round(list.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / list.length)
+  }
+
+  const globalAvgPct = localIniciativas.length > 0
+    ? Math.round(localIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / localIniciativas.length)
+    : 0
+  const globalRag = {
+    rojo:  localIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
+    ambar: localIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
+    verde: localIniciativas.filter(p => p.estado_semaforo === 'verde').length,
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="flex-shrink-0 h-18 bg-slate-900 flex items-center justify-between px-6 shadow-md z-10">
+      <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">
         <div className="flex items-center gap-4">
-          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-12 w-auto rounded-lg shadow-sm" />
+          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-14 w-auto rounded-lg shadow-sm" />
           <div className="flex flex-col">
-            <span className="text-white font-bold text-sm tracking-wide leading-tight">PSG</span>
-            <span className="text-slate-400 text-xs leading-tight">Panel Seguimiento Gubernamental — Regiones</span>
+            <span className="text-white font-bold text-base tracking-wide leading-tight">PSG</span>
+            <span className="text-slate-400 text-sm leading-tight">Panel Seguimiento Gubernamental — Regiones</span>
           </div>
         </div>
 
@@ -262,50 +277,83 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
           {/* Region list sidebar */}
           {!selectedRegion && (
-            <div className="w-64 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones</h3>
+            <div className="w-80 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+              {/* Summary header */}
+              <div className="px-5 py-4 border-b border-gray-100 bg-slate-50">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Situación general</h3>
+                  <span className="text-xs text-gray-400">16 regiones</span>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${globalAvgPct}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-bold text-slate-700 w-10 text-right">{globalAvgPct}%</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></span>
+                  <span className="ml-auto text-gray-400">{localIniciativas.length} iniciativas</span>
+                </div>
               </div>
+
               <div className="flex-1 overflow-y-auto">
                 {REGIONS.map(region => {
-                  const count = projectCounts[region.nombre] ?? 0
-                  const color = getRegionColor(region.nombre)
-                  const rag   = ragFor(region.nombre)
+                  const count  = projectCounts[region.nombre] ?? 0
+                  const color  = getRegionColor(region.nombre)
+                  const rag    = ragFor(region.nombre)
+                  const avgPct = avgPctFor(region.nombre)
+                  const barColor = avgPct === 100 ? 'bg-green-500' : avgPct >= 60 ? 'bg-blue-500' : avgPct >= 30 ? 'bg-amber-400' : avgPct > 0 ? 'bg-red-400' : 'bg-gray-200'
                   return (
                     <button
                       key={region.cod}
                       onClick={() => handleSelectRegion(region.nombre, region.cod)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-50 transition-colors"
+                      className="w-full px-5 py-3.5 text-left hover:bg-gray-50 border-b border-gray-100 transition-colors"
                     >
-                      <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-800 truncate">{region.nombre}</div>
-                        <div className="text-xs text-gray-600">{region.capital}</div>
-                        {/* RAG mini-indicators */}
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {rag.rojo > 0 && (
-                            <span className="flex items-center gap-0.5">
-                              <span className="w-2 h-2 rounded-full bg-red-500"/>
-                              <span className="text-xs text-red-600 font-medium">{rag.rojo}</span>
-                            </span>
-                          )}
-                          {rag.ambar > 0 && (
-                            <span className="flex items-center gap-0.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-400"/>
-                              <span className="text-xs text-amber-600 font-medium">{rag.ambar}</span>
-                            </span>
-                          )}
-                          {rag.verde > 0 && (
-                            <span className="flex items-center gap-0.5">
-                              <span className="w-2 h-2 rounded-full bg-green-500"/>
-                              <span className="text-xs text-green-600 font-medium">{rag.verde}</span>
-                            </span>
-                          )}
+                      <div className="flex items-start gap-3">
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-1" style={{ backgroundColor: color }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <div className="text-sm font-semibold text-gray-800 truncate">{region.nombre}</div>
+                            <div className="flex-shrink-0 text-right">
+                              <span className="text-sm font-bold text-gray-700">{count}</span>
+                              <span className="text-xs text-gray-400 ml-1">init.</span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500 mb-2">{region.capital}</div>
+                          {/* Progress bar */}
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                              <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${avgPct}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-500 w-8 text-right">{avgPct}%</span>
+                          </div>
+                          {/* RAG indicators */}
+                          <div className="flex items-center gap-2">
+                            {rag.rojo > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                <span className="w-2 h-2 rounded-full bg-red-500"/>
+                                <span className="text-xs text-red-600 font-medium">{rag.rojo}</span>
+                              </span>
+                            )}
+                            {rag.ambar > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400"/>
+                                <span className="text-xs text-amber-600 font-medium">{rag.ambar}</span>
+                              </span>
+                            )}
+                            {rag.verde > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                <span className="w-2 h-2 rounded-full bg-green-500"/>
+                                <span className="text-xs text-green-600 font-medium">{rag.verde}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <div className="text-xs font-bold text-gray-700">{count}</div>
-                        <div className="text-xs text-gray-500">iniciativas</div>
                       </div>
                     </button>
                   )
