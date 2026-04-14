@@ -52,3 +52,11 @@ export const BCCh_PIB_CODE: Record<string, string> = {
   '09': 'IX', '10': 'X',   '11': 'XI',  '12': 'XII',
   '13': 'RM', '14': 'XIV', '15': 'XV',  '16': 'XVI',
 }
+
+/** ISO 3166-2:CL subdivision codes — prefix segment of codigo_iniciativa (XX-NNN-NNN) */
+export const ISO_CODE: Record<string, string> = {
+  XV: 'AP', I: 'TA',   II: 'AN',  III: 'AT',
+  IV: 'CO', V: 'VS',   RM: 'RM',  VI: 'LI',
+  VII: 'ML', XVI: 'NB', VIII: 'BI', IX: 'AR',
+  XIV: 'LR', X: 'LL',  XI: 'AI',  XII: 'MA',
+}

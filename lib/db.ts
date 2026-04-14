@@ -1,19 +1,19 @@
 import { getSupabase } from './supabase'
-import type { Prioridad, RegionMetrics, RegionalMetric } from './types'
-import type { Project } from './projects'
+import type { Prioridad, RegionMetrics, RegionalMetric, PregoRow, PregoEstado, PregoFaseKey } from './types'
+import type { Iniciativa } from './projects'
 
 // ---------------------------------------------------------------------------
 // Prioridades
 // ---------------------------------------------------------------------------
 
-/** All 63 priorities — used for the initial page load (replaces getProjects). */
-export async function getAllPrioridades(): Promise<Project[]> {
+/** All iniciativas — used for the initial page load. */
+export async function getAllIniciativas(): Promise<Iniciativa[]> {
   const { data, error } = await getSupabase()
     .from('prioridades_territoriales')
     .select('*')
     .order('n', { ascending: true })
 
-  if (error) throw new Error(`DB error (prioridades): ${error.message}`)
+  if (error) throw new Error(`DB error (iniciativas): ${error.message}`)
 
   return (data as Prioridad[]).map(row => ({
     n: row.n,
@@ -29,22 +29,26 @@ export async function getAllPrioridades(): Promise<Project[]> {
       .filter(Boolean),
     prioridad: row.prioridad as 'Alta' | 'Media',
     plazo: row.plazo,
-    estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
+    estado_semaforo: (row.estado_semaforo ?? 'gris') as Iniciativa['estado_semaforo'],
     pct_avance: row.pct_avance ?? 0,
     responsable: row.responsable ?? null,
     fecha_limite: row.fecha_limite ?? null,
+    codigo_iniciativa: row.codigo_iniciativa ?? null,
   }))
 }
 
-/** Priorities for one region — used by the PDF minuta route. */
-export async function getPrioridadesByCod(cod: string): Promise<Project[]> {
+/** @deprecated Use getAllIniciativas() */
+export const getAllPrioridades = getAllIniciativas
+
+/** Iniciativas for one region — used by the PDF minuta route. */
+export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
   const { data, error } = await getSupabase()
     .from('prioridades_territoriales')
     .select('*')
     .eq('cod', cod)
     .order('n', { ascending: true })
 
-  if (error) throw new Error(`DB error (prioridades by cod): ${error.message}`)
+  if (error) throw new Error(`DB error (iniciativas by cod): ${error.message}`)
 
   return (data as Prioridad[]).map(row => ({
     n: row.n,
@@ -60,12 +64,16 @@ export async function getPrioridadesByCod(cod: string): Promise<Project[]> {
       .filter(Boolean),
     prioridad: row.prioridad as 'Alta' | 'Media',
     plazo: row.plazo,
-    estado_semaforo: (row.estado_semaforo ?? 'gris') as Project['estado_semaforo'],
+    estado_semaforo: (row.estado_semaforo ?? 'gris') as Iniciativa['estado_semaforo'],
     pct_avance: row.pct_avance ?? 0,
     responsable: row.responsable ?? null,
     fecha_limite: row.fecha_limite ?? null,
+    codigo_iniciativa: row.codigo_iniciativa ?? null,
   }))
 }
+
+/** @deprecated Use getIniciativasByCod() */
+export const getPrioridadesByCod = getIniciativasByCod
 
 // ---------------------------------------------------------------------------
 // Region Metrics
@@ -201,4 +209,29 @@ export async function getMetricsSummaryByCod(cod: string): Promise<Partial<Regio
     throw new Error(`DB error (metrics summary): ${error.message}`)
   }
   return data as Partial<RegionMetrics>
+}
+
+// ---------------------------------------------------------------------------
+// PREGO
+// ---------------------------------------------------------------------------
+
+export async function getAllPrego(): Promise<PregoRow[]> {
+  const { data, error } = await getSupabase()
+    .from('prego_monitoreo')
+    .select('*')
+  if (error) throw new Error(`DB error (prego): ${error.message}`)
+  return (data ?? []) as PregoRow[]
+}
+
+export async function updatePregoFase(
+  regionCod: string,
+  fase: PregoFaseKey,
+  estado: PregoEstado,
+  updatedBy?: string,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from('prego_monitoreo')
+    .update({ [fase]: estado, updated_at: new Date().toISOString(), updated_by: updatedBy ?? null })
+    .eq('region_cod', regionCod)
+  if (error) throw new Error(`DB error (prego update): ${error.message}`)
 }

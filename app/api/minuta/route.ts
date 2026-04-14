@@ -2,26 +2,26 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import MinutaDocument from '@/components/MinutaDocument'
 import type { Region } from '@/lib/regions'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 
 export async function POST(request: Request) {
   const body = await request.json() as { region: Region; fecha: string }
 
-  let projects: Project[]
+  let projects: Iniciativa[]
   let metrics: RegionMetrics | null = null
   let seiaProjects: SeiaProject[] | null = null
   let mopProjects:  MopProject[]  | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
-    const { getPrioridadesByCod, getMetricsByCod } = await import('@/lib/db')
+    const { getIniciativasByCod, getMetricsByCod } = await import('@/lib/db')
     const { getSupabaseAdmin } = await import('@/lib/supabaseServer')
     const sb = getSupabaseAdmin()
     const regionId = INE_CODE[body.region.cod]
 
     const [prioridades, metricas, seiaRes, mopRes] = await Promise.all([
-      getPrioridadesByCod(body.region.cod),
+      getIniciativasByCod(body.region.cod),
       getMetricsByCod(body.region.cod),
       regionId !== undefined
         ? sb.from('seia_projects')

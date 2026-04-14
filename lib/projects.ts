@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-export type Project = {
+export type Iniciativa = {
   n: number
   region: string
   cod: string
@@ -16,13 +16,19 @@ export type Project = {
   pct_avance: number
   responsable: string | null
   fecha_limite: string | null
+  codigo_iniciativa: string | null
 }
 
-export function getProjects(): Project[] {
+export function getIniciativas(): Iniciativa[] {
   const filePath = path.join(process.cwd(), 'data', 'prioridades_territoriales.csv')
   const content = fs.readFileSync(filePath, 'utf-8')
   return parseCSV(content)
 }
+
+/** @deprecated Use getIniciativas() */
+export const getProjects = getIniciativas
+/** @deprecated Use Iniciativa */
+export type Project = Iniciativa
 
 function parseCSV(content: string): Project[] {
   // Split into records respecting quoted fields that may contain newlines
@@ -82,5 +88,6 @@ function parseCSV(content: string): Project[] {
     pct_avance: 0,
     responsable: null,
     fecha_limite: null,
+    codigo_iniciativa: null,
   }))
 }

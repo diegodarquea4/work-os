@@ -1,19 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import type { RegionMetrics } from '@/lib/types'
 import { ZONA_COLORS } from '@/lib/regions'
 import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
+import { usePibSectorial } from '@/lib/hooks/usePibSectorial'
 import { INE_CODE } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import RegionMetricsChart from './RegionMetricsChart'
 import RegionComparisonModal from './RegionComparisonModal'
 import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
+import PibSectorialChart from './PibSectorialChart'
 
 // ── Regional trend config ────────────────────────────────────────────────────
 // Add new entries here as more series are synced. name must match metric_name in regional_metrics.
@@ -55,16 +56,6 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24))
 }
 
-function pct(val: number | null | undefined) {
-  if (val === null || val === undefined) return '—'
-  return `${String(val).replace('.', ',')}%`
-}
-
-function num(val: number | null | undefined) {
-  if (val === null || val === undefined) return '—'
-  return val.toLocaleString('es-CL')
-}
-
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type FilterSemaforo = SemaforoKey | 'todos'
 type FilterPrioridad = 'Alta' | 'Media' | 'todas'
@@ -72,29 +63,28 @@ type SortBy = 'semaforo' | 'prioridad' | 'avance' | 'actividad'
 
 type Props = {
   region: Region
-  projects: Project[]
+  projects: Iniciativa[]
   onClose: () => void
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance'>>) => void
 }
 
-export default function ProjectsPanel({ region, projects, onClose, onUpdatePrioridad }: Props) {
+export default function IniciativasPanel({ region, projects, onClose, onUpdatePrioridad }: Props) {
   const zoneColor = ZONA_COLORS[region.zona] ?? '#6B7280'
   const [downloading, setDownloading]       = useState(false)
-  const [metrics, setMetrics]               = useState<Partial<RegionMetrics> | null>(null)
-  const [selectedPrioridad, setSelectedPrioridad] = useState<Project | null>(null)
-  const [metricsOpen, setMetricsOpen]       = useState(false)
+  const [selectedPrioridad, setSelectedPrioridad] = useState<Iniciativa | null>(null)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
-  const [metricsLoading, setMetricsLoading] = useState(false)
   const [actividadLoading, setActividadLoading] = useState(false)
   const [trendOpen, setTrendOpen]           = useState(false)
   const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
   const [comparisonOpen, setComparisonOpen] = useState(false)
   const [seiaOpen, setSeiaOpen]             = useState(false)
   const [mopOpen, setMopOpen]               = useState(false)
+  const [pibOpen, setPibOpen]               = useState(false)
 
   const trendData  = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
   const seiaData   = useSeiaProjects(region.cod)
   const mopData    = useMopProjects(region.cod)
+  const pibData    = usePibSectorial(region.cod)
 
   const availableTabs = TREND_CONFIG.filter(m =>
     trendData.data.some(s => s.metric_name === m.name)
@@ -109,15 +99,8 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const [sortBy, setSortBy]                     = useState<SortBy>('semaforo')
 
   useEffect(() => {
-    setMetrics(null)
     setActividad({})
-    setMetricsLoading(true)
     setActividadLoading(true)
-    fetch(`/api/metrics/${region.cod}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => setMetrics(data))
-      .catch(() => setMetrics(null))
-      .finally(() => setMetricsLoading(false))
     fetch(`/api/actividad/${region.cod}`)
       .then(r => r.ok ? r.json() : {})
       .then(data => setActividad(data))
@@ -134,7 +117,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
   const media        = projects.filter(p => p.prioridad === 'Media').length
 
   // Filter + sort
-  const filteredProjects = projects
+  const filteredIniciativas = projects
     .filter(p => {
       if (search) {
         const q = search.toLowerCase()
@@ -296,61 +279,6 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
         </div>
       </div>
 
-      {/* ── Contexto Regional (collapsible) ── */}
-      {(metricsLoading || metrics) && (
-        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
-          <button
-            onClick={() => setMetricsOpen(o => !o)}
-            disabled={metricsLoading}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
-          >
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contexto Regional</p>
-            {metricsLoading ? (
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            ) : (
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-                className={`text-gray-500 transition-transform ${metricsOpen ? 'rotate-90' : '-rotate-90'}`}
-              >
-                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
-          {metricsLoading && (
-            <div className="px-5 pb-3 animate-pulse">
-              <div className="grid grid-cols-2 gap-2">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
-                    <div className="h-2.5 bg-gray-200 rounded w-2/3 mb-2" />
-                    <div className="h-4 bg-gray-200 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {!metricsLoading && metricsOpen && metrics && (
-            <div className="px-5 pb-3">
-              <div className="grid grid-cols-2 gap-2">
-                <MetricCard label="Población" value={num(metrics.poblacion_total)} />
-                <MetricCard label="Pobreza ingresos" value={pct(metrics.pct_pobreza_ingresos)} />
-                <MetricCard label="Desempleo" value={pct(metrics.tasa_desocupacion)} />
-                <MetricCard label="PIB (% nacional)" value={pct(metrics.pct_pib_nacional)} />
-                <MetricCard label="FONASA" value={pct(metrics.pct_fonasa)} />
-                <MetricCard label="Lista espera" value={num(metrics.lista_espera_n)} />
-                <MetricCard label="Escolaridad" value={metrics.anios_escolaridad_promedio != null ? `${metrics.anios_escolaridad_promedio} años` : '—'} />
-                <MetricCard label="Internet hogares" value={pct(metrics.pct_hogares_internet)} />
-              </div>
-              {metrics.vocacion_regional && (
-                <p className="text-xs text-gray-600 mt-2 leading-snug">
-                  <span className="font-medium text-gray-700">Vocación: </span>
-                  {metrics.vocacion_regional}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── Tendencia de Indicadores (collapsible) ── */}
       {(trendData.loading || trendData.data.length > 0) && (
         <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
@@ -484,6 +412,37 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
         </div>
       )}
 
+      {/* ── PIB Sectorial (collapsible) ── */}
+      {(pibData.loading || pibData.data.length > 0) && (
+        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
+          <button
+            onClick={() => setPibOpen(o => !o)}
+            disabled={pibData.loading}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
+          >
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">PIB Sectorial</p>
+            {pibData.loading ? (
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-gray-500 transition-transform ${pibOpen ? 'rotate-90' : '-rotate-90'}`}
+              >
+                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {pibOpen && (
+            <PibSectorialChart
+              data={pibData.data}
+              latestPeriod={pibData.latestPeriod}
+              loading={pibData.loading}
+              error={pibData.error}
+            />
+          )}
+        </div>
+      )}
+
       {/* ── Filtros ── */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 space-y-2">
         {/* Search */}
@@ -550,7 +509,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
               className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
             >
               <option value="semaforo">↑ Semáforo</option>
-              <option value="prioridad">↑ Prioridad</option>
+              <option value="prioridad">↑ Alta primero</option>
               <option value="avance">↑ Menor avance</option>
               <option value="actividad">↑ Sin actividad</option>
             </select>
@@ -558,11 +517,11 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
         </div>
       </div>
 
-      {/* ── Projects list ── */}
+      {/* ── Iniciativas list ── */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {filteredProjects.length === 0 ? (
+        {filteredIniciativas.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-sm text-gray-400">Sin prioridades con estos filtros</p>
+            <p className="text-sm text-gray-400">Sin iniciativas con estos filtros</p>
             <button
               onClick={() => { setSearch(''); setFilterSemaforo('todos'); setFilterPrioridad('todas') }}
               className="mt-2 text-xs text-slate-600 underline"
@@ -571,7 +530,7 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
             </button>
           </div>
         ) : (
-          filteredProjects.map(p => {
+          filteredIniciativas.map(p => {
             const sem = SEMAFORO_CONFIG[p.estado_semaforo]
             return (
               <div
@@ -668,15 +627,6 @@ export default function ProjectsPanel({ region, projects, onClose, onUpdatePrior
           onUpdatePrioridad={onUpdatePrioridad}
         />
       )}
-    </div>
-  )
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded-lg px-3 py-2 border border-gray-100">
-      <div className="text-xs text-gray-600 leading-tight">{label}</div>
-      <div className="text-sm font-bold text-gray-800 mt-0.5">{value}</div>
     </div>
   )
 }

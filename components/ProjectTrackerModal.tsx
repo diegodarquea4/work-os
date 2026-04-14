@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { logSemaforoChange } from '@/lib/db'
@@ -43,9 +43,9 @@ const SEMAFORO_CONFIG = {
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 
 type Props = {
-  prioridad: Project
+  prioridad: Iniciativa
   onClose: () => void
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {

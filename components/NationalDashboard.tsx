@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
@@ -31,10 +31,10 @@ type SortCol = 'n' | 'region' | 'eje' | 'semaforo' | 'avance' | 'prioridad' | 'a
 type SortDir = 'asc' | 'desc'
 
 type Props = {
-  projects: Project[]
+  projects: Iniciativa[]
   actividad: Record<number, string | null>
   actividadLoading?: boolean
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 const EJES = Array.from(new Set(
@@ -56,7 +56,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterPrioridad, setFilterPrioridad] = useState<'Alta' | 'Media' | 'todas'>('todas')
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
-  const [selected, setSelected]               = useState<Project | null>(null)
+  const [selected, setSelected]               = useState<Iniciativa | null>(null)
 
   // Sync selected when projects update (after modal saves)
   const selectedSynced = selected

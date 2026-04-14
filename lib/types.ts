@@ -1,4 +1,4 @@
-// ── Prioridades Territoriales ────────────────────────────────────────────────
+// ── Iniciativas (Prioridades Territoriales) ───────────────────────────────────
 export type Prioridad = {
   id: number
   n: number
@@ -15,6 +15,7 @@ export type Prioridad = {
   pct_avance: number | null
   responsable: string | null
   fecha_limite: string | null  // ISO date YYYY-MM-DD
+  codigo_iniciativa: string | null
 }
 
 // ── Semáforo Log ─────────────────────────────────────────────────────────────
@@ -85,6 +86,10 @@ export type RegionMetrics = {
   deficit_habitacional: number | null
   pct_hacinamiento: number | null
   pct_acceso_agua_publica: number | null
+  // Censo 2024
+  n_deficit_cuantitativo: number | null
+  pct_viv_irrecuperables: number | null
+  pct_tenencia_arrendada: number | null
 
   // Seguridad
   pct_hogares_victimas_dmcs: number | null
@@ -95,6 +100,16 @@ export type RegionMetrics = {
   // Conectividad
   pct_hogares_internet: number | null
   localidades_aisladas_n: number | null
+  // Censo 2024
+  pct_internet_movil: number | null
+  pct_internet_fijo: number | null
+
+  // Demografía Censo 2024
+  n_discapacidad: number | null
+  pct_jefatura_mujer: number | null
+
+  // Educación Censo 2024
+  pct_educacion_superior: number | null
 
   // Medio ambiente
   pct_superficie_protegida: number | null
@@ -179,3 +194,35 @@ export type SeiaProject = {
   url_ficha: string | null
   synced_at: string
 }
+
+// ── PREGO ────────────────────────────────────────────────────────────────────
+export type PregoEstado = 'pendiente' | 'en_curso' | 'completado' | 'bloqueado'
+
+export type PregoRow = {
+  region_cod:       string
+  f0_contacto:      PregoEstado
+  f1_borrador:      PregoEstado
+  f2_revision:      PregoEstado
+  e3_dipres:        PregoEstado
+  e3_desi:          PregoEstado
+  e3_subdere:       PregoEstado
+  e3_gore:          PregoEstado
+  f6_consolidacion: PregoEstado
+  f7_firma:         PregoEstado
+  updated_at:       string
+  updated_by:       string | null
+}
+
+export type PregoFaseKey = keyof Omit<PregoRow, 'region_cod' | 'updated_at' | 'updated_by'>
+
+export const PREGO_FASES: { key: PregoFaseKey; label: string }[] = [
+  { key: 'f0_contacto',      label: 'F0 Contacto DPR' },
+  { key: 'f1_borrador',      label: 'F1 Borrador DCI' },
+  { key: 'f2_revision',      label: 'F2 Revisión DPR' },
+  { key: 'e3_dipres',        label: 'E3 DIPRES' },
+  { key: 'e3_desi',          label: 'E3 DESI' },
+  { key: 'e3_subdere',       label: 'E3 SUBDERE' },
+  { key: 'e3_gore',          label: 'E3 GORE' },
+  { key: 'f6_consolidacion', label: 'F6 Consolidación' },
+  { key: 'f7_firma',         label: 'F7 Firma' },
+]

@@ -5,7 +5,7 @@ import {
   View,
   StyleSheet,
 } from '@react-pdf/renderer'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 
@@ -245,7 +245,7 @@ function abrevServicio(s: string | null | undefined): string {
 // ---------------------------------------------------------------------------
 type Props = {
   region: Region
-  projects: Project[]
+  projects: Iniciativa[]
   metrics?: RegionMetrics | null
   seiaProjects?: SeiaProject[] | null
   mopProjects?: MopProject[] | null

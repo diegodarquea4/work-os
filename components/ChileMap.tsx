@@ -79,7 +79,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
     // Tooltip
     layer.bindTooltip(
       `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}<br>
-       <span style="color:#6b7280;font-weight:400">${count} prioridades</span></div>`,
+       <span style="color:#6b7280;font-weight:400">${count} iniciativas</span></div>`,
       { sticky: true, opacity: 0.95 }
     )
   }

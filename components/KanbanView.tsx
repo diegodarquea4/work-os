@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import ProjectTrackerModal from './ProjectTrackerModal'
 
 const COLUMNS = [
@@ -23,12 +23,12 @@ const EJE_COLORS: Record<string, string> = {
 }
 
 type Props = {
-  projects: Project[]
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  projects: Iniciativa[]
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
-  const [selected, setSelected]     = useState<Project | null>(null)
+  const [selected, setSelected]     = useState<Iniciativa | null>(null)
   const [filterRegion, setFilterRegion] = useState('todas')
   const [filterEje, setFilterEje]   = useState('todos')
 
@@ -41,7 +41,7 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
     return true
   })
 
-  const byCol: Record<string, Project[]> = { rojo: [], ambar: [], verde: [], gris: [] }
+  const byCol: Record<string, Iniciativa[]> = { rojo: [], ambar: [], verde: [], gris: [] }
   for (const p of filtered) {
     byCol[p.estado_semaforo]?.push(p)
   }
@@ -73,7 +73,7 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
           {ejes.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
 
-        <span className="text-xs text-gray-400 ml-auto">{filtered.length} prioridades</span>
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} iniciativas</span>
       </div>
 
       {/* ── Kanban board ── */}
@@ -94,7 +94,7 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                   {cards.length === 0 && (
                     <div className={`border-2 border-dashed ${col.border} rounded-xl p-4 text-center text-xs text-gray-400`}>
-                      Sin prioridades
+                      Sin iniciativas
                     </div>
                   )}
                   {cards.map(p => (

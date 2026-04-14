@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import ProjectTrackerModal from './ProjectTrackerModal'
 
 type Props = {
-  projects: Project[]
+  projects: Iniciativa[]
   actividad: Record<number, string | null>
   actividadLoading: boolean
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
 }
 
 const SEMAFORO_DOT: Record<string, string> = {
@@ -19,7 +19,7 @@ const SEMAFORO_DOT: Record<string, string> = {
 }
 
 export default function AttentionTray({ projects, actividad, actividadLoading: loading, onUpdatePrioridad }: Props) {
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
   const [collapsed, setCollapsed]           = useState<Record<string, boolean>>({})
 
   function diasSinActividad(n: number): number | null {
@@ -52,10 +52,10 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  function handleUpdateAndRefresh(n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance'>>) {
+  function handleUpdateAndRefresh(n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance'>>) {
     onUpdatePrioridad(n, patch)
-    if (selectedProject?.n === n) {
-      setSelectedProject(prev => prev ? { ...prev, ...patch } : null)
+    if (selectedIniciativa?.n === n) {
+      setSelectedIniciativa(prev => prev ? { ...prev, ...patch } : null)
     }
   }
 
@@ -67,13 +67,13 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
     return { text: `Hace ${dias} días`, color: 'text-red-500' }
   }
 
-  function ProjectRow({ p }: { p: Project }) {
+  function IniciativaRow({ p }: { p: Iniciativa }) {
     const dias  = diasSinActividad(p.n)
     const fmt   = fmtDias(dias)
     const sem   = p.estado_semaforo ?? 'gris'
     return (
       <button
-        onClick={() => setSelectedProject(p)}
+        onClick={() => setSelectedIniciativa(p)}
         className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-gray-50 border-b border-gray-50 transition-colors group"
       >
         <span className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${SEMAFORO_DOT[sem] ?? 'bg-gray-300'}`} />
@@ -134,7 +134,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
           </div>
         )}
         {isOpen && count === 0 && (
-          <div className="border-t border-gray-100 px-5 py-4 text-sm text-gray-400 text-center">Sin prioridades en esta categoría</div>
+          <div className="border-t border-gray-100 px-5 py-4 text-sm text-gray-400 text-center">Sin iniciativas en esta categoría</div>
         )}
       </div>
     )
@@ -148,7 +148,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Bandeja de atención</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Prioridades que requieren acción inmediata</p>
+            <p className="text-sm text-gray-500 mt-0.5">Iniciativas que requieren acción inmediata</p>
           </div>
           {!loading && (
             <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
@@ -177,7 +177,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
                 </svg>
               }
             >
-              {bloqueadas.map(p => <ProjectRow key={p.n} p={p} />)}
+              {bloqueadas.map(p => <IniciativaRow key={p.n} p={p} />)}
             </Section>
 
             {/* Sin actividad */}
@@ -199,7 +199,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
                   const db = diasSinActividad(b.n) ?? 9999
                   return db - da
                 })
-                .map(p => <ProjectRow key={p.n} p={p} />)}
+                .map(p => <IniciativaRow key={p.n} p={p} />)}
             </Section>
 
             {/* Avance bajo */}
@@ -216,7 +216,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
             >
               {avanceBajo
                 .sort((a, b) => (a.pct_avance ?? 0) - (b.pct_avance ?? 0))
-                .map(p => <ProjectRow key={p.n} p={p} />)}
+                .map(p => <IniciativaRow key={p.n} p={p} />)}
             </Section>
 
           </div>
@@ -224,10 +224,10 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
       </div>
 
       {/* Modal */}
-      {selectedProject && (
+      {selectedIniciativa && (
         <ProjectTrackerModal
-          prioridad={selectedProject}
-          onClose={() => setSelectedProject(null)}
+          prioridad={selectedIniciativa}
+          onClose={() => setSelectedIniciativa(null)}
           onUpdatePrioridad={handleUpdateAndRefresh}
         />
       )}

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import type { GeoJsonObject } from 'geojson'
-import type { Project } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS } from '@/lib/regions'
 import { getRegionColor } from '@/lib/regionColors'
@@ -11,20 +11,21 @@ import ProjectsPanel from './ProjectsPanel'
 import NationalDashboard from './NationalDashboard'
 import AttentionTray from './AttentionTray'
 import KanbanView from './KanbanView'
+import PregoView from './PregoView'
 
 const ChileMap = dynamic(() => import('./ChileMap'), { ssr: false })
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego'
 
 type Props = {
-  projects: Project[]
+  projects: Iniciativa[]
   geoData: GeoJsonObject
 }
 
 export default function WorkOSApp({ projects, geoData }: Props) {
   const [view, setView]                       = useState<View>('mapa')
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
-  const [localProjects, setLocalProjects]     = useState<Project[]>(projects)
+  const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
   const [panelWidth, setPanelWidth]           = useState(420)
   const [actividad, setActividad]             = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(true)
@@ -62,12 +63,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  function handleUpdatePrioridad(n: number, patch: Partial<Pick<Project, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) {
-    setLocalProjects(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
+  function handleUpdatePrioridad(n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) {
+    setLocalIniciativas(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
   }
 
-  const projectsByRegion: Record<string, Project[]> = {}
-  for (const p of localProjects) {
+  const projectsByRegion: Record<string, Iniciativa[]> = {}
+  for (const p of localIniciativas) {
     if (!projectsByRegion[p.region]) projectsByRegion[p.region] = []
     projectsByRegion[p.region].push(p)
   }
@@ -77,7 +78,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     projectCounts[region] = list.length
   }
 
-  const selectedProjects = selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : []
+  const selectedIniciativas = selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : []
 
   function handleSelectRegion(regionName: string, cod: string) {
     const found = REGIONS.find(r => r.cod === cod)
@@ -109,7 +110,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             <span className="text-white font-bold text-sm tracking-wide">Work OS</span>
           </div>
           <span className="text-slate-600 text-sm">|</span>
-          <span className="text-slate-300 text-sm">Prioridades Territoriales 2026–2028</span>
+          <span className="text-slate-300 text-sm">Iniciativas Territoriales 2026–2028</span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -162,10 +163,22 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Kanban
             </button>
+            <button
+              onClick={() => setView('prego')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'prego' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="1" y="1" width="10" height="10" rx="1"/>
+                <path d="M1 4h10M1 7h10M4 4v7" strokeLinecap="round"/>
+              </svg>
+              PREGO
+            </button>
           </div>
 
           <div className="text-slate-400 text-xs">
-            {localProjects.length} prioridades · 16 regiones
+            {localIniciativas.length} iniciativas · 16 regiones
           </div>
         </div>
       </header>
@@ -174,7 +187,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'dashboard' && (
         <div className="flex-1 overflow-hidden">
           <NationalDashboard
-            projects={localProjects}
+            projects={localIniciativas}
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
@@ -186,9 +199,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'kanban' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           <KanbanView
-            projects={localProjects}
+            projects={localIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
+        </div>
+      )}
+
+      {/* PREGO view */}
+      {view === 'prego' && (
+        <div className="flex-1 overflow-hidden">
+          <PregoView />
         </div>
       )}
 
@@ -196,7 +216,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'atencion' && (
         <div className="flex-1 overflow-hidden flex">
           <AttentionTray
-            projects={localProjects}
+            projects={localIniciativas}
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
@@ -218,7 +238,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
             {!selectedRegion && (
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-md text-xs text-gray-600 pointer-events-none z-[1000]">
-                Haz clic en una región para ver sus prioridades
+                Haz clic en una región para ver sus iniciativas
               </div>
             )}
           </div>
@@ -238,7 +258,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </div>
               <ProjectsPanel
                 region={selectedRegion}
-                projects={selectedProjects}
+                projects={selectedIniciativas}
                 onClose={() => setSelectedRegion(null)}
                 onUpdatePrioridad={handleUpdatePrioridad}
               />
@@ -290,7 +310,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                       </div>
                       <div className="flex-shrink-0 text-right">
                         <div className="text-xs font-bold text-gray-700">{count}</div>
-                        <div className="text-xs text-gray-500">prioridades</div>
+                        <div className="text-xs text-gray-500">iniciativas</div>
                       </div>
                     </button>
                   )
