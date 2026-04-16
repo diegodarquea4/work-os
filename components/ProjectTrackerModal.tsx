@@ -21,17 +21,15 @@ const ESTADO_CONFIG = {
 } as const
 
 const EJE_COLORS: Record<string, string> = {
-  'Seguridad y Orden Público':       'bg-red-100 text-red-700',
-  'Infraestructura y Conectividad':  'bg-blue-100 text-blue-700',
-  'Desarrollo Económico y Empleo':   'bg-green-100 text-green-700',
-  'Vivienda y Urbanismo':            'bg-orange-100 text-orange-700',
-  'Energía y Transición Energética': 'bg-yellow-100 text-yellow-700',
-  'Medio Ambiente y Territorio':     'bg-teal-100 text-teal-700',
-  'Desarrollo Social y Familia':     'bg-pink-100 text-pink-700',
-  'Modernización e Innovación':      'bg-purple-100 text-purple-700',
+  'Eje 1: Infraestructura y Conectividad':        'bg-blue-100 text-blue-700',
+  'Eje 2: Energía y Medio Ambiente':              'bg-yellow-100 text-yellow-700',
+  'Eje 3: Salud y Servicios Básicos':             'bg-green-100 text-green-700',
+  'Eje 4: Seguridad y Soberanía':                 'bg-red-100 text-red-700',
+  'Eje 5: Desarrollo Productivo e Innovación':    'bg-purple-100 text-purple-700',
+  'Eje 6: Familia, Educación y Equidad Territorial': 'bg-pink-100 text-pink-700',
 }
 
-type Tab = 'hitos' | 'seguimiento' | 'historial' | 'calendario' | 'documentos'
+type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500',  ring: 'ring-green-300',  label: 'En verde'    },
@@ -45,11 +43,11 @@ type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type Props = {
   prioridad: Iniciativa
   onClose: () => void
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
-  const [tab, setTab]                   = useState<Tab>('hitos')
+  const [tab, setTab]                   = useState<Tab>('seguimiento')
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
   const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
@@ -87,6 +85,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // Responsable
   const [responsable, setResponsable]         = useState<string>(prioridad.responsable ?? '')
   const [usuarios, setUsuarios]               = useState<{email: string; name: string}[]>([])
+
+  // Editable metadata fields
+  const [etapaActual, setEtapaActual]               = useState<string>(prioridad.etapa_actual ?? '')
+  const [proximoHito, setProximoHito]               = useState<string>(prioridad.proximo_hito ?? '')
+  const [fechaProximoHito, setFechaProximoHito]     = useState<string>(prioridad.fecha_proximo_hito ?? '')
+  const [fuenteFinanciamiento, setFuenteFinanciamiento] = useState<string>(prioridad.fuente_financiamiento ?? '')
+  const [editingField, setEditingField]             = useState<string | null>(null)
+  const [savingField, setSavingField]               = useState(false)
 
   const ejeColor     = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const currentEstado = seguimientos.find(s => s.estado)?.estado as keyof typeof ESTADO_CONFIG | undefined
@@ -193,6 +199,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingSem(false)
   }
 
+  async function saveMetaField(field: string, value: string) {
+    setSavingField(true)
+    const patch: Record<string, string | null> = { [field]: value || null }
+    // proximo_hito and fecha_proximo_hito are saved together
+    if (field === 'proximo_hito') patch.fecha_proximo_hito = fechaProximoHito || null
+    if (field === 'fecha_proximo_hito') patch.proximo_hito = proximoHito || null
+    await getSupabase().from('prioridades_territoriales').update(patch).eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, patch as Partial<Iniciativa>)
+    setEditingField(null)
+    setSavingField(false)
+  }
+
   async function handleHitoEstado(id: number, nuevoEstado: string) {
     await getSupabase().from('seguimientos').update({ estado: nuevoEstado }).eq('id', id)
     await loadData()
@@ -274,7 +292,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {prioridad.eje}
                 </span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  prioridad.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                  prioridad.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : prioridad.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                 }`}>
                   {prioridad.prioridad}
                 </span>
@@ -284,17 +302,16 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </span>
                 )}
               </div>
-              <p className="text-base font-semibold text-gray-900 leading-snug">{prioridad.meta}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
-                <span className="flex items-center gap-1">
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="1" y="2" width="10" height="9" rx="1.5"/>
-                    <path d="M4 1v2M8 1v2M1 5h10"/>
-                  </svg>
-                  {prioridad.plazo}
-                </span>
-                <span>·</span>
+              <p className="text-base font-semibold text-gray-900 leading-snug">{prioridad.nombre}</p>
+              {prioridad.descripcion && (
+                <p className="text-xs text-gray-500 leading-relaxed mt-1 line-clamp-2">{prioridad.descripcion}</p>
+              )}
+              <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 flex-wrap">
                 <span>{prioridad.region}</span>
+                {prioridad.comuna && <><span>·</span><span>{prioridad.comuna}</span></>}
+                {prioridad.codigo_iniciativa && (
+                  <span className="font-mono text-gray-400">{prioridad.codigo_iniciativa}</span>
+                )}
               </div>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0">
@@ -304,13 +321,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </button>
           </div>
 
-          {/* Ministerios */}
+          {/* Ministerio */}
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {prioridad.ministerios.map((m, i) => (
-              <span key={i} className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md border border-gray-100">
-                {m}
-              </span>
-            ))}
+            <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md border border-gray-100">
+              {prioridad.ministerio}
+            </span>
           </div>
 
           {/* Semáforo + % avance */}
@@ -368,13 +383,146 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </select>
           </div>
 
+          {/* Metadata */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0 px-3 py-2 bg-gray-50 rounded-xl mb-2 text-xs">
+
+            {/* Etapa actual — editable select */}
+            <div className="flex items-center gap-1.5 py-1">
+              <span className="text-gray-400 w-28 flex-shrink-0">Etapa actual</span>
+              <select
+                value={etapaActual}
+                onChange={async e => {
+                  setEtapaActual(e.target.value)
+                  await saveMetaField('etapa_actual', e.target.value)
+                }}
+                disabled={savingField}
+                className="flex-1 text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+              >
+                <option value="">—</option>
+                <option>Preinversión</option>
+                <option>Diseño</option>
+                <option>Ejecución</option>
+                <option>Terminado</option>
+              </select>
+            </div>
+
+            {/* Fuente de financiamiento — editable select */}
+            <div className="flex items-center gap-1.5 py-1">
+              <span className="text-gray-400 w-28 flex-shrink-0">Fuente de financiamiento</span>
+              <select
+                value={fuenteFinanciamiento}
+                onChange={async e => {
+                  setFuenteFinanciamiento(e.target.value)
+                  await saveMetaField('fuente_financiamiento', e.target.value)
+                }}
+                disabled={savingField}
+                className="flex-1 text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+              >
+                <option value="">—</option>
+                <option>Sectorial</option>
+                <option>FNDR</option>
+                <option>Mixto</option>
+                <option>Privado</option>
+                <option>FONDEMA</option>
+                <option>PEDZE</option>
+              </select>
+            </div>
+
+            {/* Próximo hito — editable text + fecha */}
+            <div className="flex items-start gap-1.5 py-1 col-span-2">
+              <span className="text-gray-400 w-28 flex-shrink-0 pt-0.5">Próximo hito</span>
+              {editingField === 'proximo_hito' ? (
+                <div className="flex flex-1 gap-1.5">
+                  <select
+                    value={proximoHito}
+                    onChange={e => setProximoHito(e.target.value)}
+                    className="flex-1 text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
+                    autoFocus
+                  >
+                    <option value="">—</option>
+                    <option>Obtención RS</option>
+                    <option>Obtención Financiamiento</option>
+                    <option>Presentación Core</option>
+                    <option>Publicación Bases Licitación</option>
+                    <option>Adjudicación Licitación</option>
+                    <option>Término Diseño/Preinversión</option>
+                    <option>Primera Piedra</option>
+                    <option>Inicio Obras/Programa</option>
+                    <option>Término Obras/Programa</option>
+                    <option>Inauguración</option>
+                    <option>Finalizado</option>
+                    <option>Otro</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={fechaProximoHito}
+                    onChange={e => setFechaProximoHito(e.target.value)}
+                    className="text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 w-32"
+                  />
+                  <button
+                    onClick={() => saveMetaField('proximo_hito', proximoHito)}
+                    disabled={savingField}
+                    className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => { setEditingField(null); setProximoHito(prioridad.proximo_hito ?? ''); setFechaProximoHito(prioridad.fecha_proximo_hito ?? '') }}
+                    className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingField('proximo_hito')}
+                  className="flex-1 text-left text-gray-700 font-medium hover:text-slate-900 group flex items-center gap-1"
+                >
+                  {proximoHito ? (
+                    <>
+                      <span>{proximoHito}</span>
+                      {fechaProximoHito && (
+                        <span className="text-gray-400 ml-1">
+                          ({new Date(fechaProximoHito + 'T12:00:00').toLocaleDateString('es-CL', { year: 'numeric', month: 'short' })})
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-300 italic">Agregar hito...</span>
+                  )}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-0 group-hover:opacity-40 flex-shrink-0 ml-1">
+                    <path d="M7 1L9 3L3.5 8.5H1.5V6.5L7 1Z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Static fields */}
+            {prioridad.estado_termino_gobierno && (
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="text-gray-400 w-28 flex-shrink-0">Al término gob.</span>
+                <span className="text-gray-700 font-medium">{prioridad.estado_termino_gobierno}</span>
+              </div>
+            )}
+            {prioridad.inversion_mm && (
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="text-gray-400 w-28 flex-shrink-0">Inversión</span>
+                <span className="text-gray-700 font-medium">${prioridad.inversion_mm.toLocaleString('es-CL')} MM</span>
+              </div>
+            )}
+            {prioridad.rat && prioridad.rat !== 'No Requiere' && prioridad.rat !== 'No Ingresado' && (
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="text-gray-400 w-28 flex-shrink-0">RAT</span>
+                <span className="text-gray-700 font-medium">{prioridad.rat}</span>
+              </div>
+            )}
+          </div>
+
           {/* Tabs */}
           <div className="flex mt-1">
-            {(['hitos', 'seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
-              const hitos = seguimientos.filter(s => s.tipo === 'hito')
+            {(['seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
               const label =
-                t === 'hitos'       ? `Hitos${hitos.length ? ` (${hitos.length})` : ''}` :
-                t === 'seguimiento' ? `Seguimiento${seguimientos.filter(s => s.tipo !== 'hito').length ? ` (${seguimientos.filter(s => s.tipo !== 'hito').length})` : ''}` :
+                t === 'seguimiento' ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}` :
                 t === 'historial'   ? 'Historial' :
                 t === 'calendario'  ? 'Calendario' :
                 `Documentos${documentos.length ? ` (${documentos.length})` : ''}`
@@ -399,167 +547,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
-          ) : tab === 'hitos' ? (
-            // ── Hitos Kanban ──
-            <div className="px-6 py-4">
-              {/* Add hito button */}
-              {!showForm && (
-                <div className="flex justify-end mb-4">
-                  <button
-                    onClick={() => { setFormTipo('hito'); setShowForm(true) }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-700 transition-colors"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M6 2v8M2 6h8" strokeLinecap="round"/>
-                    </svg>
-                    Agregar hito
-                  </button>
-                </div>
-              )}
-
-              {/* Inline form (only shown when showForm + tipo=hito) */}
-              {showForm && (
-                <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
-                  <div className="flex gap-2 flex-wrap">
-                    {(Object.entries(TIPO_CONFIG) as [keyof typeof TIPO_CONFIG, typeof TIPO_CONFIG[keyof typeof TIPO_CONFIG]][]).map(([key, cfg]) => (
-                      <button
-                        key={key}
-                        onClick={() => setFormTipo(key)}
-                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                          formTipo === key ? cfg.color : 'bg-white text-gray-400 border border-gray-200'
-                        }`}
-                      >
-                        {cfg.label}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    placeholder="Describe el hito..."
-                    value={formDesc}
-                    onChange={e => setFormDesc(e.target.value)}
-                    rows={2}
-                    className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Autor (opcional)"
-                      value={formAutor}
-                      onChange={e => setFormAutor(e.target.value)}
-                      className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
-                    />
-                    <select
-                      value={formEstado}
-                      onChange={e => setFormEstado(e.target.value)}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
-                    >
-                      <option value="">Estado (opcional)</option>
-                      {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
-                        <option key={key} value={key}>{cfg.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="date"
-                      value={formFecha}
-                      onChange={e => setFormFecha(e.target.value)}
-                      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-700"
-                    />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={saving || !formDesc.trim()}
-                      className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                    >
-                      {saving ? 'Guardando...' : 'Guardar'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Kanban columns */}
-              {(() => {
-                const hitos = seguimientos.filter(s => s.tipo === 'hito')
-                const columns: { key: keyof typeof ESTADO_CONFIG; label: string; color: string; header: string }[] = [
-                  { key: 'pendiente',  label: 'Pendiente',  color: 'bg-gray-50 border-gray-200',   header: 'text-gray-500' },
-                  { key: 'en_curso',   label: 'En curso',   color: 'bg-blue-50 border-blue-100',   header: 'text-blue-600' },
-                  { key: 'completado', label: 'Completado', color: 'bg-green-50 border-green-100', header: 'text-green-700' },
-                  { key: 'bloqueado',  label: 'Bloqueado',  color: 'bg-red-50 border-red-100',     header: 'text-red-600' },
-                ]
-
-                if (hitos.length === 0 && !showForm) {
-                  return (
-                    <div className="flex flex-col items-center justify-center py-16 text-gray-300">
-                      <svg className="mb-3" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-                      </svg>
-                      <p className="text-sm font-medium text-gray-400">Sin hitos definidos</p>
-                      <p className="text-xs text-gray-300 mt-1">Agrega el primero con el botón de arriba</p>
-                    </div>
-                  )
-                }
-
-                return (
-                  <div className="grid grid-cols-4 gap-3">
-                    {columns.map(col => {
-                      const colHitos = hitos.filter(h => (h.estado ?? 'pendiente') === col.key)
-                      return (
-                        <div key={col.key} className={`rounded-xl border p-3 min-h-32 ${col.color}`}>
-                          <div className={`flex items-center justify-between mb-3`}>
-                            <span className={`text-xs font-semibold uppercase tracking-wider ${col.header}`}>
-                              {col.label}
-                            </span>
-                            <span className="text-xs text-gray-400 bg-white rounded-full px-1.5 py-0.5 border border-gray-100">
-                              {colHitos.length}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {colHitos.map(h => (
-                              <div key={h.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 group">
-                                <p className="text-xs text-gray-800 font-medium leading-snug line-clamp-2 mb-2">
-                                  {h.descripcion}
-                                </p>
-                                <div className="flex items-center gap-1 text-gray-400 mb-2" style={{ fontSize: '10px' }}>
-                                  {h.autor && <span>{h.autor}</span>}
-                                  {h.autor && h.fecha && <span>·</span>}
-                                  {h.fecha && <span>{fmtDate(h.fecha)}</span>}
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <select
-                                    value={h.estado ?? 'pendiente'}
-                                    onChange={e => handleHitoEstado(h.id, e.target.value)}
-                                    className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                  >
-                                    {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
-                                      <option key={key} value={key}>{cfg.label}</option>
-                                    ))}
-                                  </select>
-                                  <button
-                                    onClick={() => handleDeleteSeg(h.id)}
-                                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all p-0.5"
-                                    title="Eliminar"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                      <path d="M2 3h8M5 3V2h2v1M4.5 5.5v3M7.5 5.5v3M2.5 3l.7 7h5.6l.7-7"/>
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                            {colHitos.length === 0 && (
-                              <p className="text-xs text-gray-300 text-center py-4">Sin hitos</p>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </div>
           ) : tab === 'historial' ? (
             // ── Historial tab ──
             <div className="px-6 py-5 space-y-6">

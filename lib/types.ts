@@ -7,14 +7,22 @@ export type Prioridad = {
   capital: string
   zona: string
   eje: string
-  meta: string
-  ministerios: string  // newline-separated; split('\n') where needed
-  prioridad: 'Alta' | 'Media'
-  plazo: string
+  nombre: string
+  descripcion: string | null
+  ministerio: string
+  prioridad: 'Alta' | 'Media' | 'Baja'
+  etapa_actual: string | null
+  estado_termino_gobierno: string | null
+  proximo_hito: string | null
+  fecha_proximo_hito: string | null  // ISO date YYYY-MM-DD
+  fuente_financiamiento: string | null
+  codigo_bip: string | null
+  inversion_mm: number | null
+  comuna: string | null
+  rat: string | null
   estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris' | null
   pct_avance: number | null
   responsable: string | null
-  fecha_limite: string | null  // ISO date YYYY-MM-DD
   codigo_iniciativa: string | null
 }
 
@@ -215,14 +223,14 @@ export type PregoRow = {
 
 export type PregoFaseKey = keyof Omit<PregoRow, 'region_cod' | 'updated_at' | 'updated_by'>
 
-export const PREGO_FASES: { key: PregoFaseKey; label: string }[] = [
-  { key: 'f0_contacto',      label: 'F0 Contacto DPR' },
-  { key: 'f1_borrador',      label: 'F1 Borrador DCI' },
-  { key: 'f2_revision',      label: 'F2 Revisión DPR' },
-  { key: 'e3_dipres',        label: 'E3 DIPRES' },
-  { key: 'e3_desi',          label: 'E3 DESI' },
-  { key: 'e3_subdere',       label: 'E3 SUBDERE' },
-  { key: 'e3_gore',          label: 'E3 GORE' },
-  { key: 'f6_consolidacion', label: 'F6 Consolidación' },
-  { key: 'f7_firma',         label: 'F7 Firma' },
+export const PREGO_FASES: { key: PregoFaseKey; label: string; sublabel: string }[] = [
+  { key: 'f0_contacto',      label: 'F0', sublabel: 'Contacto' },
+  { key: 'f1_borrador',      label: 'F1', sublabel: 'Borrador' },
+  { key: 'f2_revision',      label: 'F2', sublabel: 'Revisión' },
+  { key: 'e3_dipres',        label: 'F3', sublabel: 'DIPRES' },
+  { key: 'e3_desi',          label: 'F3', sublabel: 'DESI' },
+  { key: 'e3_subdere',       label: 'F3', sublabel: 'SUBDERE' },
+  { key: 'e3_gore',          label: 'F3', sublabel: 'GORE' },
+  { key: 'f6_consolidacion', label: 'F4', sublabel: 'Consolidación' },
+  { key: 'f7_firma',         label: 'F5', sublabel: 'Firma' },
 ]

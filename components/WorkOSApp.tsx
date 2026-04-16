@@ -63,7 +63,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  function handleUpdatePrioridad(n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) {
+  function handleUpdatePrioridad(n: number, patch: Partial<Iniciativa>) {
     setLocalIniciativas(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
   }
 

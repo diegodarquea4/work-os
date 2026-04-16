@@ -24,7 +24,7 @@ const EJE_COLORS: Record<string, string> = {
 
 type Props = {
   projects: Iniciativa[]
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
@@ -109,15 +109,14 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
                           {p.eje}
                         </span>
                         <span className={`text-xs font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full ${
-                          p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : p.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                         }`}>
                           {p.prioridad}
                         </span>
                       </div>
 
-                      {/* Meta */}
                       <p className="text-xs text-gray-800 leading-snug line-clamp-3 mb-2 group-hover:text-slate-900">
-                        {p.meta}
+                        {p.nombre}
                       </p>
 
                       {/* Footer */}

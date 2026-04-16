@@ -374,18 +374,18 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
         <View style={s.tableHeader}>
           <Text style={[s.colN, s.tableHeaderText]}>#</Text>
           <Text style={[s.colEje, s.tableHeaderText]}>Eje Estratégico</Text>
-          <Text style={[s.colMeta, s.tableHeaderText]}>Meta / Acción</Text>
+          <Text style={[s.colMeta, s.tableHeaderText]}>Iniciativa</Text>
           <Text style={[s.colPrioridad, s.tableHeaderText]}>Prioridad</Text>
-          <Text style={[s.colPlazo, s.tableHeaderText]}>Plazo</Text>
+          <Text style={[s.colPlazo, s.tableHeaderText]}>Estado Término Gob.</Text>
         </View>
 
         {sorted.map((p, i) => (
           <View key={p.n} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
             <Text style={s.colN}>{i + 1}</Text>
             <Text style={s.colEje}>{p.eje}</Text>
-            <Text style={s.colMeta}>{p.meta}</Text>
+            <Text style={s.colMeta}>{p.nombre}</Text>
             <Text style={s.colPrioridad}>{p.prioridad}</Text>
-            <Text style={s.colPlazo}>{p.plazo}</Text>
+            <Text style={s.colPlazo}>{p.estado_termino_gobierno ?? '—'}</Text>
           </View>
         ))}
 

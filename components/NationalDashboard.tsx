@@ -34,7 +34,7 @@ type Props = {
   projects: Iniciativa[]
   actividad: Record<number, string | null>
   actividadLoading?: boolean
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 const EJES = Array.from(new Set(
@@ -53,7 +53,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
   const [filterSemaforo, setFilterSemaforo]   = useState<SemaforoKey | 'todos'>('todos')
-  const [filterPrioridad, setFilterPrioridad] = useState<'Alta' | 'Media' | 'todas'>('todas')
+  const [filterPrioridad, setFilterPrioridad] = useState<'Alta' | 'Media' | 'Baja' | 'todas'>('todas')
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -80,9 +80,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     let list = projects.filter(p => {
       if (search) {
         const q = search.toLowerCase()
-        if (!p.meta.toLowerCase().includes(q) &&
+        if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
-            !p.ministerios.some(m => m.toLowerCase().includes(q))) return false
+            !p.ministerio.toLowerCase().includes(q)) return false
       }
       if (filterRegion !== 'todas' && p.region !== filterRegion) return false
       if (filterEje !== 'todos' && p.eje !== filterEje) return false
@@ -121,10 +121,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       Capital: p.capital,
       Zona: p.zona,
       Eje: p.eje,
-      Meta: p.meta,
-      Ministerios: p.ministerios.join('; '),
+      Iniciativa: p.nombre,
+      Ministerio: p.ministerio,
       Prioridad: p.prioridad,
-      Plazo: p.plazo,
+      'Estado Término Gob.': p.estado_termino_gobierno ?? '',
       Semáforo: SEMAFORO_CONFIG[p.estado_semaforo]?.label ?? p.estado_semaforo,
       'Avance (%)': p.pct_avance,
       Responsable: p.responsable ?? '',
@@ -230,7 +230,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
           {/* Prioridad chips */}
           <div className="flex items-center gap-1">
-            {(['todas', 'Alta', 'Media'] as const).map(p => (
+            {(['todas', 'Alta', 'Media', 'Baja'] as const).map(p => (
               <button
                 key={p}
                 onClick={() => setFilterPrioridad(p)}
@@ -278,7 +278,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               <ColHeader col="prioridad" label="Prioridad" />
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Responsable</th>
               <ColHeader col="actividad" label="Actividad" />
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Plazo</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado Término Gob.</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
@@ -309,13 +309,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                     </span>
                   </td>
                   <td className="px-3 py-3 max-w-[320px]">
-                    <p className="text-xs text-gray-800 line-clamp-2 leading-snug">{p.meta}</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {p.ministerios.slice(0, 2).map((m, i) => (
-                        <span key={i} className="text-xs text-gray-500">{m}{i < Math.min(p.ministerios.length, 2) - 1 ? ',' : ''}</span>
-                      ))}
-                      {p.ministerios.length > 2 && <span className="text-xs text-gray-400">+{p.ministerios.length - 2}</span>}
-                    </div>
+                    <p className="text-xs text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
+                    <span className="text-xs text-gray-500 mt-1 block">{p.ministerio}</span>
                   </td>
                   <td className="px-3 py-3">
                     <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${sem.badge}`}>
@@ -340,7 +335,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   </td>
                   <td className="px-3 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                      p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                      p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : p.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                     }`}>
                       {p.prioridad}
                     </span>
@@ -361,7 +356,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                       return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
                     })()}
                   </td>
-                  <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{p.plazo}</td>
+                  <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{p.estado_termino_gobierno ?? <span className="text-gray-300">—</span>}</td>
                 </tr>
               )
             })}

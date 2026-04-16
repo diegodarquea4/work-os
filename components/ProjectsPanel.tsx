@@ -58,14 +58,14 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
 
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type FilterSemaforo = SemaforoKey | 'todos'
-type FilterPrioridad = 'Alta' | 'Media' | 'todas'
+type FilterPrioridad = 'Alta' | 'Media' | 'Baja' | 'todas'
 type SortBy = 'semaforo' | 'prioridad' | 'avance' | 'actividad'
 
 type Props = {
   region: Region
   projects: Iniciativa[]
   onClose: () => void
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 export default function IniciativasPanel({ region, projects, onClose, onUpdatePrioridad }: Props) {
@@ -121,9 +121,9 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
     .filter(p => {
       if (search) {
         const q = search.toLowerCase()
-        const inMeta = p.meta.toLowerCase().includes(q)
-        const inMin  = p.ministerios.some(m => m.toLowerCase().includes(q))
-        if (!inMeta && !inMin) return false
+        const inNombre = p.nombre.toLowerCase().includes(q)
+        const inMin    = p.ministerio.toLowerCase().includes(q)
+        if (!inNombre && !inMin) return false
       }
       if (filterSemaforo !== 'todos' && p.estado_semaforo !== filterSemaforo) return false
       if (filterPrioridad !== 'todas' && p.prioridad !== filterPrioridad) return false
@@ -488,7 +488,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
           <div className="w-px h-4 bg-gray-200 mx-0.5"/>
 
           {/* Prioridad chips */}
-          {(['todas', 'Alta', 'Media'] as FilterPrioridad[]).map(p => (
+          {(['todas', 'Alta', 'Media', 'Baja'] as FilterPrioridad[]).map(p => (
             <button
               key={p}
               onClick={() => setFilterPrioridad(p)}
@@ -550,23 +550,21 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
                     </span>
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                    p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : p.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                   }`}>
                     {p.prioridad}
                   </span>
                 </div>
 
-                {/* Meta */}
-                <p className="text-sm text-gray-800 leading-snug mb-3">{p.meta}</p>
+                {/* Nombre */}
+                <p className="text-sm text-gray-800 leading-snug mb-3">{p.nombre}</p>
 
-                {/* Ministerios */}
+                {/* Ministerio */}
                 <div className="space-y-1 mb-3">
-                  {p.ministerios.map((m, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0"/>
-                      <span className="text-xs text-gray-700">{m}</span>
-                    </div>
-                  ))}
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0"/>
+                    <span className="text-xs text-gray-700">{p.ministerio}</span>
+                  </div>
                 </div>
 
                 {/* Plazo + % avance */}
@@ -577,7 +575,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
                         <rect x="1" y="2" width="10" height="9" rx="1.5"/>
                         <path d="M4 1v2M8 1v2M1 5h10"/>
                       </svg>
-                      <span className="text-xs text-gray-600">{p.plazo}</span>
+                      <span className="text-xs text-gray-600">{p.fecha_proximo_hito ?? '—'}</span>
                     </div>
                     <span className="text-xs font-semibold text-gray-600">{p.pct_avance}%</span>
                   </div>

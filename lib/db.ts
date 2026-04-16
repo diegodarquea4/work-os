@@ -6,6 +6,34 @@ import type { Iniciativa } from './projects'
 // Prioridades
 // ---------------------------------------------------------------------------
 
+function mapRow(row: Prioridad): Iniciativa {
+  return {
+    n:                      row.n,
+    region:                 row.region,
+    cod:                    row.cod,
+    capital:                row.capital,
+    zona:                   row.zona,
+    eje:                    row.eje,
+    nombre:                 row.nombre,
+    descripcion:            row.descripcion ?? null,
+    ministerio:             row.ministerio,
+    prioridad:              row.prioridad as Iniciativa['prioridad'],
+    etapa_actual:           row.etapa_actual ?? null,
+    estado_termino_gobierno: row.estado_termino_gobierno ?? null,
+    proximo_hito:           row.proximo_hito ?? null,
+    fecha_proximo_hito:     row.fecha_proximo_hito ?? null,
+    fuente_financiamiento:  row.fuente_financiamiento ?? null,
+    codigo_bip:             row.codigo_bip ?? null,
+    inversion_mm:           row.inversion_mm ?? null,
+    comuna:                 row.comuna ?? null,
+    rat:                    row.rat ?? null,
+    estado_semaforo:        (row.estado_semaforo ?? 'gris') as Iniciativa['estado_semaforo'],
+    pct_avance:             row.pct_avance ?? 0,
+    responsable:            row.responsable ?? null,
+    codigo_iniciativa:      row.codigo_iniciativa ?? null,
+  }
+}
+
 /** All iniciativas — used for the initial page load. */
 export async function getAllIniciativas(): Promise<Iniciativa[]> {
   const { data, error } = await getSupabase()
@@ -15,26 +43,7 @@ export async function getAllIniciativas(): Promise<Iniciativa[]> {
 
   if (error) throw new Error(`DB error (iniciativas): ${error.message}`)
 
-  return (data as Prioridad[]).map(row => ({
-    n: row.n,
-    region: row.region,
-    cod: row.cod,
-    capital: row.capital,
-    zona: row.zona,
-    eje: row.eje,
-    meta: row.meta,
-    ministerios: row.ministerios
-      .split('\n')
-      .map((m: string) => m.trim())
-      .filter(Boolean),
-    prioridad: row.prioridad as 'Alta' | 'Media',
-    plazo: row.plazo,
-    estado_semaforo: (row.estado_semaforo ?? 'gris') as Iniciativa['estado_semaforo'],
-    pct_avance: row.pct_avance ?? 0,
-    responsable: row.responsable ?? null,
-    fecha_limite: row.fecha_limite ?? null,
-    codigo_iniciativa: row.codigo_iniciativa ?? null,
-  }))
+  return (data as Prioridad[]).map(mapRow)
 }
 
 /** @deprecated Use getAllIniciativas() */
@@ -50,26 +59,7 @@ export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
 
   if (error) throw new Error(`DB error (iniciativas by cod): ${error.message}`)
 
-  return (data as Prioridad[]).map(row => ({
-    n: row.n,
-    region: row.region,
-    cod: row.cod,
-    capital: row.capital,
-    zona: row.zona,
-    eje: row.eje,
-    meta: row.meta,
-    ministerios: row.ministerios
-      .split('\n')
-      .map((m: string) => m.trim())
-      .filter(Boolean),
-    prioridad: row.prioridad as 'Alta' | 'Media',
-    plazo: row.plazo,
-    estado_semaforo: (row.estado_semaforo ?? 'gris') as Iniciativa['estado_semaforo'],
-    pct_avance: row.pct_avance ?? 0,
-    responsable: row.responsable ?? null,
-    fecha_limite: row.fecha_limite ?? null,
-    codigo_iniciativa: row.codigo_iniciativa ?? null,
-  }))
+  return (data as Prioridad[]).map(mapRow)
 }
 
 /** @deprecated Use getIniciativasByCod() */

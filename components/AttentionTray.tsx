@@ -8,7 +8,7 @@ type Props = {
   projects: Iniciativa[]
   actividad: Record<number, string | null>
   actividadLoading: boolean
-  onUpdatePrioridad: (n: number, patch: Partial<Pick<Iniciativa, 'estado_semaforo' | 'pct_avance' | 'responsable'>>) => void
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 const SEMAFORO_DOT: Record<string, string> = {
@@ -78,7 +78,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
       >
         <span className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${SEMAFORO_DOT[sem] ?? 'bg-gray-300'}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-800 leading-snug line-clamp-2 group-hover:text-slate-900">{p.meta}</p>
+          <p className="text-sm text-gray-800 leading-snug line-clamp-2 group-hover:text-slate-900">{p.nombre}</p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-xs text-gray-500">{p.region}</span>
             <span className="text-gray-300">·</span>

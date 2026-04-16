@@ -8,14 +8,22 @@ export type Iniciativa = {
   capital: string
   zona: string
   eje: string
-  meta: string
-  ministerios: string[]
-  prioridad: 'Alta' | 'Media'
-  plazo: string
+  nombre: string
+  descripcion: string | null
+  ministerio: string
+  prioridad: 'Alta' | 'Media' | 'Baja'
+  etapa_actual: string | null
+  estado_termino_gobierno: string | null
+  proximo_hito: string | null
+  fecha_proximo_hito: string | null
+  fuente_financiamiento: string | null
+  codigo_bip: string | null
+  inversion_mm: number | null
+  comuna: string | null
+  rat: string | null
   estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'gris'
   pct_avance: number
   responsable: string | null
-  fecha_limite: string | null
   codigo_iniciativa: string | null
 }
 
@@ -80,14 +88,22 @@ function parseCSV(content: string): Project[] {
     capital: f[3] || '',
     zona: f[4] || '',
     eje: f[5] || '',
-    meta: f[6] || '',
-    ministerios: (f[7] || '').split('\n').map(m => m.trim()).filter(Boolean),
-    prioridad: (f[8] || 'Media') as 'Alta' | 'Media',
-    plazo: f[9] || '',
+    nombre: f[6] || '',
+    descripcion: null,
+    ministerio: f[7] || '',
+    prioridad: (f[8] || 'Media') as 'Alta' | 'Media' | 'Baja',
+    etapa_actual: null,
+    estado_termino_gobierno: null,
+    proximo_hito: null,
+    fecha_proximo_hito: null,
+    fuente_financiamiento: null,
+    codigo_bip: null,
+    inversion_mm: null,
+    comuna: null,
+    rat: null,
     estado_semaforo: 'gris' as const,
     pct_avance: 0,
     responsable: null,
-    fecha_limite: null,
     codigo_iniciativa: null,
   }))
 }
