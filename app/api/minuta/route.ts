@@ -5,8 +5,10 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
+import { requireAuth } from '@/lib/apiAuth'
 
 export async function POST(request: Request) {
+  if (!await requireAuth()) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   const body = await request.json() as { region: Region; fecha: string }
 
   let projects: Iniciativa[]

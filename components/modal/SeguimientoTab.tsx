@@ -127,7 +127,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
             value={formDesc}
             onChange={e => setFormDesc(e.target.value)}
             rows={3}
-            className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+            className="w-full text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
           />
           <div className="flex gap-2">
             <input
@@ -135,12 +135,12 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
               placeholder="Autor (opcional)"
               value={formAutor}
               onChange={e => setFormAutor(e.target.value)}
-              className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+              className="flex-1 text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
             />
             <select
               value={formEstado}
               onChange={e => setFormEstado(e.target.value)}
-              className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
+              className="flex-1 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
             >
               <option value="">Estado (sin cambio)</option>
               {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
@@ -219,12 +219,12 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
                             placeholder="Autor (opcional)"
                             value={editAutor}
                             onChange={e => setEditAutor(e.target.value)}
-                            className="flex-1 text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                            className="flex-1 text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                           />
                           <select
                             value={editEstado}
                             onChange={e => setEditEstado(e.target.value)}
-                            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white text-gray-600"
+                            className="flex-1 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                           >
                             <option value="">Sin estado</option>
                             {Object.entries(ESTADO_CONFIG).map(([key, c]) => (

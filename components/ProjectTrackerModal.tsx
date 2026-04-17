@@ -311,7 +311,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   <select
                     value={proximoHito}
                     onChange={e => setProximoHito(e.target.value)}
-                    className="flex-1 text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
+                    className="flex-1 text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
                     autoFocus
                   >
                     <option value="">—</option>
@@ -332,7 +332,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     type="date"
                     value={fechaProximoHito}
                     onChange={e => setFechaProximoHito(e.target.value)}
-                    className="text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 w-32"
+                    className="text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 w-32"
                   />
                   <button
                     onClick={() => saveMetaField('proximo_hito', proximoHito)}
@@ -429,7 +429,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     value={inversionMm}
                     onChange={e => setInversionMm(e.target.value)}
                     placeholder="0"
-                    className="w-28 text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
+                    className="w-28 text-xs text-gray-800 placeholder:text-gray-400 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
                     autoFocus
                   />
                   <button
@@ -474,7 +474,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     value={codigoBip}
                     onChange={e => setCodigoBip(e.target.value)}
                     placeholder="Ej: 30123456"
-                    className="w-36 text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white font-mono"
+                    className="w-36 text-xs text-gray-800 placeholder:text-gray-400 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white font-mono"
                     autoFocus
                   />
                   <button

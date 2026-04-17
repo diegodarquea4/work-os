@@ -34,16 +34,18 @@ function fileIcon(tipo: string | null) {
 export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     const sb   = getSupabase()
     const path = `${prioridadId}/${Date.now()}_${file.name}`
     const { error: storageErr } = await sb.storage.from('project-docs').upload(path, file)
     if (storageErr) {
-      alert(`Error subiendo archivo: ${storageErr.message}`)
+      setUploadError(`Error subiendo archivo: ${storageErr.message}`)
       setUploading(false)
       return
     }
@@ -69,6 +71,12 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Pr
   return (
     <div className="px-6 py-4">
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
+      {uploadError && (
+        <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}

@@ -57,6 +57,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
   const [selectedPrioridad, setSelectedPrioridad] = useState<Iniciativa | null>(null)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(false)
+  const [toast, setToast]                   = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [trendOpen, setTrendOpen]           = useState(false)
   const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
   const [comparisonOpen, setComparisonOpen] = useState(false)
@@ -147,7 +148,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       URL.revokeObjectURL(url)
     } catch (e) {
       console.error(e)
-      alert('Error al generar la minuta. Inténtalo de nuevo.')
+      setToast({ type: 'error', msg: 'Error al generar la minuta. Inténtalo de nuevo.' })
+      setTimeout(() => setToast(null), 4000)
     } finally {
       setDownloading(false)
     }
@@ -370,7 +372,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por meta o ministerio..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+            className="w-full pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -536,6 +538,13 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
           onClose={() => setSelectedPrioridad(null)}
           onUpdatePrioridad={onUpdatePrioridad}
         />
+      )}
+
+      {toast && (
+        <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+          <span>{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="ml-1 opacity-70 hover:opacity-100">✕</button>
+        </div>
       )}
     </div>
   )

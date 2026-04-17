@@ -8,12 +8,12 @@ import type { Region } from '@/lib/regions'
 import { REGIONS } from '@/lib/regions'
 import { getRegionColor } from '@/lib/regionColors'
 import ProjectsPanel from './ProjectsPanel'
-import NationalDashboard from './NationalDashboard'
-import AttentionTray from './AttentionTray'
-import KanbanView from './KanbanView'
-import PregoView from './PregoView'
 
-const ChileMap = dynamic(() => import('./ChileMap'), { ssr: false })
+const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
+const NationalDashboard = dynamic(() => import('./NationalDashboard'))
+const AttentionTray    = dynamic(() => import('./AttentionTray'))
+const KanbanView       = dynamic(() => import('./KanbanView'))
+const PregoView        = dynamic(() => import('./PregoView'))
 
 type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego'
 

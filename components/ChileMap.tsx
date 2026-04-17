@@ -1,12 +1,35 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvent } from 'react-leaflet'
 import type { GeoJsonObject, Feature } from 'geojson'
 import type { Layer, LeafletMouseEvent, PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { REGIONS } from '@/lib/regions'
 import { getRegionColor } from '@/lib/regionColors'
+
+// Bounding box de Chile continental + extremos (Arica al norte, Cabo de Hornos al sur)
+const CHILE_BOUNDS: [[number, number], [number, number]] = [[-56, -76], [-17, -66]]
+// Márgenes holgados para restringir paneo sin que se sienta asfixiante
+const MAX_BOUNDS: [[number, number], [number, number]] = [[-62, -82], [-14, -60]]
+
+function MapController() {
+  const map = useMap()
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+    map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] })
+    // Espera a que el ajuste termine y congela ese zoom como mínimo
+    map.once('moveend', () => { map.setMinZoom(map.getZoom()) })
+  }, [map])
+
+  // Re-ajusta Chile cuando el contenedor cambia de tamaño
+  useMapEvent('resize', () => { map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] }) })
+
+  return null
+}
 
 type Props = {
   geoData: GeoJsonObject
@@ -86,12 +109,15 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
 
   return (
     <MapContainer
-      center={[-35.5, -71.5]}
-      zoom={4}
+      bounds={CHILE_BOUNDS}
+      boundsOptions={{ padding: [20, 20] }}
+      maxBounds={MAX_BOUNDS}
+      maxBoundsViscosity={1.0}
       className="h-full w-full"
       zoomControl={true}
       attributionControl={true}
     >
+      <MapController />
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://carto.com/">CARTO</a>'

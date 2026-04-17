@@ -144,28 +144,26 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // The description row is row 2 and tells users exactly what to fill in.
   // Import reads row 1 as headers and skips row 2 (description row).
   const TEMPLATE_COLS = [
-    // ── Referencia (no modificar) ──────────────────────────────────────────
-    { key: '#',                     label: '#',                     desc: '⚠ NO MODIFICAR — Identificador único',                                                                                     wch: 6,  editable: false },
-    { key: 'region',                label: 'Región',                desc: '⚠ NO MODIFICAR — Solo referencia',                                                                                         wch: 22, editable: false },
-    { key: 'nombre',                label: 'Nombre Iniciativa',     desc: '⚠ NO MODIFICAR — Solo referencia',                                                                                         wch: 52, editable: false },
-    { key: 'ministerio',            label: 'Ministerio',            desc: '⚠ NO MODIFICAR — Solo referencia',                                                                                         wch: 24, editable: false },
-    // ── Campos editables ───────────────────────────────────────────────────
-    { key: 'eje_gobierno',          label: 'Eje Gobierno',          desc: 'Valores: Economía | Social | Seguridad',                                                                                   wch: 16, editable: true  },
-    { key: 'prioridad',             label: 'Prioridad',             desc: 'Valores: Alta | Media | Baja   (máx. 10% en Alta)',                                                                        wch: 14, editable: true  },
-    { key: 'etapa_actual',          label: 'Etapa Actual',          desc: 'Valores: Preinversión | Diseño | Ejecución | Terminado',                                                                   wch: 20, editable: true  },
-    { key: 'estado_termino_gobierno', label: 'Estado Término Gob.', desc: 'Valores: Inaugurado/Terminado/Presentado | Término Diseño | Inicio Obras/Programa | Término Etapa Preinversional | Adjudicación de Licitación', wch: 36, editable: true },
-    { key: 'estado_semaforo',       label: 'Semáforo',              desc: 'Valores: verde | ambar | rojo | gris',                                                                                     wch: 14, editable: true  },
-    { key: 'pct_avance',            label: 'Avance %',              desc: 'Número entero de 0 a 100  (ej: 65)',                                                                                       wch: 12, editable: true  },
-    { key: 'responsable',           label: 'Responsable',           desc: 'Texto libre — nombre del responsable en la Delegación',                                                                    wch: 24, editable: true  },
-    { key: 'proximo_hito',          label: 'Próximo Hito',          desc: 'Valores: Otro | Obtención RS | Obtención Financiamiento | Presentación Core | Publicación Bases Licitación | Adjudicación Licitación | Término Diseño/Preinversión | Primera Piedra | Inicio Obras/Programa | Término Obras/Programa | Inauguración | Finalizado', wch: 42, editable: true },
-    { key: 'fecha_proximo_hito',    label: 'Fecha Próximo Hito',    desc: 'Formato DD-MM-AAAA  (ej: 15-06-2025)  — puede estar vacío',                                                               wch: 22, editable: true  },
-    { key: 'inversion_mm',          label: 'Inversión MM$',         desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                          wch: 18, editable: true  },
-    { key: 'codigo_bip',            label: 'Código BIP',            desc: 'Código numérico del BIP/MIDESO — puede estar vacío si no aplica',                                                         wch: 16, editable: true  },
-    { key: 'codigo_iniciativa',     label: 'Código Iniciativa',     desc: 'Código interno del sistema DCI  (ej: INI-2025-0042) — puede estar vacío',                                                 wch: 22, editable: true  },
-    { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS',                                           wch: 20, editable: true  },
-    { key: 'fuente_financiamiento', label: 'Fuente Financiamiento', desc: 'Valores: FNDR | Mixto | Sectorial | Privado | FONDEMA | PEDZE — puede estar vacío',                                       wch: 24, editable: true  },
-    { key: 'descripcion',           label: 'Descripción',           desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                 wch: 54, editable: true  },
-    { key: 'comuna',                label: 'Comuna',                desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                       wch: 20, editable: true  },
+    // ── Referencia ─────────────────────────────────────────────────────────
+    { key: '#',                     label: '#',                     desc: '⚠ NO MODIFICAR — Identificador único de la iniciativa en el sistema',                                                      wch: 6  },
+    { key: 'region',                label: 'Región',                desc: '⚠ NO MODIFICAR — Solo referencia',                                                                                         wch: 22 },
+    // ── Datos del Plan Regional de Gobierno ────────────────────────────────
+    { key: 'nombre',                label: 'Nombre Iniciativa',     desc: 'Nombre completo de la iniciativa territorial',                                                                              wch: 52 },
+    { key: 'eje',                   label: 'Eje',                   desc: 'Eje 1: Infraestructura y Conectividad | Eje 2: Energía y Medio Ambiente | Eje 3: Salud y Servicios Básicos | Eje 4: Seguridad y Soberanía | Eje 5: Desarrollo Productivo e Innovación | Eje 6: Familia, Educación y Equidad Territorial', wch: 44 },
+    { key: 'eje_gobierno',          label: 'Eje Gobierno',          desc: 'Valores: Economía | Social | Seguridad  (varía por región — definir con la Delegación)',                               wch: 16 },
+    { key: 'ministerio',            label: 'Ministerio',            desc: 'Ministerio responsable de la iniciativa',                                                                                    wch: 28 },
+    { key: 'comuna',                label: 'Comuna',                desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                        wch: 20 },
+    { key: 'etapa_actual',          label: 'Etapa Actual',          desc: 'Valores: Preinversión | Diseño | Ejecución | Terminado',                                                                    wch: 20 },
+    { key: 'estado_termino_gobierno', label: 'Estado Término Gob.', desc: 'Inaugurado/Terminado/Presentado | Término Diseño | Inicio Obras/Programa | Término Obras/Programa | Término Etapa Preinversional | Adjudicación de Licitación | Otro', wch: 40 },
+    { key: 'proximo_hito',          label: 'Próximo Hito',          desc: 'Otro | Obtención RS | Obtención Financiamiento | Presentación Core | Publicación Bases Licitación | Adjudicación Licitación | Término Diseño/Preinversión | Primera Piedra | Inicio Obras/Programa | Término Obras/Programa | Inauguración | Finalizado', wch: 42 },
+    { key: 'fecha_proximo_hito',    label: 'Fecha Próximo Hito',    desc: 'Formato DD-MM-AAAA  (ej: 31-12-2027)  — puede estar vacío',                                                                wch: 22 },
+    { key: 'prioridad',             label: 'Prioridad',             desc: 'Valores: Alta | Media | Baja',                                                                                              wch: 14 },
+    { key: 'fuente_financiamiento', label: 'Fuente Financiamiento', desc: 'Valores: FNDR | Mixto | Sectorial | Privado | FONDEMA | PEDZE — puede estar vacío',                                        wch: 24 },
+    { key: 'codigo_bip',            label: 'Código BIP',            desc: 'Código numérico del BIP — puede estar vacío si no aplica',                                                                  wch: 16 },
+    { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS',                                            wch: 20 },
+    { key: 'codigo_iniciativa',     label: 'Código Iniciativa',     desc: 'Código interno DCI — puede estar vacío',                                                                                    wch: 22 },
+    { key: 'inversion_mm',          label: 'Inversión ($MM)',       desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                            wch: 18 },
+    { key: 'descripcion',           label: 'Descripción',           desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                  wch: 54 },
   ] as const
 
   function downloadTemplate() {
@@ -176,43 +174,42 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
     const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow])
     ws['!cols'] = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
-    // Freeze the 2-row header so users can always see field names + valid values while scrolling
-    ws['!freeze'] = { xSplit: 4, ySplit: 2 }
+    // Freeze # and Región columns + 2-row header
+    ws['!freeze'] = { xSplit: 2, ySplit: 2 }
 
     // ── Instrucciones sheet ─────────────────────────────────────────────────
     const instrAoa = [
-      ['GUÍA DE LLENADO — Módulo de Importación de Iniciativas Territoriales', '', '', ''],
-      ['División de Coordinación Interministerial  ·  Unidad de Regiones', '', '', ''],
+      ['GUÍA DE LLENADO — Plan Regional de Gobierno · Importación de Iniciativas Territoriales', '', '', ''],
+      ['División de Coordinación Interregional  ·  Ministerio del Interior', '', '', ''],
       ['', '', '', ''],
       ['CÓMO USAR ESTE ARCHIVO', '', '', ''],
       ['1. Trabaja SOLO en la hoja "Carga". No mover ni renombrar esa hoja.', '', '', ''],
-      ['2. Las primeras 4 columnas (# / Región / Nombre / Ministerio) son solo referencia — NO las modifiques.', '', '', ''],
-      ['3. La fila 2 (en gris) indica los valores permitidos para cada campo. Esa fila NO se importa.', '', '', ''],
-      ['4. Edita los campos desde la columna E en adelante, a partir de la fila 3.', '', '', ''],
-      ['5. Para dejar un campo vacío (limpiar el dato), simplemente borra la celda.', '', '', ''],
-      ['6. Sube el archivo desde el botón "Importar" en el Dashboard.', '', '', ''],
+      ['2. Las columnas # y Región son solo referencia — NO las modifiques.', '', '', ''],
+      ['3. La fila 2 (descripción de campos) NO se importa — es solo guía.', '', '', ''],
+      ['4. Completa los datos a partir de la fila 3.', '', '', ''],
+      ['5. Para dejar un campo vacío, simplemente deja la celda en blanco.', '', '', ''],
+      ['6. El semáforo, el avance % y el responsable se gestionan desde el panel — no van en este archivo.', '', '', ''],
+      ['7. Sube el archivo completado desde el botón "Importar" en el Dashboard.', '', '', ''],
       ['', '', '', ''],
       ['CAMPO', 'OBLIGATORIO', 'VALORES PERMITIDOS', 'DESCRIPCIÓN'],
-      ['#', 'Solo referencia', '—', 'Identificador único. NO MODIFICAR.'],
+      ['#', 'Solo referencia', '—', 'Identificador único de la iniciativa en el sistema. NO MODIFICAR.'],
       ['Región', 'Solo referencia', '—', 'Región. NO MODIFICAR.'],
-      ['Nombre Iniciativa', 'Solo referencia', '—', 'Nombre. NO MODIFICAR.'],
-      ['Ministerio', 'Solo referencia', '—', 'Ministerio ejecutor. NO MODIFICAR.'],
-      ['Eje Gobierno', 'No', 'Economía | Social | Seguridad', 'Eje presidencial al que pertenece la iniciativa.'],
-      ['Prioridad', 'No', 'Alta | Media | Baja', 'Nivel de prioridad. Máximo 10% de iniciativas puede ser Alta.'],
-      ['Etapa Actual', 'Sí', 'Preinversión | Diseño | Ejecución | Terminado', 'Etapa en que se encuentra actualmente la iniciativa.'],
-      ['Estado Término Gob.', 'Sí', 'Inaugurado/Terminado/Presentado · Término Diseño · Inicio Obras/Programa · Término Etapa Preinversional · Adjudicación de Licitación', 'Estado en que se espera encontrar la iniciativa al término del gobierno. No puede quedar vacío.'],
-      ['Semáforo', 'No', 'verde | ambar | rojo | gris', 'Estado de avance general de la iniciativa. verde = en tiempo; ambar = en revisión; rojo = bloqueado; gris = sin evaluar.'],
-      ['Avance %', 'No', 'Número entero 0–100', 'Porcentaje de avance de la iniciativa.'],
-      ['Responsable', 'No', 'Texto libre', 'Nombre del referente en la Delegación Presidencial.'],
-      ['Próximo Hito', 'Sí', 'Otro · Obtención RS · Obtención Financiamiento · Presentación Core · Publicación Bases Licitación · Adjudicación Licitación · Término Diseño/Preinversión · Primera Piedra · Inicio Obras/Programa · Término Obras/Programa · Inauguración · Finalizado', 'Próximo hito concreto esperado. Debe actualizarse en cada reporte.'],
-      ['Fecha Próximo Hito', 'No', 'DD-MM-AAAA  (ej: 15-06-2025)', 'Fecha estimada del próximo hito. Puede estar vacío.'],
-      ['Inversión MM$', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
-      ['Código BIP', 'No', 'Código numérico', 'Código del BIP/MIDESO. Dejar vacío si no aplica (ej: iniciativas legislativas).'],
-      ['Código Iniciativa', 'No', 'Ej: INI-2025-0042', 'Código interno del sistema DCI. Puede estar vacío.'],
-      ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS', 'FI = Factibilidad Inicial; IN = Ingresado; RS = Recomendación Satisfactoria; RE = Revisado con Errores; OT = Otro.'],
-      ['Fuente Financiamiento', 'No', 'FNDR · Mixto · Sectorial · Privado · FONDEMA · PEDZE', 'FNDR = Fondo Nacional de Desarrollo Regional; FONDEMA = Fondo de Desarrollo Zonas Extremas; PEDZE = Plan Especial Zonas Extremas.'],
-      ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa. Puede estar vacío.'],
+      ['Nombre Iniciativa', 'Sí', 'Texto libre', 'Nombre completo de la iniciativa territorial.'],
+      ['Eje', 'Sí', 'Eje 1–6 (ver valores completos en columna)', 'Eje estratégico regional de la iniciativa.'],
+      ['Eje Gobierno', 'No', 'Economía | Social | Seguridad', 'Eje presidencial. Varía por región — definir con la Delegación. No se auto-deduce del Eje Regional.'],
+      ['Ministerio', 'Sí', 'Texto libre', 'Ministerio responsable de la ejecución.'],
       ['Comuna', 'No', 'Texto libre', 'Comuna de ejecución. Dejar vacío si abarca toda la región.'],
+      ['Etapa Actual', 'No', 'Preinversión | Diseño | Ejecución | Terminado', 'Etapa en que se encuentra actualmente la iniciativa.'],
+      ['Estado Término Gob.', 'No', 'Inaugurado/Terminado/Presentado · Término Diseño · Inicio Obras/Programa · Término Obras/Programa · Término Etapa Preinversional · Adjudicación de Licitación · Otro', 'Estado esperado al término del gobierno.'],
+      ['Próximo Hito', 'No', 'Otro · Obtención RS · Obtención Financiamiento · Presentación Core · Publicación Bases Licitación · Adjudicación Licitación · Término Diseño/Preinversión · Primera Piedra · Inicio Obras/Programa · Término Obras/Programa · Inauguración · Finalizado', 'Próximo hito concreto esperado.'],
+      ['Fecha Próximo Hito', 'No', 'DD-MM-AAAA  (ej: 31-12-2027)', 'Fecha estimada del próximo hito.'],
+      ['Prioridad', 'No', 'Alta | Media | Baja', 'Nivel de prioridad de la iniciativa.'],
+      ['Fuente Financiamiento', 'No', 'FNDR · Mixto · Sectorial · Privado · FONDEMA · PEDZE', 'Fuente de financiamiento. PEDZE = Plan Especial Zonas Extremas.'],
+      ['Código BIP', 'No', 'Código numérico', 'Código del BIP/MIDESO. Dejar vacío si no aplica.'],
+      ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS', 'RS = Recomendación Satisfactoria; FI = Factibilidad Inicial; IN = Ingresado.'],
+      ['Código Iniciativa', 'No', 'Texto libre', 'Código interno del Plan Regional de Gobierno. Puede estar vacío.'],
+      ['Inversión ($MM)', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
+      ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa.'],
     ]
     const wsInstr = XLSX.utils.aoa_to_sheet(instrAoa)
     wsInstr['!cols'] = [{ wch: 26 }, { wch: 16 }, { wch: 80 }, { wch: 60 }]
@@ -224,14 +221,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   // Closed-list validators
-  const VALID_SEMAFORO       = ['verde', 'ambar', 'rojo', 'gris']
+  const VALID_EJE            = EJES
+  const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
   const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja']
   const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS']
   const VALID_ETAPA          = ['Preinversión', 'Diseño', 'Ejecución', 'Terminado']
-  const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación']
+  const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro']
   const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Inauguración', 'Finalizado']
   const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE']
-  const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
 
   // Phase 1: parse file and build preview (no DB writes)
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -258,9 +255,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       const headers = raw[0] as string[]
       const dataRows = raw.slice(2)
 
-      function col(row: string[], label: string): string {
+      // Returns undefined when the column header is absent (partial template),
+      // '' when the cell exists but is empty — callers treat these differently.
+      function col(row: string[], label: string): string | undefined {
         const idx = headers.indexOf(label)
-        return idx >= 0 ? String(row[idx] ?? '').trim() : ''
+        if (idx < 0) return undefined
+        return String(row[idx] ?? '').trim()
       }
 
       const preview: ImportPreviewRow[] = []
@@ -278,10 +278,16 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const patch: Record<string, unknown> = {}
 
         // ── Closed-list fields ──
-        const semaforo = col(row, 'Semáforo')
-        if (semaforo) {
-          if (!VALID_SEMAFORO.includes(semaforo)) rowErrors.push(`semáforo "${semaforo}" inválido`)
-          else patch.estado_semaforo = semaforo
+        const eje = col(row, 'Eje')
+        if (eje) {
+          if (!VALID_EJE.includes(eje)) rowErrors.push(`eje "${eje}" inválido`)
+          else patch.eje = eje
+        }
+        // Eje Gobierno: must be explicitly set per region — no auto-derivation
+        const ejeGobierno = col(row, 'Eje Gobierno')
+        if (ejeGobierno) {
+          if (!VALID_EJE_GOBIERNO.includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
+          else patch.eje_gobierno = ejeGobierno
         }
         const prioridad = col(row, 'Prioridad')
         if (prioridad) {
@@ -313,21 +319,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           if (!VALID_RAT.includes(rat)) rowErrors.push(`RAT "${rat}" inválido`)
           else patch.rat = rat
         }
-        const ejeGobierno = col(row, 'Eje Gobierno')
-        if (ejeGobierno) {
-          if (!VALID_EJE_GOBIERNO.includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
-          else patch.eje_gobierno = ejeGobierno
-        }
 
         // ── Numeric fields ──
-        const avanceStr = col(row, 'Avance %')
-        if (avanceStr !== '') {
-          const num = Number(avanceStr)
-          if (isNaN(num) || num < 0 || num > 100) rowErrors.push(`avance "${avanceStr}" inválido (0–100)`)
-          else patch.pct_avance = Math.round(num)
-        }
-        const inversionStr = col(row, 'Inversión MM$')
-        if (inversionStr !== '') {
+        const inversionStr = col(row, 'Inversión ($MM)')
+        if (inversionStr !== undefined && inversionStr !== '') {
           const num = Number(String(inversionStr).replace(',', '.'))
           if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
           else patch.inversion_mm = num
@@ -335,7 +330,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
         // ── Date: DD-MM-AAAA → YYYY-MM-DD ──
         const fechaRaw = col(row, 'Fecha Próximo Hito')
-        if (fechaRaw !== '') {
+        if (fechaRaw !== undefined && fechaRaw !== '') {
           const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
           if (!dm) rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA`)
           else patch.fecha_proximo_hito = `${dm[3]}-${dm[2]}-${dm[1]}`
@@ -343,7 +338,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
         // ── Free text fields ──
         for (const [label, dbCol] of [
-          ['Responsable', 'responsable'],
+          ['Nombre Iniciativa', 'nombre'],
+          ['Ministerio', 'ministerio'],
           ['Código BIP', 'codigo_bip'],
           ['Código Iniciativa', 'codigo_iniciativa'],
           ['Descripción', 'descripcion'],
@@ -486,7 +482,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar meta, región, ministerio..."
-              className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-64 text-gray-800"
+              className="pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-64"
             />
           </div>
 
@@ -550,28 +546,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-gray-500">{filtered.length} prioridades</span>
 
-            {/* Import group */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
-                </svg>
-                Importar
-              </button>
-              <button
-                onClick={downloadTemplate}
-                title="Descargar template de carga"
-                className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-medium border border-blue-200"
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
-                </svg>
-                Template
-              </button>
-            </div>
+            <button
+              onClick={() => { setImportPreview(null); setImportParseErrors([]); setImportModalOpen(true) }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
+              </svg>
+              Importar
+            </button>
 
             <button
               onClick={() => setExportModalOpen(true)}
@@ -604,15 +587,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           <button onClick={() => setImportResult(null)} className="ml-auto text-gray-400 hover:text-gray-600">✕</button>
         </div>
       )}
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".xlsx,.xls"
-        className="hidden"
-        onChange={handleFileSelect}
-      />
 
       {/* ── Table ── */}
       <div className="flex-1 overflow-auto">
@@ -762,124 +736,199 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         </table>
       </div>
 
-      {/* ── Import preview modal ── */}
-      {importModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Revisión de importación</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Revisa los cambios antes de confirmar. Solo se guardarán las filas sin errores.
-                </p>
+      {/* ── Import modal ── */}
+      {importModalOpen && (() => {
+        const hasFile   = importPreview !== null || importParseErrors.length > 0
+        const validRows = importPreview?.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0) ?? []
+        const errorRows = importPreview?.filter(r => r.errors.length > 0) ?? []
+        const isAllOk   = hasFile && importParseErrors.length === 0 && errorRows.length === 0 && validRows.length > 0
+        const hasErrors = hasFile && (importParseErrors.length > 0 || errorRows.length > 0)
+
+        const headerBg  = isAllOk  ? 'bg-green-600'  : hasErrors ? 'bg-red-600'  : 'bg-slate-800'
+        const bodyBg    = isAllOk  ? 'bg-green-50/60' : hasErrors ? 'bg-red-50/40' : 'bg-white'
+        const footerBg  = isAllOk  ? 'bg-green-50'   : hasErrors ? 'bg-red-50'   : 'bg-gray-50'
+        const borderCol = isAllOk  ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
+
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            {/* Hidden file input lives here so it's triggered from inside modal */}
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
+
+            <div className={`rounded-2xl shadow-2xl w-full max-w-3xl max-h-[82vh] flex flex-col overflow-hidden border ${borderCol}`}>
+
+              {/* Header — changes color */}
+              <div className={`${headerBg} px-6 py-4 flex items-start justify-between`}>
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    {isAllOk   ? `✓ Todo OK — ${validRows.length} iniciativa${validRows.length !== 1 ? 's' : ''} listas para guardar`
+                    : hasErrors ? `Archivo con problemas`
+                    : 'Importar iniciativas'}
+                  </h2>
+                  <p className="text-xs mt-0.5 text-white/70">
+                    {isAllOk   ? 'Revisa los cambios y confirma para guardar en la base de datos.'
+                    : hasErrors ? `${errorRows.length + importParseErrors.length} fila${errorRows.length + importParseErrors.length !== 1 ? 's' : ''} con errores — corrígelas en el archivo y vuelve a cargarlo.`
+                    : 'Carga el archivo .xlsx con los datos completados. Revisaremos el formato antes de guardar.'}
+                  </p>
+                </div>
+                <button onClick={() => setImportModalOpen(false)} className="text-white/60 hover:text-white mt-0.5 text-lg leading-none">✕</button>
               </div>
-              <button onClick={() => setImportModalOpen(false)} className="text-gray-400 hover:text-gray-600 mt-0.5">✕</button>
-            </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-3">
-              {/* Parse-level errors (not row-specific) */}
-              {importParseErrors.length > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-0.5">
-                  {importParseErrors.map((e, i) => <div key={i}>⚠ {e}</div>)}
-                </div>
-              )}
+              {/* Body */}
+              <div className={`flex-1 overflow-auto p-5 space-y-4 ${bodyBg}`}>
 
-              {/* Summary chips */}
-              {importPreview && importPreview.length > 0 && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-medium">
-                    {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0).length} listas para guardar
-                  </span>
-                  {importPreview.filter(r => r.errors.length > 0).length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-medium">
-                      {importPreview.filter(r => r.errors.length > 0).length} con errores
-                    </span>
-                  )}
-                  {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
-                      {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length} sin cambios
-                    </span>
-                  )}
-                </div>
-              )}
+                {/* ── Idle state: instructions + file zone ── */}
+                {!hasFile && (
+                  <div className="space-y-4">
+                    <div className="text-xs text-gray-600 space-y-1 leading-relaxed">
+                      <p><span className="font-semibold">1.</span> Descarga el template, completa los campos editables a partir de la fila 3.</p>
+                      <p><span className="font-semibold">2.</span> Las primeras 4 columnas son solo referencia — no las modifiques.</p>
+                      <p><span className="font-semibold">3.</span> Carga el archivo aquí. Revisaremos el formato antes de guardar.</p>
+                    </div>
+                    <button
+                      onClick={downloadTemplate}
+                      className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
+                      </svg>
+                      Descargar template de carga
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full flex flex-col items-center gap-2 py-10 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/40 transition-colors cursor-pointer"
+                    >
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span className="text-sm font-medium">Seleccionar archivo .xlsx</span>
+                    </button>
+                  </div>
+                )}
 
-              {/* Preview table */}
-              {importPreview && importPreview.length > 0 ? (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600 w-8">#</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Región</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Nombre</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Campos a actualizar / Errores</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600 w-16">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importPreview.map(row => (
-                      <tr key={row.n} className={`border-b border-gray-50 ${row.errors.length > 0 ? 'bg-red-50/60' : ''}`}>
-                        <td className="px-3 py-2 font-mono text-gray-400">{row.n}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.region}</td>
-                        <td className="px-3 py-2 text-gray-700 max-w-[180px]">
-                          <span className="line-clamp-2 leading-snug">{row.nombre}</span>
-                        </td>
-                        <td className="px-3 py-2 max-w-[280px]">
-                          {row.errors.length > 0 ? (
-                            <span className="text-red-600">{row.errors.join(' · ')}</span>
-                          ) : Object.keys(row.patch).length > 0 ? (
-                            <span className="text-green-700">{Object.keys(row.patch).join(', ')}</span>
-                          ) : (
-                            <span className="text-gray-400">Sin cambios en esta fila</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {row.errors.length > 0 ? (
-                            <span className="text-red-500 font-medium">✗ Error</span>
-                          ) : Object.keys(row.patch).length > 0 ? (
-                            <span className="text-green-600 font-medium">✓ OK</span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
+                {/* ── File loaded: parse-level errors ── */}
+                {hasFile && importParseErrors.length > 0 && (
+                  <div className="p-3 bg-red-100 border border-red-200 rounded-lg text-xs text-red-800 space-y-0.5">
+                    {importParseErrors.map((e, i) => <div key={i}>⚠ {e}</div>)}
+                  </div>
+                )}
+
+                {/* ── File loaded: summary chips ── */}
+                {hasFile && importPreview && importPreview.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs flex-wrap">
+                    {validRows.length > 0 && (
+                      <span className="px-2.5 py-1 rounded-full bg-green-100 text-green-800 font-medium border border-green-200">
+                        ✓ {validRows.length} listas para guardar
+                      </span>
+                    )}
+                    {errorRows.length > 0 && (
+                      <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-800 font-medium border border-red-200">
+                        ✗ {errorRows.length} con errores
+                      </span>
+                    )}
+                    {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length > 0 && (
+                      <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium">
+                        — {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length} sin cambios
+                      </span>
+                    )}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
+                    >
+                      Cargar otro archivo
+                    </button>
+                  </div>
+                )}
+
+                {/* ── Preview table ── */}
+                {hasFile && importPreview && importPreview.length > 0 && (
+                  <table className="w-full text-xs border-collapse rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className={`border-b ${borderCol} ${isAllOk ? 'bg-green-100' : hasErrors ? 'bg-red-100' : 'bg-gray-50'}`}>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 w-8">#</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Región</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Nombre</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Campos / Errores</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 w-16">Estado</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                !importParseErrors.length && (
-                  <p className="text-xs text-gray-400 text-center py-8">No se encontraron filas con datos.</p>
-                )
-              )}
-            </div>
+                    </thead>
+                    <tbody>
+                      {importPreview.map(row => (
+                        <tr key={row.n} className={`border-b border-gray-100 ${row.errors.length > 0 ? 'bg-red-50' : ''}`}>
+                          <td className="px-3 py-2 font-mono text-gray-400">{row.n}</td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.region}</td>
+                          <td className="px-3 py-2 text-gray-700 max-w-[180px]">
+                            <span className="line-clamp-2 leading-snug">{row.nombre}</span>
+                          </td>
+                          <td className="px-3 py-2 max-w-[280px]">
+                            {row.errors.length > 0
+                              ? <span className="text-red-600">{row.errors.join(' · ')}</span>
+                              : Object.keys(row.patch).length > 0
+                                ? <span className="text-green-700">{Object.keys(row.patch).join(', ')}</span>
+                                : <span className="text-gray-400">Sin cambios</span>}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap font-medium">
+                            {row.errors.length > 0
+                              ? <span className="text-red-500">✗</span>
+                              : Object.keys(row.patch).length > 0
+                                ? <span className="text-green-600">✓</span>
+                                : <span className="text-gray-400">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
 
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-500">
-                {importPreview?.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0).length ?? 0} iniciativas se actualizarán en la base de datos
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setImportModalOpen(false)}
-                  className="text-xs px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={applyImport}
-                  disabled={importing || (importPreview?.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0).length ?? 0) === 0}
-                  className="text-xs px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 font-medium flex items-center gap-1.5"
-                >
-                  {importing && (
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" className="animate-spin">
-                      <circle cx="6" cy="6" r="4" strokeDasharray="20 5"/>
-                    </svg>
+                {/* Empty parse result */}
+                {hasFile && importPreview?.length === 0 && !importParseErrors.length && (
+                  <p className="text-xs text-gray-400 text-center py-8">No se encontraron filas con datos en el archivo.</p>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={`px-6 py-4 border-t ${borderCol} ${footerBg} flex items-center justify-between`}>
+                <div className="text-xs text-gray-500">
+                  {hasFile
+                    ? `${validRows.length} iniciativa${validRows.length !== 1 ? 's' : ''} se actualizarán`
+                    : 'Ningún cambio guardado aún'}
+                </div>
+                <div className="flex gap-2">
+                  {!hasFile && (
+                    <button onClick={downloadTemplate} className="text-xs px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 font-medium flex items-center gap-1.5">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
+                      </svg>
+                      Template
+                    </button>
                   )}
-                  {importing ? 'Guardando…' : 'Confirmar importación'}
-                </button>
+                  <button
+                    onClick={() => setImportModalOpen(false)}
+                    className="text-xs px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                  >
+                    {hasFile && validRows.length === 0 ? 'Cerrar' : 'Cancelar'}
+                  </button>
+                  {hasFile && (
+                    <button
+                      onClick={applyImport}
+                      disabled={importing || validRows.length === 0}
+                      className={`text-xs px-4 py-2 rounded-lg text-white disabled:opacity-60 font-medium flex items-center gap-1.5 ${
+                        isAllOk ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      {importing && (
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" className="animate-spin">
+                          <circle cx="6" cy="6" r="4" strokeDasharray="20 5"/>
+                        </svg>
+                      )}
+                      {importing ? 'Guardando…' : `Confirmar${validRows.length > 0 ? ` (${validRows.length})` : ''}`}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Export modal ── */}
       {exportModalOpen && (
