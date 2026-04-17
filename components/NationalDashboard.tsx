@@ -68,6 +68,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterEje, setFilterEje]             = useState('todos')
   const [filterSemaforo, setFilterSemaforo]   = useState<SemaforoKey | 'todos'>('todos')
   const [filterPrioridad, setFilterPrioridad] = useState<'Alta' | 'Media' | 'Baja' | 'todas'>('todas')
+  const [filterEjeGobierno, setFilterEjeGobierno] = useState('todos')
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -109,6 +110,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       }
       if (filterRegion !== 'todas' && p.region !== filterRegion) return false
       if (filterEje !== 'todos' && p.eje !== filterEje) return false
+      if (filterEjeGobierno !== 'todos' && p.eje_gobierno !== filterEjeGobierno) return false
       if (filterSemaforo !== 'todos' && p.estado_semaforo !== filterSemaforo) return false
       if (filterPrioridad !== 'todas' && p.prioridad !== filterPrioridad) return false
       return true
@@ -131,11 +133,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterSemaforo, filterPrioridad, sortCol, sortDir])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, sortCol, sortDir])
 
   function clearFilters() {
     setSearch(''); setFilterRegion('todas'); setFilterEje('todos')
-    setFilterSemaforo('todos'); setFilterPrioridad('todas')
+    setFilterEjeGobierno('todos'); setFilterSemaforo('todos'); setFilterPrioridad('todas')
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -431,7 +433,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
-    filterSemaforo !== 'todos' || filterPrioridad !== 'todas'
+    filterEjeGobierno !== 'todos' || filterSemaforo !== 'todos' || filterPrioridad !== 'todas'
 
   function ColHeader({ col, label }: { col: SortCol; label: string }) {
     const active = sortCol === col
@@ -496,7 +498,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             {REGIONS.map(r => <option key={r.cod} value={r.nombre}>{r.nombre}</option>)}
           </select>
 
-          {/* Eje */}
+          {/* Eje regional */}
           <select
             value={filterEje}
             onChange={e => setFilterEje(e.target.value)}
@@ -504,6 +506,18 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           >
             <option value="todos">Todos los ejes</option>
             {EJES.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+
+          {/* Eje Gobierno */}
+          <select
+            value={filterEjeGobierno}
+            onChange={e => setFilterEjeGobierno(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+          >
+            <option value="todos">Eje Gobierno: todos</option>
+            {Array.from(new Set(projects.map(p => p.eje_gobierno).filter(Boolean))).sort().map(eg => (
+              <option key={eg!} value={eg!}>{eg}</option>
+            ))}
           </select>
 
           {/* Semáforo chips */}
