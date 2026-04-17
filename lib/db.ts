@@ -14,6 +14,7 @@ function mapRow(row: Prioridad): Iniciativa {
     capital:                row.capital,
     zona:                   row.zona,
     eje:                    row.eje,
+    eje_gobierno:           row.eje_gobierno ?? null,
     nombre:                 row.nombre,
     descripcion:            row.descripcion ?? null,
     ministerio:             row.ministerio,

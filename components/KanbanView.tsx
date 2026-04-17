@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import { EJE_COLORS, prioridadColor } from '@/lib/config'
 
 const COLUMNS = [
   { key: 'rojo',  label: 'Bloqueadas',   bg: 'bg-red-50',    border: 'border-red-200',   dot: 'bg-red-500',   header: 'bg-red-100 text-red-800'   },
@@ -11,16 +12,6 @@ const COLUMNS = [
   { key: 'gris',  label: 'Sin evaluar',  bg: 'bg-gray-50',   border: 'border-gray-200',  dot: 'bg-gray-300',  header: 'bg-gray-100 text-gray-600'   },
 ] as const
 
-const EJE_COLORS: Record<string, string> = {
-  'Seguridad y Orden Público':       'bg-red-100 text-red-700',
-  'Infraestructura y Conectividad':  'bg-blue-100 text-blue-700',
-  'Desarrollo Económico y Empleo':   'bg-green-100 text-green-700',
-  'Vivienda y Urbanismo':            'bg-orange-100 text-orange-700',
-  'Energía y Transición Energética': 'bg-yellow-100 text-yellow-700',
-  'Medio Ambiente y Territorio':     'bg-teal-100 text-teal-700',
-  'Desarrollo Social y Familia':     'bg-pink-100 text-pink-700',
-  'Modernización e Innovación':      'bg-purple-100 text-purple-700',
-}
 
 type Props = {
   projects: Iniciativa[]
@@ -108,9 +99,7 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full truncate max-w-[160px] ${EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'}`}>
                           {p.eje}
                         </span>
-                        <span className={`text-xs font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full ${
-                          p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : p.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
+                        <span className={`text-xs font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
                           {p.prioridad}
                         </span>
                       </div>

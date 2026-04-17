@@ -7,6 +7,7 @@ export type Prioridad = {
   capital: string
   zona: string
   eje: string
+  eje_gobierno: string | null
   nombre: string
   descripcion: string | null
   ministerio: string

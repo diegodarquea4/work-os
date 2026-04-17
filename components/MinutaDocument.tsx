@@ -24,36 +24,90 @@ const s = StyleSheet.create({
   },
 
   // Header institucional
-  headerInst: {
-    textAlign: 'center',
-    marginBottom: 6,
+  headerBand: {
+    backgroundColor: '#1a2744',
+    paddingVertical: 10,
+    paddingHorizontal: 60,
+    marginBottom: 0,
+    marginHorizontal: -60,
   },
-  headerTitle: {
-    fontSize: 13,
-    fontFamily: 'Helvetica-Bold',
-    letterSpacing: 1,
+  headerRepublica: {
+    fontSize: 7.5,
+    color: '#a0aec0',
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  headerSub: {
-    fontSize: 9,
-    color: '#444',
     marginBottom: 2,
   },
+  headerMinisterio: {
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
+    color: '#ffffff',
+    letterSpacing: 0.3,
+    marginBottom: 1,
+  },
+  headerDivision: {
+    fontSize: 8,
+    color: '#90cdf4',
+    marginBottom: 0,
+  },
   divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
-    marginTop: 10,
-    marginBottom: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#cbd5e0',
+    marginTop: 14,
+    marginBottom: 12,
   },
 
-  // Título de la minuta
+  // Bloque título de la minuta
+  minutaBlock: {
+    marginBottom: 12,
+  },
+  minutaLabel: {
+    fontSize: 8,
+    color: '#718096',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
   minutaTitle: {
-    fontSize: 11,
+    fontSize: 14,
     fontFamily: 'Helvetica-Bold',
-    textAlign: 'center',
-    textDecoration: 'underline',
-    marginBottom: 10,
+    color: '#1a2744',
+    marginBottom: 2,
+  },
+  minutaSubtitle: {
+    fontSize: 9,
+    color: '#4a5568',
+    marginBottom: 0,
+  },
+
+  // Ficha técnica de la región
+  fichaBox: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#f7fafc',
+    borderWidth: 0.5,
+    borderColor: '#cbd5e0',
+    borderRadius: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 16,
+    gap: 0,
+  },
+  fichaItem: {
+    width: '33%',
+    marginBottom: 5,
+  },
+  fichaLabel: {
+    fontSize: 7,
+    color: '#718096',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 1,
+  },
+  fichaValue: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#1a202c',
   },
 
   // Párrafo introductorio
@@ -119,30 +173,61 @@ const s = StyleSheet.create({
   compactHeaderText: { color: '#fff', fontSize: 7, fontFamily: 'Helvetica-Bold' },
   subNote: { fontSize: 8, color: '#555', fontStyle: 'italic', marginBottom: 4 },
 
-  // Tabla de prioridades
-  tableHeader: {
+  // Tabla resumen por eje
+  summaryHeader: {
     flexDirection: 'row',
     backgroundColor: '#1a1a1a',
-    color: '#fff',
-    padding: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 5,
     marginTop: 8,
-    marginBottom: 0,
   },
-  tableRow: {
+  summaryRow: {
     flexDirection: 'row',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#e0e0e0',
+    paddingVertical: 4,
+    paddingHorizontal: 5,
+  },
+  summaryRowAlt: { backgroundColor: '#f7f7f7' },
+  sumColEje:     { flex: 1,      fontSize: 8, paddingRight: 4 },
+  sumColTotal:   { width: '8%',  fontSize: 8, textAlign: 'center' },
+  sumColSem:     { width: '8%',  fontSize: 8, textAlign: 'center' },
+  sumColAvance:  { width: '12%', fontSize: 8, textAlign: 'center' },
+  summaryHeaderText: { color: '#fff', fontSize: 8, fontFamily: 'Helvetica-Bold' },
+
+  // Detalle agrupado por eje
+  ejeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2d3748',
     paddingVertical: 5,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
+    marginTop: 10,
   },
-  tableRowAlt: {
-    backgroundColor: '#f7f7f7',
+  ejeHeaderText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    flex: 1,
   },
-  colN: { width: '5%', fontSize: 8 },
-  colEje: { width: '25%', fontSize: 8, paddingRight: 4 },
-  colMeta: { width: '48%', fontSize: 8, paddingRight: 4 },
-  colPrioridad: { width: '10%', fontSize: 8, textAlign: 'center' },
-  colPlazo: { width: '12%', fontSize: 8, textAlign: 'center' },
+  ejeHeaderCount: {
+    color: '#cbd5e0',
+    fontSize: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e8e8e8',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  detailRowAlt: { backgroundColor: '#f9f9f9' },
+  detColGob:     { width: '13%', fontSize: 8 },
+  detColSem:     { width: '15%', fontSize: 8 },
+  detColNombre:  { flex: 1,      fontSize: 8, paddingRight: 4 },
+  detColPrior:   { width: '10%', fontSize: 8, textAlign: 'center' },
+  detColAvance:  { width: '9%',  fontSize: 8, textAlign: 'center' },
   tableHeaderText: { color: '#fff', fontSize: 8, fontFamily: 'Helvetica-Bold' },
 
   // Footer
@@ -240,6 +325,19 @@ function abrevServicio(s: string | null | undefined): string {
   return s.replace('Dirección de ', 'Dir. ').replace('Subdirección de ', 'Sub. ')
 }
 
+// Semáforo text indicator for PDF (no colors in react-pdf without SVG)
+function semLabel(sem: string | null): string {
+  if (sem === 'verde') return '● Verde'
+  if (sem === 'ambar') return '◑ Ambar'
+  if (sem === 'rojo')  return '○ Rojo'
+  return '  —'
+}
+
+// Short eje label: strip "Eje N: " prefix if present
+function ejeShort(eje: string): string {
+  return eje.replace(/^Eje \d+:\s*/i, '')
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -253,14 +351,12 @@ type Props = {
 }
 
 const EJE_PRIORITY_ORDER = [
-  'Seguridad y Orden Público',
-  'Infraestructura y Conectividad',
-  'Desarrollo Económico y Empleo',
-  'Vivienda y Urbanismo',
-  'Energía y Transición Energética',
-  'Medio Ambiente y Territorio',
-  'Desarrollo Social y Familia',
-  'Modernización e Innovación',
+  'Eje 1: Infraestructura y Conectividad',
+  'Eje 2: Energía y Medio Ambiente',
+  'Eje 3: Salud y Servicios Básicos',
+  'Eje 4: Seguridad y Soberanía',
+  'Eje 5: Desarrollo Productivo e Innovación',
+  'Eje 6: Familia, Educación y Equidad Territorial',
 ]
 
 export default function MinutaDocument({ region, projects, metrics, seiaProjects, mopProjects, fecha }: Props) {
@@ -268,9 +364,13 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
   const media = projects.filter(p => p.prioridad === 'Media')
   const m = metrics ?? null
 
+  // Sort by eje order first, then Alta before Media within each eje
   const sorted = [...projects].sort((a, b) => {
+    const ejeA = EJE_PRIORITY_ORDER.indexOf(a.eje)
+    const ejeB = EJE_PRIORITY_ORDER.indexOf(b.eje)
+    if (ejeA !== ejeB) return (ejeA === -1 ? 999 : ejeA) - (ejeB === -1 ? 999 : ejeB)
     if (a.prioridad !== b.prioridad) return a.prioridad === 'Alta' ? -1 : 1
-    return EJE_PRIORITY_ORDER.indexOf(a.eje) - EJE_PRIORITY_ORDER.indexOf(b.eje)
+    return a.n - b.n
   })
 
   return (
@@ -278,23 +378,60 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
       <Page size="A4" style={s.page}>
 
         {/* ── Header institucional ── */}
-        <View style={s.headerInst}>
-          <Text style={s.headerTitle}>MINUTA</Text>
-          <Text style={s.headerSub}>Unidad de Regiones - División de Coordinación Interministerial</Text>
-          <Text style={s.headerSub}>Ministerio del Interior</Text>
+        <View style={s.headerBand}>
+          <Text style={s.headerRepublica}>República de Chile</Text>
+          <Text style={s.headerMinisterio}>Ministerio del Interior y Seguridad Pública</Text>
+          <Text style={s.headerDivision}>División de Coordinación Interregional</Text>
         </View>
+
         <View style={s.divider} />
 
-        <Text style={s.minutaTitle}>
-          Data Región de {region.nombre} — {fecha}
-        </Text>
+        {/* ── Título del documento ── */}
+        <View style={s.minutaBlock}>
+          <Text style={s.minutaLabel}>Minuta Ejecutiva · Uso Interno</Text>
+          <Text style={s.minutaTitle}>Región de {region.nombre}</Text>
+          <Text style={s.minutaSubtitle}>Informe de Prioridades Territoriales 2026–2028  ·  {fecha}</Text>
+        </View>
+
+        {/* ── Ficha técnica de la región ── */}
+        <View style={s.fichaBox}>
+          <View style={s.fichaItem}>
+            <Text style={s.fichaLabel}>Capital regional</Text>
+            <Text style={s.fichaValue}>{region.capital}</Text>
+          </View>
+          <View style={s.fichaItem}>
+            <Text style={s.fichaLabel}>Zona</Text>
+            <Text style={s.fichaValue}>{region.zona}</Text>
+          </View>
+          {m?.superficie_km2 != null && (
+            <View style={s.fichaItem}>
+              <Text style={s.fichaLabel}>Superficie</Text>
+              <Text style={s.fichaValue}>{n(m.superficie_km2)} km²</Text>
+            </View>
+          )}
+          {m?.poblacion_total != null && (
+            <View style={s.fichaItem}>
+              <Text style={s.fichaLabel}>Población (Censo 2024)</Text>
+              <Text style={s.fichaValue}>{n(m.poblacion_total)} hab.</Text>
+            </View>
+          )}
+          {m?.comunas_n != null && (
+            <View style={s.fichaItem}>
+              <Text style={s.fichaLabel}>Comunas</Text>
+              <Text style={s.fichaValue}>{m.comunas_n}</Text>
+            </View>
+          )}
+          <View style={s.fichaItem}>
+            <Text style={s.fichaLabel}>Prioridades territoriales</Text>
+            <Text style={s.fichaValue}>{projects.length} iniciativas</Text>
+          </View>
+        </View>
 
         {/* ── Intro ── */}
         <Text style={s.intro}>
-          La Región de {region.nombre} se ubica en la zona {region.zona} de Chile
-          {m?.superficie_km2 ? `, con una superficie de ${n(m.superficie_km2)} km² (${pct(m.pct_territorio_nacional)} del territorio nacional)` : ''}.
-          A continuación se presentan datos relevantes de la Región, incluyendo sus prioridades
-          territoriales para el período 2026–2028.
+          La presente minuta resume el estado de avance de las prioridades territoriales de la
+          Región de {region.nombre} para el período 2026–2028, junto con indicadores
+          socioeconómicos y proyectos de inversión pública relevantes en la región.
         </Text>
 
         {/* ── I. Geográficos ── */}
@@ -368,26 +505,81 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
 
         {/* ── IX. Prioridades Territoriales ── */}
         <SectionTitle num="IX" title="Prioridades Territoriales 2026–2028" />
-        <Bullet>{`Total prioridades: ${projects.length} (${alta.length} alta prioridad, ${media.length} media prioridad)`}</Bullet>
+        <Bullet>{`Total: ${projects.length} iniciativas (${alta.length} alta prioridad, ${media.length} media)`}</Bullet>
 
-        {/* Table header */}
-        <View style={s.tableHeader}>
-          <Text style={[s.colN, s.tableHeaderText]}>#</Text>
-          <Text style={[s.colEje, s.tableHeaderText]}>Eje Estratégico</Text>
-          <Text style={[s.colMeta, s.tableHeaderText]}>Iniciativa</Text>
-          <Text style={[s.colPrioridad, s.tableHeaderText]}>Prioridad</Text>
-          <Text style={[s.colPlazo, s.tableHeaderText]}>Estado Término Gob.</Text>
+        {/* ── IX-A. Tabla resumen ejecutivo por eje ── */}
+        <Text style={[s.sectionTitle, { fontSize: 9, marginTop: 10 }]}>
+          Resumen por Eje Estratégico
+        </Text>
+        <View style={s.summaryHeader}>
+          <Text style={[s.sumColEje,    s.summaryHeaderText]}>Eje Regional</Text>
+          <Text style={[{ width: '13%', fontSize: 8 }, s.summaryHeaderText]}>Eje Gobierno</Text>
+          <Text style={[s.sumColTotal,  s.summaryHeaderText]}>Total</Text>
+          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Rojo</Text>
+          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Ambar</Text>
+          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Verde</Text>
+          <Text style={[s.sumColSem,    s.summaryHeaderText]}>S/E</Text>
+          <Text style={[s.sumColAvance, s.summaryHeaderText]}>Avance prom.</Text>
         </View>
+        {(() => {
+          const ejes = Array.from(new Set(sorted.map(p => p.eje)))
+          return ejes.map((eje, i) => {
+            const items = sorted.filter(p => p.eje === eje)
+            const rojo  = items.filter(p => p.estado_semaforo === 'rojo').length
+            const ambar = items.filter(p => p.estado_semaforo === 'ambar').length
+            const verde = items.filter(p => p.estado_semaforo === 'verde').length
+            const gris  = items.filter(p => p.estado_semaforo === 'gris').length
+            const avgAvance = Math.round(items.reduce((sum, p) => sum + (p.pct_avance ?? 0), 0) / items.length)
+            return (
+              <View key={eje} style={[s.summaryRow, i % 2 === 1 ? s.summaryRowAlt : {}]}>
+                <Text style={s.sumColEje}>{ejeShort(eje)}</Text>
+                <Text style={{ width: '13%', fontSize: 8 }}>{items[0]?.eje_gobierno ?? '—'}</Text>
+                <Text style={s.sumColTotal}>{items.length}</Text>
+                <Text style={s.sumColSem}>{rojo  > 0 ? rojo  : '—'}</Text>
+                <Text style={s.sumColSem}>{ambar > 0 ? ambar : '—'}</Text>
+                <Text style={s.sumColSem}>{verde > 0 ? verde : '—'}</Text>
+                <Text style={s.sumColSem}>{gris  > 0 ? gris  : '—'}</Text>
+                <Text style={s.sumColAvance}>{avgAvance}%</Text>
+              </View>
+            )
+          })
+        })()}
 
-        {sorted.map((p, i) => (
-          <View key={p.n} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
-            <Text style={s.colN}>{i + 1}</Text>
-            <Text style={s.colEje}>{p.eje}</Text>
-            <Text style={s.colMeta}>{p.nombre}</Text>
-            <Text style={s.colPrioridad}>{p.prioridad}</Text>
-            <Text style={s.colPlazo}>{p.estado_termino_gobierno ?? '—'}</Text>
-          </View>
-        ))}
+        {/* ── IX-B. Detalle agrupado por eje ── */}
+        <Text style={[s.sectionTitle, { fontSize: 9, marginTop: 14 }]}>
+          Detalle de Iniciativas por Eje
+        </Text>
+        {(() => {
+          const ejes = Array.from(new Set(sorted.map(p => p.eje)))
+          return ejes.map(eje => {
+            const items = sorted.filter(p => p.eje === eje)
+            return (
+              <View key={eje}>
+                <View style={s.ejeHeader}>
+                  <Text style={s.ejeHeaderText}>{eje}</Text>
+                  <Text style={s.ejeHeaderCount}>{items.length} iniciativa{items.length !== 1 ? 's' : ''}</Text>
+                </View>
+                {/* Detail column headers */}
+                <View style={[s.detailRow, { backgroundColor: '#e2e8f0' }]}>
+                  <Text style={[s.detColGob,    s.tableHeaderText, { color: '#374151' }]}>Eje Gobierno</Text>
+                  <Text style={[s.detColSem,    s.tableHeaderText, { color: '#374151' }]}>Estado actual</Text>
+                  <Text style={[s.detColNombre,  s.tableHeaderText, { color: '#374151' }]}>Iniciativa</Text>
+                  <Text style={[s.detColPrior,   s.tableHeaderText, { color: '#374151' }]}>Prioridad</Text>
+                  <Text style={[s.detColAvance,  s.tableHeaderText, { color: '#374151' }]}>Avance</Text>
+                </View>
+                {items.map((p, i) => (
+                  <View key={p.n} style={[s.detailRow, i % 2 === 1 ? s.detailRowAlt : {}]}>
+                    <Text style={s.detColGob}>{p.eje_gobierno ?? '—'}</Text>
+                    <Text style={s.detColSem}>{semLabel(p.estado_semaforo)}</Text>
+                    <Text style={s.detColNombre}>{p.nombre}</Text>
+                    <Text style={s.detColPrior}>{p.prioridad}</Text>
+                    <Text style={s.detColAvance}>{p.pct_avance ?? 0}%</Text>
+                  </View>
+                ))}
+              </View>
+            )
+          })
+        })()}
 
         {/* ── X. Proyectos SEIA ── */}
         <SectionTitle num="X" title="Proyectos en Evaluación Ambiental (SEIA)" />

@@ -15,6 +15,8 @@ import RegionComparisonModal from './RegionComparisonModal'
 import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
 import PibSectorialChart from './PibSectorialChart'
+import CollapsibleSection from './CollapsibleSection'
+import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor } from '@/lib/config'
 
 // ── Regional trend config ────────────────────────────────────────────────────
 // Add new entries here as more series are synced. name must match metric_name in regional_metrics.
@@ -25,24 +27,6 @@ const TREND_CONFIG = [
 
 // Stable array for hook dependency — module-level to avoid re-renders.
 const ALL_TREND_METRIC_NAMES = TREND_CONFIG.map(m => m.name)
-
-const EJE_COLORS: Record<string, string> = {
-  'Seguridad y Orden Público':      'bg-red-100 text-red-700',
-  'Infraestructura y Conectividad': 'bg-blue-100 text-blue-700',
-  'Desarrollo Económico y Empleo':  'bg-green-100 text-green-700',
-  'Vivienda y Urbanismo':           'bg-orange-100 text-orange-700',
-  'Energía y Transición Energética':'bg-yellow-100 text-yellow-700',
-  'Medio Ambiente y Territorio':    'bg-teal-100 text-teal-700',
-  'Desarrollo Social y Familia':    'bg-pink-100 text-pink-700',
-  'Modernización e Innovación':     'bg-purple-100 text-purple-700',
-}
-
-const SEMAFORO_CONFIG = {
-  verde: { dot: 'bg-green-500',  label: 'En verde'    },
-  ambar: { dot: 'bg-amber-400',  label: 'En revisión' },
-  rojo:  { dot: 'bg-red-500',    label: 'Bloqueado'   },
-  gris:  { dot: 'bg-gray-300',   label: 'Sin evaluar' },
-} as const
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 
@@ -56,8 +40,7 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24))
 }
 
-type SemaforoKey = keyof typeof SEMAFORO_CONFIG
-type FilterSemaforo = SemaforoKey | 'todos'
+type FilterSemaforo = keyof typeof SEMAFORO_CONFIG | 'todos'
 type FilterPrioridad = 'Alta' | 'Media' | 'Baja' | 'todas'
 type SortBy = 'semaforo' | 'prioridad' | 'avance' | 'actividad'
 
@@ -279,168 +262,99 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         </div>
       </div>
 
-      {/* ── Tendencia de Indicadores (collapsible) ── */}
+      {/* ── Tendencia de Indicadores ── */}
       {(trendData.loading || trendData.data.length > 0) && (
-        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
-          <button
-            onClick={() => setTrendOpen(o => !o)}
-            disabled={trendData.loading}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
-          >
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tendencia de Indicadores</p>
-            {trendData.loading ? (
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            ) : (
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-                className={`text-gray-500 transition-transform ${trendOpen ? 'rotate-90' : '-rotate-90'}`}
-              >
-                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+        <CollapsibleSection
+          title="Tendencia de Indicadores"
+          isOpen={trendOpen}
+          onToggle={() => setTrendOpen(o => !o)}
+          loading={trendData.loading}
+        >
+          <div className="px-5 pb-4">
+            {availableTabs.length > 1 && (
+              <div className="flex gap-1 mb-3 border-b border-gray-200">
+                {availableTabs.map(m => (
+                  <button
+                    key={m.name}
+                    onClick={() => setActiveMetric(m.name)}
+                    className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
+                      activeMetric === m.name
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             )}
-          </button>
-          {trendOpen && (
-            <div className="px-5 pb-4">
-              {/* Metric tabs — only shown when multiple metrics have data */}
-              {availableTabs.length > 1 && (
-                <div className="flex gap-1 mb-3 border-b border-gray-200">
-                  {availableTabs.map(m => (
-                    <button
-                      key={m.name}
-                      onClick={() => setActiveMetric(m.name)}
-                      className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
-                        activeMetric === m.name
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <RegionMetricsChart
-                series={activeSeries}
-                loading={trendData.loading}
-                error={trendData.error}
-                metricLabels={{ [activeMetric]: activeConfig.label }}
-                yFormatter={activeConfig.yFmt}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Proyectos SEIA (collapsible) ── */}
-      {(seiaData.loading || seiaData.proyectos.length > 0) && (
-        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50 relative">
-          <button
-            onClick={() => setSeiaOpen(o => !o)}
-            disabled={seiaData.loading}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
-          >
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyectos SEIA</p>
-              {!seiaData.loading && seiaData.total > 0 && (
-                <span className="text-[10px] bg-blue-100 text-blue-600 font-medium px-1.5 py-0.5 rounded-full">
-                  {seiaData.total.toLocaleString('es-CL')}
-                </span>
-              )}
-            </div>
-            {seiaData.loading ? (
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            ) : (
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-                className={`text-gray-500 transition-transform ${seiaOpen ? 'rotate-90' : '-rotate-90'}`}
-              >
-                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
-          {seiaOpen && (
-            <div className="max-h-72 overflow-y-auto">
-              <SeiaProjectsList
-                proyectos={seiaData.proyectos}
-                total={seiaData.total}
-                loading={seiaData.loading}
-                error={seiaData.error}
-                regionId={INE_CODE[region.cod] ?? 0}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Proyectos MOP (collapsible) ── */}
-      {(mopData.loading || mopData.proyectos.length > 0) && (
-        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50 relative">
-          <button
-            onClick={() => setMopOpen(o => !o)}
-            disabled={mopData.loading}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
-          >
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyectos MOP</p>
-              {!mopData.loading && mopData.total > 0 && (
-                <span className="text-[10px] bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded-full">
-                  {mopData.total.toLocaleString('es-CL')}
-                </span>
-              )}
-            </div>
-            {mopData.loading ? (
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            ) : (
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-                className={`text-gray-500 transition-transform ${mopOpen ? 'rotate-90' : '-rotate-90'}`}
-              >
-                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
-          {mopOpen && (
-            <div className="max-h-72 overflow-y-auto">
-              <MopProjectsList
-                proyectos={mopData.proyectos}
-                total={mopData.total}
-                loading={mopData.loading}
-                error={mopData.error}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── PIB Sectorial (collapsible) ── */}
-      {(pibData.loading || pibData.data.length > 0) && (
-        <div className="flex-shrink-0 border-b border-gray-100 bg-gray-50">
-          <button
-            onClick={() => setPibOpen(o => !o)}
-            disabled={pibData.loading}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-100 transition-colors disabled:cursor-default"
-          >
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">PIB Sectorial</p>
-            {pibData.loading ? (
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            ) : (
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"
-                className={`text-gray-500 transition-transform ${pibOpen ? 'rotate-90' : '-rotate-90'}`}
-              >
-                <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
-          {pibOpen && (
-            <PibSectorialChart
-              data={pibData.data}
-              latestPeriod={pibData.latestPeriod}
-              loading={pibData.loading}
-              error={pibData.error}
+            <RegionMetricsChart
+              series={activeSeries}
+              loading={trendData.loading}
+              error={trendData.error}
+              metricLabels={{ [activeMetric]: activeConfig.label }}
+              yFormatter={activeConfig.yFmt}
             />
-          )}
-        </div>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ── Proyectos SEIA ── */}
+      {(seiaData.loading || seiaData.proyectos.length > 0) && (
+        <CollapsibleSection
+          title="Proyectos SEIA"
+          isOpen={seiaOpen}
+          onToggle={() => setSeiaOpen(o => !o)}
+          loading={seiaData.loading}
+          badge={seiaData.total || undefined}
+        >
+          <div className="max-h-72 overflow-y-auto">
+            <SeiaProjectsList
+              proyectos={seiaData.proyectos}
+              total={seiaData.total}
+              loading={seiaData.loading}
+              error={seiaData.error}
+              regionId={INE_CODE[region.cod] ?? 0}
+            />
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ── Proyectos MOP ── */}
+      {(mopData.loading || mopData.proyectos.length > 0) && (
+        <CollapsibleSection
+          title="Proyectos MOP"
+          isOpen={mopOpen}
+          onToggle={() => setMopOpen(o => !o)}
+          loading={mopData.loading}
+          badge={mopData.total || undefined}
+        >
+          <div className="max-h-72 overflow-y-auto">
+            <MopProjectsList
+              proyectos={mopData.proyectos}
+              total={mopData.total}
+              loading={mopData.loading}
+              error={mopData.error}
+            />
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ── PIB Sectorial ── */}
+      {(pibData.loading || pibData.data.length > 0) && (
+        <CollapsibleSection
+          title="PIB Sectorial"
+          isOpen={pibOpen}
+          onToggle={() => setPibOpen(o => !o)}
+          loading={pibData.loading}
+        >
+          <PibSectorialChart
+            data={pibData.data}
+            latestPeriod={pibData.latestPeriod}
+            loading={pibData.loading}
+            error={pibData.error}
+          />
+        </CollapsibleSection>
       )}
 
       {/* ── Filtros ── */}
@@ -549,9 +463,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
                       {p.eje}
                     </span>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                    p.prioridad === 'Alta' ? 'bg-red-100 text-red-700' : p.prioridad === 'Media' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
                     {p.prioridad}
                   </span>
                 </div>

@@ -8,6 +8,7 @@ export type Iniciativa = {
   capital: string
   zona: string
   eje: string
+  eje_gobierno: string | null
   nombre: string
   descripcion: string | null
   ministerio: string
@@ -88,6 +89,7 @@ function parseCSV(content: string): Project[] {
     capital: f[3] || '',
     zona: f[4] || '',
     eje: f[5] || '',
+    eje_gobierno: null,
     nombre: f[6] || '',
     descripcion: null,
     ministerio: f[7] || '',
