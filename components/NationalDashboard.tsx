@@ -6,7 +6,6 @@ import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
 import { EJE_COLORS, prioridadColor } from '@/lib/config'
-import { getSupabase } from '@/lib/supabase'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200'  },
@@ -34,6 +33,8 @@ type ImportPreviewRow = {
   region: string
   patch: Record<string, unknown>
   errors: string[]
+  isNew?: boolean
+  insertData?: Record<string, unknown>
 }
 
 const EJES = [
@@ -73,10 +74,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
   const [importing, setImporting]             = useState(false)
-  const [importResult, setImportResult]       = useState<{ updated: number; errors: string[] } | null>(null)
+  const [importResult, setImportResult]       = useState<{ inserted: number; updated: number; errors: string[] } | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importPreview, setImportPreview]     = useState<ImportPreviewRow[] | null>(null)
   const [importParseErrors, setImportParseErrors] = useState<string[]>([])
+  const [importFileName, setImportFileName]       = useState<string>('')
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [exportRegions, setExportRegions]     = useState<Set<string>>(() => new Set(REGIONS.map(r => r.nombre)))
   const [exportEjes, setExportEjes]           = useState<Set<string>>(() => new Set(EJES))
@@ -147,11 +149,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Import reads row 1 as headers and skips row 2 (description row).
   const TEMPLATE_COLS = [
     // ── Referencia ─────────────────────────────────────────────────────────
-    { key: '#',                     label: '#',                     desc: '⚠ NO MODIFICAR — Identificador único de la iniciativa en el sistema',                                                      wch: 6  },
-    { key: 'region',                label: 'Región',                desc: '⚠ NO MODIFICAR — Solo referencia',                                                                                         wch: 22 },
+    { key: '#',                     label: '#',                     desc: 'Número de la iniciativa existente. DEJAR VACÍO para crear una nueva',                                              wch: 6  },
+    { key: 'region',                label: 'Región',                desc: 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos). Obligatorio si # está vacío',                     wch: 22 },
     // ── Datos del Plan Regional de Gobierno ────────────────────────────────
     { key: 'nombre',                label: 'Nombre Iniciativa',     desc: 'Nombre completo de la iniciativa territorial',                                                                              wch: 52 },
-    { key: 'eje',                   label: 'Eje',                   desc: 'Eje 1: Infraestructura y Conectividad | Eje 2: Energía y Medio Ambiente | Eje 3: Salud y Servicios Básicos | Eje 4: Seguridad y Soberanía | Eje 5: Desarrollo Productivo e Innovación | Eje 6: Familia, Educación y Equidad Territorial', wch: 44 },
+    { key: 'eje',                   label: 'Eje',                   desc: 'Eje estratégico regional — texto libre, definido por cada región (ej: "Eje 1: Infraestructura y Conectividad")',     wch: 44 },
     { key: 'eje_gobierno',          label: 'Eje Gobierno',          desc: 'Valores: Economía | Social | Seguridad  (varía por región — definir con la Delegación)',                               wch: 16 },
     { key: 'ministerio',            label: 'Ministerio',            desc: 'Ministerio responsable de la iniciativa',                                                                                    wch: 28 },
     { key: 'comuna',                label: 'Comuna',                desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                        wch: 20 },
@@ -171,7 +173,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   function downloadTemplate() {
     // Row 1: headers (column labels)
     const headerRow = TEMPLATE_COLS.map(c => c.label)
-    // Row 2: descriptions (valid values guide) — no data rows, team fills this in
+    // Row 2: descriptions (valid values guide) — not imported, only a guide
     const descRow = TEMPLATE_COLS.map(c => c.desc)
 
     const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow])
@@ -186,18 +188,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       ['', '', '', ''],
       ['CÓMO USAR ESTE ARCHIVO', '', '', ''],
       ['1. Trabaja SOLO en la hoja "Carga". No mover ni renombrar esa hoja.', '', '', ''],
-      ['2. Las columnas # y Región son solo referencia — NO las modifiques.', '', '', ''],
-      ['3. La fila 2 (descripción de campos) NO se importa — es solo guía.', '', '', ''],
-      ['4. Completa los datos a partir de la fila 3.', '', '', ''],
-      ['5. Para dejar un campo vacío, simplemente deja la celda en blanco.', '', '', ''],
-      ['6. El semáforo, el avance % y el responsable se gestionan desde el panel — no van en este archivo.', '', '', ''],
-      ['7. Sube el archivo completado desde el botón "Importar" en el Dashboard.', '', '', ''],
+      ['2. La fila 2 (descripción de campos) NO se importa — es solo guía.', '', '', ''],
+      ['3. Agrega los datos a partir de la fila 3.', '', '', ''],
+      ['4. Para dejar un campo vacío, simplemente deja la celda en blanco.', '', '', ''],
+      ['5. El semáforo, el avance % y el responsable se gestionan desde el panel — no van en este archivo.', '', '', ''],
+      ['6. Sube el archivo completado desde el botón "Importar" en el Dashboard.', '', '', ''],
+      ['', '', '', ''],
+      ['NUEVAS INICIATIVAS vs. ACTUALIZACIONES', '', '', ''],
+      ['— Para CREAR una iniciativa nueva: deja la columna # vacía. Llena Región, Nombre Iniciativa, Eje y Ministerio.', '', '', ''],
+      ['— Para ACTUALIZAR una existente: pon su # en la primera columna. Llena solo los campos que quieres cambiar.', '', '', ''],
+      ['— El código de iniciativa (ej: AY-01-001) se genera automáticamente al crear. No es necesario llenarlo.', '', '', ''],
       ['', '', '', ''],
       ['CAMPO', 'OBLIGATORIO', 'VALORES PERMITIDOS', 'DESCRIPCIÓN'],
-      ['#', 'Solo referencia', '—', 'Identificador único de la iniciativa en el sistema. NO MODIFICAR.'],
-      ['Región', 'Solo referencia', '—', 'Región. NO MODIFICAR.'],
+      ['#', 'Solo para actualizar', 'Número entero', 'Número de la iniciativa existente. DEJAR VACÍO para crear una nueva.'],
+      ['Región', 'Sí (si # está vacío)', 'Texto libre', 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos).'],
       ['Nombre Iniciativa', 'Sí', 'Texto libre', 'Nombre completo de la iniciativa territorial.'],
-      ['Eje', 'Sí', 'Eje 1–6 (ver valores completos en columna)', 'Eje estratégico regional de la iniciativa.'],
+      ['Eje', 'No', 'Texto libre — definido por cada región', 'Eje estratégico regional. Cada región define sus propios ejes.'],
       ['Eje Gobierno', 'No', 'Economía | Social | Seguridad', 'Eje presidencial. Varía por región — definir con la Delegación. No se auto-deduce del Eje Regional.'],
       ['Ministerio', 'Sí', 'Texto libre', 'Ministerio responsable de la ejecución.'],
       ['Comuna', 'No', 'Texto libre', 'Comuna de ejecución. Dejar vacío si abarca toda la región.'],
@@ -223,7 +229,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   // Closed-list validators
-  const VALID_EJE            = EJES
   const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
   const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja']
   const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS']
@@ -238,12 +243,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     if (!file) return
     if (fileInputRef.current) fileInputRef.current.value = ''
 
+    // Reset state before processing new file
+    setImportPreview(null)
+    setImportParseErrors([])
+    setImportResult(null)
+    setImportFileName('')
+
     const parseErrors: string[] = []
 
     try {
       const arrayBuffer = await file.arrayBuffer()
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
+      // Prefer "Carga" sheet by name; fall back to first sheet
+      const sheetName = wb.SheetNames.find(n => n === 'Carga') ?? wb.SheetNames[0]
+      const ws = wb.Sheets[sheetName]
+
+      setImportFileName(`${file.name}  ·  Hoja: ${sheetName}`)
 
       // row[0]=headers, row[1]=descriptions (skip), row[2+]=data
       const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
@@ -265,11 +280,164 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         return String(row[idx] ?? '').trim()
       }
 
+      // Normalize for accent/case-insensitive region matching
+      function normalize(s: string) {
+        return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+      }
+      const normalizedRegions = REGIONS.map(r => ({ ...r, norm: normalize(r.nombre) }))
+      function findRegion(input: string) {
+        return normalizedRegions.find(r => r.norm === normalize(input))
+      }
+
       const preview: ImportPreviewRow[] = []
+
+      // Pre-build eje→number map per region from existing initiatives, for codigo_iniciativa generation
+      const regionEjeNumMap = new Map<string, Map<string, number>>()
+      for (const p of projects) {
+        if (!p.codigo_iniciativa) continue
+        const m = p.codigo_iniciativa.match(/^[A-Z]+-(\d+)-\d+$/)
+        if (!m) continue
+        if (!regionEjeNumMap.has(p.region)) regionEjeNumMap.set(p.region, new Map())
+        const em = regionEjeNumMap.get(p.region)!
+        if (!em.has(p.eje)) em.set(p.eje, parseInt(m[1], 10))
+      }
+      // Track codes generated in this batch (for correct seq within new rows)
+      const batchCodes: string[] = []
+      const maxExistingN = projects.length > 0 ? Math.max(...projects.map(p => p.n)) : 0
+      let newNOffset = 0
+
+      // Shared helper: parse optional fields into a patch/insertData object
+      function parseOptionalFields(row: string[], target: Record<string, unknown>, rowErrors: string[]) {
+        const ejeGobierno = col(row, 'Eje Gobierno')
+        if (ejeGobierno) {
+          if (!VALID_EJE_GOBIERNO.includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
+          else target.eje_gobierno = ejeGobierno
+        }
+        const prioridad = col(row, 'Prioridad')
+        if (prioridad) {
+          if (!VALID_PRIORIDAD.includes(prioridad)) rowErrors.push(`prioridad "${prioridad}" inválida`)
+          else target.prioridad = prioridad
+        }
+        const etapa = col(row, 'Etapa Actual')
+        if (etapa) {
+          if (!VALID_ETAPA.includes(etapa)) rowErrors.push(`etapa "${etapa}" inválida`)
+          else target.etapa_actual = etapa
+        }
+        const estadoTermino = col(row, 'Estado Término Gob.')
+        if (estadoTermino) {
+          if (!VALID_ESTADO_TERMINO.includes(estadoTermino)) rowErrors.push(`estado término "${estadoTermino}" inválido`)
+          else target.estado_termino_gobierno = estadoTermino
+        }
+        const proximoHito = col(row, 'Próximo Hito')
+        if (proximoHito) {
+          if (!VALID_PROXIMO_HITO.includes(proximoHito)) rowErrors.push(`próximo hito "${proximoHito}" inválido`)
+          else target.proximo_hito = proximoHito
+        }
+        const fuente = col(row, 'Fuente Financiamiento')
+        if (fuente) {
+          if (!VALID_FUENTE.includes(fuente)) rowErrors.push(`fuente "${fuente}" inválida`)
+          else target.fuente_financiamiento = fuente
+        }
+        const rat = col(row, 'RAT')
+        if (rat) {
+          if (!VALID_RAT.includes(rat)) rowErrors.push(`RAT "${rat}" inválido`)
+          else target.rat = rat
+        }
+        const inversionStr = col(row, 'Inversión ($MM)')
+        if (inversionStr !== undefined && inversionStr !== '') {
+          const num = Number(String(inversionStr).replace(',', '.'))
+          if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
+          else target.inversion_mm = num
+        }
+        const fechaRaw = col(row, 'Fecha Próximo Hito')
+        if (fechaRaw !== undefined && fechaRaw !== '') {
+          const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+          if (!dm) rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA`)
+          else target.fecha_proximo_hito = `${dm[3]}-${dm[2]}-${dm[1]}`
+        }
+        for (const [label, dbCol] of [
+          ['Nombre Iniciativa', 'nombre'],
+          ['Eje', 'eje'],
+          ['Ministerio', 'ministerio'],
+          ['Código BIP', 'codigo_bip'],
+          ['Código Iniciativa', 'codigo_iniciativa'],
+          ['Descripción', 'descripcion'],
+          ['Comuna', 'comuna'],
+        ] as [string, string][]) {
+          const val = col(row, label)
+          if (val !== undefined) target[dbCol] = val === '' ? null : val
+        }
+      }
 
       for (const row of dataRows) {
         const nStr = col(row, '#')
-        if (!nStr) continue
+
+        // ── Nueva iniciativa (# vacío) ──────────────────────────────────────
+        if (!nStr) {
+          const regionNombre = col(row, 'Región') ?? ''
+          const eje          = col(row, 'Eje') ?? ''
+          const nombre       = col(row, 'Nombre Iniciativa') ?? ''
+          const ministerio   = col(row, 'Ministerio') ?? ''
+          const rowErrors: string[] = []
+
+          if (!regionNombre)                                           rowErrors.push('Región requerida')
+          const regionObj = findRegion(regionNombre)
+          if (regionNombre && !regionObj)                              rowErrors.push(`Región "${regionNombre}" no reconocida`)
+          if (!nombre)                                                 rowErrors.push('Nombre requerido')
+          if (!eje)                                                    rowErrors.push('Eje requerido')
+          if (!ministerio)                                             rowErrors.push('Ministerio requerido')
+
+          // Auto-generate codigo_iniciativa
+          let codigoIniciativa: string | null = null
+          if (regionObj && eje) {
+            if (!regionEjeNumMap.has(regionNombre)) regionEjeNumMap.set(regionNombre, new Map())
+            const ejeMap = regionEjeNumMap.get(regionNombre)!
+            let ejeNum: number
+            if (ejeMap.has(eje)) {
+              ejeNum = ejeMap.get(eje)!
+            } else {
+              const used = new Set(ejeMap.values())
+              ejeNum = 1; while (used.has(ejeNum)) ejeNum++
+              ejeMap.set(eje, ejeNum)
+            }
+            const ejePfx = `${regionObj.shortCod}-${String(ejeNum).padStart(2, '0')}`
+            const seqs = [
+              ...projects
+                .filter(p => p.region === regionNombre && p.codigo_iniciativa?.startsWith(ejePfx + '-'))
+                .map(p => parseInt(p.codigo_iniciativa!.split('-')[2] ?? '0', 10)),
+              ...batchCodes
+                .filter(c => c.startsWith(ejePfx + '-'))
+                .map(c => parseInt(c.split('-')[2] ?? '0', 10)),
+            ].filter(v => !isNaN(v))
+            const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1
+            codigoIniciativa = `${ejePfx}-${String(seq).padStart(3, '0')}`
+            batchCodes.push(codigoIniciativa)
+          }
+
+          newNOffset++
+          const newN = maxExistingN + newNOffset
+
+          const insertData: Record<string, unknown> = {
+            n:                  newN,
+            region:             regionNombre,
+            cod:                regionObj?.cod    ?? '',
+            capital:            regionObj?.capital ?? '',
+            zona:               regionObj?.zona    ?? '',
+            eje,
+            nombre,
+            ministerio,
+            prioridad:          'Media',
+            estado_semaforo:    'gris',
+            pct_avance:         0,
+            codigo_iniciativa:  codigoIniciativa,
+          }
+          parseOptionalFields(row, insertData, rowErrors)
+
+          preview.push({ n: newN, nombre, region: regionNombre, patch: {}, errors: rowErrors, isNew: true, insertData })
+          continue
+        }
+
+        // ── Iniciativa existente (# provisto) ───────────────────────────────
         const n = Number(nStr)
         if (isNaN(n) || n <= 0) { parseErrors.push(`Fila con # inválido "${nStr}" — omitida`); continue }
 
@@ -278,78 +446,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
         const rowErrors: string[] = []
         const patch: Record<string, unknown> = {}
-
-        // ── Closed-list fields ──
-        const eje = col(row, 'Eje')
-        if (eje) {
-          if (!VALID_EJE.includes(eje)) rowErrors.push(`eje "${eje}" inválido`)
-          else patch.eje = eje
-        }
-        // Eje Gobierno: must be explicitly set per region — no auto-derivation
-        const ejeGobierno = col(row, 'Eje Gobierno')
-        if (ejeGobierno) {
-          if (!VALID_EJE_GOBIERNO.includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
-          else patch.eje_gobierno = ejeGobierno
-        }
-        const prioridad = col(row, 'Prioridad')
-        if (prioridad) {
-          if (!VALID_PRIORIDAD.includes(prioridad)) rowErrors.push(`prioridad "${prioridad}" inválida`)
-          else patch.prioridad = prioridad
-        }
-        const etapa = col(row, 'Etapa Actual')
-        if (etapa) {
-          if (!VALID_ETAPA.includes(etapa)) rowErrors.push(`etapa "${etapa}" inválida`)
-          else patch.etapa_actual = etapa
-        }
-        const estadoTermino = col(row, 'Estado Término Gob.')
-        if (estadoTermino) {
-          if (!VALID_ESTADO_TERMINO.includes(estadoTermino)) rowErrors.push(`estado término "${estadoTermino}" inválido`)
-          else patch.estado_termino_gobierno = estadoTermino
-        }
-        const proximoHito = col(row, 'Próximo Hito')
-        if (proximoHito) {
-          if (!VALID_PROXIMO_HITO.includes(proximoHito)) rowErrors.push(`próximo hito "${proximoHito}" inválido`)
-          else patch.proximo_hito = proximoHito
-        }
-        const fuente = col(row, 'Fuente Financiamiento')
-        if (fuente) {
-          if (!VALID_FUENTE.includes(fuente)) rowErrors.push(`fuente "${fuente}" inválida`)
-          else patch.fuente_financiamiento = fuente
-        }
-        const rat = col(row, 'RAT')
-        if (rat) {
-          if (!VALID_RAT.includes(rat)) rowErrors.push(`RAT "${rat}" inválido`)
-          else patch.rat = rat
-        }
-
-        // ── Numeric fields ──
-        const inversionStr = col(row, 'Inversión ($MM)')
-        if (inversionStr !== undefined && inversionStr !== '') {
-          const num = Number(String(inversionStr).replace(',', '.'))
-          if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
-          else patch.inversion_mm = num
-        }
-
-        // ── Date: DD-MM-AAAA → YYYY-MM-DD ──
-        const fechaRaw = col(row, 'Fecha Próximo Hito')
-        if (fechaRaw !== undefined && fechaRaw !== '') {
-          const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
-          if (!dm) rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA`)
-          else patch.fecha_proximo_hito = `${dm[3]}-${dm[2]}-${dm[1]}`
-        }
-
-        // ── Free text fields ──
-        for (const [label, dbCol] of [
-          ['Nombre Iniciativa', 'nombre'],
-          ['Ministerio', 'ministerio'],
-          ['Código BIP', 'codigo_bip'],
-          ['Código Iniciativa', 'codigo_iniciativa'],
-          ['Descripción', 'descripcion'],
-          ['Comuna', 'comuna'],
-        ] as [string, string][]) {
-          const val = col(row, label)
-          if (val !== undefined) patch[dbCol] = val === '' ? null : val
-        }
+        parseOptionalFields(row, patch, rowErrors)
 
         preview.push({ n, nombre: project.nombre, region: project.region, patch, errors: rowErrors })
       }
@@ -364,33 +461,52 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     }
   }
 
-  // Phase 2: save validated rows to DB
+  // Phase 2: save validated rows to DB via API route (uses service role key)
   async function applyImport() {
     if (!importPreview) return
     setImporting(true)
 
-    const toSave = importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0)
-    const errors: string[] = []
-    let updated = 0
+    const valid = importPreview.filter(r => r.errors.length === 0)
+    const updates = valid
+      .filter(r => !r.isNew && Object.keys(r.patch).length > 0)
+      .map(r => ({ n: r.n, patch: r.patch }))
+    const inserts = valid
+      .filter(r => r.isNew && r.insertData)
+      .map(r => r.insertData!)
 
-    for (const row of toSave) {
-      const { error } = await getSupabase()
-        .from('prioridades_territoriales')
-        .update(row.patch)
-        .eq('n', row.n)
-
-      if (error) {
-        errors.push(`#${row.n}: ${error.message}`)
+    let result: { inserted: number; updated: number; errors: string[] }
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates, inserts }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        result = { inserted: 0, updated: 0, errors: [json?.error ?? `HTTP ${res.status}`] }
       } else {
-        updated++
-        onUpdatePrioridad(row.n, row.patch as Partial<Iniciativa>)
+        result = json as { inserted: number; updated: number; errors: string[] }
+      }
+    } catch (err) {
+      result = { inserted: 0, updated: 0, errors: [`Error de red: ${String(err)}`] }
+    }
+
+    // Sync in-memory state for updated rows (no reload needed)
+    for (const { n, patch } of updates) {
+      if (!result.errors.some(e => e.startsWith(`#${n}:`))) {
+        onUpdatePrioridad(n, patch as Partial<Iniciativa>)
       }
     }
 
     setImporting(false)
-    setImportModalOpen(false)
-    setImportPreview(null)
-    setImportResult({ updated, errors })
+    if (result.errors.length > 0) {
+      setImportResult({ inserted: result.inserted, updated: result.updated, errors: result.errors })
+    } else {
+      setImportModalOpen(false)
+      setImportPreview(null)
+      setImportResult({ inserted: result.inserted, updated: result.updated, errors: [] })
+      window.location.reload()
+    }
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -561,7 +677,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <span className="text-xs text-gray-500">{filtered.length} prioridades</span>
 
             <button
-              onClick={() => { setImportPreview(null); setImportParseErrors([]); setImportModalOpen(true) }}
+              onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -569,6 +685,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               </svg>
               Importar
             </button>
+            {/* File input always in DOM so toolbar button can trigger it directly */}
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
 
             <button
               onClick={() => setExportModalOpen(true)}
@@ -592,8 +710,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         }`}>
           <span className="font-semibold whitespace-nowrap">
             {importResult.errors.length === 0
-              ? `${importResult.updated} iniciativa${importResult.updated !== 1 ? 's' : ''} actualizada${importResult.updated !== 1 ? 's' : ''} correctamente.`
-              : `${importResult.updated} actualizadas, ${importResult.errors.length} error${importResult.errors.length !== 1 ? 'es' : ''}:`}
+              ? (() => {
+                  const parts = []
+                  if (importResult.inserted  > 0) parts.push(`${importResult.inserted} nueva${importResult.inserted !== 1 ? 's' : ''} creada${importResult.inserted !== 1 ? 's' : ''}`)
+                  if (importResult.updated   > 0) parts.push(`${importResult.updated} actualizada${importResult.updated !== 1 ? 's' : ''}`)
+                  return parts.length ? parts.join(' · ') + ' correctamente.' : 'Sin cambios.'
+                })()
+              : `${(importResult.inserted ?? 0) + importResult.updated} guardadas, ${importResult.errors.length} error${importResult.errors.length !== 1 ? 'es' : ''}:`}
           </span>
           {importResult.errors.length > 0 && (
             <span className="text-amber-700">{importResult.errors.join(' · ')}</span>
@@ -752,22 +875,21 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
       {/* ── Import modal ── */}
       {importModalOpen && (() => {
-        const hasFile   = importPreview !== null || importParseErrors.length > 0
-        const validRows = importPreview?.filter(r => r.errors.length === 0 && Object.keys(r.patch).length > 0) ?? []
-        const errorRows = importPreview?.filter(r => r.errors.length > 0) ?? []
+        const hasFile    = importPreview !== null || importParseErrors.length > 0
+        const validRows  = importPreview?.filter(r => r.errors.length === 0 && (r.isNew || Object.keys(r.patch).length > 0)) ?? []
+        const insertRows = importPreview?.filter(r => r.errors.length === 0 && r.isNew) ?? []
+        const updateRows = importPreview?.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length > 0) ?? []
+        const errorRows  = importPreview?.filter(r => r.errors.length > 0) ?? []
         const isAllOk   = hasFile && importParseErrors.length === 0 && errorRows.length === 0 && validRows.length > 0
         const hasErrors = hasFile && (importParseErrors.length > 0 || errorRows.length > 0)
 
         const headerBg  = isAllOk  ? 'bg-green-600'  : hasErrors ? 'bg-red-600'  : 'bg-slate-800'
-        const bodyBg    = isAllOk  ? 'bg-green-50/60' : hasErrors ? 'bg-red-50/40' : 'bg-white'
+        const bodyBg    = isAllOk  ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-white'
         const footerBg  = isAllOk  ? 'bg-green-50'   : hasErrors ? 'bg-red-50'   : 'bg-gray-50'
         const borderCol = isAllOk  ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
 
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            {/* Hidden file input lives here so it's triggered from inside modal */}
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
-
             <div className={`rounded-2xl shadow-2xl w-full max-w-3xl max-h-[82vh] flex flex-col overflow-hidden border ${borderCol}`}>
 
               {/* Header — changes color */}
@@ -779,7 +901,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                     : 'Importar iniciativas'}
                   </h2>
                   <p className="text-xs mt-0.5 text-white/70">
-                    {isAllOk   ? 'Revisa los cambios y confirma para guardar en la base de datos.'
+                    {isAllOk   ? (importFileName || 'Revisa los cambios y confirma para guardar en la base de datos.')
                     : hasErrors ? `${errorRows.length + importParseErrors.length} fila${errorRows.length + importParseErrors.length !== 1 ? 's' : ''} con errores — corrígelas en el archivo y vuelve a cargarlo.`
                     : 'Carga el archivo .xlsx con los datos completados. Revisaremos el formato antes de guardar.'}
                   </p>
@@ -829,9 +951,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 {/* ── File loaded: summary chips ── */}
                 {hasFile && importPreview && importPreview.length > 0 && (
                   <div className="flex items-center gap-2 text-xs flex-wrap">
-                    {validRows.length > 0 && (
+                    {insertRows.length > 0 && (
+                      <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-medium border border-blue-200">
+                        + {insertRows.length} nueva{insertRows.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {updateRows.length > 0 && (
                       <span className="px-2.5 py-1 rounded-full bg-green-100 text-green-800 font-medium border border-green-200">
-                        ✓ {validRows.length} listas para guardar
+                        ✓ {updateRows.length} actualizacion{updateRows.length !== 1 ? 'es' : ''}
                       </span>
                     )}
                     {errorRows.length > 0 && (
@@ -839,9 +966,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                         ✗ {errorRows.length} con errores
                       </span>
                     )}
-                    {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length > 0 && (
+                    {importPreview.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length === 0).length > 0 && (
                       <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium">
-                        — {importPreview.filter(r => r.errors.length === 0 && Object.keys(r.patch).length === 0).length} sin cambios
+                        — {importPreview.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length === 0).length} sin cambios
                       </span>
                     )}
                     <button
@@ -867,25 +994,36 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                     </thead>
                     <tbody>
                       {importPreview.map(row => (
-                        <tr key={row.n} className={`border-b border-gray-100 ${row.errors.length > 0 ? 'bg-red-50' : ''}`}>
-                          <td className="px-3 py-2 font-mono text-gray-400">{row.n}</td>
+                        <tr key={`${row.isNew ? 'new' : ''}${row.n}`} className={`border-b border-gray-100 ${row.errors.length > 0 ? 'bg-red-50' : row.isNew ? 'bg-blue-50/40' : ''}`}>
+                          <td className="px-3 py-2 font-mono text-gray-400">
+                            {row.isNew
+                              ? <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold">Nuevo</span>
+                              : row.n}
+                          </td>
                           <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.region}</td>
                           <td className="px-3 py-2 text-gray-700 max-w-[180px]">
                             <span className="line-clamp-2 leading-snug">{row.nombre}</span>
+                            {row.isNew && !!row.insertData?.codigo_iniciativa && (
+                              <span className="block font-mono text-blue-600 text-xs mt-0.5">{String(row.insertData.codigo_iniciativa)}</span>
+                            )}
                           </td>
                           <td className="px-3 py-2 max-w-[280px]">
                             {row.errors.length > 0
                               ? <span className="text-red-600">{row.errors.join(' · ')}</span>
-                              : Object.keys(row.patch).length > 0
-                                ? <span className="text-green-700">{Object.keys(row.patch).join(', ')}</span>
-                                : <span className="text-gray-400">Sin cambios</span>}
+                              : row.isNew
+                                ? <span className="text-blue-700">nueva iniciativa</span>
+                                : Object.keys(row.patch).length > 0
+                                  ? <span className="text-green-700">{Object.keys(row.patch).join(', ')}</span>
+                                  : <span className="text-gray-400">Sin cambios</span>}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap font-medium">
                             {row.errors.length > 0
                               ? <span className="text-red-500">✗</span>
-                              : Object.keys(row.patch).length > 0
-                                ? <span className="text-green-600">✓</span>
-                                : <span className="text-gray-400">—</span>}
+                              : row.isNew
+                                ? <span className="text-blue-600">+</span>
+                                : Object.keys(row.patch).length > 0
+                                  ? <span className="text-green-600">✓</span>
+                                  : <span className="text-gray-400">—</span>}
                           </td>
                         </tr>
                       ))}
@@ -899,11 +1037,21 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )}
               </div>
 
+              {/* Apply errors — shown inside modal when applyImport encounters DB errors */}
+              {importResult && importResult.errors.length > 0 && (
+                <div className="mx-6 mb-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Error al guardar — revisa los detalles en la consola del navegador (F12)</p>
+                  {importResult.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600 mt-0.5">{e}</p>
+                  ))}
+                </div>
+              )}
+
               {/* Footer */}
               <div className={`px-6 py-4 border-t ${borderCol} ${footerBg} flex items-center justify-between`}>
                 <div className="text-xs text-gray-500">
                   {hasFile
-                    ? `${validRows.length} iniciativa${validRows.length !== 1 ? 's' : ''} se actualizarán`
+                    ? [insertRows.length > 0 && `${insertRows.length} nueva${insertRows.length !== 1 ? 's' : ''}`, updateRows.length > 0 && `${updateRows.length} actualización${updateRows.length !== 1 ? 'es' : ''}`].filter(Boolean).join(' · ') || 'Sin cambios'
                     : 'Ningún cambio guardado aún'}
                 </div>
                 <div className="flex gap-2">

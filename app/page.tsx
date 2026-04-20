@@ -3,6 +3,9 @@ import path from 'path'
 import type { GeoJsonObject } from 'geojson'
 import WorkOSApp from '@/components/WorkOSApp'
 
+// Always fetch fresh data from Supabase — never serve a cached page
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
   // Load projects: Supabase when env vars are set, CSV file as fallback
   let projects
