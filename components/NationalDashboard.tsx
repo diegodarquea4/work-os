@@ -81,7 +81,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [importFileName, setImportFileName]       = useState<string>('')
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [exportRegions, setExportRegions]     = useState<Set<string>>(() => new Set(REGIONS.map(r => r.nombre)))
-  const [exportEjes, setExportEjes]           = useState<Set<string>>(() => new Set(EJES))
+  const [exportEjes, setExportEjes]           = useState<Set<string>>(() => new Set())
   const fileInputRef                          = useRef<HTMLInputElement>(null)
 
   // Sync selected when projects update (after modal saves)
@@ -525,6 +525,19 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   // ── Export ────────────────────────────────────────────────────────────────
 
+  // Derive unique ejes from actual projects (not from hardcoded EJES list)
+  const allProjectEjes = useMemo(() => {
+    const s = new Set<string>()
+    for (const p of projects) if (p.eje) s.add(p.eje)
+    return [...s].sort()
+  }, [projects])
+
+  // On first open, seed exportEjes with all real ejes
+  function openExportModal() {
+    if (exportEjes.size === 0) setExportEjes(new Set(allProjectEjes))
+    setExportModalOpen(true)
+  }
+
   const exportCount = projects.filter(p => exportRegions.has(p.region) && exportEjes.has(p.eje)).length
 
   function exportExcelFiltered() {
@@ -688,10 +701,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-gray-500">{filtered.length} prioridades</span>
-
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -699,11 +710,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               </svg>
               Importar
             </button>
-            {/* File input always in DOM so toolbar button can trigger it directly */}
+            {/* File input always in DOM — triggered from inside the import modal */}
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
 
             <button
-              onClick={() => setExportModalOpen(true)}
+              onClick={openExportModal}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -897,10 +908,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const isAllOk   = hasFile && importParseErrors.length === 0 && errorRows.length === 0 && validRows.length > 0
         const hasErrors = hasFile && (importParseErrors.length > 0 || errorRows.length > 0)
 
-        const headerBg  = isAllOk  ? 'bg-green-600'  : hasErrors ? 'bg-red-600'  : 'bg-slate-800'
+        const isIdle    = !hasFile
+        const headerBg  = isIdle   ? 'bg-white border-b border-gray-100' : isAllOk ? 'bg-green-600' : hasErrors ? 'bg-red-600' : 'bg-slate-800'
+        const headerTextPrimary   = isIdle ? 'text-gray-900' : 'text-white'
+        const headerTextSecondary = isIdle ? 'text-gray-500' : 'text-white/70'
+        const headerCloseBtn      = isIdle ? 'text-gray-400 hover:text-gray-600' : 'text-white/60 hover:text-white'
         const bodyBg    = isAllOk  ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-white'
-        const footerBg  = isAllOk  ? 'bg-green-50'   : hasErrors ? 'bg-red-50'   : 'bg-gray-50'
-        const borderCol = isAllOk  ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
+        const footerBg  = isIdle   ? 'bg-white' : isAllOk ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-gray-50'
+        const borderCol = isIdle   ? 'border-gray-100' : isAllOk ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
 
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -909,18 +924,18 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {/* Header — changes color */}
               <div className={`${headerBg} px-6 py-4 flex items-start justify-between`}>
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className={`text-base font-semibold ${headerTextPrimary}`}>
                     {isAllOk   ? `✓ Todo OK — ${validRows.length} iniciativa${validRows.length !== 1 ? 's' : ''} listas para guardar`
                     : hasErrors ? `Archivo con problemas`
                     : 'Importar iniciativas'}
                   </h2>
-                  <p className="text-xs mt-0.5 text-white/70">
+                  <p className={`text-xs mt-0.5 ${headerTextSecondary}`}>
                     {isAllOk   ? (importFileName || 'Revisa los cambios y confirma para guardar en la base de datos.')
                     : hasErrors ? `${errorRows.length + importParseErrors.length} fila${errorRows.length + importParseErrors.length !== 1 ? 's' : ''} con errores — corrígelas en el archivo y vuelve a cargarlo.`
                     : 'Carga el archivo .xlsx con los datos completados. Revisaremos el formato antes de guardar.'}
                   </p>
                 </div>
-                <button onClick={() => setImportModalOpen(false)} className="text-white/60 hover:text-white mt-0.5 text-lg leading-none">✕</button>
+                <button onClick={() => setImportModalOpen(false)} className={`${headerCloseBtn} mt-0.5 text-lg leading-none`}>✕</button>
               </div>
 
               {/* Body */}
@@ -1069,14 +1084,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                     : 'Ningún cambio guardado aún'}
                 </div>
                 <div className="flex gap-2">
-                  {!hasFile && (
-                    <button onClick={downloadTemplate} className="text-xs px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 font-medium flex items-center gap-1.5">
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
-                      </svg>
-                      Template
-                    </button>
-                  )}
                   <button
                     onClick={() => setImportModalOpen(false)}
                     className="text-xs px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
@@ -1153,12 +1160,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ejes</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setExportEjes(new Set(EJES))} className="text-xs text-blue-600 hover:underline">Todos</button>
+                    <button onClick={() => setExportEjes(new Set(allProjectEjes))} className="text-xs text-blue-600 hover:underline">Todos</button>
                     <button onClick={() => setExportEjes(new Set())} className="text-xs text-gray-400 hover:underline">Ninguno</button>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  {EJES.map(e => (
+                  {allProjectEjes.map(e => (
                     <label key={e} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:text-gray-900 py-0.5">
                       <input
                         type="checkbox"

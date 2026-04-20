@@ -285,6 +285,16 @@ function SectionTitle({ num, title }: { num: string; title: string }) {
   )
 }
 
+// Official full region name: most use "Región de X", exceptions handled explicitly
+function regionFullName(region: Region): string {
+  const OVERRIDES: Record<string, string> = {
+    RM:   'Región Metropolitana de Santiago',
+    XI:   'Región de Aysén del General Carlos Ibáñez del Campo',
+    XII:  'Región de Magallanes y de la Antártica Chilena',
+  }
+  return OVERRIDES[region.cod] ?? `Región de ${region.nombre}`
+}
+
 // Format number with thousands separator (e.g. 1234567 → "1.234.567")
 function n(val: number | null | undefined): string | null {
   if (val === null || val === undefined) return null
@@ -389,7 +399,7 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
         {/* ── Título del documento ── */}
         <View style={s.minutaBlock}>
           <Text style={s.minutaLabel}>Minuta Ejecutiva · Uso Interno</Text>
-          <Text style={s.minutaTitle}>Región de {region.nombre}</Text>
+          <Text style={s.minutaTitle}>{regionFullName(region)}</Text>
           <Text style={s.minutaSubtitle}>Informe de Prioridades Territoriales 2026–2028  ·  {fecha}</Text>
         </View>
 
@@ -430,7 +440,7 @@ export default function MinutaDocument({ region, projects, metrics, seiaProjects
         {/* ── Intro ── */}
         <Text style={s.intro}>
           La presente minuta resume el estado de avance de las prioridades territoriales de la
-          Región de {region.nombre} para el período 2026–2028, junto con indicadores
+          {regionFullName(region)} para el período 2026–2028, junto con indicadores
           socioeconómicos y proyectos de inversión pública relevantes en la región.
         </Text>
 

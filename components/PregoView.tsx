@@ -56,22 +56,41 @@ function CeldaEstado({
   onChange: (e: PregoEstado) => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const cfg = ESTADO_CONFIG[estado]
 
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (
+        !btnRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  function handleOpen() {
+    if (open) { setOpen(false); return }
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const dropH = 148 // approx: 4 items × 37px
+    const top = window.innerHeight - rect.bottom < dropH
+      ? rect.top - dropH - 4
+      : rect.bottom + 4
+    setDropdownPos({ top, left: rect.left + rect.width / 2 - 64 })
+    setOpen(true)
+  }
+
   return (
-    <div ref={ref} className="relative flex justify-center">
+    <div className="relative flex justify-center">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={handleOpen}
         disabled={saving}
         title={cfg.label}
         className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all
@@ -80,8 +99,12 @@ function CeldaEstado({
         {saving ? '…' : cfg.dot}
       </button>
 
-      {open && (
-        <div className="absolute top-7 z-50 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-32">
+      {open && dropdownPos && (
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-32"
+        >
           {ESTADOS.map(e => {
             const c = ESTADO_CONFIG[e]
             return (

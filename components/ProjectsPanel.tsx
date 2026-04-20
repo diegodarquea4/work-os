@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import { ZONA_COLORS } from '@/lib/regions'
+import { ZONA_COLORS, REGIONS } from '@/lib/regions'
 import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
@@ -61,14 +61,18 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
   const [trendOpen, setTrendOpen]           = useState(false)
   const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
   const [comparisonOpen, setComparisonOpen] = useState(false)
-  const [seiaOpen, setSeiaOpen]             = useState(false)
-  const [mopOpen, setMopOpen]               = useState(false)
-  const [pibOpen, setPibOpen]               = useState(false)
+  const [seiaModalOpen, setSeiaModalOpen]       = useState(false)
+  const [mopModalOpen, setMopModalOpen]         = useState(false)
+  const [seiaModalRegion, setSeiaModalRegion]   = useState(region)
+  const [mopModalRegion, setMopModalRegion]     = useState(region)
+  const [pibOpen, setPibOpen]                   = useState(false)
 
-  const trendData  = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
-  const seiaData   = useSeiaProjects(region.cod)
-  const mopData    = useMopProjects(region.cod)
-  const pibData    = usePibSectorial(region.cod)
+  const trendData     = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
+  const seiaData      = useSeiaProjects(region.cod)
+  const mopData       = useMopProjects(region.cod)
+  const pibData       = usePibSectorial(region.cod)
+  const seiaModalData = useSeiaProjects(seiaModalRegion.cod)
+  const mopModalData  = useMopProjects(mopModalRegion.cod)
 
   const availableTabs = TREND_CONFIG.filter(m =>
     trendData.data.some(s => s.metric_name === m.name)
@@ -81,6 +85,11 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
   const [filterSemaforo, setFilterSemaforo]     = useState<FilterSemaforo>('todos')
   const [filterPrioridad, setFilterPrioridad]   = useState<FilterPrioridad>('todas')
   const [sortBy, setSortBy]                     = useState<SortBy>('semaforo')
+
+  useEffect(() => {
+    setSeiaModalRegion(region)
+    setMopModalRegion(region)
+  }, [region.cod])
 
   useEffect(() => {
     setActividad({})
@@ -264,104 +273,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         </div>
       </div>
 
-      {/* ── Tendencia de Indicadores ── */}
-      {(trendData.loading || trendData.data.length > 0) && (
-        <CollapsibleSection
-          title="Tendencia de Indicadores"
-          isOpen={trendOpen}
-          onToggle={() => setTrendOpen(o => !o)}
-          loading={trendData.loading}
-        >
-          <div className="px-5 pb-4">
-            {availableTabs.length > 1 && (
-              <div className="flex gap-1 mb-3 border-b border-gray-200">
-                {availableTabs.map(m => (
-                  <button
-                    key={m.name}
-                    onClick={() => setActiveMetric(m.name)}
-                    className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
-                      activeMetric === m.name
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            <RegionMetricsChart
-              series={activeSeries}
-              loading={trendData.loading}
-              error={trendData.error}
-              metricLabels={{ [activeMetric]: activeConfig.label }}
-              yFormatter={activeConfig.yFmt}
-            />
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {/* ── Proyectos SEIA ── */}
-      {(seiaData.loading || seiaData.proyectos.length > 0) && (
-        <CollapsibleSection
-          title="Proyectos SEIA"
-          isOpen={seiaOpen}
-          onToggle={() => setSeiaOpen(o => !o)}
-          loading={seiaData.loading}
-          badge={seiaData.total || undefined}
-        >
-          <div className="max-h-72 overflow-y-auto">
-            <SeiaProjectsList
-              proyectos={seiaData.proyectos}
-              total={seiaData.total}
-              loading={seiaData.loading}
-              error={seiaData.error}
-              regionId={INE_CODE[region.cod] ?? 0}
-            />
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {/* ── Proyectos MOP ── */}
-      {(mopData.loading || mopData.proyectos.length > 0) && (
-        <CollapsibleSection
-          title="Proyectos MOP"
-          isOpen={mopOpen}
-          onToggle={() => setMopOpen(o => !o)}
-          loading={mopData.loading}
-          badge={mopData.total || undefined}
-        >
-          <div className="max-h-72 overflow-y-auto">
-            <MopProjectsList
-              proyectos={mopData.proyectos}
-              total={mopData.total}
-              loading={mopData.loading}
-              error={mopData.error}
-            />
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {/* ── PIB Sectorial ── */}
-      {(pibData.loading || pibData.data.length > 0) && (
-        <CollapsibleSection
-          title="PIB Sectorial"
-          isOpen={pibOpen}
-          onToggle={() => setPibOpen(o => !o)}
-          loading={pibData.loading}
-        >
-          <PibSectorialChart
-            data={pibData.data}
-            latestPeriod={pibData.latestPeriod}
-            loading={pibData.loading}
-            error={pibData.error}
-          />
-        </CollapsibleSection>
-      )}
-
-      {/* ── Filtros ── */}
+      {/* ── Filtros (sticky) ── */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 space-y-2">
-        {/* Search */}
         <div className="relative">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5"
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
@@ -382,42 +295,31 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             </button>
           )}
         </div>
-
-        {/* Filter chips + sort */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Semáforo chips */}
           {(['todos', 'rojo', 'ambar', 'verde', 'gris'] as FilterSemaforo[]).map(s => (
             <button
               key={s}
               onClick={() => setFilterSemaforo(s)}
               className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                filterSemaforo === s
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                filterSemaforo === s ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {s !== 'todos' && <span className={`w-2 h-2 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>}
               {s === 'todos' ? 'Todos' : SEMAFORO_CONFIG[s].label}
             </button>
           ))}
-
           <div className="w-px h-4 bg-gray-200 mx-0.5"/>
-
-          {/* Prioridad chips */}
           {(['todas', 'Alta', 'Media', 'Baja'] as FilterPrioridad[]).map(p => (
             <button
               key={p}
               onClick={() => setFilterPrioridad(p)}
               className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                filterPrioridad === p
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                filterPrioridad === p ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {p === 'todas' ? 'Todas' : p}
             </button>
           ))}
-
           <div className="ml-auto">
             <select
               value={sortBy}
@@ -433,103 +335,284 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         </div>
       </div>
 
-      {/* ── Iniciativas list ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {filteredIniciativas.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-sm text-gray-400">Sin iniciativas con estos filtros</p>
-            <button
-              onClick={() => { setSearch(''); setFilterSemaforo('todos'); setFilterPrioridad('todas') }}
-              className="mt-2 text-xs text-slate-600 underline"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        ) : (
-          filteredIniciativas.map(p => {
-            const sem = SEMAFORO_CONFIG[p.estado_semaforo]
-            return (
-              <div
-                key={p.n}
-                onClick={() => setSelectedPrioridad(p)}
-                className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer"
+      {/* ── Single scroll area: contexto + iniciativas ── */}
+      <div className="flex-1 overflow-y-auto">
+
+        {/* Tendencia de Indicadores */}
+        {(trendData.loading || trendData.data.length > 0) && (
+          <CollapsibleSection
+            title="Tendencia de Indicadores"
+            isOpen={trendOpen}
+            onToggle={() => setTrendOpen(o => !o)}
+            loading={trendData.loading}
+          >
+            <div className="px-5 pb-4">
+              {availableTabs.length > 1 && (
+                <div className="flex gap-1 mb-3 border-b border-gray-200">
+                  {availableTabs.map(m => (
+                    <button
+                      key={m.name}
+                      onClick={() => setActiveMetric(m.name)}
+                      className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
+                        activeMetric === m.name
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <RegionMetricsChart
+                series={activeSeries}
+                loading={trendData.loading}
+                error={trendData.error}
+                metricLabels={{ [activeMetric]: activeConfig.label }}
+                yFormatter={activeConfig.yFmt}
+              />
+            </div>
+          </CollapsibleSection>
+        )}
+
+        {/* PIB Sectorial */}
+        {(pibData.loading || pibData.data.length > 0) && (
+          <CollapsibleSection
+            title="PIB Sectorial"
+            isOpen={pibOpen}
+            onToggle={() => setPibOpen(o => !o)}
+            loading={pibData.loading}
+          >
+            <PibSectorialChart
+              data={pibData.data}
+              latestPeriod={pibData.latestPeriod}
+              loading={pibData.loading}
+              error={pibData.error}
+            />
+          </CollapsibleSection>
+        )}
+
+        {/* SEIA + MOP — acceso rápido */}
+        {(seiaData.loading || seiaData.proyectos.length > 0 || mopData.loading || mopData.proyectos.length > 0) && (
+          <div className="px-4 py-3 flex gap-2 border-b border-gray-100">
+            {(seiaData.loading || seiaData.proyectos.length > 0) && (
+              <button
+                onClick={() => setSeiaModalOpen(true)}
+                className="flex-1 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-teal-50 border border-teal-100 hover:bg-teal-100 hover:border-teal-200 transition-colors text-left"
               >
-                {/* Eje + prioridad + semáforo */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`}
-                      title={sem.label}
-                    />
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full truncate ${ejeColor(p.eje)}`}>
-                      {p.eje}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-6 h-6 rounded-lg bg-teal-600 flex items-center justify-center flex-shrink-0">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M6 1v5M3.5 3.5L6 1l2.5 2.5"/><path d="M2 7v3h8V7"/>
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-teal-900 leading-tight">Proyectos SEIA</p>
+                    {seiaData.total > 0 && <p className="text-xs text-teal-600">{seiaData.total} proyectos</p>}
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-teal-400 flex-shrink-0">
+                  <path d="M3 7h8M7.5 3.5L11 7l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+            {(mopData.loading || mopData.proyectos.length > 0) && (
+              <button
+                onClick={() => setMopModalOpen(true)}
+                className="flex-1 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                      <rect x="1" y="3" width="10" height="7" rx="1"/><path d="M4 3V2a1 1 0 011-1h2a1 1 0 011 1v1"/>
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-blue-900 leading-tight">Proyectos MOP</p>
+                    {mopData.total > 0 && <p className="text-xs text-blue-600">{mopData.total} proyectos</p>}
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-blue-400 flex-shrink-0">
+                  <path d="M3 7h8M7.5 3.5L11 7l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Iniciativas */}
+        <div className="px-4 py-3 space-y-3">
+          {filteredIniciativas.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-sm text-gray-400">Sin iniciativas con estos filtros</p>
+              <button
+                onClick={() => { setSearch(''); setFilterSemaforo('todos'); setFilterPrioridad('todas') }}
+                className="mt-2 text-xs text-slate-600 underline"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : (
+            filteredIniciativas.map(p => {
+              const sem = SEMAFORO_CONFIG[p.estado_semaforo]
+              return (
+                <div
+                  key={p.n}
+                  onClick={() => setSelectedPrioridad(p)}
+                  className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label}/>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full truncate ${ejeColor(p.eje)}`}>
+                        {p.eje}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
+                      {p.prioridad}
                     </span>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
-                    {p.prioridad}
-                  </span>
-                </div>
-
-                {/* Nombre */}
-                <p className="text-sm text-gray-800 leading-snug mb-3">{p.nombre}</p>
-
-                {/* Ministerio */}
-                <div className="space-y-1 mb-3">
-                  <div className="flex items-center gap-1.5">
+                  <p className="text-sm text-gray-800 leading-snug mb-3">{p.nombre}</p>
+                  <div className="flex items-center gap-1.5 mb-3">
                     <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0"/>
                     <span className="text-xs text-gray-700">{p.ministerio}</span>
                   </div>
-                </div>
-
-                {/* Plazo + % avance */}
-                <div className="pt-3 border-t border-gray-50">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
-                        <rect x="1" y="2" width="10" height="9" rx="1.5"/>
-                        <path d="M4 1v2M8 1v2M1 5h10"/>
-                      </svg>
-                      <span className="text-xs text-gray-600">{p.fecha_proximo_hito ?? '—'}</span>
+                  <div className="pt-3 border-t border-gray-50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
+                          <rect x="1" y="2" width="10" height="9" rx="1.5"/><path d="M4 1v2M8 1v2M1 5h10"/>
+                        </svg>
+                        <span className="text-xs text-gray-600">{p.fecha_proximo_hito ?? '—'}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">{p.pct_avance}%</span>
                     </div>
-                    <span className="text-xs font-semibold text-gray-600">{p.pct_avance}%</span>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${
+                          p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
+                          p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
+                          p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                        style={{ width: `${p.pct_avance}%` }}
+                      />
+                    </div>
+                    {actividadLoading ? (
+                      <div className="mt-1.5 h-3 bg-gray-100 rounded animate-pulse w-28" />
+                    ) : (() => {
+                      const dias = diasSinActividad(actividad[p.n])
+                      if (dias === null) return <p className="text-xs text-red-500 mt-1.5 font-medium">Sin actividad registrada</p>
+                      if (dias > 15)    return <p className="text-xs text-red-500 mt-1.5">Sin actividad hace <span className="font-semibold">{dias} días</span></p>
+                      if (dias > 7)     return <p className="text-xs text-amber-600 mt-1.5">Última actividad hace {dias} días</p>
+                      return <p className="text-xs text-gray-500 mt-1.5">Última actividad hace {dias === 0 ? 'hoy' : `${dias} día${dias > 1 ? 's' : ''}`}</p>
+                    })()}
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-1.5 rounded-full transition-all ${
-                        p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
-                        p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
-                        p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                      style={{ width: `${p.pct_avance}%` }}
-                    />
-                  </div>
-                  {/* Última actividad */}
-                  {actividadLoading ? (
-                    <div className="mt-1.5 h-3 bg-gray-100 rounded animate-pulse w-28" />
-                  ) : (() => {
-                    const dias = diasSinActividad(actividad[p.n])
-                    if (dias === null) return (
-                      <p className="text-xs text-red-500 mt-1.5 font-medium">Sin actividad registrada</p>
-                    )
-                    if (dias > 15) return (
-                      <p className="text-xs text-red-500 mt-1.5">Sin actividad hace <span className="font-semibold">{dias} días</span></p>
-                    )
-                    if (dias > 7) return (
-                      <p className="text-xs text-amber-600 mt-1.5">Última actividad hace {dias} días</p>
-                    )
-                    return (
-                      <p className="text-xs text-gray-500 mt-1.5">Última actividad hace {dias === 0 ? 'hoy' : `${dias} día${dias > 1 ? 's' : ''}`}</p>
-                    )
-                  })()}
                 </div>
-              </div>
-            )
-          })
-        )}
+              )
+            })
+          )}
+        </div>
       </div>
 
       {comparisonOpen && (
         <RegionComparisonModal onClose={() => setComparisonOpen(false)} />
+      )}
+
+      {/* ── Modal SEIA fullscreen ── */}
+      {seiaModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center flex-shrink-0">
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M6 1v5M3.5 3.5L6 1l2.5 2.5"/><path d="M2 7v3h8V7"/>
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Proyectos SEIA</h2>
+                <p className="text-xs text-gray-500">Sistema de Evaluación de Impacto Ambiental</p>
+              </div>
+            </div>
+            <select
+              value={seiaModalRegion.cod}
+              onChange={e => {
+                const r = REGIONS.find(r => r.cod === e.target.value)
+                if (r) setSeiaModalRegion(r)
+              }}
+              className="ml-4 text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+              {REGIONS.map(r => <option key={r.cod} value={r.cod}>{r.nombre}</option>)}
+            </select>
+            {seiaModalData.total > 0 && (
+              <span className="text-sm text-gray-500">{seiaModalData.total} proyectos</span>
+            )}
+            <button
+              onClick={() => setSeiaModalOpen(false)}
+              className="ml-auto text-gray-400 hover:text-gray-700 transition-colors"
+            >
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4l12 12M16 4L4 16"/>
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto relative">
+            <SeiaProjectsList
+              proyectos={seiaModalData.proyectos}
+              total={seiaModalData.total}
+              loading={seiaModalData.loading}
+              error={seiaModalData.error}
+              regionId={INE_CODE[seiaModalRegion.cod] ?? 0}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal MOP fullscreen ── */}
+      {mopModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                  <rect x="1" y="3" width="10" height="7" rx="1"/><path d="M4 3V2a1 1 0 011-1h2a1 1 0 011 1v1"/>
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Proyectos MOP</h2>
+                <p className="text-xs text-gray-500">Ministerio de Obras Públicas</p>
+              </div>
+            </div>
+            <select
+              value={mopModalRegion.cod}
+              onChange={e => {
+                const r = REGIONS.find(r => r.cod === e.target.value)
+                if (r) setMopModalRegion(r)
+              }}
+              className="ml-4 text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+              {REGIONS.map(r => <option key={r.cod} value={r.cod}>{r.nombre}</option>)}
+            </select>
+            {mopModalData.total > 0 && (
+              <span className="text-sm text-gray-500">{mopModalData.total} proyectos</span>
+            )}
+            <button
+              onClick={() => setMopModalOpen(false)}
+              className="ml-auto text-gray-400 hover:text-gray-700 transition-colors"
+            >
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4l12 12M16 4L4 16"/>
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto relative">
+            <MopProjectsList
+              proyectos={mopModalData.proyectos}
+              total={mopModalData.total}
+              loading={mopModalData.loading}
+              error={mopModalData.error}
+            />
+          </div>
+        </div>
       )}
 
       {selectedPrioridad && (
