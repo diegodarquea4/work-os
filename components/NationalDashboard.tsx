@@ -149,7 +149,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Import reads row 1 as headers and skips row 2 (description row).
   const TEMPLATE_COLS = [
     // ── Referencia ─────────────────────────────────────────────────────────
-    { key: '#',                     label: '#',                     desc: 'Número de la iniciativa existente. DEJAR VACÍO para crear una nueva',                                              wch: 6  },
+    { key: '#',                     label: '#',                     desc: '⚠ SOLO para actualizar existentes. DEJAR VACÍO para crear nueva iniciativa — NO uses numeración propia',      wch: 6  },
     { key: 'region',                label: 'Región',                desc: 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos). Obligatorio si # está vacío',                     wch: 22 },
     // ── Datos del Plan Regional de Gobierno ────────────────────────────────
     { key: 'nombre',                label: 'Nombre Iniciativa',     desc: 'Nombre completo de la iniciativa territorial',                                                                              wch: 52 },
@@ -442,9 +442,23 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         if (isNaN(n) || n <= 0) { parseErrors.push(`Fila con # inválido "${nStr}" — omitida`); continue }
 
         const project = projects.find(p => p.n === n)
-        if (!project) { parseErrors.push(`#${n}: no encontrado en el sistema — omitido`); continue }
+        if (!project) {
+          parseErrors.push(`#${nStr}: no existe en el sistema — si es nueva, deja la columna # vacía`)
+          continue
+        }
 
         const rowErrors: string[] = []
+
+        // Catch the common mistake: user fills # with their own numbering, but the
+        // Región column points to a different region than the found record.
+        const regionInput = col(row, 'Región')
+        if (regionInput && normalize(regionInput) !== normalize(project.region)) {
+          rowErrors.push(
+            `El # ${nStr} corresponde a la región ${project.region}, no a "${regionInput}". ` +
+            `Para crear nuevas iniciativas de ${regionInput}, deja la columna # vacía.`
+          )
+        }
+
         const patch: Record<string, unknown> = {}
         parseOptionalFields(row, patch, rowErrors)
 
