@@ -67,6 +67,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .catch(() => setActividadLoading(false))
   }, [])
 
+  // Initiatives visible to this user (regional users only see their assigned regions)
+  const visibleIniciativas: Iniciativa[] = profile?.role === 'regional'
+    ? localIniciativas.filter(p => {
+        const r = REGIONS.find(r => r.nombre === p.region)
+        return r ? profile.region_cods.includes(r.cod) : profile.region_cods.includes(p.region)
+      })
+    : localIniciativas
+
   // Auto-select region for regional users with exactly one region assigned
   useEffect(() => {
     if (profile?.role === 'regional' && profile.region_cods.length === 1 && !selectedRegion) {
@@ -270,7 +278,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'dashboard' && (
         <div className="flex-1 overflow-hidden">
           <NationalDashboard
-            projects={localIniciativas}
+            projects={visibleIniciativas}
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
@@ -282,7 +290,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'kanban' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           <KanbanView
-            projects={localIniciativas}
+            projects={visibleIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
         </div>
@@ -306,7 +314,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'atencion' && (
         <div className="flex-1 overflow-hidden flex">
           <AttentionTray
-            projects={localIniciativas}
+            projects={visibleIniciativas}
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
