@@ -7,6 +7,7 @@ import { getAllPrego, updatePregoFase } from '@/lib/db'
 
 type Props = {
   userName?: string
+  canEditRegion?: (regionCod: string) => boolean
 }
 
 const ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
@@ -50,10 +51,12 @@ function CeldaEstado({
   estado,
   saving,
   onChange,
+  disabled = false,
 }: {
   estado: PregoEstado
   saving: boolean
   onChange: (e: PregoEstado) => void
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
@@ -75,6 +78,7 @@ function CeldaEstado({
   }, [open])
 
   function handleOpen() {
+    if (disabled) return
     if (open) { setOpen(false); return }
     const rect = btnRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -91,10 +95,10 @@ function CeldaEstado({
       <button
         ref={btnRef}
         onClick={handleOpen}
-        disabled={saving}
+        disabled={saving || disabled}
         title={cfg.label}
         className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all
-          ${cfg.pill} ${saving ? 'opacity-40 cursor-wait' : 'hover:opacity-70 cursor-pointer'}`}
+          ${cfg.pill} ${saving ? 'opacity-40 cursor-wait' : disabled ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-70 cursor-pointer'}`}
       >
         {saving ? '…' : cfg.dot}
       </button>
@@ -227,7 +231,7 @@ function exportPDF(rows: PregoRow[], avgAvance: number) {
   window.open(url, '_blank')
 }
 
-export default function PregoView({ userName }: Props) {
+export default function PregoView({ userName, canEditRegion }: Props) {
   const [rows, setRows] = useState<PregoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -371,6 +375,7 @@ export default function PregoView({ userName }: Props) {
                           estado={row[f.key]}
                           saving={saving === `${row.region_cod}:${f.key}`}
                           onChange={e => handleChange(row.region_cod, f.key, e)}
+                          disabled={canEditRegion ? !canEditRegion(row.region_cod) : false}
                         />
                       </td>
                     ))}
@@ -380,6 +385,7 @@ export default function PregoView({ userName }: Props) {
                           estado={row[f.key]}
                           saving={saving === `${row.region_cod}:${f.key}`}
                           onChange={e => handleChange(row.region_cod, f.key, e)}
+                          disabled={canEditRegion ? !canEditRegion(row.region_cod) : false}
                         />
                       </td>
                     ))}
@@ -389,6 +395,7 @@ export default function PregoView({ userName }: Props) {
                           estado={row[f.key]}
                           saving={saving === `${row.region_cod}:${f.key}`}
                           onChange={e => handleChange(row.region_cod, f.key, e)}
+                          disabled={canEditRegion ? !canEditRegion(row.region_cod) : false}
                         />
                       </td>
                     ))}

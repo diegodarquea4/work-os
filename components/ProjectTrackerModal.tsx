@@ -10,6 +10,7 @@ import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
+import { useCanEdit } from '@/lib/context/UserContext'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
@@ -20,6 +21,9 @@ type Props = {
 }
 
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
+  const canEditRegion = useCanEdit()
+  const canEdit = canEditRegion(prioridad.region)
+
   const [tab, setTab]               = useState<Tab>('seguimiento')
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
@@ -138,13 +142,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </svg>
                   <select
                     value={prioridadLocal}
+                    disabled={!canEdit}
                     onChange={async e => {
                       const val = e.target.value as 'Alta' | 'Media' | 'Baja'
                       setPrioridadLocal(val)
                       await getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('n', prioridad.n)
                       onUpdatePrioridad(prioridad.n, { prioridad: val })
                     }}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                   >
                     <option value="Alta">Alta</option>
                     <option value="Media">Media</option>
@@ -186,7 +191,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <button
                   key={s}
                   onClick={() => handleSaveSemaforo(s)}
-                  disabled={savingSem}
+                  disabled={savingSem || !canEdit}
                   title={SEMAFORO_CONFIG[s].label}
                   className={`w-5 h-5 rounded-full transition-all disabled:opacity-50 ${SEMAFORO_CONFIG[s].dot} ${
                     semaforo === s
@@ -229,13 +234,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </svg>
                 <select
                   value={responsable}
+                  disabled={!canEdit}
                   onChange={async e => {
                     const val = e.target.value
                     setResponsable(val)
                     await getSupabase().from('prioridades_territoriales').update({ responsable: val || null }).eq('n', prioridad.n)
                     onUpdatePrioridad(prioridad.n, { responsable: val || null })
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">Sin asignar</option>
                   {usuarios.map(u => (
@@ -351,7 +357,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               ) : (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={() => setEditingField('proximo_hito')}
+                    onClick={() => canEdit && setEditingField('proximo_hito')}
                     className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
                   >
                     <span className="text-xs font-medium text-slate-700">
@@ -451,7 +457,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </div>
               ) : (
                 <button
-                  onClick={() => setEditingField('inversion_mm')}
+                  onClick={() => canEdit && setEditingField('inversion_mm')}
                   className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
                 >
                   <span className={`text-xs font-medium ${inversionMm ? 'text-slate-700' : 'text-slate-400'}`}>
@@ -489,7 +495,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </div>
               ) : (
                 <button
-                  onClick={() => setEditingField('codigo_bip')}
+                  onClick={() => canEdit && setEditingField('codigo_bip')}
                   className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
                 >
                   <span className={`text-xs font-medium font-mono ${codigoBip ? 'text-slate-700' : 'text-slate-400'}`}>
@@ -568,13 +574,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
           ) : tab === 'seguimiento' ? (
-            <SeguimientoTab prioridadId={prioridad.n} seguimientos={seguimientos} onRefresh={loadData} />
+            <SeguimientoTab prioridadId={prioridad.n} seguimientos={seguimientos} onRefresh={loadData} canEdit={canEdit} />
           ) : tab === 'historial' ? (
             <HistorialTab seguimientos={seguimientos} semaforoLog={semaforoLog} semaforo={semaforo} pctAvance={pctAvance} />
           ) : tab === 'calendario' ? (
             <CalendarioTab seguimientos={seguimientos} />
           ) : (
-            <DocumentosTab prioridadId={prioridad.n} documentos={documentos} onRefresh={loadData} />
+            <DocumentosTab prioridadId={prioridad.n} documentos={documentos} onRefresh={loadData} canEdit={canEdit} />
           )}
         </div>
       </div>

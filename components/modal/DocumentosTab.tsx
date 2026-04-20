@@ -8,6 +8,7 @@ type Props = {
   prioridadId: number
   documentos: Documento[]
   onRefresh: () => Promise<void>
+  canEdit?: boolean
 }
 
 function fmtDate(iso: string) {
@@ -31,7 +32,7 @@ function fileIcon(tipo: string | null) {
   return '📎'
 }
 
-export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Props) {
+export default function DocumentosTab({ prioridadId, documentos, onRefresh, canEdit = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -77,7 +78,7 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Pr
           <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
-      <button
+      {canEdit && <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
         className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors disabled:opacity-50 mb-4"
@@ -98,7 +99,7 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Pr
             Subir archivo (minuta, Excel, PDF…)
           </>
         )}
-      </button>
+      </button>}
 
       {documentos.length === 0 ? (
         <div className="text-center py-10 text-gray-300">
@@ -134,6 +135,7 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Pr
                     <path d="M8 1h5v5M5.5 8.5L13 1"/>
                   </svg>
                 </a>
+                {canEdit && (
                 <button
                   onClick={() => handleDelete(doc)}
                   className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
@@ -143,6 +145,7 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh }: Pr
                     <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
                   </svg>
                 </button>
+                )}
               </div>
             </div>
           ))}

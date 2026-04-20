@@ -36,6 +36,7 @@ type Props = {
   selectedCod: string | null
   projectCounts: Record<string, number>
   onSelect: (regionName: string, cod: string) => void
+  lockedRegions?: string[]  // cods the current user cannot open
 }
 
 function getCod(feature: Feature): string {
@@ -46,7 +47,7 @@ function getName(feature: Feature): string {
   return feature.properties?.Region ?? ''
 }
 
-export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect }: Props) {
+export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, lockedRegions = [] }: Props) {
   const geoJsonRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
 
   // Re-style all layers when selection changes
@@ -58,43 +59,46 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       const cod = getCod(f)
       const name = getName(f)
       const isSelected = cod === selectedCod
+      const isLocked = lockedRegions.includes(cod)
       const color = getRegionColor(name)
       ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(
-        buildStyle(color, isSelected)
+        buildStyle(color, isSelected, isLocked)
       )
     })
-  }, [selectedCod])
+  }, [selectedCod, lockedRegions])
 
-  function buildStyle(color: string, isSelected: boolean): PathOptions {
+  function buildStyle(color: string, isSelected: boolean, isLocked: boolean): PathOptions {
     return {
       fillColor: color,
-      fillOpacity: isSelected ? 0.92 : 0.55,
+      fillOpacity: isLocked ? 0.25 : isSelected ? 0.92 : 0.55,
       color: isSelected ? '#1e293b' : '#fff',
       weight: isSelected ? 2.5 : 0.8,
     }
   }
 
   function onEachFeature(feature: Feature, layer: Layer) {
-    const name = getName(feature)
-    const cod  = getCod(feature)
-    const color = getRegionColor(name)
-    const count = projectCounts[name] ?? 0
+    const name   = getName(feature)
+    const cod    = getCod(feature)
+    const color  = getRegionColor(name)
+    const count  = projectCounts[name] ?? 0
+    const locked = lockedRegions.includes(cod)
 
     // Initial style
     ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(
-      buildStyle(color, cod === selectedCod)
+      buildStyle(color, cod === selectedCod, locked)
     )
 
     layer.on({
       mouseover(e: LeafletMouseEvent) {
-        if (cod === selectedCod) return
+        if (cod === selectedCod || locked) return
         e.target.setStyle({ fillOpacity: 0.80, weight: 1.5 })
       },
       mouseout(e: LeafletMouseEvent) {
-        if (cod === selectedCod) return
-        e.target.setStyle(buildStyle(color, false))
+        if (cod === selectedCod || locked) return
+        e.target.setStyle(buildStyle(color, false, false))
       },
       click() {
+        if (locked) return
         onSelect(name, cod)
       },
     })

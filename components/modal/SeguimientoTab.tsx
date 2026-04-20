@@ -22,13 +22,14 @@ type Props = {
   prioridadId: number
   seguimientos: Seguimiento[]
   onRefresh: () => Promise<void>
+  canEdit?: boolean
 }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }: Props) {
+export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, canEdit = true }: Props) {
   const [showForm, setShowForm]   = useState(false)
   const [formDesc, setFormDesc]   = useState('')
   const [formTipo, setFormTipo]   = useState<keyof typeof TIPO_CONFIG>('avance')
@@ -95,7 +96,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
 
   return (
     <div className="px-6 py-4">
-      {!showForm && (
+      {!showForm && canEdit && (
         <button
           onClick={() => setShowForm(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mb-5"
@@ -260,6 +261,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
                           {est && <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>{est.label}</span>}
                           <span className="text-xs text-gray-500 ml-auto">{fmtDate(s.created_at)}</span>
+                          {canEdit && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => startEdit(s)}
@@ -280,6 +282,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh }:
                               </svg>
                             </button>
                           </div>
+                          )}
                         </div>
                         <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
                         {s.autor && <p className="text-xs text-gray-500 mt-1">{s.autor}</p>}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
@@ -8,6 +8,10 @@ import type { Region } from '@/lib/regions'
 import { REGIONS } from '@/lib/regions'
 import { getRegionColor } from '@/lib/regionColors'
 import ProjectsPanel from './ProjectsPanel'
+import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
+import { getSupabase } from '@/lib/supabase'
+import type { UserProfile } from '@/lib/apiAuth'
+import { UserProvider } from '@/lib/context/UserContext'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -15,14 +19,40 @@ const AttentionTray    = dynamic(() => import('./AttentionTray'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const PregoView        = dynamic(() => import('./PregoView'))
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios'
 
 type Props = {
   projects: Iniciativa[]
   geoData: GeoJsonObject
 }
 
+const AdminUsersView = dynamic(() => import('./AdminUsersView'))
+
 export default function WorkOSApp({ projects, geoData }: Props) {
+  const { warning, secondsLeft, extend } = useInactivityLogout()
+
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
+  }, [])
+
+  const canEditRegion = useCallback((regionNombreOrCod: string): boolean => {
+    if (!profile) return false
+    if (profile.role === 'admin' || profile.role === 'editor') return true
+    if (profile.role === 'regional') {
+      if (profile.region_cods.includes(regionNombreOrCod)) return true
+      const r = REGIONS.find(r => r.nombre === regionNombreOrCod)
+      return r ? profile.region_cods.includes(r.cod) : false
+    }
+    return false
+  }, [profile])
+
+  // Cods that regional users cannot open (all regions not in their list)
+  const lockedRegions: string[] = profile?.role === 'regional'
+    ? REGIONS.filter(r => !profile.region_cods.includes(r.cod)).map(r => r.cod)
+    : []
+
   const [view, setView]                       = useState<View>('mapa')
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
@@ -36,6 +66,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .then(data => { setActividad(data); setActividadLoading(false) })
       .catch(() => setActividadLoading(false))
   }, [])
+
+  // Auto-select region for regional users with exactly one region assigned
+  useEffect(() => {
+    if (profile?.role === 'regional' && profile.region_cods.length === 1 && !selectedRegion) {
+      const r = REGIONS.find(r => r.cod === profile.region_cods[0])
+      if (r) setSelectedRegion(r)
+    }
+  }, [profile])
   const isDragging                            = useRef(false)
   const dragStartX                            = useRef(0)
   const dragStartWidth                        = useRef(420)
@@ -112,6 +150,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
 
   return (
+    <UserProvider canEditRegion={canEditRegion}>
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">
@@ -126,6 +165,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         <div className="flex items-center gap-4">
           {/* View toggle */}
           <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
+
             <button
               onClick={() => setView('mapa')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -185,11 +225,44 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               PREGO
             </button>
+            {profile?.role === 'admin' && (
+              <button
+                onClick={() => setView('usuarios')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  view === 'usuarios' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="4.5" cy="3.5" r="2"/>
+                  <path d="M1 10c0-2 1.5-3.5 3.5-3.5S8 8 8 10"/>
+                  <circle cx="9" cy="4" r="1.5"/>
+                  <path d="M9 7.5c1.5 0 2.5 1 2.5 2.5"/>
+                </svg>
+                Usuarios
+              </button>
+            )}
           </div>
 
-          <div className="text-slate-400 text-xs">
-            {localIniciativas.length} iniciativas · 16 regiones
-          </div>
+          {/* User info */}
+          {profile && (
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-xs text-white font-medium leading-tight">{profile.email}</div>
+                <div className="text-xs text-slate-400 leading-tight capitalize">{profile.role}</div>
+              </div>
+              <button
+                onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
+                className="text-slate-400 hover:text-white transition-colors"
+                title="Cerrar sesión"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
+                  <path d="M11 11l3-3-3-3"/>
+                  <path d="M14 8H6"/>
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -215,10 +288,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
+      {/* Usuarios view (admin only) */}
+      {view === 'usuarios' && (
+        <div className="flex-1 overflow-hidden">
+          <AdminUsersView />
+        </div>
+      )}
+
       {/* PREGO view */}
       {view === 'prego' && (
         <div className="flex-1 overflow-hidden">
-          <PregoView />
+          <PregoView canEditRegion={canEditRegion} />
         </div>
       )}
 
@@ -244,6 +324,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               selectedCod={selectedRegion?.cod ?? null}
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
+              lockedRegions={lockedRegions}
             />
 
             {!selectedRegion && (
@@ -308,11 +389,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                   const rag    = ragFor(region.nombre)
                   const avgPct = avgPctFor(region.nombre)
                   const barColor = avgPct === 100 ? 'bg-green-500' : avgPct >= 60 ? 'bg-blue-500' : avgPct >= 30 ? 'bg-amber-400' : avgPct > 0 ? 'bg-red-400' : 'bg-gray-200'
+                  const isLocked = lockedRegions.includes(region.cod)
                   return (
                     <button
                       key={region.cod}
-                      onClick={() => handleSelectRegion(region.nombre, region.cod)}
-                      className="w-full px-5 py-3.5 text-left hover:bg-gray-50 border-b border-gray-100 transition-colors"
+                      onClick={() => !isLocked && handleSelectRegion(region.nombre, region.cod)}
+                      disabled={isLocked}
+                      className={`w-full px-5 py-3.5 text-left border-b border-gray-100 transition-colors ${isLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}`}
                     >
                       <div className="flex items-start gap-3">
                         <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-1" style={{ backgroundColor: color }} />
@@ -363,6 +446,38 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           )}
         </div>
       )}
+      {/* Inactivity warning */}
+      {warning && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm mx-4 overflow-hidden">
+            <div className="bg-amber-500 px-6 py-4 flex items-center gap-3">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                <path d="M10 3L17.5 17H2.5L10 3z"/>
+                <path d="M10 9v4M10 14.5v.5"/>
+              </svg>
+              <span className="text-white font-semibold text-sm">Sesión por expirar</span>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-700">
+                Por inactividad, la sesión se cerrará en{' '}
+                <span className="font-bold text-amber-600">{secondsLeft}</span> segundos.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Haz clic en "Continuar" para mantener la sesión activa.
+              </p>
+            </div>
+            <div className="px-6 pb-5 flex gap-2">
+              <button
+                onClick={extend}
+                className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </UserProvider>
   )
 }
