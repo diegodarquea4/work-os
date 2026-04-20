@@ -2,26 +2,32 @@
 
 import { createContext, useContext } from 'react'
 
-/**
- * Provides a canEditRegion function to the entire component tree.
- * WorkOSApp is the provider; deep components use useCanEdit().
- *
- * canEditRegion(regionNombreOrCod) returns true if the current user
- * may edit initiatives in that region.
- */
-const UserCtx = createContext<(regionNombreOrCod: string) => boolean>(() => true)
+type UserCtxValue = {
+  canEditRegion: (regionNombreOrCod: string) => boolean
+  canEditAny: boolean  // true for admin/editor; false for viewer/regional
+}
+
+const UserCtx = createContext<UserCtxValue>({
+  canEditRegion: () => true,
+  canEditAny: true,
+})
 
 export function UserProvider({
   canEditRegion,
+  canEditAny,
   children,
 }: {
   canEditRegion: (r: string) => boolean
+  canEditAny: boolean
   children: React.ReactNode
 }) {
-  return <UserCtx.Provider value={canEditRegion}>{children}</UserCtx.Provider>
+  return <UserCtx.Provider value={{ canEditRegion, canEditAny }}>{children}</UserCtx.Provider>
 }
 
-/** Returns a function: canEdit(regionNombreOrCod) → boolean */
 export function useCanEdit() {
-  return useContext(UserCtx)
+  return useContext(UserCtx).canEditRegion
+}
+
+export function useCanEditAny() {
+  return useContext(UserCtx).canEditAny
 }

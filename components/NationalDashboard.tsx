@@ -6,6 +6,7 @@ import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
 import { EJE_COLORS, prioridadColor } from '@/lib/config'
+import { useCanEditAny } from '@/lib/context/UserContext'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200'  },
@@ -64,6 +65,7 @@ function ratColor(r: string): string {
 }
 
 export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad }: Props) {
+  const canImport = useCanEditAny()  // only admin/editor can bulk-import
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -701,15 +703,17 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
-              </svg>
-              Importar
-            </button>
+            {canImport && (
+              <button
+                onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
+                </svg>
+                Importar
+              </button>
+            )}
             {/* File input always in DOM — triggered from inside the import modal */}
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
 

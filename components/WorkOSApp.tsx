@@ -150,7 +150,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
 
   return (
-    <UserProvider canEditRegion={canEditRegion}>
+    <UserProvider canEditRegion={canEditRegion} canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}>
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">
