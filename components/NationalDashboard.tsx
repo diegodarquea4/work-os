@@ -92,14 +92,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     ? (projects.find(p => p.n === selected.n) ?? selected)
     : null
 
-  const rojo   = projects.filter(p => p.estado_semaforo === 'rojo').length
-  const ambar  = projects.filter(p => p.estado_semaforo === 'ambar').length
-  const verde  = projects.filter(p => p.estado_semaforo === 'verde').length
-  const gris   = projects.filter(p => p.estado_semaforo === 'gris').length
-  const avgPct = projects.length
-    ? Math.round(projects.reduce((s, p) => s + p.pct_avance, 0) / projects.length)
-    : 0
-
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
@@ -139,6 +131,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     })
     return list
   }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, sortCol, sortDir])
+
+  const rojo   = filtered.filter(p => p.estado_semaforo === 'rojo').length
+  const ambar  = filtered.filter(p => p.estado_semaforo === 'ambar').length
+  const verde  = filtered.filter(p => p.estado_semaforo === 'verde').length
+  const gris   = filtered.filter(p => p.estado_semaforo === 'gris').length
+  const avgPct = filtered.length
+    ? Math.round(filtered.reduce((s, p) => s + p.pct_avance, 0) / filtered.length)
+    : 0
 
   function clearFilters() {
     setSearch(''); setFilterRegion('todas'); setFilterEje('todos')
@@ -604,7 +604,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       {/* ── Summary bar ── */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-3 flex-wrap">
-          <SummaryCard label="Total" value={projects.length.toString()} color="text-gray-800" bg="bg-gray-50" />
+          <SummaryCard label="Total" value={filtered.length.toString()} color="text-gray-800" bg="bg-gray-50" />
           <SummaryCard label="Bloqueadas" value={rojo.toString()} color="text-red-700" bg="bg-red-50" dot="bg-red-500" />
           <SummaryCard label="En revisión" value={ambar.toString()} color="text-amber-700" bg="bg-amber-50" dot="bg-amber-400" />
           <SummaryCard label="En verde" value={verde.toString()} color="text-green-700" bg="bg-green-50" dot="bg-green-500" />
