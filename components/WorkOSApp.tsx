@@ -113,6 +113,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setLocalIniciativas(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
   }
 
+  function handleDeletePrioridad(n: number) {
+    setLocalIniciativas(prev => prev.filter(p => p.n !== n))
+  }
+
   const projectsByRegion: Record<string, Iniciativa[]> = {}
   for (const p of localIniciativas) {
     if (!projectsByRegion[p.region]) projectsByRegion[p.region] = []
@@ -282,6 +286,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
+            onDeletePrioridad={handleDeletePrioridad}
           />
         </div>
       )}
@@ -292,6 +297,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           <KanbanView
             projects={visibleIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
+            onDeletePrioridad={handleDeletePrioridad}
           />
         </div>
       )}
@@ -318,6 +324,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             actividad={actividad}
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
+            onDeletePrioridad={handleDeletePrioridad}
           />
         </div>
       )}
@@ -360,6 +367,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 projects={selectedIniciativas}
                 onClose={() => setSelectedRegion(null)}
                 onUpdatePrioridad={handleUpdatePrioridad}
+                onDeletePrioridad={handleDeletePrioridad}
               />
             </div>
           )}

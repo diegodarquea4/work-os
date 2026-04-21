@@ -10,7 +10,7 @@ import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
-import { useCanEdit } from '@/lib/context/UserContext'
+import { useCanEdit, useCanEditAny } from '@/lib/context/UserContext'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
@@ -18,10 +18,12 @@ type Props = {
   prioridad: Iniciativa
   onClose: () => void
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
-export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad }: Props) {
+export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const canEditRegion = useCanEdit()
+  const canEditAny = useCanEditAny()
   const canEdit = canEditRegion(prioridad.region)
 
   const [tab, setTab]               = useState<Tab>('seguimiento')
@@ -48,6 +50,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [codigoBip, setCodigoBip]                   = useState<string>(prioridad.codigo_bip ?? '')
   const [editingField, setEditingField]             = useState<string | null>(null)
   const [savingField, setSavingField]               = useState(false)
+  const [confirmDelete, setConfirmDelete]           = useState(false)
+  const [deleting, setDeleting]                     = useState(false)
 
   const ejeColor = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
   const pc = prioridadColor(prioridadLocal)
@@ -115,6 +119,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingField(false)
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    const res = await fetch(`/api/iniciativa/${prioridad.n}`, { method: 'DELETE' })
+    setDeleting(false)
+    if (!res.ok) {
+      setConfirmDelete(false)
+      return
+    }
+    onDeletePrioridad?.(prioridad.n)
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -169,11 +185,42 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 )}
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 4l12 12M16 4L4 16"/>
-              </svg>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {canEditAny && onDeletePrioridad && !confirmDelete && (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-gray-300 hover:text-red-500 transition-colors mt-0.5"
+                  title="Eliminar iniciativa"
+                >
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h14M8 6V4h4v2M19 6l-1 12H2L1 6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
+              {confirmDelete && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-red-600 font-medium">¿Eliminar?</span>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="text-xs px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {deleting ? '…' : 'Sí'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  >
+                    No
+                  </button>
+                </div>
+              )}
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4l12 12M16 4L4 16"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Ministerio */}
@@ -214,7 +261,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </div>
 
           {/* Metadata */}
-          <div className="flex flex-col divide-y divide-gray-200/60 px-3 py-1 bg-gray-50 rounded-xl mb-2 text-xs">
+          <div className="grid grid-cols-2 gap-x-3 px-3 py-1 bg-gray-50 rounded-xl mb-2 text-xs">
+          <div className="flex flex-col divide-y divide-gray-200/60">
 
             {/* Responsable */}
             <div className="flex items-center gap-2 py-1.5">
@@ -385,9 +433,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               )}
             </div>
 
+          </div>{/* end left col */}
+          <div className="flex flex-col divide-y divide-gray-200/60 border-l border-gray-200/60 pl-3">
+
             {/* Al término gob. */}
             <div className="flex items-center gap-2 py-1.5">
-              <span className="text-gray-400 w-36 flex-shrink-0">Al término gob.</span>
+              <span className="text-gray-400 w-28 flex-shrink-0">Al término gob.</span>
               <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${
                 estadoTerminoGob === 'En operación' || estadoTerminoGob === 'Terminado' ? 'bg-green-100' :
                 estadoTerminoGob === 'En ejecución'  ? 'bg-blue-100'   :
@@ -427,7 +478,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
             {/* Inversión */}
             <div className="flex items-center gap-2 py-1.5">
-              <span className="text-gray-400 w-36 flex-shrink-0">Inversión (MM$)</span>
+              <span className="text-gray-400 w-28 flex-shrink-0">Inversión (MM$)</span>
               {editingField === 'inversion_mm' ? (
                 <div className="flex items-center gap-1.5">
                   <input
@@ -472,7 +523,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
             {/* Cód. BIP */}
             <div className="flex items-center gap-2 py-1.5">
-              <span className="text-gray-400 w-36 flex-shrink-0">Cód. BIP</span>
+              <span className="text-gray-400 w-28 flex-shrink-0">Cód. BIP</span>
               {editingField === 'codigo_bip' ? (
                 <div className="flex items-center gap-1.5">
                   <input
@@ -510,7 +561,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
             {/* RAT */}
             <div className="flex items-center gap-2 py-1.5">
-              <span className="text-gray-400 w-36 flex-shrink-0">RAT</span>
+              <span className="text-gray-400 w-28 flex-shrink-0">RAT</span>
               <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${
                 ['FI','IN','RS','RE','OT'].includes(rat) ? 'bg-green-100'  :
                 rat === 'En Tramitación'                 ? 'bg-orange-100' : 'bg-gray-100'
@@ -542,7 +593,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </select>
               </label>
             </div>
-          </div>
+          </div>{/* end right col */}
+          </div>{/* end metadata grid */}
 
           {/* Tabs */}
           <div className="flex mt-1">

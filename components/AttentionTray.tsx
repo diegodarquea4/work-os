@@ -9,6 +9,7 @@ type Props = {
   actividad: Record<number, string | null>
   actividadLoading: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
 const SEMAFORO_DOT: Record<string, string> = {
@@ -18,7 +19,7 @@ const SEMAFORO_DOT: Record<string, string> = {
   gris:  'bg-gray-300',
 }
 
-export default function AttentionTray({ projects, actividad, actividadLoading: loading, onUpdatePrioridad }: Props) {
+export default function AttentionTray({ projects, actividad, actividadLoading: loading, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
   const [collapsed, setCollapsed]           = useState<Record<string, boolean>>({})
 
@@ -229,6 +230,7 @@ export default function AttentionTray({ projects, actividad, actividadLoading: l
           prioridad={selectedIniciativa}
           onClose={() => setSelectedIniciativa(null)}
           onUpdatePrioridad={handleUpdateAndRefresh}
+          onDeletePrioridad={onDeletePrioridad}
         />
       )}
     </div>

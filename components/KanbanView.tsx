@@ -16,9 +16,10 @@ const COLUMNS = [
 type Props = {
   projects: Iniciativa[]
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
-export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
+export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const [selected, setSelected]     = useState<Iniciativa | null>(null)
   const [filterRegion, setFilterRegion] = useState('todas')
   const [filterEje, setFilterEje]   = useState('todos')
@@ -143,6 +144,7 @@ export default function KanbanView({ projects, onUpdatePrioridad }: Props) {
           prioridad={selectedSynced}
           onClose={() => setSelected(null)}
           onUpdatePrioridad={onUpdatePrioridad}
+          onDeletePrioridad={onDeletePrioridad}
         />
       )}
     </div>

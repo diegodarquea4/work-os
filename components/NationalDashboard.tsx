@@ -26,6 +26,7 @@ type Props = {
   actividad: Record<number, string | null>
   actividadLoading?: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
 type ImportPreviewRow = {
@@ -64,13 +65,13 @@ function ratColor(r: string): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad }: Props) {
+export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const canImport = useCanEditAny()  // only admin/editor can bulk-import
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
-  const [filterSemaforo, setFilterSemaforo]   = useState<SemaforoKey | 'todos'>('todos')
-  const [filterPrioridad, setFilterPrioridad] = useState<'Alta' | 'Media' | 'Baja' | 'todas'>('todas')
+  const [filterSemaforo, setFilterSemaforo]   = useState<Set<SemaforoKey>>(new Set())
+  const [filterPrioridad, setFilterPrioridad] = useState<Set<'Alta' | 'Media' | 'Baja'>>(new Set())
   const [filterEjeGobierno, setFilterEjeGobierno] = useState('todos')
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
@@ -115,8 +116,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterRegion !== 'todas' && p.region !== filterRegion) return false
       if (filterEje !== 'todos' && p.eje !== filterEje) return false
       if (filterEjeGobierno !== 'todos' && p.eje_gobierno !== filterEjeGobierno) return false
-      if (filterSemaforo !== 'todos' && p.estado_semaforo !== filterSemaforo) return false
-      if (filterPrioridad !== 'todas' && p.prioridad !== filterPrioridad) return false
+      if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey)) return false
+      if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad as 'Alta' | 'Media' | 'Baja')) return false
       return true
     })
 
@@ -141,7 +142,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   function clearFilters() {
     setSearch(''); setFilterRegion('todas'); setFilterEje('todos')
-    setFilterEjeGobierno('todos'); setFilterSemaforo('todos'); setFilterPrioridad('todas')
+    setFilterEjeGobierno('todos'); setFilterSemaforo(new Set()); setFilterPrioridad(new Set())
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -578,7 +579,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
-    filterEjeGobierno !== 'todos' || filterSemaforo !== 'todos' || filterPrioridad !== 'todas'
+    filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0
 
   function ColHeader({ col, label }: { col: SortCol; label: string }) {
     const active = sortCol === col
@@ -667,33 +668,56 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
           {/* Semáforo chips */}
           <div className="flex items-center gap-1">
-            {(['todos', 'rojo', 'ambar', 'verde', 'gris'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterSemaforo(s)}
-                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                  filterSemaforo === s ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {s !== 'todos' && <span className={`w-2 h-2 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>}
-                {s === 'todos' ? 'Todos' : SEMAFORO_CONFIG[s].label}
-              </button>
-            ))}
+            {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
+              const active = filterSemaforo.has(s)
+              const activeClass =
+                s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
+                s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'  :
+                s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300'  :
+                                'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFilterSemaforo(prev => {
+                    const next = new Set(prev)
+                    next.has(s) ? next.delete(s) : next.add(s)
+                    return next
+                  })}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                    active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>
+                  {SEMAFORO_CONFIG[s].label}
+                </button>
+              )
+            })}
           </div>
 
           {/* Prioridad chips */}
           <div className="flex items-center gap-1">
-            {(['todas', 'Alta', 'Media', 'Baja'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setFilterPrioridad(p)}
-                className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                  filterPrioridad === p ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {p === 'todas' ? 'Todas' : p}
-              </button>
-            ))}
+            {(['Alta', 'Media', 'Baja'] as const).map(p => {
+              const active = filterPrioridad.has(p)
+              const activeClass =
+                p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'        :
+                p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'   :
+                                'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
+              return (
+                <button
+                  key={p}
+                  onClick={() => setFilterPrioridad(prev => {
+                    const next = new Set(prev)
+                    next.has(p) ? next.delete(p) : next.add(p)
+                    return next
+                  })}
+                  className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                    active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            })}
           </div>
 
           {hasFilters && (
@@ -1220,6 +1244,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           prioridad={selectedSynced}
           onClose={() => setSelected(null)}
           onUpdatePrioridad={onUpdatePrioridad}
+          onDeletePrioridad={onDeletePrioridad}
         />
       )}
     </div>

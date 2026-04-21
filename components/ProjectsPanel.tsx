@@ -40,8 +40,8 @@ function diasSinActividad(lastIso: string | null | undefined): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24))
 }
 
-type FilterSemaforo = keyof typeof SEMAFORO_CONFIG | 'todos'
-type FilterPrioridad = 'Alta' | 'Media' | 'Baja' | 'todas'
+type SemaforoKey2 = keyof typeof SEMAFORO_CONFIG
+type FilterPrioridad = 'Alta' | 'Media' | 'Baja'
 type SortBy = 'semaforo' | 'prioridad' | 'avance' | 'actividad'
 
 type Props = {
@@ -49,9 +49,10 @@ type Props = {
   projects: Iniciativa[]
   onClose: () => void
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
-export default function IniciativasPanel({ region, projects, onClose, onUpdatePrioridad }: Props) {
+export default function IniciativasPanel({ region, projects, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const zoneColor = ZONA_COLORS[region.zona] ?? '#6B7280'
   const [downloading, setDownloading]       = useState(false)
   const [selectedPrioridad, setSelectedPrioridad] = useState<Iniciativa | null>(null)
@@ -82,8 +83,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
 
   // Filters
   const [search, setSearch]                     = useState('')
-  const [filterSemaforo, setFilterSemaforo]     = useState<FilterSemaforo>('todos')
-  const [filterPrioridad, setFilterPrioridad]   = useState<FilterPrioridad>('todas')
+  const [filterSemaforo, setFilterSemaforo]     = useState<Set<SemaforoKey2>>(new Set())
+  const [filterPrioridad, setFilterPrioridad]   = useState<Set<FilterPrioridad>>(new Set())
   const [sortBy, setSortBy]                     = useState<SortBy>('semaforo')
 
   useEffect(() => {
@@ -118,8 +119,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         const inMin    = p.ministerio.toLowerCase().includes(q)
         if (!inNombre && !inMin) return false
       }
-      if (filterSemaforo !== 'todos' && p.estado_semaforo !== filterSemaforo) return false
-      if (filterPrioridad !== 'todas' && p.prioridad !== filterPrioridad) return false
+      if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey2)) return false
+      if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad as FilterPrioridad)) return false
       return true
     })
     .sort((a, b) => {
@@ -274,7 +275,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       </div>
 
       {/* ── Filtros (sticky) ── */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 space-y-2">
+      <div className="flex-shrink-0 px-4 pt-2.5 pb-2 border-b border-gray-100 space-y-2">
+        {/* Buscador */}
         <div className="relative">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5"
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
@@ -295,36 +297,77 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {(['todos', 'rojo', 'ambar', 'verde', 'gris'] as FilterSemaforo[]).map(s => (
+
+        {/* Chips de filtro */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Estado semáforo */}
+          {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
+            const active = filterSemaforo.has(s)
+            const activeClass =
+              s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
+              s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'  :
+              s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300'  :
+                              'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
+            return (
+              <button
+                key={s}
+                onClick={() => setFilterSemaforo(prev => {
+                  const next = new Set(prev)
+                  next.has(s) ? next.delete(s) : next.add(s)
+                  return next
+                })}
+                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                  active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>
+                {SEMAFORO_CONFIG[s].label}
+              </button>
+            )
+          })}
+
+          <div className="w-px h-3 bg-gray-200 mx-0.5 flex-shrink-0"/>
+
+          {/* Prioridad */}
+          {(['Alta', 'Media', 'Baja'] as const).map(p => {
+            const active = filterPrioridad.has(p)
+            const activeClass =
+              p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'        :
+              p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'   :
+                              'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
+            return (
+              <button
+                key={p}
+                onClick={() => setFilterPrioridad(prev => {
+                  const next = new Set(prev)
+                  next.has(p) ? next.delete(p) : next.add(p)
+                  return next
+                })}
+                className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                  active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          })}
+
+          {/* Limpiar — solo cuando hay filtros activos */}
+          {(filterSemaforo.size > 0 || filterPrioridad.size > 0) && (
             <button
-              key={s}
-              onClick={() => setFilterSemaforo(s)}
-              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                filterSemaforo === s ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              onClick={() => { setFilterSemaforo(new Set()); setFilterPrioridad(new Set()) }}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors ml-0.5 underline underline-offset-2"
             >
-              {s !== 'todos' && <span className={`w-2 h-2 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>}
-              {s === 'todos' ? 'Todos' : SEMAFORO_CONFIG[s].label}
+              Limpiar
             </button>
-          ))}
-          <div className="w-px h-4 bg-gray-200 mx-0.5"/>
-          {(['todas', 'Alta', 'Media', 'Baja'] as FilterPrioridad[]).map(p => (
-            <button
-              key={p}
-              onClick={() => setFilterPrioridad(p)}
-              className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                filterPrioridad === p ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {p === 'todas' ? 'Todas' : p}
-            </button>
-          ))}
+          )}
+
+          {/* Ordenar */}
           <div className="ml-auto">
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortBy)}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-300"
             >
               <option value="semaforo">↑ Semáforo</option>
               <option value="prioridad">↑ Alta primero</option>
@@ -446,7 +489,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             <div className="text-center py-10">
               <p className="text-sm text-gray-400">Sin iniciativas con estos filtros</p>
               <button
-                onClick={() => { setSearch(''); setFilterSemaforo('todos'); setFilterPrioridad('todas') }}
+                onClick={() => { setSearch(''); setFilterSemaforo(new Set()); setFilterPrioridad(new Set()) }}
                 className="mt-2 text-xs text-slate-600 underline"
               >
                 Limpiar filtros
@@ -620,6 +663,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
           prioridad={selectedPrioridad}
           onClose={() => setSelectedPrioridad(null)}
           onUpdatePrioridad={onUpdatePrioridad}
+          onDeletePrioridad={onDeletePrioridad}
         />
       )}
 
