@@ -365,6 +365,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               <ProjectsPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
+                panelWidth={panelWidth}
                 onClose={() => setSelectedRegion(null)}
                 onUpdatePrioridad={handleUpdatePrioridad}
                 onDeletePrioridad={handleDeletePrioridad}
