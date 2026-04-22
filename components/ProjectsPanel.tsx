@@ -190,7 +190,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
       </div>
 
       {/* ── Floating info tag (fixed, left of panel, over map) ── */}
-      <div
+      {!selectedPrioridad && !indicadoresOpen && !seiaModalOpen && !mopModalOpen && <div
         className="fixed z-[1001] bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-gray-200"
         style={{ top: 96, right: panelWidth + 10, width: 272 }}
       >
@@ -330,7 +330,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ── Filtros ── */}
       <div className="flex-shrink-0 px-4 pt-3 pb-2.5 border-b border-gray-100 space-y-2.5">

@@ -44,17 +44,27 @@ export async function POST(request: Request) {
       .limit(1)
     const baseN = (maxRow?.[0]?.n as number | undefined) ?? 0
 
+    // Filter by permission first, assign sequential n
+    const allowed: Record<string, unknown>[] = []
     for (let i = 0; i < inserts.length; i++) {
       const regionNombre = inserts[i].region as string | undefined
       if (!canWrite(profile, regionNombre)) {
         errors.push(`"${inserts[i].nombre}": sin permiso para insertar en esta región`)
-        continue
+      } else {
+        allowed.push({ ...inserts[i], n: baseN + allowed.length + 1 })
       }
-      const { error } = await db
-        .from('prioridades_territoriales')
-        .insert({ ...inserts[i], n: baseN + i + 1 })
-      if (error) errors.push(`"${inserts[i].nombre}": ${error.message}`)
-      else inserted++
+    }
+
+    // Bulk insert in batches of 200 to avoid Vercel timeout
+    const BATCH = 200
+    for (let i = 0; i < allowed.length; i += BATCH) {
+      const batch = allowed.slice(i, i + BATCH)
+      const { error } = await db.from('prioridades_territoriales').insert(batch)
+      if (error) {
+        errors.push(`Batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
+      } else {
+        inserted += batch.length
+      }
     }
   }
 
