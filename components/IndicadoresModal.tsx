@@ -31,7 +31,7 @@ const MAIN_TABS: { id: MainTab; label: string; emoji: string }[] = [
   { id: 'pib',       label: 'PIB Regional',      emoji: '📈' },
   { id: 'censo',     label: 'Censo 2024',         emoji: '🏘' },
   { id: 'empleo',    label: 'Empleo',             emoji: '💼' },
-  { id: 'casen',     label: 'CASEN 2024',         emoji: '🏠' },
+  { id: 'casen',     label: 'CASEN',               emoji: '🏠' },
   { id: 'comparar',  label: 'Comparar',           emoji: '📊' },
 ]
 
@@ -356,7 +356,7 @@ function SeguridadResumen({ security: s, allSecurity, accentColor }: {
   const noData = !s && allSecurity.length === 0
 
   if (noData) {
-    return <EmptyState text="Sin datos de seguridad disponibles. Los datos de LeyStop se actualizan automáticamente cada lunes." />
+    return <EmptyState text="Sin datos de seguridad disponibles. Los datos de LeyStop se actualizan automáticamente cada miércoles." />
   }
 
   return (
@@ -525,7 +525,7 @@ function SeguridadActividad({ stats: s, accentColor }: { stats: StopStatsT | nul
         <KpiCard label="Controles realizados"  value={num(s.controles_total)}                              sub="Identidad + Vehicular" color={accentColor} />
         <KpiCard label="Fiscalizaciones"        value={num(s.fiscalizaciones)}                              sub="Alcohol + Banca"       color="#2563eb" />
         <KpiCard label="Incautaciones armas"    value={num((s.incaut_fuego ?? 0) + (s.incaut_blancas ?? 0))} sub="Fuego + Blancas"     color="#dc2626" />
-        <KpiCard label="Decomisos (semana)"      value={num(s.decomisos_semana)}                            sub="Año a la fecha"        color="#9333ea" />
+        <KpiCard label="Decomisos"               value={num(s.decomisos_semana)}                            sub="última semana"         color="#9333ea" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -625,7 +625,7 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
           {sectLoading ? (
             <div className="flex items-center justify-center h-40"><div className="w-7 h-7 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : sectores.length === 0 ? (
-            <EmptyState text="Sin datos sectoriales disponibles. Requiere sync de PIB sectorial en Banco Central." />
+            <EmptyState text="Datos sectoriales no disponibles aún. Las series de PIB por sector están pendientes de configuración." />
           ) : (
             <>
               {sectPeriod && <p className="text-sm font-semibold text-gray-700">Composición sectorial — {fmtQuarterly(sectPeriod)}</p>}
@@ -716,7 +716,7 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Zona rural"           value={pct(m.pct_rural)}                         sub="de la población"         color={PURPLE} />
             <KpiCard label="Densidad poblacional" value={m.densidad_poblacional != null ? `${fnum(m.densidad_poblacional, 1)} hab/km²` : '—'} sub="" color={PURPLE} />
           </div>
-          <Source text="Fuente: Censo de Población y Vivienda 2024 — INE Chile" />
+          <Source text="Fuente: Censo 2024 — INE Chile · Urbano/rural y densidad: Censo 2017" />
         </div>
       )}
 
@@ -727,10 +727,8 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Hacinamiento"             value={pct(m.pct_viv_hacinadas)}              sub="de viviendas"    color={PURPLE} />
             <KpiCard label="Acceso agua pública"      value={pct(m.pct_acceso_agua_publica)}        sub="de viviendas"    color={PURPLE} />
             <KpiCard label="Jefatura femenina"        value={pct(m.pct_jefatura_mujer)}             sub="de hogares"      color={PURPLE} />
-            <KpiCard label="Pobreza por ingresos"     value={pct(m.pct_pobreza_ingresos)}           sub="CASEN"           color={PURPLE} />
-            <KpiCard label="Pobreza multidimensional" value={pct(m.pct_pobreza_multidimensional)}   sub="CASEN"           color={PURPLE} />
           </div>
-          <Source text="Fuente: Censo 2024 + CASEN — INE Chile" />
+          <Source text="Fuente: Censo 2024 — INE Chile" />
         </div>
       )}
 
@@ -740,11 +738,8 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Educación superior"     value={pct(m.pct_educacion_superior)}          sub="de la población"         color={PURPLE} />
             <KpiCard label="Años escolaridad (18+)" value={`${fnum(m.anios_escolaridad_promedio)} años`} sub="promedio"          color={PURPLE} />
             <KpiCard label="Cobertura parvularia"   value={pct(m.cobertura_parvularia_pct)}         sub="de niños en edad"        color={PURPLE} />
-            <KpiCard label="Tasa desocupación"      value={pct(m.tasa_desocupacion)}                sub="promedio anual (BCCh)"   color={PURPLE} />
-            <KpiCard label="Ocupados (Censo)"       value={num(m.n_ocupado)}                        sub="personas"                color={PURPLE} />
-            <KpiCard label="Desocupados (Censo)"    value={num(m.n_desocupado)}                     sub="personas"                color={PURPLE} />
           </div>
-          <Source text="Fuente: Censo 2024 + BCCh + CASEN — INE Chile" />
+          <Source text="Fuente: Censo 2024 — INE Chile" />
         </div>
       )}
 
@@ -755,7 +750,6 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Internet móvil"          value={pct(m.pct_internet_movil)}              sub="cobertura"               color={PURPLE} />
             <KpiCard label="Internet fijo"           value={pct(m.pct_internet_fijo)}               sub="cobertura"               color={PURPLE} />
             <KpiCard label="Acceso agua pública"     value={pct(m.pct_acceso_agua_publica)}         sub="de viviendas"            color={PURPLE} />
-            <KpiCard label="Hacinamiento"            value={pct(m.pct_hacinamiento)}                sub="de viviendas"            color={PURPLE} />
             <KpiCard label="Localidades aisladas"    value={num(m.localidades_aisladas_n)}           sub="con dificultad de acceso" color={PURPLE} />
           </div>
           <Source text="Fuente: Censo 2024 — INE Chile" />
@@ -776,7 +770,7 @@ function EmpleoSection({ region, empleoData, metrics: m, subTab, setSubTab, zone
   zoneColor: string
 }) {
   const SUB = [
-    { id: 'resumen'   as EmpleoSub, label: 'Resumen comparativo' },
+    { id: 'resumen'   as EmpleoSub, label: 'Resumen' },
     { id: 'evolucion' as EmpleoSub, label: 'Evolución por región' },
     { id: 'ranking'   as EmpleoSub, label: 'Ranking regional' },
   ]
@@ -862,15 +856,6 @@ function EmpleoEvolucion({ region, data, metrics: m, latestReg, latestNat, zoneC
               <span className="text-xs text-gray-400">Promedio Nacional</span>
             </div>
           </div>
-        </div>
-      )}
-
-      {m && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard label="Tasa ocupación"    value={pct(m.tasa_ocupacion)}           sub="snapshot"  color="#0891b2" />
-          <KpiCard label="Participación"     value={pct(m.tasa_participacion_laboral)} sub="laboral" color="#0891b2" />
-          <KpiCard label="Inf. informal"     value={pct(m.tasa_ocupacion_informal)}   sub="del total" color="#0891b2" />
-          <KpiCard label="Desocupados"       value={num(m.n_desocupado)}              sub="Censo 2024" color="#0891b2" />
         </div>
       )}
 
@@ -960,7 +945,7 @@ function CasenSection({ metrics: m, subTab, setSubTab }: {
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <p className="text-xs text-amber-700">
-              <span className="font-semibold">Nota:</span> Datos del último levantamiento CASEN disponible (snapshot estático). Los gráficos de evolución temporal 2009–2024 requieren carga de series históricas CASEN.
+              <span className="font-semibold">Fuentes:</span> Pobreza por ingresos: CASEN 2024. Pobreza multidimensional: CASEN 2022 (estimación parcial por región). Pobreza extrema y severa: datos pendientes de carga.
             </p>
           </div>
           <Source text="Fuente: CASEN — Ministerio de Desarrollo Social y Familia (MIDESO)" />
@@ -981,13 +966,18 @@ function CasenSection({ metrics: m, subTab, setSubTab }: {
 
       {subTab === 'seguridad' && (
         <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <p className="text-xs text-blue-700">
+              <span className="font-semibold">Nota:</span> Estos indicadores provienen de la ENUSC (Encuesta Nacional Urbana de Seguridad Ciudadana) — encuesta independiente de CASEN, realizada por INE.
+            </p>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
-            <KpiCard label="Hogares víctimas (DMCS)" value={pct(m.pct_hogares_victimas_dmcs)}      sub="% de hogares"              color={ROSE} />
-            <KpiCard label="Percepción inseguridad"  value={pct(m.pct_percepcion_inseguridad)}     sub="% personas que se sienten inseguras" color={ROSE} />
+            <KpiCard label="Hogares víctimas (DMCS)" value={pct(m.pct_hogares_victimas_dmcs)}      sub="% de hogares · ENUSC 2022"  color={ROSE} />
+            <KpiCard label="Percepción inseguridad"  value={pct(m.pct_percepcion_inseguridad)}     sub="% personas · ENUSC 2022"    color={ROSE} />
             <KpiCard label="Tasa denuncias"          value={fmt(m.tasa_denuncias_100k, 0, ' /100k')} sub="por 100.000 hab."         color={ROSE} />
             <KpiCard label="Tasa delitos"            value={fmt(m.tasa_delitos_100k, 0, ' /100k')} sub="por 100.000 hab."           color={ROSE} />
           </div>
-          <Source text="Fuente: ENUSC — INE Chile / Carabineros de Chile" />
+          <Source text="Fuente: ENUSC 2022 — INE Chile · Tasa denuncias/delitos: Carabineros de Chile" />
         </div>
       )}
     </div>
