@@ -114,6 +114,14 @@ export type RegionMetrics = {
   pct_internet_fijo: number | null
 
   // Demografía Censo 2024
+  n_inmigrantes:   number | null
+  n_pueblos_orig:  number | null
+  prom_edad:       number | null
+  pct_edad_60_mas: number | null
+  n_ocupado:       number | null
+  n_desocupado:    number | null
+  pct_viv_hacinadas: number | null
+  censo_updated_at: string | null
   n_discapacidad: number | null
   pct_jefatura_mujer: number | null
 
@@ -152,6 +160,20 @@ export type Documento = {
   tamano_bytes: number | null
   subido_por: string | null
   created_at: string
+}
+
+// ── Security Weekly (LeyStop / Carabineros) ───────────────────────────────────
+export type SecurityWeekly = {
+  region_id:      number
+  fecha_desde:    string
+  fecha_hasta:    string
+  semana:         string | null
+  tasa_registro:  number | null
+  casos_semana:   number | null
+  var_semana_pct: number | null
+  delito_1: string | null; pct_1: number | null
+  delito_2: string | null; pct_2: number | null
+  delito_3: string | null; pct_3: number | null
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────

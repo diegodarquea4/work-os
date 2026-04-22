@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject, SecurityWeekly } from '@/lib/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,7 @@ function buildContext(
   metrics: RegionMetrics | null,
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
+  securityData?: SecurityWeekly | null,
 ): string {
   const total = projects.length
   const rojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
@@ -135,6 +136,13 @@ ${hitos || 'Sin próximos hitos registrados.'}
 ${metricsStr}
 ${seiaStr}
 ${mopStr}
+${securityData ? `
+SEGURIDAD PÚBLICA (LeyStop / Carabineros de Chile):
+- Tasa de registro: ${securityData.tasa_registro?.toFixed(0) ?? 'N/D'} casos por 100k hab (semana ${securityData.semana ?? 'N/D'})
+- Casos última semana: ${securityData.casos_semana ?? 'N/D'}${securityData.var_semana_pct != null ? ` (${securityData.var_semana_pct > 0 ? '+' : ''}${securityData.var_semana_pct.toFixed(1)}% vs semana anterior)` : ''}
+- Principal tipo de delito: ${securityData.delito_1 ?? 'N/D'}${securityData.pct_1 != null ? ` (${securityData.pct_1.toFixed(0)}%)` : ''}
+- 2°: ${securityData.delito_2 ?? 'N/D'}${securityData.pct_2 != null ? ` (${securityData.pct_2.toFixed(0)}%)` : ''}
+- 3°: ${securityData.delito_3 ?? 'N/D'}${securityData.pct_3 != null ? ` (${securityData.pct_3.toFixed(0)}%)` : ''}` : ''}
 `.trim()
 }
 
@@ -149,12 +157,13 @@ export async function generateMinutaContent(
   planPdfBase64: string | null,
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
+  securityData?: SecurityWeekly | null,
 ): Promise<MinutaEjecutivaContent | MinutaCompletaContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
-  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects)
+  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, securityData)
   const ejes = [...new Set(projects.map(p => p.eje))]
 
   const systemPrompt = tipo === 'ejecutiva'

@@ -4,6 +4,7 @@
     { "path": "/api/seia-sync", "schedule": "0 8 * * 1" },
     { "path": "/api/mop-sync",  "schedule": "0 9 * * 1" },
     { "path": "/api/pib-sync",  "schedule": "0 11 * * 1" },
-    { "path": "/api/stop-sync", "schedule": "0 10 * * 3" }
+    { "path": "/api/stop-sync",      "schedule": "0 10 * * 3" },
+    { "path": "/api/external-sync", "schedule": "0 12 * * 1" }
   ]
 }

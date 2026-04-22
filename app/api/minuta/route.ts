@@ -5,7 +5,7 @@ import fs from 'fs'
 import MinutaDocument from '@/components/MinutaDocument'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject, SecurityWeekly } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { generateMinutaContent, type MinutaTipo } from '@/lib/minutaAI'
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   let metrics: RegionMetrics | null = null
   let seiaProjects: SeiaProject[] | null = null
   let mopProjects:  MopProject[]  | null = null
+  let securityData: SecurityWeekly | null = null
   let planPdfBase64: string | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     const sb = getSupabaseAdmin()
     const regionId = INE_CODE[body.region.cod]
 
-    const [prioridades, metricas, seiaRes, mopRes] = await Promise.all([
+    const [prioridades, metricas, seiaRes, mopRes, secRes] = await Promise.all([
       getIniciativasByCod(body.region.cod),
       getMetricsByCod(body.region.cod),
       regionId !== undefined
@@ -59,12 +60,21 @@ export async function POST(request: Request) {
             .order('nombre')
             .limit(15)
         : Promise.resolve({ data: null }),
+      regionId !== undefined
+        ? sb.from('security_weekly')
+            .select('*')
+            .eq('region_id', regionId)
+            .order('fecha_hasta', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ])
 
     projects     = prioridades
     metrics      = metricas
     seiaProjects = (seiaRes.data as SeiaProject[] | null)
     mopProjects  = (mopRes.data  as MopProject[]  | null)
+    securityData = (secRes.data  as SecurityWeekly | null)
 
     // Fetch Plan Regional PDF from Storage for AI context
     try {
@@ -84,7 +94,7 @@ export async function POST(request: Request) {
     projects = all.filter(p => p.cod === body.region.cod)
   }
 
-  console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, planPdf: ${!!planPdfBase64}`)
+  console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, security: ${!!securityData}, planPdf: ${!!planPdfBase64}`)
 
   // Generate AI narrative (non-blocking — if it fails, PDF still renders)
   const aiContent = await generateMinutaContent(
@@ -96,6 +106,7 @@ export async function POST(request: Request) {
     planPdfBase64,
     seiaProjects,
     mopProjects,
+    securityData,
   )
 
   const regionSlug = body.region.nombre

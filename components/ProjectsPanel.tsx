@@ -4,29 +4,16 @@ import { useState, useEffect } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { ZONA_COLORS, REGIONS } from '@/lib/regions'
-import { useRegionMetrics } from '@/lib/hooks/useRegionMetrics'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
-import { usePibSectorial } from '@/lib/hooks/usePibSectorial'
 import { INE_CODE } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import RegionMetricsChart from './RegionMetricsChart'
-import RegionComparisonModal from './RegionComparisonModal'
+import IndicadoresModal from './IndicadoresModal'
 import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
-import PibSectorialChart from './PibSectorialChart'
 import CollapsibleSection from './CollapsibleSection'
+import MinutaLoadingModal from './MinutaLoadingModal'
 import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor } from '@/lib/config'
-
-// ── Regional trend config ────────────────────────────────────────────────────
-// Add new entries here as more series are synced. name must match metric_name in regional_metrics.
-const TREND_CONFIG = [
-  { name: 'tasa_desocupacion', label: 'Desocupación', yFmt: (v: number) => `${v.toLocaleString('es-CL')}%` },
-  { name: 'pib_regional',      label: 'PIB Regional', yFmt: (v: number) => `${v.toFixed(0)} MM$` },
-] as const
-
-// Stable array for hook dependency — module-level to avoid re-renders.
-const ALL_TREND_METRIC_NAMES = TREND_CONFIG.map(m => m.name)
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 
@@ -61,27 +48,16 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(false)
   const [toast, setToast]                   = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
-  const [trendOpen, setTrendOpen]           = useState(false)
-  const [activeMetric, setActiveMetric]     = useState<string>(TREND_CONFIG[0].name)
-  const [comparisonOpen, setComparisonOpen] = useState(false)
+  const [indicadoresOpen, setIndicadoresOpen] = useState(false)
   const [seiaModalOpen, setSeiaModalOpen]       = useState(false)
   const [mopModalOpen, setMopModalOpen]         = useState(false)
   const [seiaModalRegion, setSeiaModalRegion]   = useState(region)
   const [mopModalRegion, setMopModalRegion]     = useState(region)
-  const [pibOpen, setPibOpen]                   = useState(false)
 
-  const trendData     = useRegionMetrics(region.cod, ALL_TREND_METRIC_NAMES)
   const seiaData      = useSeiaProjects(region.cod)
   const mopData       = useMopProjects(region.cod)
-  const pibData       = usePibSectorial(region.cod)
   const seiaModalData = useSeiaProjects(seiaModalRegion.cod)
   const mopModalData  = useMopProjects(mopModalRegion.cod)
-
-  const availableTabs = TREND_CONFIG.filter(m =>
-    trendData.data.some(s => s.metric_name === m.name)
-  )
-  const activeSeries = trendData.data.filter(s => s.metric_name === activeMetric)
-  const activeConfig = TREND_CONFIG.find(m => m.name === activeMetric) ?? TREND_CONFIG[0]
 
   // Filters
   const [search, setSearch]                     = useState('')
@@ -203,17 +179,19 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             </div>
             <h2 className="text-lg font-bold text-gray-900 leading-tight">{region.nombre}</h2>
             <p className="text-sm text-gray-600 mt-0.5">Capital: {region.capital}</p>
-            <button
-              onClick={() => setComparisonOpen(true)}
-              className="flex items-center gap-1.5 mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-              title="Ver comparativa de las 16 regiones"
-            >
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <polyline points="1,10 4,5 7,7 10,2 12,4"/>
-                <line x1="1" y1="12" x2="12" y2="12"/>
-              </svg>
-              Comparar 16 regiones
-            </button>
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={() => setIndicadoresOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                title="Seguridad, PIB, Censo 2024 y comparativa interregional"
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <polyline points="1,10 4,5 7,7 10,2 12,4"/>
+                  <line x1="1" y1="12" x2="12" y2="12"/>
+                </svg>
+                Dashboard Regional
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2 mt-1">
             {/* Minuta split button */}
@@ -435,60 +413,6 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       {/* ── Single scroll area: contexto + iniciativas ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* Tendencia de Indicadores */}
-        {(trendData.loading || trendData.data.length > 0) && (
-          <CollapsibleSection
-            title="Tendencia de Indicadores"
-            isOpen={trendOpen}
-            onToggle={() => setTrendOpen(o => !o)}
-            loading={trendData.loading}
-          >
-            <div className="px-5 pb-4">
-              {availableTabs.length > 1 && (
-                <div className="flex gap-1 mb-3 border-b border-gray-200">
-                  {availableTabs.map(m => (
-                    <button
-                      key={m.name}
-                      onClick={() => setActiveMetric(m.name)}
-                      className={`text-xs px-3 py-1.5 font-medium transition-colors border-b-2 -mb-px ${
-                        activeMetric === m.name
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <RegionMetricsChart
-                series={activeSeries}
-                loading={trendData.loading}
-                error={trendData.error}
-                metricLabels={{ [activeMetric]: activeConfig.label }}
-                yFormatter={activeConfig.yFmt}
-              />
-            </div>
-          </CollapsibleSection>
-        )}
-
-        {/* PIB Sectorial */}
-        {(pibData.loading || pibData.data.length > 0) && (
-          <CollapsibleSection
-            title="PIB Sectorial"
-            isOpen={pibOpen}
-            onToggle={() => setPibOpen(o => !o)}
-            loading={pibData.loading}
-          >
-            <PibSectorialChart
-              data={pibData.data}
-              latestPeriod={pibData.latestPeriod}
-              loading={pibData.loading}
-              error={pibData.error}
-            />
-          </CollapsibleSection>
-        )}
-
         {/* SEIA + MOP — acceso rápido */}
         {(seiaData.loading || seiaData.proyectos.length > 0 || mopData.loading || mopData.proyectos.length > 0) && (
           <div className="px-4 py-3 flex gap-2 border-b border-gray-100">
@@ -611,9 +535,6 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         </div>
       </div>
 
-      {comparisonOpen && (
-        <RegionComparisonModal onClose={() => setComparisonOpen(false)} />
-      )}
 
       {/* ── Modal SEIA fullscreen ── */}
       {seiaModalOpen && (
@@ -712,6 +633,13 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
         </div>
       )}
 
+      {indicadoresOpen && (
+        <IndicadoresModal
+          region={region}
+          onClose={() => setIndicadoresOpen(false)}
+        />
+      )}
+
       {selectedPrioridad && (
         <ProjectTrackerModal
           prioridad={selectedPrioridad}
@@ -727,6 +655,8 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
           <button onClick={() => setToast(null)} className="ml-1 opacity-70 hover:opacity-100">✕</button>
         </div>
       )}
+
+      {downloading && <MinutaLoadingModal tipo={downloadingTipo ?? 'ejecutiva'} />}
     </div>
   )
 }
