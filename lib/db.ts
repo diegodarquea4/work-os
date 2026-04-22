@@ -35,16 +35,27 @@ function mapRow(row: Prioridad): Iniciativa {
   }
 }
 
-/** All iniciativas — used for the initial page load. */
+/** All iniciativas — used for the initial page load. Paginates to bypass Supabase's 1000-row default. */
 export async function getAllIniciativas(): Promise<Iniciativa[]> {
-  const { data, error } = await getSupabase()
-    .from('prioridades_territoriales')
-    .select('*')
-    .order('n', { ascending: true })
+  const PAGE = 1000
+  const all: Prioridad[] = []
+  let from = 0
 
-  if (error) throw new Error(`DB error (iniciativas): ${error.message}`)
+  while (true) {
+    const { data, error } = await getSupabase()
+      .from('prioridades_territoriales')
+      .select('*')
+      .order('n', { ascending: true })
+      .range(from, from + PAGE - 1)
 
-  return (data as Prioridad[]).map(mapRow)
+    if (error) throw new Error(`DB error (iniciativas): ${error.message}`)
+    if (!data || data.length === 0) break
+    all.push(...(data as Prioridad[]))
+    if (data.length < PAGE) break
+    from += PAGE
+  }
+
+  return all.map(mapRow)
 }
 
 /** @deprecated Use getAllIniciativas() */
