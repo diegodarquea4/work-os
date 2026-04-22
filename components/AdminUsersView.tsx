@@ -145,7 +145,9 @@ export default function AdminUsersView() {
     })
     if (res.ok) {
       setUsers(prev => prev.map(u =>
-        u.id === id ? { ...u, role, region_cods: role !== 'regional' ? [] : u.region_cods } : u
+        u.id === id
+          ? { ...u, role, region_cods: (role !== 'regional' && role !== 'viewer') ? [] : u.region_cods }
+          : u
       ))
     } else { setError('Error al actualizar rol') }
     setSaving(null)
@@ -188,7 +190,7 @@ export default function AdminUsersView() {
         email: inviteEmail.trim(),
         full_name: inviteName.trim() || undefined,
         role: inviteRole,
-        region_cods: inviteRole === 'regional' ? inviteRegions : [],
+        region_cods: (inviteRole === 'regional' || inviteRole === 'viewer') ? inviteRegions : [],
       }),
     })
     if (res.ok) {
@@ -269,7 +271,7 @@ export default function AdminUsersView() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      {u.role === 'regional' ? (
+                      {(u.role === 'regional' || u.role === 'viewer') ? (
                         <RegionPicker
                           value={u.region_cods}
                           disabled={saving === u.id}
@@ -344,13 +346,14 @@ export default function AdminUsersView() {
                   <option value="viewer">Solo lectura — sin edición</option>
                 </select>
               </div>
-              {inviteRole === 'regional' && (
+              {(inviteRole === 'regional' || inviteRole === 'viewer') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Regiones asignadas{' '}
-                    {inviteRegions.length > 0 && (
-                      <span className="text-teal-600 font-normal">({inviteRegions.length} seleccionadas)</span>
-                    )}
+                    {inviteRegions.length === 0
+                      ? <span className="text-gray-400 font-normal text-xs">(vacío = ve todas las regiones)</span>
+                      : <span className="text-teal-600 font-normal">({inviteRegions.length} seleccionadas)</span>
+                    }
                   </label>
                   <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto">
                     {REGIONS.map(r => (

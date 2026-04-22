@@ -48,10 +48,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return false
   }, [profile])
 
-  // Cods that regional users cannot open (all regions not in their list)
-  const lockedRegions: string[] = profile?.role === 'regional'
-    ? REGIONS.filter(r => !profile.region_cods.includes(r.cod)).map(r => r.cod)
-    : []
+  // Cods that regional/filtered-viewer users cannot open
+  const lockedRegions: string[] =
+    (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0))
+      ? REGIONS.filter(r => !profile!.region_cods.includes(r.cod)).map(r => r.cod)
+      : []
 
   const [view, setView]                       = useState<View>('mapa')
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
@@ -67,18 +68,22 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .catch(() => setActividadLoading(false))
   }, [])
 
-  // Initiatives visible to this user (regional users only see their assigned regions)
-  const visibleIniciativas: Iniciativa[] = profile?.role === 'regional'
+  // Initiatives visible to this user (regional + filtered-viewer only see assigned regions)
+  const needsRegionFilter =
+    profile?.role === 'regional' ||
+    (profile?.role === 'viewer' && profile.region_cods.length > 0)
+
+  const visibleIniciativas: Iniciativa[] = needsRegionFilter
     ? localIniciativas.filter(p => {
         const r = REGIONS.find(r => r.nombre === p.region)
-        return r ? profile.region_cods.includes(r.cod) : profile.region_cods.includes(p.region)
+        return r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
       })
     : localIniciativas
 
-  // Auto-select region for regional users with exactly one region assigned
+  // Auto-select region for single-region users (regional or filtered viewer)
   useEffect(() => {
-    if (profile?.role === 'regional' && profile.region_cods.length === 1 && !selectedRegion) {
-      const r = REGIONS.find(r => r.cod === profile.region_cods[0])
+    if (needsRegionFilter && profile!.region_cods.length === 1 && !selectedRegion) {
+      const r = REGIONS.find(r => r.cod === profile!.region_cods[0])
       if (r) setSelectedRegion(r)
     }
   }, [profile])
@@ -225,6 +230,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Kanban
             </button>
+            {(profile?.role === 'admin' || profile?.role === 'editor') && (
             <button
               onClick={() => setView('prego')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -237,6 +243,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               PREGO
             </button>
+            )}
             {profile?.role === 'admin' && (
               <button
                 onClick={() => setView('usuarios')}
@@ -309,8 +316,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
-      {/* PREGO view */}
-      {view === 'prego' && (
+      {/* PREGO view — admin/editor only */}
+      {view === 'prego' && (profile?.role === 'admin' || profile?.role === 'editor') && (
         <div className="flex-1 overflow-hidden">
           <PregoView canEditRegion={canEditRegion} />
         </div>

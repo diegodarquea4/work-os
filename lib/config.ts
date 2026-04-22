@@ -35,3 +35,18 @@ export function prioridadColor(p: 'Alta' | 'Media' | 'Baja') {
          p === 'Media' ? { bg: 'bg-amber-100', text: 'text-amber-700', flag: 'text-amber-500' } :
                          { bg: 'bg-blue-100',  text: 'text-blue-700',  flag: 'text-blue-500'  }
 }
+
+/** Chip color for eje_gobierno value (compact, for inline use) */
+export function ejeGobColor(eg: string | null): string {
+  return eg === 'Seguridad' ? 'bg-red-50 text-red-700'
+       : eg === 'Social'    ? 'bg-purple-50 text-purple-700'
+       :                      'bg-blue-50 text-blue-700'
+}
+
+/** Header/banner color for eje_gobierno grouping (stronger background) */
+export function ejeGobHeaderColor(eg: string | null): string {
+  return eg === 'Economía'  ? 'bg-blue-100 text-blue-800'
+       : eg === 'Social'    ? 'bg-purple-100 text-purple-800'
+       : eg === 'Seguridad' ? 'bg-red-100 text-red-800'
+       :                      'bg-gray-100 text-gray-600'
+}

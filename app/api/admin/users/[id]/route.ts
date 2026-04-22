@@ -17,8 +17,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (role !== undefined) {
     patch.role = role
-    // Clear regions when switching away from regional
-    if (role !== 'regional') patch.region_cods = []
+    // Clear regions when switching to a role that doesn't use region filtering
+    if (role !== 'regional' && role !== 'viewer') patch.region_cods = []
   }
   if (region_cods !== undefined) patch.region_cods = region_cods
   if (full_name !== undefined) patch.full_name = full_name

@@ -26,7 +26,9 @@ function readLogoDataUrl(): string | null {
 const LOGO_DATA_URL = readLogoDataUrl()
 
 export async function POST(request: Request) {
-  if (!await requireAuth()) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  const authProfile = await requireAuth()
+  if (!authProfile) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  if (authProfile.role !== 'admin' && authProfile.role !== 'editor') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   const body = await request.json() as { region: Region; fecha: string; tipo?: MinutaTipo }
   const tipo: MinutaTipo = body.tipo ?? 'completo'
 

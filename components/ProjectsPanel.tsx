@@ -14,6 +14,7 @@ import MopProjectsList from './MopProjectsList'
 import CollapsibleSection from './CollapsibleSection'
 import MinutaLoadingModal from './MinutaLoadingModal'
 import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor } from '@/lib/config'
+import { useCanEditAny } from '@/lib/context/UserContext'
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 
@@ -42,6 +43,7 @@ type Props = {
 
 export default function IniciativasPanel({ region, projects, panelWidth, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const zoneColor = ZONA_COLORS[region.zona] ?? '#6B7280'
+  const canEditAny = useCanEditAny()
   const [downloading, setDownloading]       = useState(false)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | null>(null)
@@ -269,8 +271,8 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
               Dashboard Regional
             </button>
 
-            {/* Minuta split button */}
-            <div className="relative" data-minuta-menu="true">
+            {/* Minuta split button — admin/editor only */}
+            {canEditAny && <div className="relative" data-minuta-menu="true">
               <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900 w-full">
                 <button
                   onClick={() => handleDownload('ejecutiva')}
@@ -327,7 +329,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>}

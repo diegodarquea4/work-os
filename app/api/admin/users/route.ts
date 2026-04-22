@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     email,
     full_name: full_name ?? null,
     role,
-    region_cods: role === 'regional' ? (region_cods ?? []) : [],
+    region_cods: (role === 'regional' || role === 'viewer') ? (region_cods ?? []) : [],
   })
 
   if (profileError) {

@@ -5,14 +5,15 @@ import { getSupabase } from '@/lib/supabase'
 import { INE_CODE } from '@/lib/regions'
 import type { MetricSeries, RegionalMetric, RegionMetrics, SecurityWeekly } from '@/lib/types'
 
-export const INDICADOR_METRICS = ['tasa_desocupacion', 'pib_regional', 'tasa_delictual'] as const
+export const INDICADOR_METRICS = ['tasa_desocupacion', 'pib_regional'] as const
 
 export function useRegionIndicadores(regionCod: string) {
-  const [timeSeries,    setTimeSeries]    = useState<MetricSeries[]>([])
-  const [nationalSeries,setNationalSeries]= useState<MetricSeries[]>([])
-  const [security,      setSecurity]      = useState<SecurityWeekly | null>(null)
-  const [metrics,       setMetrics]       = useState<RegionMetrics | null>(null)
-  const [loading,       setLoading]       = useState(true)
+  const [timeSeries,      setTimeSeries]      = useState<MetricSeries[]>([])
+  const [nationalSeries,  setNationalSeries]  = useState<MetricSeries[]>([])
+  const [security,        setSecurity]        = useState<SecurityWeekly | null>(null)
+  const [securityHistory, setSecurityHistory] = useState<SecurityWeekly[]>([])
+  const [metrics,         setMetrics]         = useState<RegionMetrics | null>(null)
+  const [loading,         setLoading]         = useState(true)
 
   useEffect(() => {
     const regionId = INE_CODE[regionCod]
@@ -37,13 +38,12 @@ export function useRegionIndicadores(regionCod: string) {
         .in('metric_name', names)
         .order('period', { ascending: true }),
 
-      // Security snapshot: latest week
+      // Security history: up to 52 weeks (latest first)
       sb.from('security_weekly')
         .select('*')
         .eq('region_id', regionId)
         .order('fecha_hasta', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .limit(52),
 
       // Region metrics (census + economic snapshot for Demografía tab)
       sb.from('region_metrics')
@@ -53,14 +53,16 @@ export function useRegionIndicadores(regionCod: string) {
     ]).then(([tsRes, natRes, secRes, metRes]) => {
       setTimeSeries(toSeries(tsRes.data as RawRow[] | null, names))
       setNationalSeries(toSeries(natRes.data as RawRow[] | null, names))
-      setSecurity((secRes.data ?? null) as SecurityWeekly | null)
+      const secRows = (secRes.data ?? []) as SecurityWeekly[]
+      setSecurity(secRows[0] ?? null)
+      setSecurityHistory(secRows)
       setMetrics((metRes.data ?? null) as RegionMetrics | null)
       setLoading(false)
     }).catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionCod])
 
-  return { timeSeries, nationalSeries, security, metrics, loading }
+  return { timeSeries, nationalSeries, security, securityHistory, metrics, loading }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

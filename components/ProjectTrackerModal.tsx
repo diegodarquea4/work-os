@@ -249,15 +249,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               ))}
               <span className="text-xs text-gray-700 ml-1">{SEMAFORO_CONFIG[semaforo].label}</span>
             </div>
-            <div className="w-px h-4 bg-gray-200"/>
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs text-gray-600 flex-shrink-0">Avance</span>
-              <div className="w-32 bg-gray-200 rounded-full h-1.5">
-                <div className="bg-slate-700 h-1.5 rounded-full transition-all" style={{ width: `${pctAvance}%` }} />
-              </div>
-              <span className="text-xs font-semibold text-gray-700">{pctAvance}%</span>
-              <span className="text-xs text-gray-400 italic">calculado desde hitos</span>
-            </div>
           </div>
 
           {/* Metadata */}
@@ -267,12 +258,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Responsable */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Responsable</span>
-              <label className="relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-white border border-gray-200 cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors group">
+              <label className="relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-white border border-gray-200 cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors group w-44">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400 flex-shrink-0">
                   <circle cx="5" cy="3.5" r="2"/>
                   <path d="M1 9c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5"/>
                 </svg>
-                <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
+                <span className="text-xs font-medium text-gray-700 truncate flex-1">
                   {responsable
                     ? (usuarios.find(u => u.email === responsable)?.name ?? responsable)
                     : <span className="text-gray-400">Sin asignar</span>}
@@ -304,13 +295,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Etapa actual */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Etapa actual</span>
-              <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
                 etapaActual === 'Terminado'    ? 'bg-green-100' :
                 etapaActual === 'Ejecución'    ? 'bg-blue-100'  :
                 etapaActual === 'Diseño'       ? 'bg-violet-100':
                 etapaActual === 'Preinversión' ? 'bg-orange-100': 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
-                <span className={`text-xs font-medium truncate max-w-[110px] ${
+                <span className={`text-xs font-medium truncate flex-1 ${
                   etapaActual === 'Terminado'    ? 'text-green-700' :
                   etapaActual === 'Ejecución'    ? 'text-blue-700'  :
                   etapaActual === 'Diseño'       ? 'text-violet-700':
@@ -336,8 +327,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Fuente de financiamiento */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Fuente de financiamiento</span>
-              <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:bg-slate-200 transition-colors group bg-slate-100 ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
-                <span className="text-xs font-medium text-slate-700 truncate max-w-[110px]">{fuenteFinanciamiento || '—'}</span>
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:bg-slate-200 transition-colors group bg-slate-100 w-44 ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
+                <span className="text-xs font-medium text-slate-700 truncate flex-1">{fuenteFinanciamiento || '—'}</span>
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
                   <path d="M1.5 3L4 5.5L6.5 3"/>
                 </svg>
@@ -361,11 +352,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex items-start gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0 pt-0.5">Próximo hito</span>
               {editingField === 'proximo_hito' ? (
-                <div className="flex flex-1 gap-1.5">
+                <div className="flex flex-col flex-1 gap-1.5">
                   <select
                     value={proximoHito}
                     onChange={e => setProximoHito(e.target.value)}
-                    className="flex-1 text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
+                    className="w-full text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
                     autoFocus
                   >
                     <option value="">—</option>
@@ -382,33 +373,35 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     <option>Finalizado</option>
                     <option>Otro</option>
                   </select>
-                  <input
-                    type="date"
-                    value={fechaProximoHito}
-                    onChange={e => setFechaProximoHito(e.target.value)}
-                    className="text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 w-32"
-                  />
-                  <button
-                    onClick={() => saveMetaField('proximo_hito', proximoHito)}
-                    disabled={savingField}
-                    className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50"
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    onClick={() => { setEditingField(null); setProximoHito(prioridad.proximo_hito ?? ''); setFechaProximoHito(prioridad.fecha_proximo_hito ?? '') }}
-                    className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={fechaProximoHito}
+                      onChange={e => setFechaProximoHito(e.target.value)}
+                      className="flex-1 text-xs text-gray-700 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    />
+                    <button
+                      onClick={() => saveMetaField('proximo_hito', proximoHito)}
+                      disabled={savingField}
+                      className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50 flex-shrink-0"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      onClick={() => { setEditingField(null); setProximoHito(prioridad.proximo_hito ?? ''); setFechaProximoHito(prioridad.fecha_proximo_hito ?? '') }}
+                      className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 flex-shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => canEdit && setEditingField('proximo_hito')}
-                    className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
+                    className="flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer w-44"
                   >
-                    <span className="text-xs font-medium text-slate-700">
+                    <span className="text-xs font-medium text-slate-700 flex-1 truncate">
                       {proximoHito || <span className="text-slate-400">Agregar hito...</span>}
                     </span>
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
@@ -439,14 +432,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Al término gob. */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-28 flex-shrink-0">Al término gob.</span>
-              <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
                 estadoTerminoGob === 'En operación' || estadoTerminoGob === 'Terminado' ? 'bg-green-100' :
                 estadoTerminoGob === 'En ejecución'  ? 'bg-blue-100'   :
                 estadoTerminoGob === 'En diseño'     ? 'bg-violet-100' :
                 estadoTerminoGob === 'En licitación' || estadoTerminoGob === 'En preinversión' ? 'bg-orange-100' :
                 estadoTerminoGob === 'Sin iniciar'   ? 'bg-gray-100'   : 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
-                <span className={`text-xs font-medium truncate max-w-[160px] ${
+                <span className={`text-xs font-medium truncate flex-1 ${
                   estadoTerminoGob === 'En operación' || estadoTerminoGob === 'Terminado' ? 'text-green-700' :
                   estadoTerminoGob === 'En ejecución'  ? 'text-blue-700'   :
                   estadoTerminoGob === 'En diseño'     ? 'text-violet-700' :
@@ -509,9 +502,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               ) : (
                 <button
                   onClick={() => canEdit && setEditingField('inversion_mm')}
-                  className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
+                  className="flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer w-44"
                 >
-                  <span className={`text-xs font-medium ${inversionMm ? 'text-slate-700' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-medium flex-1 truncate ${inversionMm ? 'text-slate-700' : 'text-slate-400'}`}>
                     {inversionMm ? `$${parseFloat(inversionMm).toLocaleString('es-CL')} MM` : '—'}
                   </span>
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
@@ -547,9 +540,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               ) : (
                 <button
                   onClick={() => canEdit && setEditingField('codigo_bip')}
-                  className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer"
+                  className="flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer w-44"
                 >
-                  <span className={`text-xs font-medium font-mono ${codigoBip ? 'text-slate-700' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-medium font-mono flex-1 truncate ${codigoBip ? 'text-slate-700' : 'text-slate-400'}`}>
                     {codigoBip || '—'}
                   </span>
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
@@ -562,11 +555,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* RAT */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-28 flex-shrink-0">RAT</span>
-              <label className={`relative inline-flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
                 ['FI','IN','RS','RE','OT'].includes(rat) ? 'bg-green-100'  :
                 rat === 'En Tramitación'                 ? 'bg-orange-100' : 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
-                <span className={`text-xs font-medium truncate max-w-[160px] ${
+                <span className={`text-xs font-medium truncate flex-1 ${
                   ['FI','IN','RS','RE','OT'].includes(rat) ? 'text-green-700'  :
                   rat === 'En Tramitación'                 ? 'text-orange-700' : 'text-gray-400'
                 }`}>{rat && rat !== 'No Requiere' && rat !== 'No Ingresado' ? rat : '—'}</span>
