@@ -15,6 +15,8 @@
  */
 
 import { NextRequest } from 'next/server'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
 
@@ -108,12 +110,15 @@ async function runSync() {
 
   // ── Phase B: LeyStop from SQLite ─────────────────────────────────────────
   try {
-    // Load sql.js with CDN WASM (avoids bundling issues)
+    // Load sql.js with bundled WASM from node_modules (reliable in serverless)
     const initSqlJs = (await import('sql.js')).default
-    const SQL = await initSqlJs({
-      locateFile: (file: string) =>
-        `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${file}`,
-    })
+    const wasmBuf = readFileSync(
+      join(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm')
+    )
+    const wasmBinary = wasmBuf.buffer.slice(
+      wasmBuf.byteOffset, wasmBuf.byteOffset + wasmBuf.byteLength
+    ) as ArrayBuffer
+    const SQL = await initSqlJs({ wasmBinary })
 
     // Download SQLite database from GitHub
     console.log('[external-sync] Downloading bcn_indicadores.db...')
