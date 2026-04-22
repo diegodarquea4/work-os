@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isLoginPage = pathname.startsWith('/login')
   const isAuthCallback = pathname.startsWith('/auth/callback')
-  const isCronRoute = pathname.startsWith('/api/ine-sync') || pathname.startsWith('/api/ine-discover') || pathname.startsWith('/api/seia-sync') || pathname.startsWith('/api/mop-sync') || pathname.startsWith('/api/pib-sync') || pathname.startsWith('/api/pib-discover') || pathname.startsWith('/api/stop-sync')
+  const isCronRoute = pathname.startsWith('/api/ine-sync') || pathname.startsWith('/api/ine-discover') || pathname.startsWith('/api/seia-sync') || pathname.startsWith('/api/mop-sync') || pathname.startsWith('/api/pib-sync') || pathname.startsWith('/api/pib-discover') || pathname.startsWith('/api/stop-sync') || pathname.startsWith('/api/external-sync')
 
   if (!user && !isLoginPage && !isAuthCallback && !isCronRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
