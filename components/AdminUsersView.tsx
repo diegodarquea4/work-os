@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
+import PlanesRegionalesPanel from './PlanesRegionalesPanel'
 
 type UserRow = {
   id: string
@@ -296,6 +297,8 @@ export default function AdminUsersView() {
             </table>
           </div>
         )}
+
+        <PlanesRegionalesPanel />
       </div>
 
       {/* Invite modal */}

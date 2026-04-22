@@ -55,6 +55,8 @@ type Props = {
 export default function IniciativasPanel({ region, projects, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const zoneColor = ZONA_COLORS[region.zona] ?? '#6B7280'
   const [downloading, setDownloading]       = useState(false)
+  const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
+  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | null>(null)
   const [selectedPrioridad, setSelectedPrioridad] = useState<Iniciativa | null>(null)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(false)
@@ -91,6 +93,15 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
     setSeiaModalRegion(region)
     setMopModalRegion(region)
   }, [region.cod])
+
+  useEffect(() => {
+    if (!minutaMenuOpen) return
+    function closeMenu(e: MouseEvent) {
+      if (!(e.target as Element).closest('[data-minuta-menu]')) setMinutaMenuOpen(false)
+    }
+    document.addEventListener('click', closeMenu)
+    return () => document.removeEventListener('click', closeMenu)
+  }, [minutaMenuOpen])
 
   useEffect(() => {
     setActividad({})
@@ -136,8 +147,10 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       return 0
     })
 
-  async function handleDownload() {
+  async function handleDownload(tipo: 'ejecutiva' | 'completo') {
+    setDownloadingTipo(tipo)
     setDownloading(true)
+    setMinutaMenuOpen(false)
     try {
       const now = new Date()
       const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -146,14 +159,15 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       const res = await fetch('/api/minuta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, fecha }),
+        body: JSON.stringify({ region, fecha, tipo }),
       })
       if (!res.ok) throw new Error('Error generando minuta')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : ''
+      a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}${suffix}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
@@ -162,6 +176,7 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
       setTimeout(() => setToast(null), 4000)
     } finally {
       setDownloading(false)
+      setDownloadingTipo(null)
     }
   }
 
@@ -201,28 +216,67 @@ export default function IniciativasPanel({ region, projects, onClose, onUpdatePr
             </button>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Descargar minuta en PDF"
-            >
-              {downloading ? (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                    <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+            {/* Minuta split button */}
+            <div className="relative" data-minuta-menu="true">
+              <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                <button
+                  onClick={() => handleDownload('ejecutiva')}
+                  disabled={downloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Minuta Ejecutiva (2 páginas)"
+                >
+                  {downloading && downloadingTipo === 'ejecutiva' ? (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                        <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+                      </svg>
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M6 1v7M3 5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Minuta Ejecutiva
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMinutaMenuOpen(v => !v)}
+                  disabled={downloading}
+                  className="px-1.5 py-1.5 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-l border-slate-700"
+                  title="Más opciones de minuta"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  Generando...
-                </>
-              ) : (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 1v7M3 5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Minuta PDF
-                </>
+                </button>
+              </div>
+              {minutaMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[160px] py-1">
+                  <button
+                    onClick={() => handleDownload('completo')}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    {downloading && downloadingTipo === 'completo' ? (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                          <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+                        </svg>
+                        Generando...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="1" width="8" height="10" rx="1"/><line x1="4" y1="4" x2="8" y2="4"/><line x1="4" y1="6" x2="8" y2="6"/><line x1="4" y1="8" x2="6" y2="8"/>
+                        </svg>
+                        Reporte Completo
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Cerrar">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M4 4l12 12M16 4L4 16" />

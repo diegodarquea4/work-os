@@ -8,249 +8,390 @@ import {
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import type { MinutaCompletaContent } from '@/lib/minutaAI'
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ── Palette ──────────────────────────────────────────────────────────────────
+const C = {
+  navy:       '#1a2744',
+  red:        '#C8102E',
+  ejeHdr:     '#1e3a5f',
+  lightBlue:  '#EFF6FF',
+  bg:         '#f9fafb',
+  border:     '#e5e7eb',
+  textDark:   '#111827',
+  textMid:    '#374151',
+  textLight:  '#6b7280',
+  white:      '#ffffff',
+  alertRed:   '#b91c1c',
+  recGreen:   '#15803d',
+  amber:      '#d97706',
+  verde:      '#16a34a',
+  rojo:       '#dc2626',
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: {
-    fontFamily: 'Helvetica',
-    fontSize: 10,
-    color: '#1a1a1a',
-    paddingTop: 50,
-    paddingBottom: 60,
-    paddingHorizontal: 60,
+    fontFamily:        'Helvetica',
+    fontSize:          9,
+    color:             C.textDark,
+    paddingTop:        32,
+    paddingBottom:     52,
+    paddingHorizontal: 44,
+  },
+
+  // ── Header ──
+  header: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    alignItems:     'flex-start',
+    marginBottom:   8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           10,
+  },
+  logoPlaceholder: {
+    width: 40, height: 40,
+    backgroundColor: C.navy,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoPlaceholderText: {
+    color: C.white,
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    letterSpacing: 0.5,
+  },
+  orgBlock: { justifyContent: 'center' },
+  orgBold:  { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.navy },
+  orgLight: { fontSize: 7, color: C.textLight, marginTop: 1 },
+  headerDate: { fontSize: 8, color: C.textLight, textAlign: 'right' },
+
+  divider: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: C.navy,
+    marginBottom:      12,
+  },
+
+  // ── Title block ──
+  titleBlock: {
+    alignItems:    'center',
+    marginBottom:  14,
+  },
+  titleSupra: {
+    fontSize:      7.5,
+    color:         C.textLight,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom:  3,
+  },
+  titleMain: {
+    fontSize:      14,
+    fontFamily:    'Helvetica-Bold',
+    color:         C.navy,
+    textTransform: 'uppercase',
+    textAlign:     'center',
+    marginBottom:  2,
+  },
+  titleSub: {
+    fontSize:   10,
+    fontFamily: 'Helvetica-Bold',
+    color:      C.textMid,
+    textAlign:  'center',
+    marginBottom: 2,
+  },
+  titleMeta: {
+    fontSize: 8,
+    color:    C.textLight,
+    textAlign:'center',
+  },
+
+  // ── Resumen box ──
+  resumenBox: {
+    backgroundColor: C.lightBlue,
+    borderLeftWidth: 3,
+    borderLeftColor: C.navy,
+    paddingHorizontal: 10,
+    paddingVertical:    7,
+    marginBottom:      14,
+  },
+  resumenLabel: {
+    fontSize:      7.5,
+    fontFamily:    'Helvetica-Bold',
+    color:         C.navy,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom:  3,
+  },
+  resumenText: {
+    fontSize:   9,
+    color:      C.textDark,
+    lineHeight: 1.5,
+    textAlign:  'justify',
+  },
+
+  // ── Section heading ──
+  sectionTitle: {
+    fontSize:        10,
+    fontFamily:      'Helvetica-Bold',
+    textDecoration:  'underline',
+    color:           C.navy,
+    marginTop:       14,
+    marginBottom:    7,
+  },
+
+  // ── Letter subsections (a. b. c.) ──
+  subRow:     { flexDirection: 'row', marginBottom: 9, paddingLeft: 4 },
+  subLetter:  { width: 18, fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.textDark },
+  subContent: { flex: 1 },
+  subTitle:   { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.textDark, marginBottom: 2 },
+  subText:    { fontSize: 9, color: C.textMid, lineHeight: 1.55, textAlign: 'justify' },
+
+  // ── Bullets ──
+  bulletRow: { flexDirection: 'row', marginBottom: 3, paddingLeft: 6 },
+  bulletDot: { width: 10, fontSize: 9, color: C.textMid },
+  bulletText:{ flex: 1, fontSize: 9, color: C.textMid, lineHeight: 1.5 },
+
+  // ── Stats summary table (Section II) ──
+  statsHdr: {
+    flexDirection:     'row',
+    backgroundColor:   C.navy,
+    paddingVertical:   3,
+    paddingHorizontal: 5,
+  },
+  statsRow: {
+    flexDirection:     'row',
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.border,
+    paddingVertical:   2.5,
+    paddingHorizontal: 5,
+  },
+  statsRowAlt:  { backgroundColor: C.bg },
+  statsRowTotal:{ backgroundColor: '#e8eef5' },
+  statsHdrTxt:  { color: C.white, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
+  statsColEje:  { flex: 1, fontSize: 7.5 },
+  statsColN:    { width: '9%',  fontSize: 7.5, textAlign: 'center' },
+  statsColPct:  { width: '11%', fontSize: 7.5, textAlign: 'center' },
+  statsColR:    { width: '9%',  fontSize: 7.5, textAlign: 'center', color: C.rojo },
+  statsColA:    { width: '9%',  fontSize: 7.5, textAlign: 'center', color: C.amber },
+  statsColV:    { width: '9%',  fontSize: 7.5, textAlign: 'center', color: C.verde },
+
+  // ── Eje header band ──
+  ejeHeader: {
+    backgroundColor:  C.ejeHdr,
+    paddingVertical:  5,
+    paddingHorizontal:8,
+    marginTop:        10,
+  },
+  ejeHeaderText: {
+    color:      C.white,
+    fontSize:   9,
+    fontFamily: 'Helvetica-Bold',
+  },
+  ejeResumenBox: {
+    backgroundColor:   '#EEF3F8',
+    paddingHorizontal: 8,
+    paddingVertical:   5,
+    marginBottom:      3,
+  },
+  ejeResumenText: {
+    fontSize:   8.5,
+    color:      C.textMid,
+    fontStyle:  'italic',
     lineHeight: 1.5,
   },
 
-  // Header institucional
-  headerBand: {
-    backgroundColor: '#1a2744',
-    paddingVertical: 10,
-    paddingHorizontal: 60,
-    marginBottom: 0,
-    marginHorizontal: -60,
+  // ── Mini table (eje fallback) ──
+  miniHdr: {
+    flexDirection:     'row',
+    backgroundColor:   '#374151',
+    paddingVertical:   3,
+    paddingHorizontal: 5,
   },
-  headerRepublica: {
-    fontSize: 7.5,
-    color: '#a0aec0',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  headerMinisterio: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    color: '#ffffff',
-    letterSpacing: 0.3,
-    marginBottom: 1,
-  },
-  headerDivision: {
-    fontSize: 8,
-    color: '#90cdf4',
-    marginBottom: 0,
-  },
-  divider: {
+  miniRow: {
+    flexDirection:     'row',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#cbd5e0',
-    marginTop: 14,
-    marginBottom: 12,
+    borderBottomColor: C.border,
+    paddingVertical:   2.5,
+    paddingHorizontal: 5,
   },
+  miniRowAlt:   { backgroundColor: C.bg },
+  miniHdrTxt:   { color: C.white, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
+  miniColNombre:{ flex: 1, fontSize: 7.5, paddingRight: 4 },
+  miniColSem:   { width: '14%', fontSize: 7.5 },
+  miniColPct:   { width: '10%', fontSize: 7.5, textAlign: 'right' },
 
-  // Bloque título de la minuta
-  minutaBlock: {
-    marginBottom: 12,
+  // ── GPS table ──
+  gpsIntro: {
+    fontSize:   9,
+    color:      C.textMid,
+    lineHeight: 1.5,
+    marginBottom: 6,
+    textAlign:  'justify',
   },
-  minutaLabel: {
-    fontSize: 8,
-    color: '#718096',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 3,
+  gpsHdr: {
+    flexDirection:     'row',
+    backgroundColor:   '#2d4a6e',
+    paddingVertical:   4,
+    paddingHorizontal: 4,
+    marginTop:         4,
   },
-  minutaTitle: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    color: '#1a2744',
-    marginBottom: 2,
+  gpsRow: {
+    flexDirection:     'row',
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.border,
+    paddingVertical:   3,
+    paddingHorizontal: 4,
   },
-  minutaSubtitle: {
-    fontSize: 9,
-    color: '#4a5568',
-    marginBottom: 0,
-  },
-
-  // Ficha técnica de la región
-  fichaBox: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: '#f7fafc',
-    borderWidth: 0.5,
-    borderColor: '#cbd5e0',
-    borderRadius: 3,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    marginBottom: 16,
-    gap: 0,
-  },
-  fichaItem: {
-    width: '33%',
-    marginBottom: 5,
-  },
-  fichaLabel: {
-    fontSize: 7,
-    color: '#718096',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginBottom: 1,
-  },
-  fichaValue: {
-    fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
-    color: '#1a202c',
-  },
-
-  // Párrafo introductorio
-  intro: {
-    fontSize: 10,
-    marginBottom: 16,
-    textAlign: 'justify',
-  },
-
-  // Secciones
-  sectionTitle: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    textDecoration: 'underline',
-    marginTop: 14,
+  gpsRowAlt:  { backgroundColor: C.bg },
+  gpsHdrTxt:  { color: C.white, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
+  gpsColFuente:{ width: '9%',  fontSize: 7.5 },
+  gpsColNombre:{ flex: 1,      fontSize: 7.5, paddingRight: 4 },
+  gpsColSector:{ width: '18%', fontSize: 7.5, paddingRight: 3 },
+  gpsColInv:   { width: '15%', fontSize: 7.5, textAlign: 'right' },
+  gpsColEtapa: { width: '14%', fontSize: 7.5 },
+  gpsLabel: {
+    fontSize:  7,
+    color:     C.textLight,
+    fontStyle: 'italic',
+    marginTop: 2,
     marginBottom: 6,
   },
 
-  // Bullet items
-  bulletRow: {
-    flexDirection: 'row',
-    marginBottom: 3,
-    paddingLeft: 10,
-  },
-  bulletDot: {
-    width: 14,
-    color: '#444',
-  },
-  bulletText: {
-    flex: 1,
-    fontSize: 10,
-  },
+  // ── Alertas / Recomendaciones ──
+  alertRow:   { flexDirection: 'row', marginBottom: 4, paddingLeft: 4 },
+  alertMarker:{ width: 14, fontSize: 9, color: C.alertRed, fontFamily: 'Helvetica-Bold' },
+  alertText:  { flex: 1, fontSize: 9, color: C.textMid },
+  recRow:     { flexDirection: 'row', marginBottom: 4, paddingLeft: 4 },
+  recMarker:  { width: 14, fontSize: 9, color: C.recGreen, fontFamily: 'Helvetica-Bold' },
+  recText:    { flex: 1, fontSize: 9, color: C.textMid },
 
-  // Placeholder (sin dato)
-  placeholder: {
-    color: '#888',
-    fontStyle: 'italic',
-  },
-
-  // Tabla compacta (SEIA / MOP)
-  compactHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#3a3a3a',
-    color: '#fff',
-    paddingVertical: 4,
+  // ── Hitos ──
+  hitosHdr: {
+    flexDirection:     'row',
+    backgroundColor:   '#7c3f00',
+    paddingVertical:   4,
     paddingHorizontal: 4,
-    marginTop: 6,
+    marginTop:         4,
   },
-  compactRow: {
-    flexDirection: 'row',
+  hitosRow: {
+    flexDirection:     'row',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
-    paddingVertical: 3,
+    borderBottomColor: C.border,
+    paddingVertical:   3,
     paddingHorizontal: 4,
   },
-  compactRowAlt: { backgroundColor: '#f7f7f7' },
-  colNombre:    { flex: 1,      fontSize: 7, paddingRight: 4 },
-  colEstado:    { width: '18%', fontSize: 7 },
-  colInversion: { width: '15%', fontSize: 7, textAlign: 'right' },
-  colFecha:     { width: '13%', fontSize: 7, textAlign: 'center' },
-  colServicio:  { width: '22%', fontSize: 7, paddingRight: 4 },
-  colEtapa:     { width: '14%', fontSize: 7 },
-  compactHeaderText: { color: '#fff', fontSize: 7, fontFamily: 'Helvetica-Bold' },
-  subNote: { fontSize: 8, color: '#555', fontStyle: 'italic', marginBottom: 4 },
+  hitosRowAlt:    { backgroundColor: C.bg },
+  hitosHdrTxt:    { color: C.white, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
+  hitosColNombre: { flex: 1, fontSize: 7.5, paddingRight: 4 },
+  hitosColHito:   { flex: 1, fontSize: 7.5, paddingRight: 4 },
+  hitosColFecha:  { width: '14%', fontSize: 7.5, textAlign: 'center' },
 
-  // Tabla resumen por eje
-  summaryHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
-    paddingVertical: 4,
+  // ── Annex ──
+  annexHdr: {
+    flexDirection:     'row',
+    backgroundColor:   C.navy,
+    paddingVertical:   4,
     paddingHorizontal: 5,
-    marginTop: 8,
+    marginTop:         6,
   },
-  summaryRow: {
-    flexDirection: 'row',
+  annexRow: {
+    flexDirection:     'row',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
-    paddingVertical: 4,
+    borderBottomColor: C.border,
+    paddingVertical:   3,
     paddingHorizontal: 5,
   },
-  summaryRowAlt: { backgroundColor: '#f7f7f7' },
-  sumColEje:     { flex: 1,      fontSize: 8, paddingRight: 4 },
-  sumColTotal:   { width: '8%',  fontSize: 8, textAlign: 'center' },
-  sumColSem:     { width: '8%',  fontSize: 8, textAlign: 'center' },
-  sumColAvance:  { width: '12%', fontSize: 8, textAlign: 'center' },
-  summaryHeaderText: { color: '#fff', fontSize: 8, fontFamily: 'Helvetica-Bold' },
+  annexRowAlt:  { backgroundColor: C.bg },
+  annexColLabel:{ flex: 1,      fontSize: 8, color: C.textMid },
+  annexColValue:{ width: '35%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.textDark, textAlign: 'right' },
+  annexHdrTxt:  { color: C.white, fontSize: 8, fontFamily: 'Helvetica-Bold' },
 
-  // Detalle agrupado por eje
-  ejeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2d3748',
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    marginTop: 10,
-  },
-  ejeHeaderText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
-    flex: 1,
-  },
-  ejeHeaderCount: {
-    color: '#cbd5e0',
-    fontSize: 8,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#e8e8e8',
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-  },
-  detailRowAlt: { backgroundColor: '#f9f9f9' },
-  detColGob:     { width: '13%', fontSize: 8 },
-  detColSem:     { width: '15%', fontSize: 8 },
-  detColNombre:  { flex: 1,      fontSize: 8, paddingRight: 4 },
-  detColPrior:   { width: '10%', fontSize: 8, textAlign: 'center' },
-  detColAvance:  { width: '9%',  fontSize: 8, textAlign: 'center' },
-  tableHeaderText: { color: '#fff', fontSize: 8, fontFamily: 'Helvetica-Bold' },
-
-  // Footer
+  // ── Footer ──
   footer: {
     position: 'absolute',
-    bottom: 30,
-    left: 60,
-    right: 60,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 0.5,
-    borderTopColor: '#bbb',
-    paddingTop: 6,
+    bottom:   0,
+    left:     0,
+    right:    0,
   },
-  footerText: {
-    fontSize: 8,
-    color: '#888',
+  footerNavy:  { height: 3, backgroundColor: C.navy },
+  footerRed:   { height: 3, backgroundColor: C.red },
+  footerBrand: {
+    fontSize:        7.5,
+    fontFamily:      'Helvetica-Bold',
+    color:           C.navy,
+    textAlign:       'center',
+    letterSpacing:   1.5,
+    paddingVertical: 3,
+    backgroundColor: C.white,
   },
+
+  placeholder: { fontSize: 8.5, color: C.textLight, fontStyle: 'italic' },
 })
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function tr(str: string, max: number): string {
+  return str.length > max ? str.slice(0, max - 1) + '…' : str
+}
+
+function n(val?: number | null): string | null {
+  if (val == null) return null
+  return val.toLocaleString('es-CL')
+}
+
+function pct(val?: number | null): string | null {
+  if (val == null) return null
+  return `${String(val).replace('.', ',')}%`
+}
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', {
+      day: '2-digit', month: 'short', year: '2-digit',
+    })
+  } catch { return iso.slice(0, 10) }
+}
+
+function fmtSeia(mm?: number | null): string {
+  if (mm == null) return '—'
+  if (mm >= 1_000) return `USD ${(mm / 1_000).toFixed(1)}B`
+  return `USD ${mm.toFixed(0)}M`
+}
+
+function fmtMop(miles?: number | null): string {
+  if (miles == null) return '—'
+  if (miles >= 1_000_000) return `$${(miles / 1_000_000).toFixed(1)}B`
+  if (miles >= 1_000)     return `$${(miles / 1_000).toFixed(0)}M`
+  return `$${miles.toLocaleString('es-CL')} mil`
+}
+
+function semLabel(sem: string | null): string {
+  if (sem === 'verde') return '● Verde'
+  if (sem === 'ambar') return '◑ Ámbar'
+  if (sem === 'rojo')  return '○ Rojo'
+  return '  —'
+}
+
+function regionFullName(region: Region): string {
+  const OVERRIDES: Record<string, string> = {
+    RM:  'Región Metropolitana de Santiago',
+    XI:  'Región de Aysén del Gral. Carlos Ibáñez del Campo',
+    XII: 'Región de Magallanes y de la Antártica Chilena',
+  }
+  return OVERRIDES[region.cod] ?? `Región de ${region.nombre}`
+}
+
+function ejeNum(eje: string): number {
+  const m = eje.match(/\d+/)
+  return m ? parseInt(m[0], 10) : 99
+}
+
+const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f']
+
 function Bullet({ children }: { children: string }) {
   return (
     <View style={s.bulletRow}>
@@ -260,397 +401,452 @@ function Bullet({ children }: { children: string }) {
   )
 }
 
-function DataBullet({ label, value }: { label: string; value: string | number | null | undefined }) {
-  if (value === null || value === undefined || value === '') {
-    return (
-      <View style={s.bulletRow}>
-        <Text style={s.bulletDot}>•</Text>
-        <Text style={[s.bulletText, s.placeholder]}>{label}: [sin datos]</Text>
-      </View>
-    )
-  }
-  return (
-    <View style={s.bulletRow}>
-      <Text style={s.bulletDot}>•</Text>
-      <Text style={s.bulletText}>{label}: {value}</Text>
-    </View>
-  )
-}
+// ── Props ────────────────────────────────────────────────────────────────────
 
-function SectionTitle({ num, title }: { num: string; title: string }) {
-  return (
-    <Text style={s.sectionTitle}>
-      {num}.   {title}
-    </Text>
-  )
-}
-
-// Official full region name: most use "Región de X", exceptions handled explicitly
-function regionFullName(region: Region): string {
-  const OVERRIDES: Record<string, string> = {
-    RM:   'Región Metropolitana de Santiago',
-    XI:   'Región de Aysén del General Carlos Ibáñez del Campo',
-    XII:  'Región de Magallanes y de la Antártica Chilena',
-  }
-  return OVERRIDES[region.cod] ?? `Región de ${region.nombre}`
-}
-
-// Format number with thousands separator (e.g. 1234567 → "1.234.567")
-function n(val: number | null | undefined): string | null {
-  if (val === null || val === undefined) return null
-  return val.toLocaleString('es-CL')
-}
-
-// Format percentage (e.g. 12.5 → "12,5%")
-function pct(val: number | null | undefined): string | null {
-  if (val === null || val === undefined) return null
-  return `${String(val).replace('.', ',')}%`
-}
-
-function truncStr(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max) + '…' : s
-}
-
-function fmtMesAnio(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso + 'T12:00:00')
-  return new Intl.DateTimeFormat('es-CL', { month: 'short', year: 'numeric' }).format(d)
-}
-
-function fmtInversionSeia(mm: number | null | undefined): string {
-  if (mm === null || mm === undefined) return '—'
-  if (mm >= 1000) return `$${(mm / 1000).toFixed(1)} MM MM$`
-  return `$${mm.toFixed(1)} MM$`
-}
-
-function fmtInversionMop(miles: number | null | undefined): string {
-  if (miles === null || miles === undefined) return '—'
-  if (miles >= 1_000_000) return `$${(miles / 1_000_000).toFixed(1)} MM MM$`
-  if (miles >= 1_000)     return `$${(miles / 1_000).toFixed(0)} M MM$`
-  return `$${miles.toLocaleString('es-CL')} miles`
-}
-
-function abrevServicio(s: string | null | undefined): string {
-  if (!s) return '—'
-  return s.replace('Dirección de ', 'Dir. ').replace('Subdirección de ', 'Sub. ')
-}
-
-// Semáforo text indicator for PDF (no colors in react-pdf without SVG)
-function semLabel(sem: string | null): string {
-  if (sem === 'verde') return '● Verde'
-  if (sem === 'ambar') return '◑ Ambar'
-  if (sem === 'rojo')  return '○ Rojo'
-  return '  —'
-}
-
-// Short eje label: strip "Eje N: " prefix if present
-function ejeShort(eje: string): string {
-  return eje.replace(/^Eje \d+:\s*/i, '')
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 type Props = {
-  region: Region
-  projects: Iniciativa[]
-  metrics?: RegionMetrics | null
-  seiaProjects?: SeiaProject[] | null
-  mopProjects?: MopProject[] | null
-  fecha: string  // e.g. "Abril 2026"
+  region:       Region
+  projects:     Iniciativa[]
+  metrics?:     RegionMetrics | null
+  seiaProjects?:SeiaProject[]  | null
+  mopProjects?: MopProject[]   | null
+  fecha:        string
+  aiContent?:   MinutaCompletaContent | null | unknown
 }
 
-const EJE_PRIORITY_ORDER = [
-  'Eje 1: Infraestructura y Conectividad',
-  'Eje 2: Energía y Medio Ambiente',
-  'Eje 3: Salud y Servicios Básicos',
-  'Eje 4: Seguridad y Soberanía',
-  'Eje 5: Desarrollo Productivo e Innovación',
-  'Eje 6: Familia, Educación y Equidad Territorial',
-]
+// ── Component ────────────────────────────────────────────────────────────────
 
-export default function MinutaDocument({ region, projects, metrics, seiaProjects, mopProjects, fecha }: Props) {
-  const alta  = projects.filter(p => p.prioridad === 'Alta')
-  const media = projects.filter(p => p.prioridad === 'Media')
+export default function MinutaDocument({
+  region, projects, metrics, seiaProjects, mopProjects, fecha, aiContent,
+}: Props) {
+
+  const ai = (
+    aiContent &&
+    typeof aiContent === 'object' &&
+    'cifras' in aiContent
+  ) ? aiContent as MinutaCompletaContent : null
+
   const m = metrics ?? null
 
-  // Sort by eje order first, then Alta before Media within each eje
+  // Sort projects by eje number, then prioridad, then n
   const sorted = [...projects].sort((a, b) => {
-    const ejeA = EJE_PRIORITY_ORDER.indexOf(a.eje)
-    const ejeB = EJE_PRIORITY_ORDER.indexOf(b.eje)
-    if (ejeA !== ejeB) return (ejeA === -1 ? 999 : ejeA) - (ejeB === -1 ? 999 : ejeB)
+    const na = ejeNum(a.eje), nb = ejeNum(b.eje)
+    if (na !== nb) return na - nb
     if (a.prioridad !== b.prioridad) return a.prioridad === 'Alta' ? -1 : 1
     return a.n - b.n
   })
+
+  const ejes = Array.from(new Set(sorted.map(p => p.eje)))
+
+  // Próximos hitos
+  const hitos = sorted
+    .filter(p => p.proximo_hito && p.fecha_proximo_hito)
+    .sort((a, b) => (a.fecha_proximo_hito ?? '') < (b.fecha_proximo_hito ?? '') ? -1 : 1)
+    .slice(0, 10)
+
+  // GPS combined (SEIA top 5 + MOP top 5)
+  const seiaTop = (seiaProjects ?? []).slice(0, 5)
+  const mopTop  = (mopProjects  ?? []).slice(0, 5)
+  const hasGps  = seiaTop.length > 0 || mopTop.length > 0
+
+  // Summary stats
+  const totalInit = projects.length
+  const avgPct    = totalInit
+    ? Math.round(projects.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / totalInit)
+    : 0
+  const totalRojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
+  const totalAmbar = projects.filter(p => p.estado_semaforo === 'ambar').length
+  const totalVerde = projects.filter(p => p.estado_semaforo === 'verde').length
+
+  // Cifras fallback (from metrics)
+  const cifraFallback: { label: string; val: string | null }[] = [
+    { label: 'PIB regional',                  val: m?.pib_regional != null ? `${n(m.pib_regional)} MM$` : null },
+    { label: '% PIB nacional',                val: pct(m?.pct_pib_nacional) },
+    { label: 'Variación actividad económica', val: m?.variacion_interanual != null ? `${m.variacion_interanual}%` : null },
+    { label: 'Tasa desocupación',             val: pct(m?.tasa_desocupacion) },
+    { label: 'Tasa participación laboral',    val: pct(m?.tasa_participacion_laboral) },
+    { label: 'Ocupación informal',            val: pct(m?.tasa_ocupacion_informal) },
+    { label: 'Pobreza por ingresos',          val: pct(m?.pct_pobreza_ingresos) },
+    { label: 'Pobreza multidimensional',      val: pct(m?.pct_pobreza_multidimensional) },
+    { label: 'Déficit habitacional',          val: m?.deficit_habitacional != null ? n(m.deficit_habitacional) : null },
+    { label: 'Hogares víctimas DMCS',         val: pct(m?.pct_hogares_victimas_dmcs) },
+    { label: 'Sectores productivos',          val: m?.sectores_productivos_principales ?? null },
+  ]
+
+  // Annex indicators
+  const annexRows: { label: string; val: string }[] = ([
+    ['Población total',              m?.poblacion_total      != null ? `${n(m.poblacion_total)} hab.` : '—'],
+    ['Superficie (km²)',             m?.superficie_km2        != null ? `${n(m.superficie_km2)} km²` : '—'],
+    ['Comunas',                      m?.comunas_n             != null ? String(m.comunas_n) : '—'],
+    ['PIB regional (MM$)',           m?.pib_regional          != null ? n(m.pib_regional) ?? '—' : '—'],
+    ['% PIB nacional',               pct(m?.pct_pib_nacional) ?? '—'],
+    ['Variación actividad económica',m?.variacion_interanual  != null ? `${m.variacion_interanual}%` : '—'],
+    ['Tasa desocupación',            pct(m?.tasa_desocupacion) ?? '—'],
+    ['Participación laboral',        pct(m?.tasa_participacion_laboral) ?? '—'],
+    ['Ocupación informal',           pct(m?.tasa_ocupacion_informal) ?? '—'],
+    ['Pobreza por ingresos',         pct(m?.pct_pobreza_ingresos) ?? '—'],
+    ['Pobreza extrema',              pct(m?.pct_pobreza_extrema) ?? '—'],
+    ['Pobreza multidimensional',     pct(m?.pct_pobreza_multidimensional) ?? '—'],
+    ['Déficit habitacional',         m?.deficit_habitacional  != null ? n(m.deficit_habitacional) ?? '—' : '—'],
+    ['Hacinamiento (%)',             pct(m?.pct_hacinamiento) ?? '—'],
+    ['Lista de espera (salud)',      m?.lista_espera_n        != null ? n(m.lista_espera_n) ?? '—' : '—'],
+    ['Camas hosp. / 1.000 hab.',     m?.camas_por_1000_hab    != null ? String(m.camas_por_1000_hab) : '—'],
+    ['Población FONASA (%)',         pct(m?.pct_fonasa) ?? '—'],
+    ['Años escolaridad promedio',    m?.anios_escolaridad_promedio != null ? `${m.anios_escolaridad_promedio} años` : '—'],
+    ['Alfabetismo',                  pct(m?.tasa_alfabetismo) ?? '—'],
+    ['Hogares víctimas DMCS',        pct(m?.pct_hogares_victimas_dmcs) ?? '—'],
+    ['Percepción de inseguridad',    pct(m?.pct_percepcion_inseguridad) ?? '—'],
+    ['Tasa denuncias / 100k hab.',   m?.tasa_denuncias_100k   != null ? String(m.tasa_denuncias_100k) : '—'],
+  ] as [string, string][]).map(([label, val]) => ({ label, val }))
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
 
-        {/* ── Header institucional ── */}
-        <View style={s.headerBand}>
-          <Text style={s.headerRepublica}>República de Chile</Text>
-          <Text style={s.headerMinisterio}>Ministerio del Interior y Seguridad Pública</Text>
-          <Text style={s.headerDivision}>División de Coordinación Interregional</Text>
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* HEADER                                                              */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <View style={s.header}>
+          <View style={s.headerLeft}>
+            <View style={s.logoPlaceholder}>
+              <Text style={s.logoPlaceholderText}>GOB</Text>
+            </View>
+            <View style={s.orgBlock}>
+              <Text style={s.orgBold}>Ministerio del Interior y Seguridad Pública</Text>
+              <Text style={s.orgLight}>División de Coordinación Interregional</Text>
+              <Text style={s.orgLight}>República de Chile</Text>
+            </View>
+          </View>
+          <Text style={s.headerDate}>{fecha}</Text>
         </View>
-
         <View style={s.divider} />
 
-        {/* ── Título del documento ── */}
-        <View style={s.minutaBlock}>
-          <Text style={s.minutaLabel}>Minuta Ejecutiva · Uso Interno</Text>
-          <Text style={s.minutaTitle}>{regionFullName(region)}</Text>
-          <Text style={s.minutaSubtitle}>Informe de Prioridades Territoriales 2026–2028  ·  {fecha}</Text>
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TITLE BLOCK                                                         */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <View style={s.titleBlock}>
+          <Text style={s.titleSupra}>Informe de Avances</Text>
+          <Text style={s.titleMain}>Plan Regional de Gobierno</Text>
+          <Text style={s.titleSub}>{regionFullName(region).toUpperCase()}</Text>
+          <Text style={s.titleMeta}>
+            Actualizado al {fecha}  ·  {totalInit} iniciativas  ·  {avgPct}% avance promedio
+          </Text>
         </View>
 
-        {/* ── Ficha técnica de la región ── */}
-        <View style={s.fichaBox}>
-          <View style={s.fichaItem}>
-            <Text style={s.fichaLabel}>Capital regional</Text>
-            <Text style={s.fichaValue}>{region.capital}</Text>
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* RESUMEN EJECUTIVO (AI)                                              */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {ai?.resumen_ejecutivo ? (
+          <View style={s.resumenBox}>
+            <Text style={s.resumenLabel}>Resumen</Text>
+            <Text style={s.resumenText}>{ai.resumen_ejecutivo}</Text>
           </View>
-          <View style={s.fichaItem}>
-            <Text style={s.fichaLabel}>Zona</Text>
-            <Text style={s.fichaValue}>{region.zona}</Text>
-          </View>
-          {m?.superficie_km2 != null && (
-            <View style={s.fichaItem}>
-              <Text style={s.fichaLabel}>Superficie</Text>
-              <Text style={s.fichaValue}>{n(m.superficie_km2)} km²</Text>
-            </View>
-          )}
-          {m?.poblacion_total != null && (
-            <View style={s.fichaItem}>
-              <Text style={s.fichaLabel}>Población (Censo 2024)</Text>
-              <Text style={s.fichaValue}>{n(m.poblacion_total)} hab.</Text>
-            </View>
-          )}
-          {m?.comunas_n != null && (
-            <View style={s.fichaItem}>
-              <Text style={s.fichaLabel}>Comunas</Text>
-              <Text style={s.fichaValue}>{m.comunas_n}</Text>
-            </View>
-          )}
-          <View style={s.fichaItem}>
-            <Text style={s.fichaLabel}>Prioridades territoriales</Text>
-            <Text style={s.fichaValue}>{projects.length} iniciativas</Text>
-          </View>
-        </View>
-
-        {/* ── Intro ── */}
-        <Text style={s.intro}>
-          La presente minuta resume el estado de avance de las prioridades territoriales de la
-          {regionFullName(region)} para el período 2026–2028, junto con indicadores
-          socioeconómicos y proyectos de inversión pública relevantes en la región.
-        </Text>
-
-        {/* ── I. Geográficos ── */}
-        <SectionTitle num="I" title="Geográficos" />
-        <DataBullet label="Superficie total (km²)" value={m?.superficie_km2 != null ? n(m.superficie_km2) : null} />
-        <DataBullet label="% del territorio nacional" value={pct(m?.pct_territorio_nacional)} />
-        <Bullet>{`Capital regional: ${region.capital}`}</Bullet>
-        <DataBullet label="Número de provincias" value={m?.provincias_n} />
-        <DataBullet label="Número de comunas" value={m?.comunas_n} />
-
-        {/* ── II. Demográficos ── */}
-        <SectionTitle num="II" title="Demográficos" />
-        <DataBullet label="Población total (Censo 2024)" value={m?.poblacion_total != null ? n(m.poblacion_total) : null} />
-        <DataBullet label="Densidad poblacional (hab/km²)" value={m?.densidad_poblacional} />
-        <DataBullet label="% población urbana / rural" value={m?.pct_urbana != null && m?.pct_rural != null ? `${pct(m.pct_urbana)} / ${pct(m.pct_rural)}` : null} />
-        <DataBullet label="Promedio de edad" value={m?.promedio_edad != null ? `${m.promedio_edad} años` : null} />
-        <DataBullet label="% población inmigrante" value={pct(m?.pct_inmigrantes)} />
-        <DataBullet label="% perteneciente a pueblo indígena" value={pct(m?.pct_indigena)} />
-
-        {/* ── III. Población Vulnerable ── */}
-        <SectionTitle num="III" title="Población Vulnerable" />
-        <DataBullet label="Pobreza por ingresos (%)" value={pct(m?.pct_pobreza_ingresos)} />
-        <DataBullet label="Pobreza extrema (%)" value={pct(m?.pct_pobreza_extrema)} />
-        <DataBullet label="Pobreza multidimensional (%)" value={pct(m?.pct_pobreza_multidimensional)} />
-        <DataBullet label="Pobreza severa (%)" value={pct(m?.pct_pobreza_severa)} />
-        <DataBullet label="% hogares en tramo 40 del RSH" value={pct(m?.pct_rsh_tramo40)} />
-
-        {/* ── IV. Economía ── */}
-        <SectionTitle num="IV" title="Economía" />
-        <DataBullet label="PIB regional (miles de millones de pesos)" value={m?.pib_regional != null ? n(m.pib_regional) : null} />
-        <DataBullet label="% del PIB nacional" value={pct(m?.pct_pib_nacional)} />
-        <DataBullet label="Variación interanual actividad económica" value={m?.variacion_interanual != null ? `${m.variacion_interanual}%` : null} />
-        <DataBullet label="Tasa de desocupación (%)" value={pct(m?.tasa_desocupacion)} />
-        <DataBullet label="Tasa de participación laboral (%)" value={pct(m?.tasa_participacion_laboral)} />
-        <DataBullet label="Tasa de ocupación informal (%)" value={pct(m?.tasa_ocupacion_informal)} />
-        {m?.sectores_productivos_principales ? (
-          <Bullet>{`Sectores productivos: ${m.sectores_productivos_principales}`}</Bullet>
-        ) : (
-          <DataBullet label="Sectores productivos principales" value={null} />
-        )}
-        {m?.vocacion_regional ? (
-          <Bullet>{`Vocación regional: ${m.vocacion_regional}`}</Bullet>
         ) : null}
 
-        {/* ── V. Educación ── */}
-        <SectionTitle num="V" title="Educación" />
-        <DataBullet label="Años de escolaridad promedio" value={m?.anios_escolaridad_promedio != null ? `${m.anios_escolaridad_promedio} años` : null} />
-        <DataBullet label="Tasa de alfabetismo (15 años o más)" value={pct(m?.tasa_alfabetismo)} />
-        <DataBullet label="Matrícula escolar total" value={m?.matricula_escolar_total != null ? n(m.matricula_escolar_total) : null} />
-        <DataBullet label="Cobertura educación parvularia (%)" value={pct(m?.cobertura_parvularia_pct)} />
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* COMPROMISOS DEL PLAN REGIONAL (AI — extraídos del PDF)             */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {ai?.compromisos_plan?.length ? (
+          <View>
+            <Text style={[s.sectionTitle, { marginTop: 4 }]}>
+              Compromisos del Plan Regional de Gobierno
+            </Text>
+            {ai.compromisos_plan.map((c, i) => (
+              <Bullet key={i}>{c}</Bullet>
+            ))}
+          </View>
+        ) : null}
 
-        {/* ── VI. Salud ── */}
-        <SectionTitle num="VI" title="Salud" />
-        <DataBullet label="Población FONASA (%)" value={pct(m?.pct_fonasa)} />
-        <DataBullet label="Hospitales / establecimientos hospitalarios" value={m?.hospitales_n} />
-        <DataBullet label="Camas hospitalarias por 1.000 hab." value={m?.camas_por_1000_hab} />
-        <DataBullet label="Lista de espera (N° personas)" value={m?.lista_espera_n != null ? n(m.lista_espera_n) : null} />
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* I. PRINCIPALES CIFRAS EN LA REGIÓN                                 */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>I.   Principales cifras en la región</Text>
 
-        {/* ── VII. Vivienda ── */}
-        <SectionTitle num="VII" title="Vivienda" />
-        <DataBullet label="Déficit habitacional" value={m?.deficit_habitacional != null ? n(m.deficit_habitacional) : null} />
-        <DataBullet label="Hogares con hacinamiento (%)" value={pct(m?.pct_hacinamiento)} />
-        <DataBullet label="% acceso a red pública de agua" value={pct(m?.pct_acceso_agua_publica)} />
+        {ai?.cifras?.length ? (
+          ai.cifras.map((c, i) => (
+            <View key={i} style={s.subRow}>
+              <Text style={s.subLetter}>{LETTERS[i] ?? String(i + 1)}.</Text>
+              <View style={s.subContent}>
+                <Text style={s.subTitle}>{c.titulo}:</Text>
+                <Text style={s.subText}>{c.texto}</Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View>
+            {cifraFallback.filter(r => r.val !== null).map((r, i) => (
+              <Bullet key={i}>{`${r.label}: ${r.val}`}</Bullet>
+            ))}
+            {cifraFallback.every(r => r.val === null) && (
+              <Text style={s.placeholder}>
+                Indicadores socioeconómicos no disponibles para esta región.
+              </Text>
+            )}
+          </View>
+        )}
 
-        {/* ── VIII. Seguridad ── */}
-        <SectionTitle num="VIII" title="Seguridad" />
-        <DataBullet label="Hogares víctimas DMCS (%)" value={pct(m?.pct_hogares_victimas_dmcs)} />
-        <DataBullet label="Percepción de inseguridad (%)" value={pct(m?.pct_percepcion_inseguridad)} />
-        <DataBullet label="Tasa de denuncias por 100.000 hab." value={m?.tasa_denuncias_100k} />
-        <DataBullet label="Tasa de registro delitos por 100.000 hab." value={m?.tasa_delitos_100k} />
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* II. ESTADO DEL PLAN REGIONAL                                        */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>II.   Estado del Plan Regional</Text>
 
-        {/* ── IX. Prioridades Territoriales ── */}
-        <SectionTitle num="IX" title="Prioridades Territoriales 2026–2028" />
-        <Bullet>{`Total: ${projects.length} iniciativas (${alta.length} alta prioridad, ${media.length} media)`}</Bullet>
+        <View>
+          {/* Header row */}
+          <View style={s.statsHdr}>
+            <Text style={[s.statsColEje, s.statsHdrTxt]}>Eje Estratégico</Text>
+            <Text style={[s.statsColN,   s.statsHdrTxt, { textAlign: 'center' }]}>N°</Text>
+            <Text style={[s.statsColPct, s.statsHdrTxt, { textAlign: 'center' }]}>Avance</Text>
+            <Text style={[s.statsColR,   s.statsHdrTxt, { color: C.white }]}>Rojo</Text>
+            <Text style={[s.statsColA,   s.statsHdrTxt, { color: C.white }]}>Ámbar</Text>
+            <Text style={[s.statsColV,   s.statsHdrTxt, { color: C.white }]}>Verde</Text>
+          </View>
 
-        {/* ── IX-A. Tabla resumen ejecutivo por eje ── */}
-        <Text style={[s.sectionTitle, { fontSize: 9, marginTop: 10 }]}>
-          Resumen por Eje Estratégico
-        </Text>
-        <View style={s.summaryHeader}>
-          <Text style={[s.sumColEje,    s.summaryHeaderText]}>Eje Regional</Text>
-          <Text style={[{ width: '13%', fontSize: 8 }, s.summaryHeaderText]}>Eje Gobierno</Text>
-          <Text style={[s.sumColTotal,  s.summaryHeaderText]}>Total</Text>
-          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Rojo</Text>
-          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Ambar</Text>
-          <Text style={[s.sumColSem,    s.summaryHeaderText]}>Verde</Text>
-          <Text style={[s.sumColSem,    s.summaryHeaderText]}>S/E</Text>
-          <Text style={[s.sumColAvance, s.summaryHeaderText]}>Avance prom.</Text>
-        </View>
-        {(() => {
-          const ejes = Array.from(new Set(sorted.map(p => p.eje)))
-          return ejes.map((eje, i) => {
+          {ejes.map((eje, i) => {
             const items = sorted.filter(p => p.eje === eje)
-            const rojo  = items.filter(p => p.estado_semaforo === 'rojo').length
-            const ambar = items.filter(p => p.estado_semaforo === 'ambar').length
-            const verde = items.filter(p => p.estado_semaforo === 'verde').length
-            const gris  = items.filter(p => p.estado_semaforo === 'gris').length
-            const avgAvance = Math.round(items.reduce((sum, p) => sum + (p.pct_avance ?? 0), 0) / items.length)
+            const r     = items.filter(p => p.estado_semaforo === 'rojo').length
+            const a     = items.filter(p => p.estado_semaforo === 'ambar').length
+            const v     = items.filter(p => p.estado_semaforo === 'verde').length
+            const avg   = Math.round(items.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / items.length)
             return (
-              <View key={eje} style={[s.summaryRow, i % 2 === 1 ? s.summaryRowAlt : {}]}>
-                <Text style={s.sumColEje}>{ejeShort(eje)}</Text>
-                <Text style={{ width: '13%', fontSize: 8 }}>{items[0]?.eje_gobierno ?? '—'}</Text>
-                <Text style={s.sumColTotal}>{items.length}</Text>
-                <Text style={s.sumColSem}>{rojo  > 0 ? rojo  : '—'}</Text>
-                <Text style={s.sumColSem}>{ambar > 0 ? ambar : '—'}</Text>
-                <Text style={s.sumColSem}>{verde > 0 ? verde : '—'}</Text>
-                <Text style={s.sumColSem}>{gris  > 0 ? gris  : '—'}</Text>
-                <Text style={s.sumColAvance}>{avgAvance}%</Text>
+              <View key={eje} style={[s.statsRow, i % 2 === 1 ? s.statsRowAlt : {}]}>
+                <Text style={s.statsColEje}>{tr(eje, 52)}</Text>
+                <Text style={[s.statsColN,  { textAlign: 'center' }]}>{items.length}</Text>
+                <Text style={[s.statsColPct,{ textAlign: 'center' }]}>{avg}%</Text>
+                <Text style={s.statsColR}>{r > 0 ? r : '—'}</Text>
+                <Text style={s.statsColA}>{a > 0 ? a : '—'}</Text>
+                <Text style={s.statsColV}>{v > 0 ? v : '—'}</Text>
               </View>
             )
-          })
-        })()}
+          })}
 
-        {/* ── IX-B. Detalle agrupado por eje ── */}
-        <Text style={[s.sectionTitle, { fontSize: 9, marginTop: 14 }]}>
-          Detalle de Iniciativas por Eje
+          {/* Total row */}
+          <View style={[s.statsRow, s.statsRowTotal]}>
+            <Text style={[s.statsColEje, { fontFamily: 'Helvetica-Bold' }]}>TOTAL</Text>
+            <Text style={[s.statsColN,   { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{totalInit}</Text>
+            <Text style={[s.statsColPct, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{avgPct}%</Text>
+            <Text style={[s.statsColR,   { fontFamily: 'Helvetica-Bold' }]}>{totalRojo  > 0 ? totalRojo  : '—'}</Text>
+            <Text style={[s.statsColA,   { fontFamily: 'Helvetica-Bold' }]}>{totalAmbar > 0 ? totalAmbar : '—'}</Text>
+            <Text style={[s.statsColV,   { fontFamily: 'Helvetica-Bold' }]}>{totalVerde > 0 ? totalVerde : '—'}</Text>
+          </View>
+        </View>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* III. PRINCIPALES AVANCES DEL PLAN                                  */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>III.   Principales avances del Plan</Text>
+
+        {ejes.map(eje => {
+          const items  = sorted.filter(p => p.eje === eje)
+          const r      = items.filter(p => p.estado_semaforo === 'rojo').length
+          const a      = items.filter(p => p.estado_semaforo === 'ambar').length
+          const v      = items.filter(p => p.estado_semaforo === 'verde').length
+          const avg    = Math.round(items.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / items.length)
+          // Normalized lookup (handles minor name differences between AI output and data)
+          const aiEje  = ai?.avances_ejes?.[eje] ??
+            Object.entries(ai?.avances_ejes ?? {})
+              .find(([k]) => k.toLowerCase().trim() === eje.toLowerCase().trim())?.[1]
+
+          return (
+            <View key={eje}>
+              {/* Eje band */}
+              <View style={s.ejeHeader}>
+                <Text style={s.ejeHeaderText}>
+                  {eje.toUpperCase()}  ·  {items.length} iniciativas  ·  {avg}% avance promedio
+                  {r > 0 ? `  ·  ${r} rojo`  : ''}
+                  {a > 0 ? `  ·  ${a} ámbar` : ''}
+                  {v > 0 ? `  ·  ${v} verde` : ''}
+                </Text>
+              </View>
+
+              {/* AI resumen italics */}
+              {aiEje?.resumen ? (
+                <View style={s.ejeResumenBox}>
+                  <Text style={s.ejeResumenText}>{aiEje.resumen}</Text>
+                </View>
+              ) : null}
+
+              {/* AI logros bullets OR fallback mini table */}
+              {aiEje?.logros?.length ? (
+                <View style={{ paddingLeft: 4, paddingTop: 3, paddingBottom: 6 }}>
+                  {aiEje.logros.map((logro, i) => (
+                    <Bullet key={i}>{logro}</Bullet>
+                  ))}
+                </View>
+              ) : (
+                <View>
+                  <View style={s.miniHdr}>
+                    <Text style={[s.miniColNombre, s.miniHdrTxt]}>Iniciativa</Text>
+                    <Text style={[s.miniColSem,    s.miniHdrTxt]}>Estado</Text>
+                    <Text style={[s.miniColPct,    s.miniHdrTxt]}>Avance</Text>
+                  </View>
+                  {items.slice(0, 20).map((p, i) => (
+                    <View key={p.n} style={[s.miniRow, i % 2 === 1 ? s.miniRowAlt : {}]}>
+                      <Text style={s.miniColNombre}>{tr(p.nombre, 65)}</Text>
+                      <Text style={s.miniColSem}>{semLabel(p.estado_semaforo)}</Text>
+                      <Text style={s.miniColPct}>{p.pct_avance ?? 0}%</Text>
+                    </View>
+                  ))}
+                  {items.length > 20 && (
+                    <Text style={[s.placeholder, { paddingLeft: 5, paddingTop: 2 }]}>
+                      … y {items.length - 20} iniciativas adicionales
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          )
+        })}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* IV. PROYECTOS DE INVERSIÓN PRIVADA (GPS)                            */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>IV.   Proyectos de Inversión Privada (GPS)</Text>
+
+        <Text style={s.gpsIntro}>
+          {ai?.gps_narrativa
+            ? ai.gps_narrativa
+            : `La región registra ${seiaTop.length} proyecto${seiaTop.length !== 1 ? 's' : ''} en evaluación ambiental (SEIA) y ${mopTop.length} obra${mopTop.length !== 1 ? 's' : ''} del Ministerio de Obras Públicas (MOP) en el período vigente.`}
         </Text>
-        {(() => {
-          const ejes = Array.from(new Set(sorted.map(p => p.eje)))
-          return ejes.map(eje => {
-            const items = sorted.filter(p => p.eje === eje)
-            return (
-              <View key={eje}>
-                <View style={s.ejeHeader}>
-                  <Text style={s.ejeHeaderText}>{eje}</Text>
-                  <Text style={s.ejeHeaderCount}>{items.length} iniciativa{items.length !== 1 ? 's' : ''}</Text>
+
+        {hasGps ? (
+          <View>
+            <View style={s.gpsHdr}>
+              <Text style={[s.gpsColFuente, s.gpsHdrTxt]}>Fuente</Text>
+              <Text style={[s.gpsColNombre, s.gpsHdrTxt]}>Proyecto</Text>
+              <Text style={[s.gpsColSector, s.gpsHdrTxt]}>Sector / Servicio</Text>
+              <Text style={[s.gpsColInv,    s.gpsHdrTxt]}>Inversión</Text>
+              <Text style={[s.gpsColEtapa,  s.gpsHdrTxt]}>Etapa</Text>
+            </View>
+            {seiaTop.map((p, i) => (
+              <View key={`seia-${p.id}`} style={[s.gpsRow, i % 2 === 1 ? s.gpsRowAlt : {}]}>
+                <Text style={s.gpsColFuente}>SEIA</Text>
+                <Text style={s.gpsColNombre}>{tr(p.nombre, 55)}</Text>
+                <Text style={s.gpsColSector}>{tr(p.tipo ?? '—', 22)}</Text>
+                <Text style={s.gpsColInv}>{fmtSeia(p.inversion_mm)}</Text>
+                <Text style={s.gpsColEtapa}>{tr(p.estado ?? '—', 18)}</Text>
+              </View>
+            ))}
+            {mopTop.map((p, i) => (
+              <View key={`mop-${p.cod_p}`} style={[s.gpsRow, (seiaTop.length + i) % 2 === 1 ? s.gpsRowAlt : {}]}>
+                <Text style={s.gpsColFuente}>MOP</Text>
+                <Text style={s.gpsColNombre}>{tr(p.nombre, 55)}</Text>
+                <Text style={s.gpsColSector}>{tr(p.servicio ?? '—', 22)}</Text>
+                <Text style={s.gpsColInv}>{fmtMop(p.inversion_miles)}</Text>
+                <Text style={s.gpsColEtapa}>{tr(p.etapa ?? '—', 18)}</Text>
+              </View>
+            ))}
+            <Text style={s.gpsLabel}>
+              Fuente: SEIA — Servicio de Evaluación Ambiental | MOP — Ministerio de Obras Públicas
+            </Text>
+          </View>
+        ) : (
+          <Text style={s.placeholder}>
+            Sin proyectos de inversión privada registrados para esta región.
+          </Text>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* V. ALERTAS Y RECOMENDACIONES                                        */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {(ai?.alertas_criticas?.length || ai?.recomendaciones?.length || sorted.some(p => p.estado_semaforo === 'rojo')) ? (
+          <View>
+            <Text style={s.sectionTitle}>V.   Alertas y Recomendaciones</Text>
+
+            {ai?.alertas_criticas?.length ? (
+              ai.alertas_criticas.map((alerta, i) => (
+                <View key={i} style={s.alertRow}>
+                  <Text style={s.alertMarker}>⚠</Text>
+                  <Text style={s.alertText}>{alerta}</Text>
                 </View>
-                {/* Detail column headers */}
-                <View style={[s.detailRow, { backgroundColor: '#e2e8f0' }]}>
-                  <Text style={[s.detColGob,    s.tableHeaderText, { color: '#374151' }]}>Eje Gobierno</Text>
-                  <Text style={[s.detColSem,    s.tableHeaderText, { color: '#374151' }]}>Estado actual</Text>
-                  <Text style={[s.detColNombre,  s.tableHeaderText, { color: '#374151' }]}>Iniciativa</Text>
-                  <Text style={[s.detColPrior,   s.tableHeaderText, { color: '#374151' }]}>Prioridad</Text>
-                  <Text style={[s.detColAvance,  s.tableHeaderText, { color: '#374151' }]}>Avance</Text>
+              ))
+            ) : (
+              sorted.filter(p => p.estado_semaforo === 'rojo').slice(0, 5).map((p, i) => (
+                <View key={i} style={s.alertRow}>
+                  <Text style={s.alertMarker}>⚠</Text>
+                  <Text style={s.alertText}>
+                    {p.nombre} ({p.ministerio ?? '—'}) — avance {p.pct_avance ?? 0}%
+                    {p.etapa_actual ? `, etapa: ${p.etapa_actual}` : ''}
+                  </Text>
                 </View>
-                {items.map((p, i) => (
-                  <View key={p.n} style={[s.detailRow, i % 2 === 1 ? s.detailRowAlt : {}]}>
-                    <Text style={s.detColGob}>{p.eje_gobierno ?? '—'}</Text>
-                    <Text style={s.detColSem}>{semLabel(p.estado_semaforo)}</Text>
-                    <Text style={s.detColNombre}>{p.nombre}</Text>
-                    <Text style={s.detColPrior}>{p.prioridad}</Text>
-                    <Text style={s.detColAvance}>{p.pct_avance ?? 0}%</Text>
+              ))
+            )}
+
+            {ai?.recomendaciones?.length ? (
+              <View style={{ marginTop: 6 }}>
+                {ai.recomendaciones.map((rec, i) => (
+                  <View key={i} style={s.recRow}>
+                    <Text style={s.recMarker}>→</Text>
+                    <Text style={s.recText}>{rec}</Text>
                   </View>
                 ))}
               </View>
-            )
-          })
-        })()}
+            ) : null}
+          </View>
+        ) : null}
 
-        {/* ── X. Proyectos SEIA ── */}
-        <SectionTitle num="X" title="Proyectos en Evaluación Ambiental (SEIA)" />
-        {seiaProjects && seiaProjects.length > 0 ? (
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* PRÓXIMOS HITOS                                                      */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {hitos.length > 0 && (
           <View>
-            <Text style={s.subNote}>
-              Mostrando {seiaProjects.length} proyecto{seiaProjects.length > 1 ? 's' : ''} más recientes registrados en SEIA.
-            </Text>
-            <View style={s.compactHeader}>
-              <Text style={[s.colNombre,    s.compactHeaderText]}>Nombre</Text>
-              <Text style={[s.colEstado,    s.compactHeaderText]}>Estado</Text>
-              <Text style={[s.colInversion, s.compactHeaderText]}>Inversión</Text>
-              <Text style={[s.colFecha,     s.compactHeaderText]}>Presentación</Text>
+            <Text style={[s.sectionTitle, { color: '#7c3f00' }]}>Próximos Hitos</Text>
+            <View style={s.hitosHdr}>
+              <Text style={[s.hitosColNombre, s.hitosHdrTxt]}>Iniciativa</Text>
+              <Text style={[s.hitosColHito,   s.hitosHdrTxt]}>Hito</Text>
+              <Text style={[s.hitosColFecha,  s.hitosHdrTxt]}>Fecha</Text>
             </View>
-            {seiaProjects.map((p, i) => (
-              <View key={p.id} style={[s.compactRow, i % 2 === 1 ? s.compactRowAlt : {}]}>
-                <Text style={s.colNombre}>{truncStr(p.nombre, 60)}</Text>
-                <Text style={s.colEstado}>{truncStr(p.estado ?? '—', 24)}</Text>
-                <Text style={s.colInversion}>{fmtInversionSeia(p.inversion_mm)}</Text>
-                <Text style={s.colFecha}>{fmtMesAnio(p.fecha_presentacion)}</Text>
+            {hitos.map((p, i) => (
+              <View key={p.n} style={[s.hitosRow, i % 2 === 1 ? s.hitosRowAlt : {}]}>
+                <Text style={s.hitosColNombre}>{tr(p.nombre, 45)}</Text>
+                <Text style={s.hitosColHito}>{tr(p.proximo_hito ?? '', 45)}</Text>
+                <Text style={s.hitosColFecha}>{fmtDate(p.fecha_proximo_hito)}</Text>
               </View>
             ))}
           </View>
-        ) : (
-          <Text style={s.subNote}>Sin proyectos registrados en SEIA para esta región.</Text>
         )}
 
-        {/* ── XI. Proyectos MOP ── */}
-        <SectionTitle num="XI" title="Proyectos de Obras Públicas (MOP)" />
-        {mopProjects && mopProjects.length > 0 ? (
-          <View>
-            <Text style={s.subNote}>
-              Mostrando {mopProjects.length} proyecto{mopProjects.length > 1 ? 's' : ''} registrados en MOP.
-            </Text>
-            <View style={s.compactHeader}>
-              <Text style={[s.colNombre,    s.compactHeaderText]}>Nombre</Text>
-              <Text style={[s.colServicio,  s.compactHeaderText]}>Servicio</Text>
-              <Text style={[s.colEtapa,     s.compactHeaderText]}>Etapa</Text>
-              <Text style={[s.colInversion, s.compactHeaderText]}>Inversión</Text>
-            </View>
-            {mopProjects.map((p, i) => (
-              <View key={p.cod_p} style={[s.compactRow, i % 2 === 1 ? s.compactRowAlt : {}]}>
-                <Text style={s.colNombre}>{truncStr(p.nombre, 60)}</Text>
-                <Text style={s.colServicio}>{abrevServicio(p.servicio)}</Text>
-                <Text style={s.colEtapa}>{p.etapa ?? '—'}</Text>
-                <Text style={s.colInversion}>{fmtInversionMop(p.inversion_miles)}</Text>
-              </View>
-            ))}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* ANEXO: INDICADORES REGIONALES                                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <Text style={[s.sectionTitle, { marginTop: 18 }]}>
+          Anexo.   Principales indicadores regionales
+        </Text>
+        <View style={s.annexHdr}>
+          <Text style={[s.annexColLabel, s.annexHdrTxt]}>Indicador</Text>
+          <Text style={[s.annexColValue, s.annexHdrTxt, { textAlign: 'right' }]}>Valor regional</Text>
+        </View>
+        {annexRows.map((r, i) => (
+          <View key={i} style={[s.annexRow, i % 2 === 1 ? s.annexRowAlt : {}]}>
+            <Text style={s.annexColLabel}>{r.label}</Text>
+            <Text style={s.annexColValue}>{r.val}</Text>
           </View>
-        ) : (
-          <Text style={s.subNote}>Sin proyectos registrados en MOP para esta región.</Text>
-        )}
+        ))}
+        {m?.sectores_productivos_principales ? (
+          <Text style={[s.placeholder, { paddingTop: 4, paddingLeft: 5 }]}>
+            Sectores productivos: {m.sectores_productivos_principales}
+          </Text>
+        ) : null}
+        {m?.vocacion_regional ? (
+          <Text style={[s.placeholder, { paddingLeft: 5 }]}>
+            Vocación regional: {m.vocacion_regional}
+          </Text>
+        ) : null}
 
-        {/* Footer */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* FOOTER (fixed — aparece en todas las páginas)                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>Ministerio del Interior — Uso interno</Text>
+          <View style={s.footerNavy} />
+          <View style={s.footerRed} />
           <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            style={s.footerBrand}
+            render={({ pageNumber, totalPages }) =>
+              `\u2261  GOBIERNO DE CHILE  \u2261    p. ${pageNumber} / ${totalPages}`
+            }
           />
         </View>
+
       </Page>
     </Document>
   )
