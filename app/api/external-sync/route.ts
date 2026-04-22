@@ -76,8 +76,11 @@ async function runSync() {
       const safeDiv = (a: number | null | undefined, b: number | null | undefined, scale = 100) =>
         a != null && b != null && b > 0 ? parseFloat(((a / b) * scale).toFixed(4)) : null
 
+      const hacinamiento = safeDiv(r.n_viv_hacinadas, r.n_vp_ocupada)
       const patch: Record<string, number | string | null> = {
         poblacion_total:         r.n_per ?? null,
+        pct_hombres:             safeDiv(r.n_hombres, r.n_per),
+        pct_mujeres:             safeDiv(r.n_mujeres, r.n_per),
         pct_inmigrantes:         safeDiv(r.n_inmigrantes, r.n_per),
         pct_indigena:            safeDiv(r.n_pueblos_orig, r.n_per),
         n_inmigrantes:           r.n_inmigrantes ?? null,
@@ -89,9 +92,12 @@ async function runSync() {
         n_ocupado:               r.n_ocupado ?? null,
         n_desocupado:            r.n_desocupado ?? null,
         n_deficit_cuantitativo:  r.n_deficit_cuantitativo ?? null,
-        pct_viv_hacinadas:       safeDiv(r.n_viv_hacinadas, r.n_vp_ocupada),
+        pct_viv_hacinadas:       hacinamiento,
+        pct_hacinamiento:        hacinamiento,   // alias leído por IndicadoresModal
         pct_acceso_agua_publica: safeDiv(r.n_fuente_agua_publica, r.n_vp_ocupada),
         pct_hogares_internet:    safeDiv(r.n_internet, r.n_hog),
+        pct_internet_movil:      safeDiv(r.n_internet_movil ?? null, r.n_hog),
+        pct_internet_fijo:       safeDiv(r.n_internet_fijo  ?? null, r.n_hog),
         pct_jefatura_mujer:      safeDiv(r.n_jefatura_mujer, r.n_hog),
         pct_educacion_superior:  safeDiv(r.n_cine_terciaria_maestria_doctorado, r.n_per),
         censo_updated_at:        new Date().toISOString(),
@@ -246,6 +252,8 @@ type CensoRegion = {
   n_deficit_cuantitativo: number
   n_fuente_agua_publica: number
   n_internet: number
+  n_internet_movil?: number
+  n_internet_fijo?: number
   n_jefatura_mujer: number
   prom_edad: number
   prom_escolaridad18: number

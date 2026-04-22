@@ -705,10 +705,12 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <KpiCard label="Población total"     value={num(m.poblacion_total)}                   sub="habitantes"              color={PURPLE} />
+            <KpiCard label="Hombres"              value={pct(m.pct_hombres)}                       sub={num(m.poblacion_total != null && m.pct_hombres != null ? Math.round(m.poblacion_total * m.pct_hombres / 100) : null)} color={PURPLE} />
+            <KpiCard label="Mujeres"              value={pct(m.pct_mujeres)}                       sub={num(m.poblacion_total != null && m.pct_mujeres != null ? Math.round(m.poblacion_total * m.pct_mujeres / 100) : null)} color={PURPLE} />
             <KpiCard label="Edad promedio"        value={`${fnum(m.prom_edad)} años`}              sub="promedio regional"       color={PURPLE} />
+            <KpiCard label="Mayores de 60 años"   value={pct(m.pct_edad_60_mas)}                   sub="del total regional"      color={PURPLE} />
             <KpiCard label="Inmigrantes"          value={pct(m.pct_inmigrantes)}                   sub={`${num(m.n_inmigrantes)} personas`} color={PURPLE} />
             <KpiCard label="Pueblos originarios"  value={pct(m.pct_indigena)}                      sub={`${num(m.n_pueblos_orig)} personas`} color={PURPLE} />
-            <KpiCard label="Mayores de 60 años"   value={pct(m.pct_edad_60_mas)}                   sub="del total regional"      color={PURPLE} />
             <KpiCard label="Discapacidad"         value={num(m.n_discapacidad)}                    sub="personas"                color={PURPLE} />
             <KpiCard label="Zona urbana"          value={pct(m.pct_urbana)}                        sub="de la población"         color={PURPLE} />
             <KpiCard label="Zona rural"           value={pct(m.pct_rural)}                         sub="de la población"         color={PURPLE} />

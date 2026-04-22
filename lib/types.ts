@@ -51,6 +51,8 @@ export type RegionMetrics = {
 
   // Demografía
   poblacion_total: number | null
+  pct_hombres: number | null
+  pct_mujeres: number | null
   pct_inmigrantes: number | null
   pct_indigena: number | null
   pct_urbana: number | null
