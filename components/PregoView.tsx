@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
-import { PREGO_FASES, type PregoEstado, type PregoFaseKey, type PregoRow } from '@/lib/types'
+import { PREGO_FASES, PREGO_ESTADO_CONFIG, type PregoEstado, type PregoFaseKey, type PregoRow } from '@/lib/types'
 import { getAllPrego, updatePregoFase } from '@/lib/db'
 
 type Props = {
@@ -10,12 +10,7 @@ type Props = {
   canEditRegion?: (regionCod: string) => boolean
 }
 
-const ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
-  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',  dot: '○' },
-  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', dot: '◐' },
-  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
-  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
-}
+const ESTADO_CONFIG = PREGO_ESTADO_CONFIG
 
 const ESTADOS: PregoEstado[] = ['pendiente', 'en_curso', 'completado', 'bloqueado']
 

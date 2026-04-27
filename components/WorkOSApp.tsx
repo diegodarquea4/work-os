@@ -19,14 +19,15 @@ const AttentionTray    = dynamic(() => import('./AttentionTray'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const PregoView        = dynamic(() => import('./PregoView'))
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional'
 
 type Props = {
   projects: Iniciativa[]
   geoData: GeoJsonObject
 }
 
-const AdminUsersView = dynamic(() => import('./AdminUsersView'))
+const AdminUsersView  = dynamic(() => import('./AdminUsersView'))
+const VistaRegional   = dynamic(() => import('./VistaRegional'))
 
 export default function WorkOSApp({ projects, geoData }: Props) {
   const { warning, secondsLeft, extend } = useInactivityLogout()
@@ -81,12 +82,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     : localIniciativas
 
   // Auto-select region for single-region users (regional or filtered viewer)
+  // Also auto-redirect to vista-regional for single-region users
   useEffect(() => {
     if (needsRegionFilter && profile!.region_cods.length === 1 && !selectedRegion) {
       const r = REGIONS.find(r => r.cod === profile!.region_cods[0])
       if (r) setSelectedRegion(r)
     }
-  }, [profile])
+    if (profile?.role === 'regional' && (profile.region_cods.length ?? 0) >= 1) {
+      setView('vista-regional')
+    }
+  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
   const isDragging                            = useRef(false)
   const dragStartX                            = useRef(0)
   const dragStartWidth                        = useRef(420)
@@ -230,6 +235,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Kanban
             </button>
+            <button
+              onClick={() => setView('vista-regional')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'vista-regional' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="6" cy="4" r="2"/>
+                <path d="M2 10c0-2.5 1.8-4 4-4s4 1.5 4 4" strokeLinecap="round"/>
+              </svg>
+              Mi Región
+            </button>
             {(profile?.role === 'admin' || profile?.role === 'editor') && (
             <button
               onClick={() => setView('prego')}
@@ -332,6 +349,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+          />
+        </div>
+      )}
+
+      {/* Vista Regional */}
+      {view === 'vista-regional' && (
+        <div className="flex-1 overflow-hidden flex">
+          <VistaRegional
+            iniciativas={visibleIniciativas}
+            actividad={actividad}
+            profile={profile}
+            lockedRegions={lockedRegions}
           />
         </div>
       )}

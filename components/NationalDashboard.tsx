@@ -9,10 +9,10 @@ import { EJE_COLORS, prioridadColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 
 const SEMAFORO_CONFIG = {
-  verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200'  },
-  ambar: { dot: 'bg-amber-400', label: 'En revisión', badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'  },
-  rojo:  { dot: 'bg-red-500',   label: 'Bloqueado',   badge: 'bg-red-50 text-red-700 ring-1 ring-red-200'        },
-  gris:  { dot: 'bg-gray-300',  label: 'Sin evaluar', badge: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'    },
+  verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
+  ambar: { dot: 'bg-amber-400', label: 'En revisión', badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',  bar: 'bg-amber-400'  },
+  rojo:  { dot: 'bg-red-500',   label: 'Bloqueadas',  badge: 'bg-red-50 text-red-700 ring-1 ring-red-200',        bar: 'bg-red-500'    },
+  gris:  { dot: 'bg-gray-300',  label: 'Sin evaluar', badge: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',    bar: 'bg-gray-300'   },
 } as const
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
@@ -20,6 +20,27 @@ const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
 type SortDir = 'asc' | 'desc'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'proximoHito' | 'estadoTermino' | 'inversion' | 'rat' | 'fuente' | 'responsable' | 'actividad'
+
+const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
+  { id: 'n',             label: '#',                     defaultVisible: false },
+  { id: 'estado',        label: 'Estado',                defaultVisible: true  },
+  { id: 'iniciativa',    label: 'Iniciativa',            defaultVisible: true  },
+  { id: 'region',        label: 'Región',                defaultVisible: true  },
+  { id: 'ejeRegional',   label: 'Eje Regional',          defaultVisible: false },
+  { id: 'ejeGobierno',   label: 'Eje Gobierno',          defaultVisible: false },
+  { id: 'avance',        label: 'Avance',                defaultVisible: true  },
+  { id: 'prioridad',     label: 'Prioridad',             defaultVisible: false },
+  { id: 'proximoHito',   label: 'Próximo Hito',          defaultVisible: true  },
+  { id: 'estadoTermino', label: 'Estado Término Gob.',   defaultVisible: false },
+  { id: 'inversion',     label: 'Inversión',             defaultVisible: true  },
+  { id: 'rat',           label: 'RAT',                   defaultVisible: false },
+  { id: 'fuente',        label: 'Fuente Financiamiento', defaultVisible: false },
+  { id: 'responsable',   label: 'Responsable',           defaultVisible: false },
+  { id: 'actividad',     label: 'Actividad',             defaultVisible: true  },
+]
+
+const DEFAULT_COLS = new Set<ColId>(ALL_COLS.filter(c => c.defaultVisible).map(c => c.id))
 
 type Props = {
   projects: Iniciativa[]
@@ -66,7 +87,7 @@ function ratColor(r: string): string {
 }
 
 export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad }: Props) {
-  const canImport = useCanEditAny()  // only admin/editor can bulk-import
+  const canImport = useCanEditAny()
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -87,7 +108,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [exportEjes, setExportEjes]           = useState<Set<string>>(() => new Set())
   const fileInputRef                          = useRef<HTMLInputElement>(null)
 
-  // Sync selected when projects update (after modal saves)
+  // New UI state
+  const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
+  const [visibleCols, setVisibleCols]                   = useState<Set<ColId>>(DEFAULT_COLS)
+  const [showColsPanel, setShowColsPanel]               = useState(false)
+  const [groupByRegion, setGroupByRegion]               = useState(false)
+
   const selectedSynced = selected
     ? (projects.find(p => p.n === selected.n) ?? selected)
     : null
@@ -95,6 +121,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
+  }
+
+  function toggleSemaforo(s: SemaforoKey) {
+    setFilterSemaforo(prev => {
+      const next = new Set(prev)
+      next.has(s) ? next.delete(s) : next.add(s)
+      return next
+    })
+  }
+
+  function toggleColId(id: ColId) {
+    setVisibleCols(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
   const filtered = useMemo(() => {
@@ -115,13 +157,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
     list = [...list].sort((a, b) => {
       let cmp = 0
-      if (sortCol === 'n')         cmp = a.n - b.n
-      if (sortCol === 'region')    cmp = a.region.localeCompare(b.region)
-      if (sortCol === 'eje')        cmp = a.eje.localeCompare(b.eje)
+      if (sortCol === 'n')           cmp = a.n - b.n
+      if (sortCol === 'region')      cmp = a.region.localeCompare(b.region)
+      if (sortCol === 'eje')         cmp = a.eje.localeCompare(b.eje)
       if (sortCol === 'ejeGobierno') cmp = (a.eje_gobierno ?? '').localeCompare(b.eje_gobierno ?? '')
-      if (sortCol === 'semaforo')  cmp = SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
-      if (sortCol === 'avance')    cmp = a.pct_avance - b.pct_avance
-      if (sortCol === 'prioridad') cmp = (a.prioridad === 'Alta' ? 0 : 1) - (b.prioridad === 'Alta' ? 0 : 1)
+      if (sortCol === 'semaforo')    cmp = SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
+      if (sortCol === 'avance')      cmp = a.pct_avance - b.pct_avance
+      if (sortCol === 'prioridad')   cmp = (a.prioridad === 'Alta' ? 0 : 1) - (b.prioridad === 'Alta' ? 0 : 1)
       if (sortCol === 'actividad') {
         const da = actividad[a.n] ? new Date(actividad[a.n]!).getTime() : 0
         const db = actividad[b.n] ? new Date(actividad[b.n]!).getTime() : 0
@@ -130,14 +172,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, sortCol, sortDir])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, sortCol, sortDir, actividad])
 
   const rojo   = filtered.filter(p => p.estado_semaforo === 'rojo').length
   const ambar  = filtered.filter(p => p.estado_semaforo === 'ambar').length
   const verde  = filtered.filter(p => p.estado_semaforo === 'verde').length
   const gris   = filtered.filter(p => p.estado_semaforo === 'gris').length
-  const avgPct = filtered.length
-    ? Math.round(filtered.reduce((s, p) => s + p.pct_avance, 0) / filtered.length)
+  const total  = filtered.length
+  const avgPct = total
+    ? Math.round(filtered.reduce((s, p) => s + p.pct_avance, 0) / total)
     : 0
 
   function clearFilters() {
@@ -147,14 +190,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   // ── Template & Import ────────────────────────────────────────────────────
 
-  // Column definitions: key (used as DB field name), header label, description row, width
-  // The description row is row 2 and tells users exactly what to fill in.
-  // Import reads row 1 as headers and skips row 2 (description row).
   const TEMPLATE_COLS = [
-    // ── Referencia ─────────────────────────────────────────────────────────
     { key: '#',                     label: '#',                     desc: '⚠ SOLO para actualizar existentes. DEJAR VACÍO para crear nueva iniciativa — NO uses numeración propia',      wch: 6  },
     { key: 'region',                label: 'Región',                desc: 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos). Obligatorio si # está vacío',                     wch: 22 },
-    // ── Datos del Plan Regional de Gobierno ────────────────────────────────
     { key: 'nombre',                label: 'Nombre Iniciativa',     desc: 'Nombre completo de la iniciativa territorial',                                                                              wch: 52 },
     { key: 'eje',                   label: 'Eje',                   desc: 'Eje estratégico regional — texto libre, definido por cada región (ej: "Eje 1: Infraestructura y Conectividad")',     wch: 44 },
     { key: 'eje_gobierno',          label: 'Eje Gobierno',          desc: 'Valores: Economía | Social | Seguridad  (varía por región — definir con la Delegación)',                               wch: 16 },
@@ -174,17 +212,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   ] as const
 
   function downloadTemplate() {
-    // Row 1: headers (column labels)
     const headerRow = TEMPLATE_COLS.map(c => c.label)
-    // Row 2: descriptions (valid values guide) — not imported, only a guide
-    const descRow = TEMPLATE_COLS.map(c => c.desc)
-
+    const descRow   = TEMPLATE_COLS.map(c => c.desc)
     const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow])
-    ws['!cols'] = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
-    // Freeze # and Región columns + 2-row header
+    ws['!cols']   = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
     ws['!freeze'] = { xSplit: 2, ySplit: 2 }
 
-    // ── Instrucciones sheet ─────────────────────────────────────────────────
     const instrAoa = [
       ['GUÍA DE LLENADO — Plan Regional de Gobierno · Importación de Iniciativas Territoriales', '', '', ''],
       ['División de Coordinación Interregional  ·  Ministerio del Interior', '', '', ''],
@@ -231,7 +264,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     XLSX.writeFile(wb, 'template-prioridades.xlsx')
   }
 
-  // Closed-list validators
   const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
   const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja']
   const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS']
@@ -240,13 +272,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Inauguración', 'Finalizado']
   const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE']
 
-  // Phase 1: parse file and build preview (no DB writes)
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     if (fileInputRef.current) fileInputRef.current.value = ''
 
-    // Reset state before processing new file
     setImportPreview(null)
     setImportParseErrors([])
     setImportResult(null)
@@ -257,13 +287,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     try {
       const arrayBuffer = await file.arrayBuffer()
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
-      // Prefer "Carga" sheet by name; fall back to first sheet
       const sheetName = wb.SheetNames.find(n => n === 'Carga') ?? wb.SheetNames[0]
       const ws = wb.Sheets[sheetName]
 
       setImportFileName(`${file.name}  ·  Hoja: ${sheetName}`)
 
-      // row[0]=headers, row[1]=descriptions (skip), row[2+]=data
       const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
       if (raw.length < 3) {
         setImportParseErrors(['El archivo no tiene filas de datos. Agrega datos a partir de la fila 3.'])
@@ -275,15 +303,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       const headers = raw[0] as string[]
       const dataRows = raw.slice(2)
 
-      // Returns undefined when the column header is absent (partial template),
-      // '' when the cell exists but is empty — callers treat these differently.
       function col(row: string[], label: string): string | undefined {
         const idx = headers.indexOf(label)
         if (idx < 0) return undefined
         return String(row[idx] ?? '').trim()
       }
 
-      // Normalize for accent/case-insensitive region matching
       function normalize(s: string) {
         return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       }
@@ -294,7 +319,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
       const preview: ImportPreviewRow[] = []
 
-      // Pre-build eje→number map per region from existing initiatives, for codigo_iniciativa generation
       const regionEjeNumMap = new Map<string, Map<string, number>>()
       for (const p of projects) {
         if (!p.codigo_iniciativa) continue
@@ -304,12 +328,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const em = regionEjeNumMap.get(p.region)!
         if (!em.has(p.eje)) em.set(p.eje, parseInt(m[1], 10))
       }
-      // Track codes generated in this batch (for correct seq within new rows)
       const batchCodes: string[] = []
       const maxExistingN = projects.length > 0 ? Math.max(...projects.map(p => p.n)) : 0
       let newNOffset = 0
 
-      // Shared helper: parse optional fields into a patch/insertData object
       function parseOptionalFields(row: string[], target: Record<string, unknown>, rowErrors: string[]) {
         const ejeGobierno = col(row, 'Eje Gobierno')
         if (ejeGobierno) {
@@ -375,7 +397,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       for (const row of dataRows) {
         const nStr = col(row, '#')
 
-        // ── Nueva iniciativa (# vacío) ──────────────────────────────────────
         if (!nStr) {
           const regionNombre = col(row, 'Región') ?? ''
           const eje          = col(row, 'Eje') ?? ''
@@ -383,14 +404,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           const ministerio   = col(row, 'Ministerio') ?? ''
           const rowErrors: string[] = []
 
-          if (!regionNombre)                                           rowErrors.push('Región requerida')
+          if (!regionNombre)                             rowErrors.push('Región requerida')
           const regionObj = findRegion(regionNombre)
-          if (regionNombre && !regionObj)                              rowErrors.push(`Región "${regionNombre}" no reconocida`)
-          if (!nombre)                                                 rowErrors.push('Nombre requerido')
-          if (!eje)                                                    rowErrors.push('Eje requerido')
-          if (!ministerio)                                             rowErrors.push('Ministerio requerido')
+          if (regionNombre && !regionObj)                rowErrors.push(`Región "${regionNombre}" no reconocida`)
+          if (!nombre)                                   rowErrors.push('Nombre requerido')
+          if (!eje)                                      rowErrors.push('Eje requerido')
+          if (!ministerio)                               rowErrors.push('Ministerio requerido')
 
-          // Auto-generate codigo_iniciativa
           let codigoIniciativa: string | null = null
           if (regionObj && eje) {
             if (!regionEjeNumMap.has(regionNombre)) regionEjeNumMap.set(regionNombre, new Map())
@@ -435,12 +455,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             codigo_iniciativa:  codigoIniciativa,
           }
           parseOptionalFields(row, insertData, rowErrors)
-
           preview.push({ n: newN, nombre, region: regionNombre, patch: {}, errors: rowErrors, isNew: true, insertData })
           continue
         }
 
-        // ── Iniciativa existente (# provisto) ───────────────────────────────
         const n = Number(nStr)
         if (isNaN(n) || n <= 0) { parseErrors.push(`Fila con # inválido "${nStr}" — omitida`); continue }
 
@@ -451,11 +469,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         }
 
         const rowErrors: string[] = []
-
-        // Catch the common mistake: user fills # with their own numbering, but the
-        // Región column points to a different region than the found record.
+        function normalize2(s: string) {
+          return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        }
         const regionInput = col(row, 'Región')
-        if (regionInput && normalize(regionInput) !== normalize(project.region)) {
+        if (regionInput && normalize2(regionInput) !== normalize2(project.region)) {
           rowErrors.push(
             `El # ${nStr} corresponde a la región ${project.region}, no a "${regionInput}". ` +
             `Para crear nuevas iniciativas de ${regionInput}, deja la columna # vacía.`
@@ -464,7 +482,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
         const patch: Record<string, unknown> = {}
         parseOptionalFields(row, patch, rowErrors)
-
         preview.push({ n, nombre: project.nombre, region: project.region, patch, errors: rowErrors })
       }
 
@@ -478,18 +495,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     }
   }
 
-  // Phase 2: save validated rows to DB via API route (uses service role key)
   async function applyImport() {
     if (!importPreview) return
     setImporting(true)
 
-    const valid = importPreview.filter(r => r.errors.length === 0)
-    const updates = valid
-      .filter(r => !r.isNew && Object.keys(r.patch).length > 0)
-      .map(r => ({ n: r.n, patch: r.patch }))
-    const inserts = valid
-      .filter(r => r.isNew && r.insertData)
-      .map(r => r.insertData!)
+    const valid   = importPreview.filter(r => r.errors.length === 0)
+    const updates = valid.filter(r => !r.isNew && Object.keys(r.patch).length > 0).map(r => ({ n: r.n, patch: r.patch }))
+    const inserts = valid.filter(r => r.isNew && r.insertData).map(r => r.insertData!)
 
     let result: { inserted: number; updated: number; errors: string[] }
     try {
@@ -508,7 +520,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       result = { inserted: 0, updated: 0, errors: [`Error de red: ${String(err)}`] }
     }
 
-    // Sync in-memory state for updated rows (no reload needed)
     for (const { n, patch } of updates) {
       if (!result.errors.some(e => e.startsWith(`#${n}:`))) {
         onUpdatePrioridad(n, patch as Partial<Iniciativa>)
@@ -528,14 +539,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   // ── Export ────────────────────────────────────────────────────────────────
 
-  // Derive unique ejes from actual projects (not from hardcoded EJES list)
   const allProjectEjes = useMemo(() => {
     const s = new Set<string>()
     for (const p of projects) if (p.eje) s.add(p.eje)
     return [...s].sort()
   }, [projects])
 
-  // On first open, seed exportEjes with all real ejes
   function openExportModal() {
     if (exportEjes.size === 0) setExportEjes(new Set(allProjectEjes))
     setExportModalOpen(true)
@@ -578,19 +587,26 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setExportModalOpen(false)
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
     filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0
+
+  const hasSecondaryFilter = filterEje !== 'todos' || filterEjeGobierno !== 'todos' || filterPrioridad.size > 0
+
+  // Dynamic column count for colspan calculation
+  const colCount = visibleCols.size
 
   function ColHeader({ col, label }: { col: SortCol; label: string }) {
     const active = sortCol === col
     return (
       <th
         onClick={() => handleSort(col)}
-        className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-900 select-none whitespace-nowrap"
+        className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-800 select-none whitespace-nowrap"
       >
         <span className="flex items-center gap-1">
           {label}
-          <span className={`text-gray-300 ${active ? 'text-gray-600' : ''}`}>
+          <span className={active ? 'text-gray-700' : 'text-gray-300'}>
             {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
           </span>
         </span>
@@ -598,26 +614,99 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     )
   }
 
+  // ── Grouped rows ──────────────────────────────────────────────────────────
+
+  const groupedByRegion = useMemo(() => {
+    if (!groupByRegion) return null
+    const map = new Map<string, Iniciativa[]>()
+    for (const p of filtered) {
+      if (!map.has(p.region)) map.set(p.region, [])
+      map.get(p.region)!.push(p)
+    }
+    return map
+  }, [filtered, groupByRegion])
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* ── Summary bar ── */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white">
-        <div className="flex items-center gap-3 flex-wrap">
-          <SummaryCard label="Total" value={filtered.length.toString()} color="text-gray-800" bg="bg-gray-50" />
-          <SummaryCard label="Bloqueadas" value={rojo.toString()} color="text-red-700" bg="bg-red-50" dot="bg-red-500" />
-          <SummaryCard label="En revisión" value={ambar.toString()} color="text-amber-700" bg="bg-amber-50" dot="bg-amber-400" />
-          <SummaryCard label="En verde" value={verde.toString()} color="text-green-700" bg="bg-green-50" dot="bg-green-500" />
-          <SummaryCard label="Sin evaluar" value={gris.toString()} color="text-gray-600" bg="bg-gray-100" dot="bg-gray-300" />
-          <div className="ml-auto flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-2">
-            <span className="text-xs text-gray-500">Avance promedio</span>
-            <span className="text-lg font-bold text-slate-700">{avgPct}%</span>
+      {/* ── Header: summary bar + actions ── */}
+      <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-gray-100 bg-white">
+        <div className="flex items-center gap-5">
+
+          {/* Stacked bar + legend */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
+              <span className="font-semibold text-gray-800 text-sm">{total} iniciativas</span>
+              {([['rojo', rojo], ['ambar', ambar], ['verde', verde], ['gris', gris]] as const).map(([key, count]) =>
+                count > 0 && (
+                  <button
+                    key={key}
+                    onClick={() => toggleSemaforo(key)}
+                    className={`flex items-center gap-1.5 transition-opacity ${filterSemaforo.size > 0 && !filterSemaforo.has(key) ? 'opacity-40' : ''}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${SEMAFORO_CONFIG[key].dot}`}/>
+                    <span className="font-medium text-gray-700">{count}</span>
+                    <span>{SEMAFORO_CONFIG[key].label}</span>
+                  </button>
+                )
+              )}
+            </div>
+            {total > 0 && (
+              <div className="flex h-2 rounded-full overflow-hidden gap-px bg-gray-100">
+                {([['rojo', rojo], ['ambar', ambar], ['verde', verde], ['gris', gris]] as const).map(([key, count]) =>
+                  count > 0 && (
+                    <div
+                      key={key}
+                      className={`${SEMAFORO_CONFIG[key].bar} cursor-pointer transition-opacity hover:opacity-80 ${filterSemaforo.size > 0 && !filterSemaforo.has(key) ? 'opacity-30' : ''}`}
+                      style={{ width: `${(count / total) * 100}%` }}
+                      onClick={() => toggleSemaforo(key)}
+                      title={`${count} ${SEMAFORO_CONFIG[key].label}`}
+                    />
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Avance */}
+          <div className="flex-shrink-0 text-center px-3">
+            <div className="text-2xl font-bold text-slate-700 leading-none">{avgPct}%</div>
+            <div className="text-xs text-gray-400 mt-0.5">avance</div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex-shrink-0 flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
+            {canImport && (
+              <button
+                onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
+                </svg>
+                Importar
+              </button>
+            )}
+            <button
+              onClick={openExportModal}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
+              </svg>
+              Excel
+            </button>
           </div>
         </div>
       </div>
 
       {/* ── Filters ── */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white space-y-2">
+      <div className="flex-shrink-0 px-6 py-2.5 border-b border-gray-100 bg-white space-y-2">
+
+        {/* Primary row */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative">
@@ -630,7 +719,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar meta, región, ministerio..."
-              className="pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-64"
+              className="pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-56"
             />
           </div>
 
@@ -644,45 +733,19 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             {REGIONS.map(r => <option key={r.cod} value={r.nombre}>{r.nombre}</option>)}
           </select>
 
-          {/* Eje regional */}
-          <select
-            value={filterEje}
-            onChange={e => setFilterEje(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[200px]"
-          >
-            <option value="todos">Todos los ejes</option>
-            {EJES.map(e => <option key={e} value={e}>{e}</option>)}
-          </select>
-
-          {/* Eje Gobierno */}
-          <select
-            value={filterEjeGobierno}
-            onChange={e => setFilterEjeGobierno(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
-          >
-            <option value="todos">Eje Gobierno: todos</option>
-            {Array.from(new Set(projects.map(p => p.eje_gobierno).filter(Boolean))).sort().map(eg => (
-              <option key={eg!} value={eg!}>{eg}</option>
-            ))}
-          </select>
-
           {/* Semáforo chips */}
           <div className="flex items-center gap-1">
             {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
               const active = filterSemaforo.has(s)
               const activeClass =
-                s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
-                s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'  :
-                s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300'  :
+                s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'      :
+                s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' :
+                s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
                                 'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
               return (
                 <button
                   key={s}
-                  onClick={() => setFilterSemaforo(prev => {
-                    const next = new Set(prev)
-                    next.has(s) ? next.delete(s) : next.add(s)
-                    return next
-                  })}
+                  onClick={() => toggleSemaforo(s)}
                   className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
                     active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
@@ -694,64 +757,136 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             })}
           </div>
 
-          {/* Prioridad chips */}
-          <div className="flex items-center gap-1">
-            {(['Alta', 'Media', 'Baja'] as const).map(p => {
-              const active = filterPrioridad.has(p)
-              const activeClass =
-                p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'        :
-                p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'   :
-                                'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
-              return (
-                <button
-                  key={p}
-                  onClick={() => setFilterPrioridad(prev => {
-                    const next = new Set(prev)
-                    next.has(p) ? next.delete(p) : next.add(p)
-                    return next
-                  })}
-                  className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                    active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {p}
-                </button>
-              )
-            })}
-          </div>
+          {/* Más filtros toggle */}
+          <button
+            onClick={() => setShowSecondaryFilters(v => !v)}
+            className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${
+              showSecondaryFilters || hasSecondaryFilter
+                ? 'bg-slate-100 border-slate-300 text-slate-700'
+                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {hasSecondaryFilter && <span className="w-1.5 h-1.5 rounded-full bg-blue-500"/>}
+            Más filtros
+            <span className="text-gray-400">{showSecondaryFilters ? '↑' : '↓'}</span>
+          </button>
 
           {hasFilters && (
-            <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-slate-700 underline ml-1">
+            <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-slate-700 underline">
               Limpiar
             </button>
           )}
 
+          {/* Right controls */}
           <div className="ml-auto flex items-center gap-2">
-            {canImport && (
-              <button
-                onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
-                </svg>
-                Importar
-              </button>
-            )}
-            {/* File input always in DOM — triggered from inside the import modal */}
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelect} />
-
+            {/* Group by region */}
             <button
-              onClick={openExportModal}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium"
+              onClick={() => setGroupByRegion(v => !v)}
+              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                groupByRegion
+                  ? 'bg-slate-800 border-slate-800 text-white'
+                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
-              </svg>
-              Excel
+              Por región
             </button>
+
+            {/* Columns toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColsPanel(v => !v)}
+                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${
+                  showColsPanel
+                    ? 'bg-slate-100 border-slate-300 text-slate-700'
+                    : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="1" y="1" width="4" height="10" rx="1"/><rect x="7" y="1" width="4" height="10" rx="1"/>
+                </svg>
+                Columnas
+              </button>
+
+              {showColsPanel && (
+                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg p-3 z-30 w-52">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Columnas visibles</div>
+                  <div className="space-y-1">
+                    {ALL_COLS.map(c => (
+                      <label key={c.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:text-gray-900 py-0.5">
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.has(c.id)}
+                          onChange={() => toggleColId(c.id)}
+                          className="rounded"
+                        />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowColsPanel(false)}
+                    className="mt-2 w-full text-xs text-center text-gray-400 hover:text-gray-600"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Secondary filters (collapsible) */}
+        {showSecondaryFilters && (
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            {/* Eje regional */}
+            <select
+              value={filterEje}
+              onChange={e => setFilterEje(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[220px]"
+            >
+              <option value="todos">Todos los ejes</option>
+              {EJES.map(e => <option key={e} value={e}>{e}</option>)}
+            </select>
+
+            {/* Eje Gobierno */}
+            <select
+              value={filterEjeGobierno}
+              onChange={e => setFilterEjeGobierno(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+              <option value="todos">Eje Gobierno: todos</option>
+              {Array.from(new Set(projects.map(p => p.eje_gobierno).filter(Boolean))).sort().map(eg => (
+                <option key={eg!} value={eg!}>{eg}</option>
+              ))}
+            </select>
+
+            {/* Prioridad chips */}
+            <div className="flex items-center gap-1">
+              {(['Alta', 'Media', 'Baja'] as const).map(p => {
+                const active = filterPrioridad.has(p)
+                const activeClass =
+                  p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'       :
+                  p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'  :
+                                  'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setFilterPrioridad(prev => {
+                      const next = new Set(prev)
+                      next.has(p) ? next.delete(p) : next.add(p)
+                      return next
+                    })}
+                    className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                      active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Import result banner ── */}
@@ -765,8 +900,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             {importResult.errors.length === 0
               ? (() => {
                   const parts = []
-                  if (importResult.inserted  > 0) parts.push(`${importResult.inserted} nueva${importResult.inserted !== 1 ? 's' : ''} creada${importResult.inserted !== 1 ? 's' : ''}`)
-                  if (importResult.updated   > 0) parts.push(`${importResult.updated} actualizada${importResult.updated !== 1 ? 's' : ''}`)
+                  if (importResult.inserted > 0) parts.push(`${importResult.inserted} nueva${importResult.inserted !== 1 ? 's' : ''} creada${importResult.inserted !== 1 ? 's' : ''}`)
+                  if (importResult.updated  > 0) parts.push(`${importResult.updated} actualizada${importResult.updated !== 1 ? 's' : ''}`)
                   return parts.length ? parts.join(' · ') + ' correctamente.' : 'Sin cambios.'
                 })()
               : `${(importResult.inserted ?? 0) + importResult.updated} guardadas, ${importResult.errors.length} error${importResult.errors.length !== 1 ? 'es' : ''}:`}
@@ -779,149 +914,63 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       )}
 
       {/* ── Table ── */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
             <tr>
-              <ColHeader col="n" label="#" />
-              <ColHeader col="region" label="Región" />
-              <ColHeader col="ejeGobierno" label="Eje Gobierno" />
-              <ColHeader col="eje" label="Eje Regional" />
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Meta</th>
-              <ColHeader col="semaforo" label="Estado" />
-              <ColHeader col="avance" label="Avance" />
-              <ColHeader col="prioridad" label="Prioridad" />
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Estado Término Gob.</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Próximo Hito</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Inversión MM$</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">RAT</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Fuente Financiamiento</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Responsable</th>
-              <ColHeader col="actividad" label="Actividad" />
+              {visibleCols.has('n')             && <ColHeader col="n" label="#" />}
+              {visibleCols.has('estado')        && <ColHeader col="semaforo" label="Estado" />}
+              {visibleCols.has('iniciativa')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Iniciativa</th>}
+              {visibleCols.has('region')        && <ColHeader col="region" label="Región" />}
+              {visibleCols.has('ejeRegional')   && <ColHeader col="eje" label="Eje Regional" />}
+              {visibleCols.has('ejeGobierno')   && <ColHeader col="ejeGobierno" label="Eje Gobierno" />}
+              {visibleCols.has('avance')        && <ColHeader col="avance" label="Avance" />}
+              {visibleCols.has('prioridad')     && <ColHeader col="prioridad" label="Prioridad" />}
+              {visibleCols.has('proximoHito')   && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Próximo Hito</th>}
+              {visibleCols.has('estadoTermino') && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Estado Término Gob.</th>}
+              {visibleCols.has('inversion')     && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Inversión</th>}
+              {visibleCols.has('rat')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">RAT</th>}
+              {visibleCols.has('fuente')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fuente</th>}
+              {visibleCols.has('responsable')   && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Responsable</th>}
+              {visibleCols.has('actividad')     && <ColHeader col="actividad" label="Actividad" />}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
-            {filtered.length === 0 ? (
+            {total === 0 ? (
               <tr>
-                <td colSpan={16} className="px-6 py-16 text-center text-gray-400 text-sm">
+                <td colSpan={colCount} className="px-6 py-16 text-center text-gray-400 text-sm">
                   Sin prioridades con estos filtros.{' '}
                   <button onClick={clearFilters} className="underline text-slate-600">Limpiar filtros</button>
                 </td>
               </tr>
-            ) : filtered.map(p => {
-              const sem = SEMAFORO_CONFIG[p.estado_semaforo]
-              const ejeColor = EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'
-              return (
-                <tr
-                  key={p.n}
-                  onClick={() => setSelected(p)}
-                  className="hover:bg-blue-50/40 cursor-pointer transition-colors"
-                >
-                  <td className="px-3 py-3 text-xs text-gray-500 font-mono">{p.n}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <div className="text-xs font-medium text-gray-800">{p.region}</div>
-                    <div className="text-xs text-gray-500">{p.capital}</div>
-                    <div className="text-xs text-gray-400">{p.zona}{p.comuna ? ` · ${p.comuna}` : ''}</div>
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    {(() => {
-                      const gob = p.eje_gobierno
-                      const cls = gob === 'Seguridad' ? 'bg-red-50 text-red-700' :
-                                  gob === 'Social'    ? 'bg-purple-50 text-purple-700' :
-                                                       'bg-blue-50 text-blue-700'
-                      return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cls}`}>{gob ?? '—'}</span>
-                    })()}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${ejeColor}`}>
-                      {p.eje}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 max-w-[300px]">
-                    <p className="text-xs text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
-                    <span className="text-xs text-gray-500 mt-0.5 block">{p.ministerio}</span>
-                    {p.etapa_actual && (
-                      <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded mt-0.5 inline-block leading-tight">{p.etapa_actual}</span>
-                    )}
-                    {(p.codigo_bip || p.codigo_iniciativa) && (
-                      <span className="text-xs text-gray-400 font-mono mt-0.5 block">
-                        {[p.codigo_bip && `BIP: ${p.codigo_bip}`, p.codigo_iniciativa && `Cód: ${p.codigo_iniciativa}`].filter(Boolean).join(' · ')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${sem.badge}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${sem.dot}`}/>
-                      {sem.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
-                        <div
-                          className={`h-1.5 rounded-full ${
-                            p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
-                            p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
-                            p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
-                          }`}
-                          style={{ width: `${p.pct_avance}%` }}
-                        />
+            ) : groupedByRegion ? (
+              // Grouped by region
+              Array.from(groupedByRegion.entries()).map(([regionNombre, rows]) => {
+                const rAvg   = Math.round(rows.reduce((s, p) => s + p.pct_avance, 0) / rows.length)
+                const rRojo  = rows.filter(p => p.estado_semaforo === 'rojo').length
+                const rAmbar = rows.filter(p => p.estado_semaforo === 'ambar').length
+                const rVerde = rows.filter(p => p.estado_semaforo === 'verde').length
+                return [
+                  <tr key={`group-${regionNombre}`} className="bg-slate-50 border-t-2 border-slate-200">
+                    <td colSpan={colCount} className="px-4 py-2">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-xs text-slate-700">{regionNombre}</span>
+                        <span className="text-xs text-gray-400">{rows.length} iniciativas</span>
+                        <span className="text-xs font-semibold text-slate-600">{rAvg}% avance</span>
+                        <div className="flex items-center gap-1.5 ml-1">
+                          {rRojo  > 0 && <span className="flex items-center gap-1 text-xs text-red-600"><span className="w-1.5 h-1.5 rounded-full bg-red-500"/>{rRojo}</span>}
+                          {rAmbar > 0 && <span className="flex items-center gap-1 text-xs text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>{rAmbar}</span>}
+                          {rVerde > 0 && <span className="flex items-center gap-1 text-xs text-green-600"><span className="w-1.5 h-1.5 rounded-full bg-green-500"/>{rVerde}</span>}
+                        </div>
                       </div>
-                      <span className="text-xs font-semibold text-gray-700 w-8 text-right">{p.pct_avance}%</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
-                      {p.prioridad}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
-                    {p.estado_termino_gobierno ?? <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-3 py-3 max-w-[200px]">
-                    {p.proximo_hito
-                      ? <>
-                          <p className="text-xs text-gray-700 line-clamp-2 leading-snug">{p.proximo_hito}</p>
-                          {p.fecha_proximo_hito && (
-                            <span className="text-xs text-gray-400 mt-0.5 block">{formatDate(p.fecha_proximo_hito)}</span>
-                          )}
-                        </>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    {p.inversion_mm != null
-                      ? <span className="text-xs font-mono text-gray-700">{p.inversion_mm.toLocaleString('es-CL')} MM$</span>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    {p.rat
-                      ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ratColor(p.rat)}`}>{p.rat}</span>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-gray-600 max-w-[160px]">
-                    {p.fuente_financiamiento
-                      ? <span className="line-clamp-2 block">{p.fuente_financiamiento}</span>
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap max-w-[120px]">
-                    {p.responsable
-                      ? <span className="truncate block">{p.responsable}</span>
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    {actividadLoading ? (
-                      <div className="h-3 bg-gray-100 rounded animate-pulse w-14" />
-                    ) : (() => {
-                      const dias = diasSinActividad(actividad[p.n])
-                      if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
-                      if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>
-                      if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
-                      return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
-                    })()}
-                  </td>
-                </tr>
-              )
-            })}
+                    </td>
+                  </tr>,
+                  ...rows.map(p => <DataRow key={p.n} p={p} />),
+                ]
+              })
+            ) : (
+              filtered.map(p => <DataRow key={p.n} p={p} />)
+            )}
           </tbody>
         </table>
       </div>
@@ -933,23 +982,20 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const insertRows = importPreview?.filter(r => r.errors.length === 0 && r.isNew) ?? []
         const updateRows = importPreview?.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length > 0) ?? []
         const errorRows  = importPreview?.filter(r => r.errors.length > 0) ?? []
-        const isAllOk   = hasFile && importParseErrors.length === 0 && errorRows.length === 0 && validRows.length > 0
-        const hasErrors = hasFile && (importParseErrors.length > 0 || errorRows.length > 0)
-
-        const isIdle    = !hasFile
-        const headerBg  = isIdle   ? 'bg-white border-b border-gray-100' : isAllOk ? 'bg-green-600' : hasErrors ? 'bg-red-600' : 'bg-slate-800'
+        const isAllOk    = hasFile && importParseErrors.length === 0 && errorRows.length === 0 && validRows.length > 0
+        const hasErrors  = hasFile && (importParseErrors.length > 0 || errorRows.length > 0)
+        const isIdle     = !hasFile
+        const headerBg         = isIdle ? 'bg-white border-b border-gray-100' : isAllOk ? 'bg-green-600' : hasErrors ? 'bg-red-600' : 'bg-slate-800'
         const headerTextPrimary   = isIdle ? 'text-gray-900' : 'text-white'
         const headerTextSecondary = isIdle ? 'text-gray-500' : 'text-white/70'
         const headerCloseBtn      = isIdle ? 'text-gray-400 hover:text-gray-600' : 'text-white/60 hover:text-white'
-        const bodyBg    = isAllOk  ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-white'
-        const footerBg  = isIdle   ? 'bg-white' : isAllOk ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-gray-50'
-        const borderCol = isIdle   ? 'border-gray-100' : isAllOk ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
+        const bodyBg    = isAllOk ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-white'
+        const footerBg  = isIdle  ? 'bg-white'    : isAllOk ? 'bg-green-50' : hasErrors ? 'bg-red-50' : 'bg-gray-50'
+        const borderCol = isIdle  ? 'border-gray-100' : isAllOk ? 'border-green-200' : hasErrors ? 'border-red-200' : 'border-gray-200'
 
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className={`rounded-2xl shadow-2xl w-full max-w-3xl max-h-[82vh] flex flex-col overflow-hidden border ${borderCol}`}>
-
-              {/* Header — changes color */}
               <div className={`${headerBg} px-6 py-4 flex items-start justify-between`}>
                 <div>
                   <h2 className={`text-base font-semibold ${headerTextPrimary}`}>
@@ -966,10 +1012,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 <button onClick={() => setImportModalOpen(false)} className={`${headerCloseBtn} mt-0.5 text-lg leading-none`}>✕</button>
               </div>
 
-              {/* Body */}
               <div className={`flex-1 overflow-auto p-5 space-y-4 ${bodyBg}`}>
-
-                {/* ── Idle state: instructions + file zone ── */}
                 {!hasFile && (
                   <div className="space-y-4">
                     <div className="text-xs text-gray-600 space-y-1 leading-relaxed">
@@ -998,14 +1041,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   </div>
                 )}
 
-                {/* ── File loaded: parse-level errors ── */}
                 {hasFile && importParseErrors.length > 0 && (
                   <div className="p-3 bg-red-100 border border-red-200 rounded-lg text-xs text-red-800 space-y-0.5">
                     {importParseErrors.map((e, i) => <div key={i}>⚠ {e}</div>)}
                   </div>
                 )}
 
-                {/* ── File loaded: summary chips ── */}
                 {hasFile && importPreview && importPreview.length > 0 && (
                   <div className="flex items-center gap-2 text-xs flex-wrap">
                     {insertRows.length > 0 && (
@@ -1028,16 +1069,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                         — {importPreview.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length === 0).length} sin cambios
                       </span>
                     )}
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
-                    >
+                    <button onClick={() => fileInputRef.current?.click()} className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline">
                       Cargar otro archivo
                     </button>
                   </div>
                 )}
 
-                {/* ── Preview table ── */}
                 {hasFile && importPreview && importPreview.length > 0 && (
                   <table className="w-full text-xs border-collapse rounded-lg overflow-hidden">
                     <thead>
@@ -1088,13 +1125,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   </table>
                 )}
 
-                {/* Empty parse result */}
                 {hasFile && importPreview?.length === 0 && !importParseErrors.length && (
                   <p className="text-xs text-gray-400 text-center py-8">No se encontraron filas con datos en el archivo.</p>
                 )}
               </div>
 
-              {/* Apply errors — shown inside modal when applyImport encounters DB errors */}
               {importResult && importResult.errors.length > 0 && (
                 <div className="mx-6 mb-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-xs font-semibold text-red-700 mb-1">Error al guardar — revisa los detalles en la consola del navegador (F12)</p>
@@ -1104,7 +1139,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 </div>
               )}
 
-              {/* Footer */}
               <div className={`px-6 py-4 border-t ${borderCol} ${footerBg} flex items-center justify-between`}>
                 <div className="text-xs text-gray-500">
                   {hasFile
@@ -1152,9 +1186,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               </div>
               <button onClick={() => setExportModalOpen(false)} className="text-gray-400 hover:text-gray-600 mt-0.5">✕</button>
             </div>
-
             <div className="flex-1 overflow-auto p-6 space-y-5">
-              {/* Regions */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Regiones</span>
@@ -1182,8 +1214,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   ))}
                 </div>
               </div>
-
-              {/* Ejes */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ejes</span>
@@ -1212,14 +1242,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 </div>
               </div>
             </div>
-
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
               <span className="text-xs text-gray-500 font-medium">{exportCount} iniciativas seleccionadas</span>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setExportModalOpen(false)}
-                  className="text-xs px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
-                >
+                <button onClick={() => setExportModalOpen(false)} className="text-xs px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium">
                   Cancelar
                 </button>
                 <button
@@ -1238,7 +1264,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         </div>
       )}
 
-      {/* Modal */}
+      {/* Project tracker modal */}
       {selectedSynced && (
         <ProjectTrackerModal
           prioridad={selectedSynced}
@@ -1249,18 +1275,141 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       )}
     </div>
   )
-}
 
-function SummaryCard({ label, value, color, bg, dot }: {
-  label: string; value: string; color: string; bg: string; dot?: string
-}) {
-  return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${bg}`}>
-      {dot && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dot}`}/>}
-      <div>
-        <div className="text-xs text-gray-500 leading-tight">{label}</div>
-        <div className={`text-lg font-bold leading-tight ${color}`}>{value}</div>
-      </div>
-    </div>
-  )
+  // ── Row component (inner, accesses closure state) ─────────────────────────
+
+  function DataRow({ p }: { p: Iniciativa }) {
+    const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
+    const ejeColor = EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'
+    return (
+      <tr
+        onClick={() => setSelected(p)}
+        className="hover:bg-blue-50/40 cursor-pointer transition-colors"
+      >
+        {visibleCols.has('n') && (
+          <td className="px-3 py-3.5 text-xs text-gray-400 font-mono">{p.n}</td>
+        )}
+        {visibleCols.has('estado') && (
+          <td className="px-3 py-3.5">
+            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${sem.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${sem.dot}`}/>
+              {sem.label}
+            </span>
+          </td>
+        )}
+        {visibleCols.has('iniciativa') && (
+          <td className="px-3 py-3.5 max-w-xs">
+            <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
+            <span className="text-xs text-gray-400 mt-0.5 block">{p.ministerio}</span>
+          </td>
+        )}
+        {visibleCols.has('region') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            <div className="text-xs font-medium text-gray-700">{p.region}</div>
+            <div className="text-xs text-gray-400">{p.capital}</div>
+          </td>
+        )}
+        {visibleCols.has('ejeRegional') && (
+          <td className="px-3 py-3.5">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${ejeColor}`}>
+              {p.eje}
+            </span>
+          </td>
+        )}
+        {visibleCols.has('ejeGobierno') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {(() => {
+              const gob = p.eje_gobierno
+              const cls = gob === 'Seguridad' ? 'bg-red-50 text-red-700' :
+                          gob === 'Social'    ? 'bg-purple-50 text-purple-700' :
+                                               'bg-blue-50 text-blue-700'
+              return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cls}`}>{gob ?? '—'}</span>
+            })()}
+          </td>
+        )}
+        {visibleCols.has('avance') && (
+          <td className="px-3 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
+                <div
+                  className={`h-1.5 rounded-full ${
+                    p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
+                    p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
+                    p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                  style={{ width: `${p.pct_avance}%` }}
+                />
+              </div>
+              <span className="text-xs font-semibold text-gray-700 w-8 text-right">{p.pct_avance}%</span>
+            </div>
+          </td>
+        )}
+        {visibleCols.has('prioridad') && (
+          <td className="px-3 py-3.5">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
+              {p.prioridad}
+            </span>
+          </td>
+        )}
+        {visibleCols.has('proximoHito') && (
+          <td className="px-3 py-3.5 max-w-[200px]">
+            {p.proximo_hito
+              ? <>
+                  <p className="text-xs text-gray-700 line-clamp-2 leading-snug">{p.proximo_hito}</p>
+                  {p.fecha_proximo_hito && (
+                    <span className="text-xs text-gray-400 mt-0.5 block">{formatDate(p.fecha_proximo_hito)}</span>
+                  )}
+                </>
+              : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('estadoTermino') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
+            {p.estado_termino_gobierno ?? <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('inversion') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {p.inversion_mm != null
+              ? <span className="text-xs font-mono text-gray-700">{p.inversion_mm.toLocaleString('es-CL')} MM$</span>
+              : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('rat') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {p.rat
+              ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ratColor(p.rat)}`}>{p.rat}</span>
+              : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('fuente') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[140px]">
+            {p.fuente_financiamiento
+              ? <span className="line-clamp-2 block">{p.fuente_financiamiento}</span>
+              : <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('responsable') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap max-w-[120px]">
+            {p.responsable
+              ? <span className="truncate block">{p.responsable}</span>
+              : <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('actividad') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {actividadLoading ? (
+              <div className="h-3 bg-gray-100 rounded animate-pulse w-14" />
+            ) : (() => {
+              const dias = diasSinActividad(actividad[p.n])
+              if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
+              if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>
+              if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
+              return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
+            })()}
+          </td>
+        )}
+      </tr>
+    )
+  }
 }

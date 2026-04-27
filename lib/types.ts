@@ -259,3 +259,10 @@ export const PREGO_FASES: { key: PregoFaseKey; label: string; sublabel: string }
   { key: 'f6_consolidacion', label: 'F4', sublabel: 'Consolidación' },
   { key: 'f7_firma',         label: 'F5', sublabel: 'Firma' },
 ]
+
+export const PREGO_ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
+  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',   dot: '○' },
+  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', dot: '◐' },
+  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
+  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
+}
