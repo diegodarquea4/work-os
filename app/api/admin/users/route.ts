@@ -32,13 +32,17 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin()
 
-  const { data: inviteData, error: inviteError } = await db.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: full_name ?? '' },
+  // Create user directly (no email invite) — auto-confirmed with default password
+  const { data: createData, error: createError } = await db.auth.admin.createUser({
+    email,
+    password: 'DCI2026',
+    email_confirm: true,
+    user_metadata: { full_name: full_name ?? '' },
   })
 
-  if (inviteError) return Response.json({ error: inviteError.message }, { status: 400 })
+  if (createError) return Response.json({ error: createError.message }, { status: 400 })
 
-  const userId = inviteData.user.id
+  const userId = createData.user.id
 
   const { error: profileError } = await db.from('user_profiles').insert({
     id: userId,

@@ -7,13 +7,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const { role, region_cods, full_name } = await request.json() as {
+  const body = await request.json() as {
     role?: string
     region_cods?: string[]
     full_name?: string
+    reset_password?: boolean
   }
+  const { role, region_cods, full_name, reset_password } = body
 
   const db = getSupabaseAdmin()
+
+  // Reset password + confirm email for existing unconfirmed users
+  if (reset_password) {
+    const { error: authError } = await db.auth.admin.updateUserById(id, {
+      password: 'DCI2026',
+      email_confirm: true,
+    })
+    if (authError) return Response.json({ error: authError.message }, { status: 500 })
+    return Response.json({ ok: true })
+  }
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (role !== undefined) {
     patch.role = role

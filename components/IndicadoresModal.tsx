@@ -17,9 +17,9 @@ import type { MetricSeries, RegionMetrics } from '@/lib/types'
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type MainTab    = 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen' | 'comparar'
+type MainTab    = 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen'
 type SecSubTab  = 'resumen'   | 'evolucion' | 'actividad'
-type PibSubTab  = 'evolucion' | 'sectores'  | 'resumen'
+type PibSubTab  = 'evolucion' | 'sectores'  | 'comparar' | 'resumen'
 type CensoSub   = 'demografia' | 'vivienda' | 'educacion' | 'conectividad'
 type EmpleoSub  = 'resumen'   | 'evolucion' | 'ranking'
 type CasenSub   = 'pobreza'   | 'salud'     | 'seguridad'
@@ -32,8 +32,7 @@ const MAIN_TABS: { id: MainTab; label: string; emoji: string }[] = [
   { id: 'pib',       label: 'PIB Regional',      emoji: '📈' },
   { id: 'censo',     label: 'Censo 2024',         emoji: '🏘' },
   { id: 'empleo',    label: 'Empleo',             emoji: '💼' },
-  { id: 'casen',     label: 'CASEN',               emoji: '🏠' },
-  { id: 'comparar',  label: 'Comparar',           emoji: '📊' },
+  { id: 'casen',     label: 'CASEN',              emoji: '🏠' },
 ]
 
 const TAB_COLOR: Record<MainTab, string> = {
@@ -42,7 +41,6 @@ const TAB_COLOR: Record<MainTab, string> = {
   censo:     '#7c3aed',
   empleo:    '#0891b2',
   casen:     '#be185d',
-  comparar:  '#475569',
 }
 
 // Region colors for comparison chart
@@ -99,7 +97,7 @@ function KpiCard({ label, value, sub, color }: {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 leading-none">{label}</p>
       <p className="text-2xl font-bold text-gray-900 leading-none">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1.5 leading-snug">{sub}</p>}
+      {sub && <p className="text-xs text-gray-500 mt-1.5 leading-snug">{sub}</p>}
     </div>
   )
 }
@@ -112,7 +110,7 @@ function SubTabs<T extends string>({ tabs, active, onChange }: {
       {tabs.map(t => (
         <button key={t.id} onClick={() => onChange(t.id)}
           className={`text-sm px-4 py-2.5 font-medium border-b-2 transition-colors -mb-px ${
-            active === t.id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+            active === t.id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}>
           {t.label}
         </button>
@@ -127,8 +125,13 @@ function EmptyState({ text }: { text: string }) {
   )
 }
 
-function Source({ text }: { text: string }) {
-  return <p className="text-xs text-gray-400 mt-3">{text}</p>
+function Source({ text, updated }: { text: string; updated?: string }) {
+  return (
+    <div className="flex items-center justify-between mt-3 gap-4">
+      <p className="text-xs text-gray-500">{text}</p>
+      {updated && <p className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0">↻ {updated}</p>}
+    </div>
+  )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -159,7 +162,8 @@ export default function IndicadoresModal({ region, onClose }: Props) {
   // ── PIB chart data ────────────────────────────────────────────────────────
   const pibData = useMemo(() => {
     const regS = timeSeries.find(s => s.metric_name === 'pib_regional')
-    const natS = nationalSeries.find(s => s.metric_name === 'pib_regional')
+    // National PIB is stored as 'pib_nacional' (separate series for region_id=0)
+    const natS = nationalSeries.find(s => s.metric_name === 'pib_nacional')
     if (!regS) return []
     const natMap = new Map((natS?.data ?? []).map(d => [d.period, d.value]))
 
@@ -296,9 +300,6 @@ export default function IndicadoresModal({ region, onClose }: Props) {
                   setSubTab={setCasenSub}
                 />
               )}
-              {mainTab === 'comparar' && (
-                <CompararSection region={activeRegion} />
-              )}
             </>
           )}
         </div>
@@ -429,7 +430,7 @@ function SeguridadResumen({ regionRow: r, allRows, semana, accentColor }: {
                     </td>
                     <td className="px-3 py-2 text-right text-gray-700">{row.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</td>
                     <td className="px-3 py-2 text-right text-gray-700">{row.tasa_registro?.toFixed(0) ?? '—'}</td>
-                    <td className="px-3 py-2 text-gray-500 max-w-[180px] truncate">{row.mayor_registro_1 ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 max-w-[180px] truncate">{row.mayor_registro_1 ?? '—'}</td>
                   </tr>
                 ))}
             </tbody>
@@ -444,7 +445,7 @@ function SeguridadResumen({ regionRow: r, allRows, semana, accentColor }: {
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
               <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
               <YAxis type="category" dataKey="nombre" tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} width={130} />
               <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} /100k`, 'Tasa']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
               <Bar dataKey="tasa" radius={[0, 3, 3, 0]}>
@@ -457,7 +458,7 @@ function SeguridadResumen({ regionRow: r, allRows, semana, accentColor }: {
         </div>
       )}
 
-      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" />
+      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" updated={semana || undefined} />
     </div>
   )
 }
@@ -476,8 +477,8 @@ function SeguridadEvolucion({ history }: { history: LeystopRow[] }) {
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data} margin={{ top: 4, right: 10, left: -20, bottom: 24 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
-            <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
+            <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
             <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} /100k`, 'Tasa delictual']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
             <Bar dataKey="value" fill="#86efac" radius={[2, 2, 0, 0]} />
           </BarChart>
@@ -489,15 +490,15 @@ function SeguridadEvolucion({ history }: { history: LeystopRow[] }) {
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 4, right: 10, left: -20, bottom: 24 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
-            <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
+            <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
             <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), 'Casos']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
             <Bar dataKey="casos" fill="#16a34a" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" />
+      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" updated={history.at(-1)?.fecha_hasta_iso ? `Últ. semana: ${fmtShortDate(history.at(-1)!.fecha_hasta_iso)}` : undefined} />
     </div>
   )
 }
@@ -549,7 +550,7 @@ function SeguridadActividad({ regionRow: r, allRows, accentColor }: {
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">{title}</h3>
             <ResponsiveContainer width="100%" height={120}>
               <BarChart data={bData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
                 <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={110} />
                 <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), '']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
                 <Bar dataKey="valor" fill={color} radius={[0, 3, 3, 0]} />
@@ -559,7 +560,7 @@ function SeguridadActividad({ regionRow: r, allRows, accentColor }: {
         ))}
       </div>
 
-      <Source text={`Fuente: Ley S.T.O.P. — Carabineros de Chile · ${row.fecha_desde_iso} al ${row.fecha_hasta_iso}`} />
+      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile" updated={`Semana ${row.fecha_desde_iso} al ${row.fecha_hasta_iso}`} />
     </div>
   )
 }
@@ -584,9 +585,12 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
   const SUB = [
     { id: 'evolucion' as PibSubTab, label: 'Evolución' },
     { id: 'sectores'  as PibSubTab, label: 'Sectores productivos' },
+    { id: 'comparar'  as PibSubTab, label: 'Comparar regiones' },
     { id: 'resumen'   as PibSubTab, label: 'Resumen' },
   ]
   const latestReg = pibData.at(-1)?.regional ?? null
+  const lastPeriod = pibData.at(-1)?.period ?? sectPeriod ?? null
+  const updatedLabel = lastPeriod ? `Último dato: ${fmtQuarterly(lastPeriod)}` : undefined
   const pibYFmt = (v: number) => pibMode === 'pct' ? `${v.toFixed(2)}%` : `${v.toFixed(0)} MM$`
 
   return (
@@ -606,22 +610,29 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
               {region.nombre.split(' ')[0]}: {pibYFmt(latestReg)}
             </span>
           )}
-          {pibData.length === 0 ? (
+          {pibData.length === 0 && pibMode === 'pct' ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-amber-700">
+                <span className="font-semibold">PIB nacional no disponible aún</span> — requiere sync de Banco Central (serie F032.PIB). Cambia a <button onClick={() => setPibMode('mm')} className="underline font-semibold">MM$</button> para ver la evolución regional.
+              </p>
+            </div>
+          ) : pibData.length === 0 ? (
             <EmptyState text="Sin datos de PIB regional. Requiere sync de Banco Central." />
           ) : (
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={pibData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-                  <XAxis dataKey="period" tickFormatter={fmtQuarterly} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                  <YAxis tickFormatter={pibYFmt} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={54} />
+                  <XAxis dataKey="period" tickFormatter={fmtQuarterly} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tickFormatter={pibYFmt} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={54} />
                   <Tooltip formatter={(value, name) => [typeof value === 'number' ? pibYFmt(value) : String(value), name === 'regional' ? region.nombre : 'Promedio Nacional']} labelFormatter={(l) => typeof l === 'string' ? fmtQuarterly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
                   <Line type="monotone" dataKey="regional" stroke={zoneColor} strokeWidth={2.5} dot={{ r: 2, fill: zoneColor }} activeDot={{ r: 5 }} connectNulls />
+                  {pibMode === 'mm' && <Line type="monotone" dataKey="national" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 3 }} connectNulls />}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
-          <Source text="Fuente: Banco Central de Chile · Actualización trimestral" />
+          <Source text="Fuente: Banco Central de Chile · Actualización trimestral" updated={updatedLabel} />
         </div>
       )}
 
@@ -638,7 +649,7 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
                 <ResponsiveContainer width="100%" height={Math.max(280, sectores.length * 32)}>
                   <BarChart data={sectores} layout="vertical" margin={{ top: 0, right: 60, left: 10, bottom: 0 }}>
                     <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(0)} MM$`} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v.toFixed(0)} MM$`} />
                     <YAxis type="category" dataKey="sector" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={140} />
                     <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} MM$`, 'PIB']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
                     <Bar dataKey="value" fill="#2563eb" radius={[0, 3, 3, 0]}>
@@ -649,8 +660,12 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
               </div>
             </>
           )}
-          <Source text="Fuente: Banco Central de Chile · Miles de millones de pesos encadenados base 2018" />
+          <Source text="Fuente: Banco Central de Chile · Miles de millones de pesos encadenados base 2018" updated={sectPeriod ? `Último dato: ${fmtQuarterly(sectPeriod)}` : undefined} />
         </div>
+      )}
+
+      {subTab === 'comparar' && (
+        <CompararSection region={region} />
       )}
 
       {subTab === 'resumen' && (
@@ -672,7 +687,7 @@ function PibSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores
               )}
             </div>
           )}
-          <Source text="Fuente: Banco Central de Chile · Datos anuales / snapshot estático" />
+          <Source text="Fuente: Banco Central de Chile · Datos anuales / snapshot estático" updated={updatedLabel} />
         </div>
       )}
     </div>
@@ -721,7 +736,7 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Zona rural"           value={pct(m.pct_rural)}                         sub="de la población"         color={PURPLE} />
             <KpiCard label="Densidad poblacional" value={m.densidad_poblacional != null ? `${fnum(m.densidad_poblacional, 1)} hab/km²` : '—'} sub="" color={PURPLE} />
           </div>
-          <Source text="Fuente: Censo 2024 — INE Chile · Urbano/rural y densidad: Censo 2017" />
+          <Source text="Fuente: Censo 2024 — INE Chile · Urbano/rural y densidad: Censo 2017" updated="Censo 2024" />
         </div>
       )}
 
@@ -783,22 +798,26 @@ function EmpleoSection({ region, empleoData, colegaEmpleo, metrics: m, subTab, s
   const latestEmpleo = empleoData.at(-1)?.regional ?? null
   const latestNat    = empleoData.at(-1)?.national  ?? null
   const latestColega = colegaEmpleo.at(-1)
+  const empleoUpdated = latestColega?.periodo
+    ? `Último dato: ${fmtMonthly(latestColega.periodo)}`
+    : empleoData.at(-1)?.period ? `Último dato: ${fmtMonthly(empleoData.at(-1)!.period)}` : undefined
 
   return (
     <div className="p-6">
       <SubTabs tabs={SUB} active={subTab} onChange={setSubTab} />
-      {subTab === 'resumen'   && <EmpleoResumen region={region} metrics={m} latestColega={latestColega ?? null} zoneColor={zoneColor} />}
-      {subTab === 'evolucion' && <EmpleoEvolucion region={region} data={empleoData} colegaEmpleo={colegaEmpleo} metrics={m} latestReg={latestEmpleo} latestNat={latestNat} zoneColor={zoneColor} />}
+      {subTab === 'resumen'   && <EmpleoResumen region={region} metrics={m} latestColega={latestColega ?? null} zoneColor={zoneColor} updated={empleoUpdated} />}
+      {subTab === 'evolucion' && <EmpleoEvolucion region={region} data={empleoData} colegaEmpleo={colegaEmpleo} metrics={m} latestReg={latestEmpleo} latestNat={latestNat} zoneColor={zoneColor} updated={empleoUpdated} />}
       {subTab === 'ranking'   && <EmpleoRanking region={region} zoneColor={zoneColor} />}
     </div>
   )
 }
 
-function EmpleoResumen({ region, metrics: m, latestColega, zoneColor }: {
+function EmpleoResumen({ region, metrics: m, latestColega, zoneColor, updated }: {
   region: Region
   metrics: RegionMetrics | null
   latestColega: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint | null
   zoneColor: string
+  updated?: string
 }) {
   const CYAN = '#0891b2'
 
@@ -813,12 +832,12 @@ function EmpleoResumen({ region, metrics: m, latestColega, zoneColor }: {
         <KpiCard label="Ocupación informal" value={pct(m?.tasa_ocupacion_informal)}         sub="del total de ocupados"         color={CYAN} />
         <KpiCard label="Desocupados (Censo)" value={num(m?.n_desocupado)}                   sub="personas · Censo 2024"          color={CYAN} />
       </div>
-      <Source text="Fuente: BCE/INE (mensual) + Censo 2024 — INE Chile" />
+      <Source text="Fuente: BCE/INE (mensual) + Censo 2024 — INE Chile" updated={updated} />
     </div>
   )
 }
 
-function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, latestNat, zoneColor }: {
+function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, latestNat, zoneColor, updated }: {
   region: Region
   data: { period: string; regional: number | null; national: number | null }[]
   colegaEmpleo: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint[]
@@ -826,6 +845,7 @@ function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, la
   latestReg: number | null
   latestNat: number | null
   zoneColor: string
+  updated?: string
 }) {
   const yFmt = (v: number) => `${v.toFixed(1)}%`
   // Merge colega tasa series with work-os series (colega preferred where available)
@@ -861,8 +881,8 @@ function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, la
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={mergedTasa} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-              <XAxis dataKey="period" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis tickFormatter={yFmt} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
+              <XAxis dataKey="period" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+              <YAxis tickFormatter={yFmt} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={48} />
               <Tooltip formatter={(value, name) => [typeof value === 'number' ? yFmt(value) : String(value), name === 'regional' ? region.nombre : 'Promedio Nacional']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
               <Line type="monotone" dataKey="regional" stroke={zoneColor} strokeWidth={2.5} dot={{ r: 1.5, fill: zoneColor }} activeDot={{ r: 5 }} connectNulls />
               {!colegaEmpleo.length && <Line type="monotone" dataKey="national" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 3 }} connectNulls />}
@@ -878,8 +898,8 @@ function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, la
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={colegaEmpleo} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-              <XAxis dataKey="periodo" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => `${v.toFixed(0)}k`} />
+              <XAxis dataKey="periodo" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => `${v.toFixed(0)}k`} />
               <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} mil`, 'Ocupados']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
               <Line type="monotone" dataKey="ocupados" stroke="#0891b2" strokeWidth={2.5} dot={{ r: 1.5, fill: '#0891b2' }} activeDot={{ r: 5 }} connectNulls />
             </LineChart>
@@ -887,7 +907,7 @@ function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, la
         </div>
       )}
 
-      <Source text="Fuente: BCE/INE — Banco Central de Chile · Actualización mensual" />
+      <Source text="Fuente: BCE/INE — Banco Central de Chile · Actualización mensual" updated={updated} />
     </div>
   )
 }
@@ -920,7 +940,7 @@ function EmpleoRanking({ region, zoneColor }: { region: Region; zoneColor: strin
           <ResponsiveContainer width="100%" height={Math.max(320, rankingData.length * 28)}>
             <BarChart data={rankingData} layout="vertical" margin={{ top: 0, right: 50, left: 10, bottom: 0 }}>
               <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} unit="%" domain={[0, 'auto']} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} unit="%" domain={[0, 'auto']} />
               <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={140} />
               <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Tasa desocupación']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
               <Bar dataKey="value" radius={[0, 3, 3, 0]}>
@@ -932,7 +952,7 @@ function EmpleoRanking({ region, zoneColor }: { region: Region; zoneColor: strin
           </ResponsiveContainer>
         </div>
       )}
-      <Source text="Fuente: Banco Central de Chile · Actualización mensual" />
+      {rankingData[0] && <Source text="Fuente: Banco Central de Chile · Actualización mensual" updated={`Último dato: ${fmtMonthly(rankingData[0].period)}`} />}
     </div>
   )
 }
@@ -976,7 +996,7 @@ function CasenSection({ metrics: m, subTab, setSubTab }: {
               <span className="font-semibold">Fuentes:</span> Pobreza por ingresos: CASEN 2024. Pobreza multidimensional: CASEN 2022 (estimación parcial por región). Pobreza extrema y severa: datos pendientes de carga.
             </p>
           </div>
-          <Source text="Fuente: CASEN — Ministerio de Desarrollo Social y Familia (MIDESO)" />
+          <Source text="Fuente: CASEN — Ministerio de Desarrollo Social y Familia (MIDESO)" updated="CASEN 2024" />
         </div>
       )}
 
@@ -1005,7 +1025,7 @@ function CasenSection({ metrics: m, subTab, setSubTab }: {
             <KpiCard label="Tasa denuncias"          value={fmt(m.tasa_denuncias_100k, 0, ' /100k')} sub="por 100.000 hab."         color={ROSE} />
             <KpiCard label="Tasa delitos"            value={fmt(m.tasa_delitos_100k, 0, ' /100k')} sub="por 100.000 hab."           color={ROSE} />
           </div>
-          <Source text="Fuente: ENUSC 2022 — INE Chile · Tasa denuncias/delitos: Carabineros de Chile" />
+          <Source text="Fuente: ENUSC 2022 — INE Chile · Tasa denuncias/delitos: Carabineros de Chile" updated="ENUSC 2022" />
         </div>
       )}
     </div>
@@ -1066,7 +1086,7 @@ function CompararSection({ region }: { region: Region }) {
             </button>
           ))}
         </div>
-        <span className="text-xs text-gray-400">{visible.size} de 16 regiones visibles</span>
+        <span className="text-xs text-gray-500">{visible.size} de 16 regiones visibles</span>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-4">
@@ -1075,8 +1095,8 @@ function CompararSection({ region }: { region: Region }) {
         ) : (
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-              <XAxis dataKey="period" tickFormatter={fmtP} tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={{ stroke: '#E5E7EB' }} interval="preserveStartEnd" />
-              <YAxis tickFormatter={metricCfg.yFmt} tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} width={60} />
+              <XAxis dataKey="period" tickFormatter={fmtP} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={{ stroke: '#E5E7EB' }} interval="preserveStartEnd" />
+              <YAxis tickFormatter={metricCfg.yFmt} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={60} />
               <Tooltip formatter={(value, name) => typeof value === 'number' ? [metricCfg.yFmt(value), REGIONS.find(r => r.cod === name)?.nombre ?? name] : [value, name]} labelFormatter={(l) => typeof l === 'string' ? fmtP(l) : l} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E5E7EB' }} itemSorter={(item) => -(item.value as number)} />
               {data.filter(s => visible.has(s.region.cod)).map(s => (
                 <Line key={s.region.cod} type="monotone" dataKey={s.region.cod} name={s.region.cod}
@@ -1123,7 +1143,11 @@ function CompararSection({ region }: { region: Region }) {
         </div>
       </div>
 
-      <Source text="Fuente: Banco Central de Chile · Actualización mensual / trimestral" />
+      {(() => {
+        const lastP = data.at(0)?.data.at(-1)?.period
+        const updTxt = lastP ? (activeMetric === 'pib_regional' ? `Último dato: ${fmtQuarterly(lastP)}` : `Último dato: ${fmtMonthly(lastP)}`) : undefined
+        return <Source text="Fuente: Banco Central de Chile · Actualización mensual / trimestral" updated={updTxt} />
+      })()}
     </div>
   )
 }

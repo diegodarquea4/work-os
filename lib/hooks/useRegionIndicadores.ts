@@ -22,6 +22,8 @@ export function useRegionIndicadores(regionCod: string) {
     setLoading(true)
     const sb = getSupabase()
     const names = [...INDICADOR_METRICS]
+    // National PIB is stored as 'pib_nacional' (not 'pib_regional') — include it
+    const nationalNames = [...names, 'pib_nacional']
 
     Promise.all([
       // Regional time series
@@ -35,7 +37,7 @@ export function useRegionIndicadores(regionCod: string) {
       sb.from('regional_metrics')
         .select('metric_name, period, value')
         .eq('region_id', 0)
-        .in('metric_name', names)
+        .in('metric_name', nationalNames)
         .order('period', { ascending: true }),
 
       // Security history: up to 52 weeks (latest first)

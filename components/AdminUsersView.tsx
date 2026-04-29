@@ -179,6 +179,21 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
+  async function handleResetPassword(id: string, email: string) {
+    if (!confirm(`Resetear la clave de ${email} a "DCI2026"?`)) return
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_password: true }),
+    })
+    if (!res.ok) {
+      const body = await res.json()
+      setError(body.error ?? 'Error al resetear contraseña')
+    }
+    setSaving(null)
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     setInviting(true)
@@ -219,7 +234,7 @@ export default function AdminUsersView() {
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M7 2v10M2 7h10"/>
           </svg>
-          Invitar usuario
+          Agregar usuario
         </button>
       </div>
 
@@ -282,16 +297,28 @@ export default function AdminUsersView() {
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => handleDelete(u.id, u.email)}
-                        disabled={saving === u.id}
-                        className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded hover:bg-red-50 disabled:opacity-40"
-                        title="Eliminar acceso"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
-                        </svg>
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleResetPassword(u.id, u.email)}
+                          disabled={saving === u.id}
+                          className="p-1.5 text-gray-300 hover:text-amber-500 transition-colors rounded hover:bg-amber-50 disabled:opacity-40"
+                          title="Resetear clave a DCI2026"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(u.id, u.email)}
+                          disabled={saving === u.id}
+                          className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded hover:bg-red-50 disabled:opacity-40"
+                          title="Eliminar acceso"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -308,7 +335,7 @@ export default function AdminUsersView() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md mx-4 overflow-hidden">
             <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-              <span className="text-white font-semibold">Invitar usuario</span>
+              <span className="text-white font-semibold">Agregar usuario</span>
               <button onClick={() => setShowInvite(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <form onSubmit={handleInvite} className="px-6 py-5 space-y-4">
@@ -372,6 +399,11 @@ export default function AdminUsersView() {
                   </div>
                 </div>
               )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-700">
+                  El usuario quedará activo inmediatamente. <span className="font-semibold">Clave inicial: DCI2026</span>
+                </p>
+              </div>
               {inviteError && (
                 <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{inviteError}</p>
               )}
@@ -388,7 +420,7 @@ export default function AdminUsersView() {
                   disabled={inviting}
                   className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
                 >
-                  {inviting ? 'Enviando...' : 'Enviar invitación'}
+                  {inviting ? 'Creando...' : 'Crear usuario'}
                 </button>
               </div>
             </form>
