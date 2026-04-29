@@ -7,12 +7,13 @@ import {
 } from 'recharts'
 import { useRegionIndicadores } from '@/lib/hooks/useRegionIndicadores'
 import { useAllRegionsMetric } from '@/lib/hooks/useAllRegionsMetric'
-import { useAllRegionsSecurity } from '@/lib/hooks/useAllRegionsSecurity'
-import { useStopStats } from '@/lib/hooks/useStopStats'
 import { usePibSectorial } from '@/lib/hooks/usePibSectorial'
-import { ZONA_COLORS, REGIONS } from '@/lib/regions'
+import { useColegaSeguridadAll, useColegaSeguridadRegion } from '@/lib/hooks/useColegaSeguridad'
+import type { LeystopRow } from '@/lib/hooks/useColegaSeguridad'
+import { useColegaEmpleoRegion } from '@/lib/hooks/useColegaEmpleo'
+import { ZONA_COLORS, REGIONS, INE_CODE } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
-import type { MetricSeries, RegionMetrics, SecurityWeekly } from '@/lib/types'
+import type { MetricSeries, RegionMetrics } from '@/lib/types'
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
@@ -148,11 +149,12 @@ export default function IndicadoresModal({ region, onClose }: Props) {
   const zoneColor    = ZONA_COLORS[activeRegion.zona] ?? '#64748b'
   const tabColor     = TAB_COLOR[mainTab]
 
-  const { timeSeries, nationalSeries, security, securityHistory, metrics, loading } =
+  const { timeSeries, nationalSeries, metrics, loading } =
     useRegionIndicadores(activeRegionCod)
-  const { stats: stopStats }  = useStopStats(activeRegionCod)
   const { data: sectores, latestPeriod: sectPeriod, loading: sectLoading } = usePibSectorial(activeRegionCod)
-  const { data: allSecurity } = useAllRegionsSecurity()
+  const { rows: allLeystop, semana: leystopSemana, loading: secAllLoading } = useColegaSeguridadAll()
+  const { history: leystopHistory, loading: secRegLoading } = useColegaSeguridadRegion(activeRegionCod)
+  const { series: colegaEmpleo } = useColegaEmpleoRegion(activeRegionCod)
 
   // ── PIB chart data ────────────────────────────────────────────────────────
   const pibData = useMemo(() => {
@@ -244,10 +246,11 @@ export default function IndicadoresModal({ region, onClose }: Props) {
             <>
               {mainTab === 'seguridad' && (
                 <SeguridadSection
-                  security={security}
-                  securityHistory={securityHistory}
-                  allSecurity={allSecurity}
-                  stopStats={stopStats}
+                  regionCod={activeRegionCod}
+                  allRows={allLeystop}
+                  history={leystopHistory}
+                  semana={leystopSemana}
+                  loading={secAllLoading || secRegLoading}
                   subTab={secSub}
                   setSubTab={setSecSub}
                   accentColor={tabColor}
@@ -279,6 +282,7 @@ export default function IndicadoresModal({ region, onClose }: Props) {
                 <EmpleoSection
                   region={activeRegion}
                   empleoData={empleoData}
+                  colegaEmpleo={colegaEmpleo}
                   metrics={metrics}
                   subTab={empleoSub}
                   setSubTab={setEmpleoSub}
@@ -305,14 +309,12 @@ export default function IndicadoresModal({ region, onClose }: Props) {
 
 // ── Seguridad ─────────────────────────────────────────────────────────────────
 
-type AllSecEntry = import('@/lib/hooks/useAllRegionsSecurity').RegionSecuritySnapshot
-type StopStatsT  = import('@/lib/hooks/useStopStats').StopStats
-
-function SeguridadSection({ security: s, securityHistory, allSecurity, stopStats, subTab, setSubTab, accentColor }: {
-  security: SecurityWeekly | null
-  securityHistory: SecurityWeekly[]
-  allSecurity: AllSecEntry[]
-  stopStats: StopStatsT | null
+function SeguridadSection({ regionCod, allRows, history, semana, loading, subTab, setSubTab, accentColor }: {
+  regionCod: string
+  allRows: LeystopRow[]
+  history: LeystopRow[]
+  semana: string
+  loading: boolean
   subTab: SecSubTab
   setSubTab: (t: SecSubTab) => void
   accentColor: string
@@ -322,119 +324,74 @@ function SeguridadSection({ security: s, securityHistory, allSecurity, stopStats
     { id: 'evolucion' as SecSubTab, label: 'Evolución temporal' },
     { id: 'actividad' as SecSubTab, label: 'Actividad operativa' },
   ]
+
+  const regionRow = allRows.find(r => INE_CODE[regionCod] === r.id_region) ?? null
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-slate-700 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
   return (
     <div className="p-6">
       <SubTabs tabs={SUB} active={subTab} onChange={setSubTab} />
-      {subTab === 'resumen'   && <SeguridadResumen security={s} allSecurity={allSecurity} accentColor={accentColor} />}
-      {subTab === 'evolucion' && <SeguridadEvolucion history={securityHistory} />}
-      {subTab === 'actividad' && <SeguridadActividad stats={stopStats} accentColor={accentColor} />}
+      {subTab === 'resumen'   && <SeguridadResumen regionRow={regionRow} allRows={allRows} semana={semana} accentColor={accentColor} />}
+      {subTab === 'evolucion' && <SeguridadEvolucion history={history} />}
+      {subTab === 'actividad' && <SeguridadActividad regionRow={regionRow} allRows={allRows} accentColor={accentColor} />}
     </div>
   )
 }
 
-function SeguridadResumen({ security: s, allSecurity, accentColor }: {
-  security: SecurityWeekly | null
-  allSecurity: AllSecEntry[]
+function SeguridadResumen({ regionRow: r, allRows, semana, accentColor }: {
+  regionRow: LeystopRow | null
+  allRows: LeystopRow[]
+  semana: string
   accentColor: string
 }) {
-  // National totals from all-regions data
-  const totalCasos     = allSecurity.reduce((sum, r) => sum + (r.casos_semana ?? 0), 0)
-  const avgTasa        = allSecurity.length > 0
-    ? allSecurity.reduce((sum, r) => sum + (r.tasa_registro ?? 0), 0) / allSecurity.filter(r => r.tasa_registro != null).length
+  const totalAnno = allRows.reduce((s, row) => s + (row.casos_anno_fecha ?? 0), 0)
+  const totalSem  = allRows.reduce((s, row) => s + (row.casos_ultima_semana ?? 0), 0)
+  const avgTasa   = allRows.length > 0
+    ? allRows.reduce((s, row) => s + (row.tasa_registro ?? 0), 0) / allRows.filter(row => row.tasa_registro != null).length
     : null
-  const avgVar         = allSecurity.length > 0
-    ? allSecurity.reduce((sum, r) => sum + (r.var_semana_pct ?? 0), 0) / allSecurity.filter(r => r.var_semana_pct != null).length
-    : null
-  const varPos = (avgVar ?? 0) > 0
 
-  // Bar chart data (sorted by tasa_registro)
-  const chartData = [...allSecurity]
-    .filter(r => r.tasa_registro != null)
+  const chartData = [...allRows]
+    .filter(row => row.tasa_registro != null)
     .sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
-    .map(r => ({ nombre: r.region_nombre.replace('Región de ', '').replace('Región del ', '').replace('Región ', ''), tasa: r.tasa_registro ?? 0 }))
+    .map(row => ({ nombre: row.nombre_region, tasa: row.tasa_registro ?? 0 }))
 
-  const noData = !s && allSecurity.length === 0
-
-  if (noData) {
-    return <EmptyState text="Sin datos de seguridad disponibles. Los datos de LeyStop se actualizan automáticamente cada miércoles." />
+  if (allRows.length === 0) {
+    return <EmptyState text="Sin datos de seguridad. Los datos de LeyStop se actualizan automáticamente cada miércoles." />
   }
 
   return (
     <div className="space-y-5">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <KpiCard label="Casos semana (total nacional)" value={totalCasos > 0 ? totalCasos.toLocaleString('es-CL') : (s?.casos_semana?.toLocaleString('es-CL') ?? '—')} sub={s?.semana ? `Semana ${s.semana}` : undefined} color={accentColor} />
-        <KpiCard label="Variación (promedio regional)"  value={avgVar != null ? `${varPos ? '+' : ''}${avgVar.toFixed(1)}%` : (s?.var_semana_pct != null ? `${s.var_semana_pct.toFixed(1)}%` : '—')} sub="vs semana anterior" color={varPos ? '#dc2626' : accentColor} />
-        <KpiCard label="Tasa por 100 mil hab." value={avgTasa != null ? avgTasa.toFixed(0) : (s?.tasa_registro?.toFixed(0) ?? '—')} sub="Promedio regional" color="#2563eb" />
+      {/* KPIs — región seleccionada + nacionales */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard label="Casos año a la fecha" value={r?.casos_anno_fecha?.toLocaleString('es-CL') ?? totalAnno.toLocaleString('es-CL')} sub={r ? r.nombre_region : 'Total nacional'} color={accentColor} />
+        <KpiCard label="Última semana" value={r?.casos_ultima_semana?.toLocaleString('es-CL') ?? totalSem.toLocaleString('es-CL')} sub={semana || 'Semana actual'} color={accentColor} />
+        <KpiCard label="Var. año a la fecha" value={r?.var_anno_fecha != null ? `${r.var_anno_fecha > 0 ? '+' : ''}${r.var_anno_fecha.toFixed(1)}%` : '—'} sub="vs año anterior" color={(r?.var_anno_fecha ?? 0) > 0 ? '#dc2626' : accentColor} />
+        <KpiCard label="Tasa /100k hab." value={r?.tasa_registro?.toFixed(0) ?? (avgTasa?.toFixed(0) ?? '—')} sub={r ? 'Región seleccionada' : 'Promedio nacional'} color="#2563eb" />
       </div>
 
-      {/* All-regions table */}
-      {allSecurity.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Resumen por región</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-2.5 text-gray-500 font-medium">Región</th>
-                  <th className="text-right px-3 py-2.5 text-gray-500 font-medium">Casos sem.</th>
-                  <th className="text-right px-3 py-2.5 text-gray-500 font-medium">Var. %</th>
-                  <th className="text-right px-3 py-2.5 text-gray-500 font-medium">Tasa/100k</th>
-                  <th className="text-left px-3 py-2.5 text-gray-500 font-medium">Principal delito</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allSecurity.map(r => (
-                  <tr key={r.region_cod} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{r.region_nombre}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-700">{r.casos_semana?.toLocaleString('es-CL') ?? '—'}</td>
-                    <td className={`px-3 py-2.5 text-right font-semibold ${(r.var_semana_pct ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {r.var_semana_pct != null ? `${r.var_semana_pct > 0 ? '+' : ''}${r.var_semana_pct.toFixed(1)}%` : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-gray-700">{r.tasa_registro?.toFixed(0) ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-500 max-w-[200px] truncate">{r.delito_1 ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Bar chart */}
-      {chartData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Tasa de registro por 100 mil hab.</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-              <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={130} />
-              <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} /100k`, 'Tasa']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="tasa" fill={accentColor} radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Single-region delitos (if we have it) */}
-      {s && (() => {
-        const delitos = [{ nombre: s.delito_1, pct: s.pct_1 }, { nombre: s.delito_2, pct: s.pct_2 }, { nombre: s.delito_3, pct: s.pct_3 }].filter(d => d.nombre)
-        const maxPct = Math.max(...delitos.map(d => d.pct ?? 0), 1)
+      {/* Top 5 delitos de la región */}
+      {r && (() => {
+        const delitos = [
+          { nombre: r.mayor_registro_1, n: r.n_1 }, { nombre: r.mayor_registro_2, n: r.n_2 },
+          { nombre: r.mayor_registro_3, n: r.n_3 }, { nombre: r.mayor_registro_4, n: r.n_4 },
+          { nombre: r.mayor_registro_5, n: r.n_5 },
+        ].filter(d => d.nombre)
+        const maxN = Math.max(...delitos.map(d => d.n ?? 0), 1)
         return delitos.length > 0 ? (
           <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Top delitos — región seleccionada</h3>
-            <div className="space-y-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Top 5 delitos — {r.nombre_region} · {semana}</h3>
+            <div className="space-y-3">
               {delitos.map((d, i) => (
                 <div key={i}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm text-gray-700 leading-tight pr-4">{d.nombre}</span>
-                    <span className="text-sm font-bold text-gray-900 flex-shrink-0">{fmt(d.pct, 1)}%</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-700 leading-tight pr-4 truncate">{d.nombre}</span>
+                    <span className="text-xs font-bold text-gray-900 flex-shrink-0">{d.n?.toLocaleString('es-CL') ?? '—'}</span>
                   </div>
-                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((d.pct ?? 0) / maxPct) * 100}%`, backgroundColor: i === 0 ? accentColor : '#86efac' }} />
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${((d.n ?? 0) / maxN) * 100}%`, backgroundColor: i === 0 ? accentColor : '#86efac' }} />
                   </div>
                 </div>
               ))}
@@ -443,24 +400,81 @@ function SeguridadResumen({ security: s, allSecurity, accentColor }: {
         ) : null
       })()}
 
-      <Source text={`Fuente: Ley S.T.O.P. — Carabineros de Chile${s?.fecha_desde && s?.fecha_hasta ? ` · ${s.fecha_desde} al ${s.fecha_hasta}` : ''} · Datos actualizados semanalmente`} />
+      {/* Ranking table — todas las regiones */}
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ranking por región — {semana}</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-[#1a1a2e] text-white">
+                <th className="text-left px-4 py-2.5 font-medium">Región</th>
+                <th className="text-right px-3 py-2.5 font-medium">Casos año</th>
+                <th className="text-right px-3 py-2.5 font-medium">Var. año %</th>
+                <th className="text-right px-3 py-2.5 font-medium">Últ. semana</th>
+                <th className="text-right px-3 py-2.5 font-medium">Tasa/100k</th>
+                <th className="text-left px-3 py-2.5 font-medium">Delito principal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...allRows]
+                .sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
+                .map(row => (
+                  <tr key={row.id_region} className={`border-b border-gray-50 hover:bg-blue-50 transition-colors ${row.id_region === r?.id_region ? 'bg-blue-50 font-semibold' : ''}`}>
+                    <td className="px-4 py-2 text-gray-800">{row.nombre_region}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{row.casos_anno_fecha?.toLocaleString('es-CL') ?? '—'}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${(row.var_anno_fecha ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {row.var_anno_fecha != null ? `${row.var_anno_fecha > 0 ? '+' : ''}${row.var_anno_fecha.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-700">{row.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{row.tasa_registro?.toFixed(0) ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 max-w-[180px] truncate">{row.mayor_registro_1 ?? '—'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Bar chart tasa por región */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Tasa de registro por 100 mil hab.</h3>
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="nombre" tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} width={130} />
+              <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} /100k`, 'Tasa']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+              <Bar dataKey="tasa" radius={[0, 3, 3, 0]}>
+                {chartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.nombre === r?.nombre_region ? accentColor : '#86efac'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" />
     </div>
   )
 }
 
-function SeguridadEvolucion({ history }: { history: SecurityWeekly[] }) {
-  const data = [...history].reverse().map(s => ({ period: s.fecha_hasta, value: s.tasa_registro ?? 0 }))
+function SeguridadEvolucion({ history }: { history: LeystopRow[] }) {
+  const data = history.map(s => ({ period: s.fecha_hasta_iso, value: s.tasa_registro ?? 0, casos: s.casos_ultima_semana ?? 0 }))
 
   if (data.length === 0) {
-    return <EmptyState text="Sin histórico de seguridad disponible. Los datos semanales se acumulan con cada sync." />
+    return <EmptyState text="Sin histórico de seguridad disponible. Los datos se acumulan con cada sync semanal." />
   }
 
   return (
     <div className="space-y-5">
       <div className="bg-white rounded-xl border border-gray-100 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Tasa de registro por 100 mil hab. — evolución semanal</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 24 }}>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={data} margin={{ top: 4, right: 10, left: -20, bottom: 24 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
             <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
             <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
@@ -470,91 +484,82 @@ function SeguridadEvolucion({ history }: { history: SecurityWeekly[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Delitos stacked per week */}
-      {history.length > 1 && (() => {
-        const stackData = [...history].reverse().map(s => ({
-          period:   s.fecha_hasta,
-          delito1:  s.pct_1 ?? 0,
-          delito2:  s.pct_2 ?? 0,
-          delito3:  s.pct_3 ?? 0,
-          label1:   s.delito_1 ?? '',
-          label2:   s.delito_2 ?? '',
-          label3:   s.delito_3 ?? '',
-        }))
-        const labels = { d1: stackData[stackData.length - 1]?.label1 || 'Delito 1', d2: stackData[stackData.length - 1]?.label2 || 'Delito 2', d3: stackData[stackData.length - 1]?.label3 || 'Delito 3' }
-        return (
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Top delitos por semana (% del total)</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={stackData} margin={{ top: 4, right: 10, left: -20, bottom: 24 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(stackData.length / 10) - 1)} />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} unit="%" />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                <Bar dataKey="delito1" name={labels.d1} stackId="a" fill="#16a34a" />
-                <Bar dataKey="delito2" name={labels.d2} stackId="a" fill="#4ade80" />
-                <Bar dataKey="delito3" name={labels.d3} stackId="a" fill="#86efac" radius={[2, 2, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )
-      })()}
+      <div className="bg-white rounded-xl border border-gray-100 p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Casos por semana</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data} margin={{ top: 4, right: 10, left: -20, bottom: 24 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+            <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={Math.max(0, Math.floor(data.length / 10) - 1)} />
+            <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+            <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), 'Casos']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+            <Bar dataKey="casos" fill="#16a34a" radius={[2, 2, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
 
       <Source text="Fuente: Ley S.T.O.P. — Carabineros de Chile · Actualización semanal" />
     </div>
   )
 }
 
-function SeguridadActividad({ stats: s, accentColor }: { stats: StopStatsT | null; accentColor: string }) {
-  if (!s) {
-    return <EmptyState text="Datos operativos no disponibles para esta región. Se actualizan con el sync semanal de LeyStop." />
+function SeguridadActividad({ regionRow: r, allRows, accentColor }: {
+  regionRow: LeystopRow | null
+  allRows: LeystopRow[]
+  accentColor: string
+}) {
+  const row = r ?? allRows[0]
+  if (!row) {
+    return <EmptyState text="Datos operativos no disponibles. Se actualizan con el sync semanal de LeyStop." />
   }
 
   const controlesData = [
-    { nombre: 'Identidad', valor: s.controles_identidad ?? 0 },
-    { nombre: 'Vehicular',  valor: s.controles_vehicular  ?? 0 },
+    { nombre: 'Identidad', valor: row.controles_identidad ?? 0 },
+    { nombre: 'Vehicular',  valor: row.controles_vehicular  ?? 0 },
   ]
   const incautData = [
-    { nombre: 'Armas de fuego', valor: s.incaut_fuego   ?? 0 },
-    { nombre: 'Armas blancas',  valor: s.incaut_blancas ?? 0 },
+    { nombre: 'Armas de fuego', valor: row.incaut_fuego   ?? 0 },
+    { nombre: 'Armas blancas',  valor: row.incaut_blancas ?? 0 },
+  ]
+  const fiscData = [
+    { nombre: 'Control alcohol', valor: row.fiscal_alcohol  ?? 0 },
+    { nombre: 'Control banca',   valor: row.fiscal_bancaria ?? 0 },
   ]
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label="Controles realizados"  value={num(s.controles_total)}                              sub="Identidad + Vehicular" color={accentColor} />
-        <KpiCard label="Fiscalizaciones"        value={num(s.fiscalizaciones)}                              sub="Alcohol + Banca"       color="#2563eb" />
-        <KpiCard label="Incautaciones armas"    value={num((s.incaut_fuego ?? 0) + (s.incaut_blancas ?? 0))} sub="Fuego + Blancas"     color="#dc2626" />
-        <KpiCard label="Decomisos"               value={num(s.decomisos_semana)}                            sub="última semana"         color="#9333ea" />
+        <KpiCard label="Controles"           value={num(row.controles)}                                        sub="Identidad + Vehicular"       color={accentColor} />
+        <KpiCard label="Fiscalizaciones"      value={num(row.fiscalizaciones)}                                  sub="Alcohol + Banca"             color="#2563eb" />
+        <KpiCard label="Incautaciones armas"  value={num((row.incaut_fuego ?? 0) + (row.incaut_blancas ?? 0))} sub="Fuego + Blancas"             color="#dc2626" />
+        <KpiCard label="Decomisos"            value={row.decomisos_anno != null ? `${row.decomisos_anno.toFixed(0)} kg` : '—'} sub="Año a la fecha"   color="#9333ea" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Controles por tipo</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={controlesData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} width={90} />
-              <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), '']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="valor" fill="#3b82f6" radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Incautaciones</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={incautData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} width={100} />
-              <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), '']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="valor" fill="#dc2626" radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <KpiCard label="Allanamientos"        value={num(row.allanamientos_anno)}      sub="Año a la fecha"   color={accentColor} />
+        <KpiCard label="Vehículos recuperados" value={num(row.vehiculos_recuperados_anno)} sub="Año a la fecha" color="#0891b2" />
       </div>
 
-      <Source text={`Fuente: Ley S.T.O.P. — Carabineros de Chile · ${s.fecha_desde} al ${s.fecha_hasta}`} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {[
+          { title: 'Controles por tipo', data: controlesData, color: '#3b82f6' },
+          { title: 'Fiscalizaciones por tipo', data: fiscData, color: '#2563eb' },
+          { title: 'Incautaciones de armas', data: incautData, color: '#dc2626' },
+        ].map(({ title, data: bData, color }) => (
+          <div key={title} className="bg-white rounded-xl border border-gray-100 p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">{title}</h3>
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={bData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={110} />
+                <Tooltip formatter={(v: unknown) => [Number(v).toLocaleString('es-CL'), '']} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                <Bar dataKey="valor" fill={color} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ))}
+      </div>
+
+      <Source text={`Fuente: Ley S.T.O.P. — Carabineros de Chile · ${row.fecha_desde_iso} al ${row.fecha_hasta_iso}`} />
     </div>
   )
 }
@@ -761,9 +766,10 @@ function CensoSection({ metrics: m, subTab, setSubTab }: {
 
 // ── Empleo ────────────────────────────────────────────────────────────────────
 
-function EmpleoSection({ region, empleoData, metrics: m, subTab, setSubTab, zoneColor }: {
+function EmpleoSection({ region, empleoData, colegaEmpleo, metrics: m, subTab, setSubTab, zoneColor }: {
   region: Region
   empleoData: { period: string; regional: number | null; national: number | null }[]
+  colegaEmpleo: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint[]
   metrics: RegionMetrics | null
   subTab: EmpleoSub
   setSubTab: (t: EmpleoSub) => void
@@ -776,52 +782,68 @@ function EmpleoSection({ region, empleoData, metrics: m, subTab, setSubTab, zone
   ]
   const latestEmpleo = empleoData.at(-1)?.regional ?? null
   const latestNat    = empleoData.at(-1)?.national  ?? null
+  const latestColega = colegaEmpleo.at(-1)
 
   return (
     <div className="p-6">
       <SubTabs tabs={SUB} active={subTab} onChange={setSubTab} />
-      {subTab === 'resumen'   && <EmpleoResumen region={region} metrics={m} zoneColor={zoneColor} />}
-      {subTab === 'evolucion' && <EmpleoEvolucion region={region} data={empleoData} metrics={m} latestReg={latestEmpleo} latestNat={latestNat} zoneColor={zoneColor} />}
+      {subTab === 'resumen'   && <EmpleoResumen region={region} metrics={m} latestColega={latestColega ?? null} zoneColor={zoneColor} />}
+      {subTab === 'evolucion' && <EmpleoEvolucion region={region} data={empleoData} colegaEmpleo={colegaEmpleo} metrics={m} latestReg={latestEmpleo} latestNat={latestNat} zoneColor={zoneColor} />}
       {subTab === 'ranking'   && <EmpleoRanking region={region} zoneColor={zoneColor} />}
     </div>
   )
 }
 
-function EmpleoResumen({ region, metrics: m, zoneColor }: { region: Region; metrics: RegionMetrics | null; zoneColor: string }) {
+function EmpleoResumen({ region, metrics: m, latestColega, zoneColor }: {
+  region: Region
+  metrics: RegionMetrics | null
+  latestColega: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint | null
+  zoneColor: string
+}) {
   const CYAN = '#0891b2'
-
-  if (!m) return <EmptyState text="Sin datos de empleo para esta región." />
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <KpiCard label="Tasa desocupación"         value={pct(m.tasa_desocupacion)}               sub="último dato disponible"      color={CYAN} />
-        <KpiCard label="Tasa ocupación"            value={pct(m.tasa_ocupacion)}                  sub="del total de la fuerza laboral" color={CYAN} />
-        <KpiCard label="Tasa participación laboral" value={pct(m.tasa_participacion_laboral)}      sub="de la población en edad de trabajar" color={CYAN} />
-        <KpiCard label="Ocupación informal"        value={pct(m.tasa_ocupacion_informal)}          sub="del total de ocupados"       color={CYAN} />
-        <KpiCard label="Ocupados (Censo)"          value={num(m.n_ocupado)}                        sub="personas"                    color={CYAN} />
-        <KpiCard label="Desocupados (Censo)"       value={num(m.n_desocupado)}                     sub="personas"                    color={CYAN} />
+        {/* Prefer colega monthly tasa over static region_metrics */}
+        <KpiCard label="Tasa desocupación" value={latestColega?.tasa != null ? `${latestColega.tasa.toFixed(1)}%` : pct(m?.tasa_desocupacion)} sub={latestColega ? `${latestColega.periodo} · BCE/INE` : 'último dato'} color={CYAN} />
+        <KpiCard label="Ocupados"          value={latestColega?.ocupados != null ? `${latestColega.ocupados.toFixed(0)} mil` : num(m?.n_ocupado)} sub={latestColega ? 'miles de personas · BCE/INE' : 'Censo 2024'} color={CYAN} />
+        <KpiCard label="Tasa ocupación"    value={pct(m?.tasa_ocupacion)}                  sub="del total de la fuerza laboral" color={CYAN} />
+        <KpiCard label="Tasa participación laboral" value={pct(m?.tasa_participacion_laboral)} sub="de la población en edad de trabajar" color={CYAN} />
+        <KpiCard label="Ocupación informal" value={pct(m?.tasa_ocupacion_informal)}         sub="del total de ocupados"         color={CYAN} />
+        <KpiCard label="Desocupados (Censo)" value={num(m?.n_desocupado)}                   sub="personas · Censo 2024"          color={CYAN} />
       </div>
-      <Source text="Fuente: BCCh (mensual) + Censo 2024 — INE Chile" />
+      <Source text="Fuente: BCE/INE (mensual) + Censo 2024 — INE Chile" />
     </div>
   )
 }
 
-function EmpleoEvolucion({ region, data, metrics: m, latestReg, latestNat, zoneColor }: {
+function EmpleoEvolucion({ region, data, colegaEmpleo, metrics: m, latestReg, latestNat, zoneColor }: {
   region: Region
   data: { period: string; regional: number | null; national: number | null }[]
+  colegaEmpleo: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint[]
   metrics: RegionMetrics | null
   latestReg: number | null
   latestNat: number | null
   zoneColor: string
 }) {
   const yFmt = (v: number) => `${v.toFixed(1)}%`
+  // Merge colega tasa series with work-os series (colega preferred where available)
+  const mergedTasa = useMemo(() => {
+    if (colegaEmpleo.length > 0) {
+      return colegaEmpleo.map(p => ({ period: p.periodo, regional: p.tasa, national: null as number | null }))
+    }
+    return data
+  }, [colegaEmpleo, data])
+
+  const latestTasa = colegaEmpleo.at(-1)?.tasa ?? latestReg
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        {latestReg != null && (
+        {latestTasa != null && (
           <span className="text-xs px-3 py-1.5 rounded-full font-semibold text-white" style={{ backgroundColor: zoneColor }}>
-            {region.nombre.split(' ')[0]}: {yFmt(latestReg)}
+            {region.nombre.split(' ')[0]}: {yFmt(latestTasa)}
           </span>
         )}
         {latestNat != null && (
@@ -831,35 +853,41 @@ function EmpleoEvolucion({ region, data, metrics: m, latestReg, latestNat, zoneC
         )}
       </div>
 
-      {data.length === 0 ? (
+      {mergedTasa.length === 0 ? (
         <EmptyState text="Sin datos de evolución de desempleo. Requiere sync del Banco Central." />
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Tasa de desocupación mensual (%)</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={mergedTasa} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
               <XAxis dataKey="period" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={yFmt} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
               <Tooltip formatter={(value, name) => [typeof value === 'number' ? yFmt(value) : String(value), name === 'regional' ? region.nombre : 'Promedio Nacional']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              <Line type="monotone" dataKey="regional" stroke={zoneColor} strokeWidth={2.5} dot={{ r: 2, fill: zoneColor }} activeDot={{ r: 5 }} connectNulls />
-              <Line type="monotone" dataKey="national" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 3 }} connectNulls />
+              <Line type="monotone" dataKey="regional" stroke={zoneColor} strokeWidth={2.5} dot={{ r: 1.5, fill: zoneColor }} activeDot={{ r: 5 }} connectNulls />
+              {!colegaEmpleo.length && <Line type="monotone" dataKey="national" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 3 }} connectNulls />}
             </LineChart>
           </ResponsiveContainer>
-          <div className="flex items-center gap-4 mt-3 px-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-0.5 rounded inline-block" style={{ backgroundColor: zoneColor }} />
-              <span className="text-xs text-gray-500">{region.nombre}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="20" height="4" viewBox="0 0 20 4"><line x1="0" y1="2" x2="20" y2="2" stroke="#9CA3AF" strokeWidth="1.5" strokeDasharray="5 3" /></svg>
-              <span className="text-xs text-gray-400">Promedio Nacional</span>
-            </div>
-          </div>
         </div>
       )}
 
-      <Source text="Fuente: Banco Central de Chile · Actualización mensual" />
+      {/* Ocupados chart — only if colega has data */}
+      {colegaEmpleo.length > 0 && colegaEmpleo.some(p => p.ocupados != null) && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Ocupados — miles de personas</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={colegaEmpleo} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+              <XAxis dataKey="periodo" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => `${v.toFixed(0)}k`} />
+              <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} mil`, 'Ocupados']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+              <Line type="monotone" dataKey="ocupados" stroke="#0891b2" strokeWidth={2.5} dot={{ r: 1.5, fill: '#0891b2' }} activeDot={{ r: 5 }} connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <Source text="Fuente: BCE/INE — Banco Central de Chile · Actualización mensual" />
     </div>
   )
 }
