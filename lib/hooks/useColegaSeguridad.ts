@@ -43,9 +43,9 @@ export type LeystopRow = {
   decomisos_anno: number | null
 }
 
-// ── Hook: latest semana for all regions (for rankings) ────────────────────────
+// ── Hook: all regions for a given semana (or latest if omitted) ───────────────
 
-export function useColegaSeguridadAll() {
+export function useColegaSeguridadAll(id_semana?: number) {
   const [rows, setRows]       = useState<LeystopRow[]>([])
   const [semana, setSemana]   = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -55,21 +55,24 @@ export function useColegaSeguridadAll() {
     async function load() {
       try {
         const sb = getSupabaseColega()
-        type SemanaRow = { id_semana: number }
-        const { data: latest } = await sb
-          .from('registros_leystop')
-          .select('id_semana')
-          .order('id_semana', { ascending: false })
-          .limit(1)
+        let targetSemana = id_semana
 
-        if (cancelled) return
-        if (!latest?.length) { setLoading(false); return }
-        const maxSemana = (latest[0] as SemanaRow).id_semana
+        if (targetSemana === undefined) {
+          type SemanaRow = { id_semana: number }
+          const { data: latest } = await sb
+            .from('registros_leystop')
+            .select('id_semana')
+            .order('id_semana', { ascending: false })
+            .limit(1)
+          if (cancelled) return
+          if (!latest?.length) { setLoading(false); return }
+          targetSemana = (latest[0] as SemanaRow).id_semana
+        }
 
         const { data } = await sb
           .from('registros_leystop')
           .select('*')
-          .eq('id_semana', maxSemana)
+          .eq('id_semana', targetSemana)
           .order('id_region')
 
         if (cancelled) return
@@ -90,7 +93,7 @@ export function useColegaSeguridadAll() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [id_semana])
 
   return { rows, semana, loading }
 }

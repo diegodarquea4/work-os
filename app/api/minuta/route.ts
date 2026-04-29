@@ -5,10 +5,11 @@ import fs from 'fs'
 import MinutaDocument from '@/components/MinutaDocument'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject, SecurityWeekly } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
-import { generateMinutaContent, type MinutaTipo } from '@/lib/minutaAI'
+import { generateMinutaContent, type MinutaTipo, type LeystopMinuta } from '@/lib/minutaAI'
+import { getSupabaseColega } from '@/lib/supabaseColega'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   let metrics: RegionMetrics | null = null
   let seiaProjects: SeiaProject[] | null = null
   let mopProjects:  MopProject[]  | null = null
-  let securityData: SecurityWeekly | null = null
+  let leystopData: LeystopMinuta | null = null
   let planPdfBase64: string | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
@@ -45,7 +46,9 @@ export async function POST(request: Request) {
     const sb = getSupabaseAdmin()
     const regionId = INE_CODE[body.region.cod]
 
-    const [prioridades, metricas, seiaRes, mopRes, secRes] = await Promise.all([
+    const colegaOk = !!(process.env.NEXT_PUBLIC_SUPABASE_COLEGA_URL && process.env.NEXT_PUBLIC_SUPABASE_COLEGA_ANON)
+
+    const [prioridades, metricas, seiaRes, mopRes, leystopRes] = await Promise.all([
       getIniciativasByCod(body.region.cod),
       getMetricsByCod(body.region.cod),
       regionId !== undefined
@@ -62,11 +65,12 @@ export async function POST(request: Request) {
             .order('nombre')
             .limit(15)
         : Promise.resolve({ data: null }),
-      regionId !== undefined
-        ? sb.from('security_weekly')
-            .select('*')
-            .eq('region_id', regionId)
-            .order('fecha_hasta', { ascending: false })
+      colegaOk && regionId !== undefined
+        ? getSupabaseColega()
+            .from('registros_leystop')
+            .select('semana,tasa_registro,casos_ultima_semana,var_ultima_semana,var_28dias,var_anno_fecha,casos_anno_fecha,casos_anno_fecha_anterior,mayor_registro_1,pct_1,mayor_registro_2,pct_2,mayor_registro_3,pct_3,mayor_registro_4,pct_4,mayor_registro_5,pct_5,controles,controles_identidad,controles_vehicular,fiscalizaciones,incautaciones,incaut_fuego,incaut_blancas,allanamientos_anno,vehiculos_recuperados_anno,decomisos_anno')
+            .eq('id_region', regionId)
+            .order('id_semana', { ascending: false })
             .limit(1)
             .maybeSingle()
         : Promise.resolve({ data: null }),
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
     metrics      = metricas
     seiaProjects = (seiaRes.data as SeiaProject[] | null)
     mopProjects  = (mopRes.data  as MopProject[]  | null)
-    securityData = (secRes.data  as SecurityWeekly | null)
+    leystopData  = (leystopRes.data as LeystopMinuta | null)
 
     // Fetch Plan Regional PDF from Storage for AI context
     try {
@@ -96,7 +100,7 @@ export async function POST(request: Request) {
     projects = all.filter(p => p.cod === body.region.cod)
   }
 
-  console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, security: ${!!securityData}, planPdf: ${!!planPdfBase64}`)
+  console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}`)
 
   // Generate AI narrative (non-blocking — if it fails, PDF still renders)
   const aiContent = await generateMinutaContent(
@@ -108,7 +112,7 @@ export async function POST(request: Request) {
     planPdfBase64,
     seiaProjects,
     mopProjects,
-    securityData,
+    leystopData,
   )
 
   const regionSlug = body.region.nombre

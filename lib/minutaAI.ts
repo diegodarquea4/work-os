@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject, SecurityWeekly } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,33 @@ export type MinutaCompletaContent = {
 
 export type MinutaTipo = 'ejecutiva' | 'completo'
 
+// Subset of registros_leystop used in minuta context (DB field names — pct_N not n_N)
+export type LeystopMinuta = {
+  semana: string | null
+  tasa_registro: number | null
+  casos_ultima_semana: number | null
+  var_ultima_semana: number | null
+  var_28dias: number | null
+  var_anno_fecha: number | null
+  casos_anno_fecha: number | null
+  casos_anno_fecha_anterior: number | null
+  mayor_registro_1: string | null; pct_1: number | null
+  mayor_registro_2: string | null; pct_2: number | null
+  mayor_registro_3: string | null; pct_3: number | null
+  mayor_registro_4: string | null; pct_4: number | null
+  mayor_registro_5: string | null; pct_5: number | null
+  controles: number | null
+  controles_identidad: number | null
+  controles_vehicular: number | null
+  fiscalizaciones: number | null
+  incautaciones: number | null
+  incaut_fuego: number | null
+  incaut_blancas: number | null
+  allanamientos_anno: number | null
+  vehiculos_recuperados_anno: number | null
+  decomisos_anno: number | null
+}
+
 // ── Context builder ──────────────────────────────────────────────────────────
 
 function buildContext(
@@ -42,7 +69,7 @@ function buildContext(
   metrics: RegionMetrics | null,
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
-  securityData?: SecurityWeekly | null,
+  leystopData?: LeystopMinuta | null,
 ): string {
   const total = projects.length
   const rojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
@@ -136,13 +163,22 @@ ${hitos || 'Sin próximos hitos registrados.'}
 ${metricsStr}
 ${seiaStr}
 ${mopStr}
-${securityData ? `
-SEGURIDAD PÚBLICA (LeyStop / Carabineros de Chile):
-- Tasa de registro: ${securityData.tasa_registro?.toFixed(0) ?? 'N/D'} casos por 100k hab (semana ${securityData.semana ?? 'N/D'})
-- Casos última semana: ${securityData.casos_semana ?? 'N/D'}${securityData.var_semana_pct != null ? ` (${securityData.var_semana_pct > 0 ? '+' : ''}${securityData.var_semana_pct.toFixed(1)}% vs semana anterior)` : ''}
-- Principal tipo de delito: ${securityData.delito_1 ?? 'N/D'}${securityData.pct_1 != null ? ` (${securityData.pct_1.toFixed(0)}%)` : ''}
-- 2°: ${securityData.delito_2 ?? 'N/D'}${securityData.pct_2 != null ? ` (${securityData.pct_2.toFixed(0)}%)` : ''}
-- 3°: ${securityData.delito_3 ?? 'N/D'}${securityData.pct_3 != null ? ` (${securityData.pct_3.toFixed(0)}%)` : ''}` : ''}
+${leystopData ? `
+SEGURIDAD PÚBLICA — LeyStop / Carabineros de Chile (${leystopData.semana ?? 'última semana disponible'}):
+- Tasa de registro: ${leystopData.tasa_registro?.toFixed(0) ?? 'N/D'} casos por 100k hab
+- Casos última semana: ${leystopData.casos_ultima_semana ?? 'N/D'}${leystopData.var_ultima_semana != null ? ` (${leystopData.var_ultima_semana > 0 ? '+' : ''}${leystopData.var_ultima_semana.toFixed(1)}% vs semana anterior)` : ''}${leystopData.var_28dias != null ? `, ${leystopData.var_28dias > 0 ? '+' : ''}${leystopData.var_28dias.toFixed(1)}% vs últimos 28 días` : ''}
+- Variación año-a-fecha: ${leystopData.var_anno_fecha != null ? `${leystopData.var_anno_fecha > 0 ? '+' : ''}${leystopData.var_anno_fecha.toFixed(1)}%` : 'N/D'}${leystopData.casos_anno_fecha != null && leystopData.casos_anno_fecha_anterior != null ? ` (${leystopData.casos_anno_fecha} vs ${leystopData.casos_anno_fecha_anterior} casos mismo período año anterior)` : ''}
+- Top 5 delitos: ${[
+    leystopData.mayor_registro_1 ? `${leystopData.mayor_registro_1} (${leystopData.pct_1?.toFixed(0) ?? '?'}%)` : null,
+    leystopData.mayor_registro_2 ? `${leystopData.mayor_registro_2} (${leystopData.pct_2?.toFixed(0) ?? '?'}%)` : null,
+    leystopData.mayor_registro_3 ? `${leystopData.mayor_registro_3} (${leystopData.pct_3?.toFixed(0) ?? '?'}%)` : null,
+    leystopData.mayor_registro_4 ? `${leystopData.mayor_registro_4} (${leystopData.pct_4?.toFixed(0) ?? '?'}%)` : null,
+    leystopData.mayor_registro_5 ? `${leystopData.mayor_registro_5} (${leystopData.pct_5?.toFixed(0) ?? '?'}%)` : null,
+  ].filter(Boolean).join(' | ')}
+- Controles: ${leystopData.controles ?? 'N/D'} (${leystopData.controles_identidad ?? 'N/D'} identidad, ${leystopData.controles_vehicular ?? 'N/D'} vehicular)
+- Fiscalizaciones: ${leystopData.fiscalizaciones ?? 'N/D'}
+- Incautaciones: ${leystopData.incautaciones ?? 'N/D'} (${leystopData.incaut_fuego ?? 'N/D'} armas de fuego, ${leystopData.incaut_blancas ?? 'N/D'} armas blancas)
+- Allanamientos año: ${leystopData.allanamientos_anno ?? 'N/D'} | Vehículos recuperados año: ${leystopData.vehiculos_recuperados_anno ?? 'N/D'} | Decomisos año: ${leystopData.decomisos_anno ?? 'N/D'}` : ''}
 `.trim()
 }
 
@@ -157,13 +193,13 @@ export async function generateMinutaContent(
   planPdfBase64: string | null,
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
-  securityData?: SecurityWeekly | null,
+  leystopData?: LeystopMinuta | null,
 ): Promise<MinutaEjecutivaContent | MinutaCompletaContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
-  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, securityData)
+  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData)
   const ejes = [...new Set(projects.map(p => p.eje))]
 
   const systemPrompt = tipo === 'ejecutiva'
@@ -202,7 +238,7 @@ Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono f
     },
     {
       "titulo": "Seguridad pública",
-      "texto": "Párrafo de 3-4 oraciones con datos de victimización DMCS, percepción de inseguridad y tendencias en denuncias."
+      "texto": "Párrafo de 3-4 oraciones con datos de tasa delictual LeyStop/Carabineros, variación respecto al año anterior, principales tipos de delito y actividad operativa policial (controles, fiscalizaciones, incautaciones). Complementar con indicadores CASEN de victimización y percepción de inseguridad si están disponibles."
     }
   ],
   "gps_narrativa": "Párrafo de 3-4 oraciones que introduce los proyectos de inversión privada y obras públicas en la región, destacando montos totales, sectores predominantes y relevancia para el desarrollo regional.",
