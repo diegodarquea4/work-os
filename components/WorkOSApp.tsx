@@ -360,7 +360,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             iniciativas={visibleIniciativas}
             actividad={actividad}
             profile={profile}
-            lockedRegions={lockedRegions}
           />
         </div>
       )}
