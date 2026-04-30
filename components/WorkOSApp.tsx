@@ -56,7 +56,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
+  const [viewDropOpen, setViewDropOpen]        = useState(false)
+  const [dropPos, setDropPos]                  = useState({ top: 0, left: 0 })
+  const viewDropRef                            = useRef<HTMLDivElement>(null)
+  const viewDropBtnRef                         = useRef<HTMLButtonElement>(null)
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
+
+  const GROUPED_VIEWS: { key: View; label: string }[] = [
+    { key: 'dashboard',      label: 'Dashboard' },
+    { key: 'atencion',       label: 'Atención'  },
+    { key: 'kanban',         label: 'Kanban'    },
+    { key: 'vista-regional', label: 'Mi Región' },
+  ]
+  const isGroupedActive  = GROUPED_VIEWS.some(v => v.key === view)
+  const activeGroupLabel = GROUPED_VIEWS.find(v => v.key === view)?.label ?? 'Seguimiento'
+
+  function handleViewDropToggle() {
+    if (!viewDropOpen && viewDropBtnRef.current) {
+      const rect = viewDropBtnRef.current.getBoundingClientRect()
+      setDropPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setViewDropOpen(prev => !prev)
+  }
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
   const [panelWidth, setPanelWidth]           = useState(420)
   const [actividad, setActividad]             = useState<Record<number, string | null>>({})
@@ -80,6 +101,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         return r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
       })
     : localIniciativas
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (
+        viewDropRef.current && !viewDropRef.current.contains(target) &&
+        viewDropBtnRef.current && !viewDropBtnRef.current.contains(target)
+      ) {
+        setViewDropOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
 
   // Auto-select region for single-region users (regional or filtered viewer)
   // Also auto-redirect to vista-regional for single-region users
@@ -199,58 +234,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mapa
             </button>
-            <button
-              onClick={() => setView('dashboard')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'dashboard' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
-              </svg>
-              Dashboard
-            </button>
-            <button
-              onClick={() => setView('atencion')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'atencion' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <circle cx="6" cy="6" r="5"/>
-                <path d="M6 3.5v3M6 8v.5" strokeLinecap="round"/>
-              </svg>
-              Atención
-            </button>
-            <button
-              onClick={() => setView('kanban')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'kanban' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="1" y="1" width="3" height="10" rx="0.8"/>
-                <rect x="5" y="1" width="3" height="7" rx="0.8"/>
-                <rect x="9" y="1" width="2" height="5" rx="0.8"/>
-              </svg>
-              Kanban
-            </button>
-            <button
-              onClick={() => setView('vista-regional')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'vista-regional' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <circle cx="6" cy="4" r="2"/>
-                <path d="M2 10c0-2.5 1.8-4 4-4s4 1.5 4 4" strokeLinecap="round"/>
-              </svg>
-              Mi Región
-            </button>
+            {/* Grouped views dropdown trigger */}
+            <div ref={viewDropRef}>
+              <button
+                ref={viewDropBtnRef}
+                onClick={handleViewDropToggle}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  isGroupedActive ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
+                </svg>
+                {activeGroupLabel}
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ transform: viewDropOpen ? 'rotate(180deg)' : 'none' }}>
+                  <path d="M2 4l3 3 3-3"/>
+                </svg>
+              </button>
+            </div>
             {(profile?.role === 'admin' || profile?.role === 'editor') && (
             <button
               onClick={() => setView('prego')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors animate-in fade-in duration-300 ${
                 view === 'prego' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -264,7 +269,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             {profile?.role === 'admin' && (
               <button
                 onClick={() => setView('usuarios')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors animate-in fade-in duration-300 ${
                   view === 'usuarios' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -279,26 +284,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             )}
           </div>
 
-          {/* User info */}
-          {profile && (
-            <div className="flex items-center gap-3">
-              <div className="text-right">
+          {/* User info — logout siempre visible, email/rol aparece al cargar perfil */}
+          <div className="flex items-center gap-3">
+            {profile ? (
+              <div className="text-right animate-in fade-in duration-300">
                 <div className="text-xs text-white font-medium leading-tight">{profile.email}</div>
                 <div className="text-xs text-slate-400 leading-tight capitalize">{profile.role}</div>
               </div>
-              <button
-                onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
-                className="text-slate-400 hover:text-white transition-colors"
-                title="Cerrar sesión"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
-                  <path d="M11 11l3-3-3-3"/>
-                  <path d="M14 8H6"/>
-                </svg>
-              </button>
-            </div>
-          )}
+            ) : (
+              <div className="w-28 h-7 rounded bg-slate-800 animate-pulse" />
+            )}
+            <button
+              onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
+              className="text-slate-400 hover:text-white transition-colors"
+              title="Cerrar sesión"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
+                <path d="M11 11l3-3-3-3"/>
+                <path d="M14 8H6"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -527,6 +534,29 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* View dropdown — rendered at root level to escape header stacking context */}
+      {viewDropOpen && (
+        <div
+          ref={viewDropRef}
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999, minWidth: 140 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
+        >
+          {GROUPED_VIEWS.map(v => (
+            <button
+              key={v.key}
+              onClick={() => { setView(v.key); setViewDropOpen(false) }}
+              className={`block w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === v.key
+                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
