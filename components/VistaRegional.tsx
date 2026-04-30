@@ -170,6 +170,10 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
+  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'completo', { cached: boolean; generated_at: string | null }>>({
+    ejecutiva: { cached: false, generated_at: null },
+    completo:  { cached: false, generated_at: null },
+  })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
   const [pibNacional, setPibNacional] = useState<{ period: string; value: number }[]>([])
@@ -205,6 +209,20 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
       .eq('region_cod', selectedCod)
       .maybeSingle()
       .then(({ data }) => setPrego(data as PregoRow | null))
+  }, [selectedCod])
+
+  // Fetch cache status for both minuta types when region changes
+  useEffect(() => {
+    if (!selectedCod) return
+    Promise.all([
+      fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ejecutiva`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/minuta?region_cod=${selectedCod}&tipo=completo`).then(r => r.ok ? r.json() : null),
+    ]).then(([ej, comp]) => {
+      setMinutaCache({
+        ejecutiva: ej ?? { cached: false, generated_at: null },
+        completo:  comp ?? { cached: false, generated_at: null },
+      })
+    }).catch(() => {})
   }, [selectedCod])
 
   // Close minuta dropdown on outside click
@@ -313,7 +331,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
   // ── Minuta handler ───────────────────────────────────────────────────────────
 
-  async function handleMinuta(tipo: 'ejecutiva' | 'completo' = 'ejecutiva') {
+  async function handleMinuta(tipo: 'ejecutiva' | 'completo' = 'ejecutiva', force = false) {
     if (!region || downloadingMinuta) return
     setDownloadingMinuta(true)
     setDownloadingTipo(tipo)
@@ -326,7 +344,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
       const res = await fetch('/api/minuta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, fecha, tipo }),
+        body: JSON.stringify({ region, fecha, tipo, ...(force ? { force: true } : {}) }),
       })
       if (!res.ok) throw new Error('Error generando minuta')
       const blob = await res.blob()
@@ -336,6 +354,8 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
       a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}-${tipo}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+      // Update local cache state so buttons reflect new status immediately
+      setMinutaCache(prev => ({ ...prev, [tipo]: { cached: true, generated_at: new Date().toISOString() } }))
     } catch {
       setToastMsg('Error al generar la minuta. Inténtalo de nuevo.')
       setTimeout(() => setToastMsg(null), 4000)
@@ -474,40 +494,56 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
                 )}
                 {/* Minuta split button */}
                 <div className="relative" data-minuta-menu="true">
-                  <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
-                    <button
-                      onClick={() => handleMinuta('ejecutiva')}
-                      disabled={downloadingMinuta || !region}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {downloadingMinuta && downloadingTipo === 'ejecutiva' ? (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                            <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
-                          </svg>
-                          Generando...
-                        </>
-                      ) : (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                            <path d="M2 2h5l3 3v5H2V2z"/><path d="M6 2v4h4"/>
-                          </svg>
-                          Minuta ejecutiva
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setMinutaMenuOpen(v => !v)}
-                      disabled={downloadingMinuta || !region}
-                      className="px-2 py-1.5 text-white hover:bg-slate-700 disabled:opacity-50 transition-colors border-l border-slate-700"
-                    >
-                      <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
+                  <div className="flex items-center gap-1">
+                    <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                      <button
+                        onClick={() => handleMinuta('ejecutiva')}
+                        disabled={downloadingMinuta || !region}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {downloadingMinuta && downloadingTipo === 'ejecutiva' ? (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                              <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+                            </svg>
+                            {minutaCache.ejecutiva.cached ? 'Descargando...' : 'Generando...'}
+                          </>
+                        ) : (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <path d="M2 2h5l3 3v5H2V2z"/><path d="M6 2v4h4"/>
+                            </svg>
+                            {minutaCache.ejecutiva.cached ? 'Descargar ejecutiva' : 'Generar ejecutiva'}
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setMinutaMenuOpen(v => !v)}
+                        disabled={downloadingMinuta || !region}
+                        className="px-2 py-1.5 text-white hover:bg-slate-700 disabled:opacity-50 transition-colors border-l border-slate-700"
+                      >
+                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                    {/* Force regenerate — admin/editor only, visible when cached */}
+                    {(profile?.role === 'admin' || profile?.role === 'editor') && minutaCache.ejecutiva.cached && (
+                      <button
+                        onClick={() => handleMinuta('ejecutiva', true)}
+                        disabled={downloadingMinuta || !region}
+                        title="Regenerar con IA (fuerza nueva generación)"
+                        className="p-1.5 text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 6a5 5 0 1 0 1-3"/>
+                          <path d="M1 1v3h3"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                   {minutaMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-full py-1">
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-max py-1">
                       <button
                         onClick={() => handleMinuta('completo')}
                         className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
@@ -517,17 +553,29 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                               <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
                             </svg>
-                            Generando...
+                            {minutaCache.completo.cached ? 'Descargando...' : 'Generando...'}
                           </>
                         ) : (
                           <>
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                               <rect x="2" y="1" width="8" height="10" rx="1"/><line x1="4" y1="4" x2="8" y2="4"/><line x1="4" y1="6" x2="8" y2="6"/><line x1="4" y1="8" x2="6" y2="8"/>
                             </svg>
-                            Reporte Completo
+                            {minutaCache.completo.cached ? 'Descargar Reporte Completo' : 'Generar Reporte Completo'}
                           </>
                         )}
                       </button>
+                      {(profile?.role === 'admin' || profile?.role === 'editor') && minutaCache.completo.cached && (
+                        <button
+                          onClick={() => handleMinuta('completo', true)}
+                          className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 6a5 5 0 1 0 1-3"/>
+                            <path d="M1 1v3h3"/>
+                          </svg>
+                          Regenerar con IA
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

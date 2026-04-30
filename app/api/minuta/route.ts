@@ -8,6 +8,7 @@ import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { generateMinutaContent, type MinutaTipo, type LeystopMinuta } from '@/lib/minutaAI'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 
@@ -26,12 +27,44 @@ function readLogoDataUrl(): string | null {
 }
 const LOGO_DATA_URL = readLogoDataUrl()
 
+export async function GET(request: Request) {
+  const authProfile = await requireAuth()
+  if (!authProfile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const url = new URL(request.url)
+  const region_cod = url.searchParams.get('region_cod')
+  const tipo = (url.searchParams.get('tipo') ?? 'ejecutiva') as MinutaTipo
+
+  if (!region_cod || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return Response.json({ cached: false, generated_at: null })
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const sb = getSupabaseAdmin()
+  const { data } = await sb.from('minuta_cache')
+    .select('generated_at')
+    .eq('region_cod', region_cod)
+    .eq('tipo', tipo)
+    .eq('cache_date', today)
+    .maybeSingle()
+
+  return Response.json({ cached: !!data, generated_at: data?.generated_at ?? null })
+}
+
 export async function POST(request: Request) {
   const authProfile = await requireAuth()
   if (!authProfile) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  if (authProfile.role !== 'admin' && authProfile.role !== 'editor') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
-  const body = await request.json() as { region: Region; fecha: string; tipo?: MinutaTipo }
+  const body = await request.json() as { region: Region; fecha: string; tipo?: MinutaTipo; force?: boolean }
+
+  // regional / filtered-viewer can only generate minutas for their assigned regions
+  const isRestricted = authProfile.role === 'regional' ||
+    (authProfile.role === 'viewer' && authProfile.region_cods.length > 0)
+  if (isRestricted && !authProfile.region_cods.includes(body.region.cod)) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+  }
   const tipo: MinutaTipo = body.tipo ?? 'completo'
+  const force = body.force ?? false
+  const today = new Date().toISOString().slice(0, 10)
 
   let projects: Iniciativa[]
   let metrics: RegionMetrics | null = null
@@ -39,16 +72,18 @@ export async function POST(request: Request) {
   let mopProjects:  MopProject[]  | null = null
   let leystopData: LeystopMinuta | null = null
   let planPdfBase64: string | null = null
+  let cachedAiContent: unknown = null
+  let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getIniciativasByCod, getMetricsByCod } = await import('@/lib/db')
-    const { getSupabaseAdmin } = await import('@/lib/supabaseServer')
     const sb = getSupabaseAdmin()
+    sbRef = sb
     const regionId = INE_CODE[body.region.cod]
 
     const colegaOk = !!(process.env.NEXT_PUBLIC_SUPABASE_COLEGA_URL && process.env.NEXT_PUBLIC_SUPABASE_COLEGA_ANON)
 
-    const [prioridades, metricas, seiaRes, mopRes, leystopRes] = await Promise.all([
+    const [prioridades, metricas, seiaRes, mopRes, leystopRes, cacheRes] = await Promise.all([
       getIniciativasByCod(body.region.cod),
       getMetricsByCod(body.region.cod),
       regionId !== undefined
@@ -74,6 +109,14 @@ export async function POST(request: Request) {
             .limit(1)
             .maybeSingle()
         : Promise.resolve({ data: null }),
+      force
+        ? Promise.resolve({ data: null })
+        : sb.from('minuta_cache')
+            .select('ai_content')
+            .eq('region_cod', body.region.cod)
+            .eq('tipo', tipo)
+            .eq('cache_date', today)
+            .maybeSingle(),
     ])
 
     projects     = prioridades
@@ -81,6 +124,7 @@ export async function POST(request: Request) {
     seiaProjects = (seiaRes.data as SeiaProject[] | null)
     mopProjects  = (mopRes.data  as MopProject[]  | null)
     leystopData  = (leystopRes.data as LeystopMinuta | null)
+    cachedAiContent = (cacheRes.data as { ai_content: unknown } | null)?.ai_content ?? null
 
     // Fetch Plan Regional PDF from Storage for AI context
     try {
@@ -100,20 +144,36 @@ export async function POST(request: Request) {
     projects = all.filter(p => p.cod === body.region.cod)
   }
 
-  console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}`)
-
-  // Generate AI narrative (non-blocking — if it fails, PDF still renders)
-  const aiContent = await generateMinutaContent(
-    tipo,
-    body.region.nombre,
-    body.fecha,
-    projects,
-    metrics,
-    planPdfBase64,
-    seiaProjects,
-    mopProjects,
-    leystopData,
-  )
+  // Use cached AI content or generate fresh
+  let aiContent: unknown
+  if (cachedAiContent) {
+    console.log(`[minuta] cache HIT ${body.region.cod}/${tipo}`)
+    aiContent = cachedAiContent
+  } else {
+    console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}`)
+    aiContent = await generateMinutaContent(
+      tipo,
+      body.region.nombre,
+      body.fecha,
+      projects,
+      metrics,
+      planPdfBase64,
+      seiaProjects,
+      mopProjects,
+      leystopData,
+    )
+    // Store in cache (fire-and-forget — don't delay the PDF response)
+    if (sbRef) {
+      sbRef.from('minuta_cache').upsert({
+        region_cod:   body.region.cod,
+        tipo,
+        cache_date:   today,
+        ai_content:   aiContent as Record<string, unknown>,
+        generated_by: authProfile.id,
+      }, { onConflict: 'region_cod,tipo,cache_date' })
+        .then(({ error }) => { if (error) console.error('[minuta] cache store:', error.message) })
+    }
+  }
 
   const regionSlug = body.region.nombre
     .toLowerCase()
