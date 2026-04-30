@@ -88,16 +88,6 @@ async function runSync() {
 
   const latestStored: number = maxRow?.semana_id ?? 0
 
-  // Population map: region_id → poblacion_total (for tasa_registro computation)
-  const { data: popRows } = await supabase
-    .from('region_metrics')
-    .select('region_cod, poblacion_total')
-  const popByRegionId: Record<number, number> = {}
-  for (const [cod, id] of Object.entries(INE_CODE)) {
-    const row = (popRows ?? []).find((r: { region_cod: string; poblacion_total: number | null }) => r.region_cod === cod)
-    if (row?.poblacion_total && id > 0) popByRegionId[id] = row.poblacion_total
-  }
-
   // Initialize session — get XSRF token from cookies
   let session = await initSession()
   if (!session) {
@@ -205,8 +195,6 @@ async function runSync() {
         .from('stop_stats')
         .upsert(batch, { onConflict: 'region_id,semana_id' })
       if (dbErr) errors.push(`DB upsert semana ${semana.id}: ${dbErr.message}`)
-      // Mirror to security_weekly
-      await upsertSecurityWeekly(supabase, batch, popByRegionId, errors)
     }
   }
 
@@ -216,7 +204,6 @@ async function runSync() {
       .from('stop_stats')
       .upsert(rows, { onConflict: 'region_id,semana_id' })
     if (dbErr) errors.push(`DB final upsert: ${dbErr.message}`)
-    await upsertSecurityWeekly(supabase, rows, popByRegionId, errors)
   }
 
   const totalUpserted = newSemanas.length * REGION_CODS.length - errors.filter(e => e.includes('semana=')).length
@@ -229,38 +216,6 @@ async function runSync() {
     upserted:      totalUpserted,
     errors:        errors.length > 0 ? errors : undefined,
   })
-}
-
-// ── security_weekly mirror ────────────────────────────────────────────────────
-
-async function upsertSecurityWeekly(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  batch: StopRow[],
-  popByRegionId: Record<number, number>,
-  errors: string[],
-) {
-  const secRows = batch.map(r => {
-    const pop = popByRegionId[r.region_id]
-    const tasa = r.casos_ultima_semana != null && pop
-      ? parseFloat(((r.casos_ultima_semana / pop) * 100000).toFixed(2))
-      : null
-    return {
-      region_id:      r.region_id,
-      fecha_desde:    r.fecha_desde,
-      fecha_hasta:    r.fecha_hasta,
-      semana:         String(r.semana_id),
-      tasa_registro:  tasa,
-      casos_semana:   r.casos_ultima_semana,
-      var_semana_pct: null,
-      delito_1:       r.mayor_registro_1,  pct_1: r.pct_1,
-      delito_2:       r.mayor_registro_2,  pct_2: r.pct_2,
-      delito_3:       r.mayor_registro_3,  pct_3: r.pct_3,
-    }
-  })
-  const { error } = await supabase
-    .from('security_weekly')
-    .upsert(secRows, { onConflict: 'region_id,fecha_hasta' })
-  if (error) errors.push(`security_weekly upsert: ${error.message}`)
 }
 
 // ── Session helpers ───────────────────────────────────────────────────────────

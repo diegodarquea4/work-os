@@ -164,20 +164,6 @@ export type Documento = {
   created_at: string
 }
 
-// ── Security Weekly (LeyStop / Carabineros) ───────────────────────────────────
-export type SecurityWeekly = {
-  region_id:      number
-  fecha_desde:    string
-  fecha_hasta:    string
-  semana:         string | null
-  tasa_registro:  number | null
-  casos_semana:   number | null
-  var_semana_pct: number | null
-  delito_1: string | null; pct_1: number | null
-  delito_2: string | null; pct_2: number | null
-  delito_3: string | null; pct_3: number | null
-}
-
 // ── Regional Metrics (time-series) ────────────────────────────────────────────
 export type RegionalMetric = {
   id: string

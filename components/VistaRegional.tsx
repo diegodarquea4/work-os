@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRegionIndicadores } from '@/lib/hooks/useRegionIndicadores'
+import { useColegaSeguridadRegion } from '@/lib/hooks/useColegaSeguridad'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
@@ -225,7 +226,9 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   )
 
   // External data hooks
-  const { timeSeries, security, loading: metricsLoading } = useRegionIndicadores(selectedCod ?? '')
+  const { timeSeries, loading: metricsLoading } = useRegionIndicadores(selectedCod ?? '')
+  const { history: leystopHistory } = useColegaSeguridadRegion(selectedCod ?? '')
+  const leystop = leystopHistory.at(-1) ?? null
   const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
   const { proyectos: mopProjects, total: mopTotal } = useMopProjects(selectedCod ?? '')
 
@@ -658,13 +661,13 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             />
             <MetricCard
               title="Seguridad"
-              subtitle={security ? `Sem. ${security.semana ?? ''}` : 'Semanal LeyStop'}
-              value={security ? `${security.tasa_registro?.toFixed(1) ?? '—'}/100k` : metricsLoading ? '…' : 'N/D'}
-              trend={security?.var_semana_pct ?? null}
+              subtitle={leystop ? `Sem. ${leystop.semana ?? ''}` : 'Semanal LeyStop'}
+              value={leystop ? `${leystop.tasa_registro?.toFixed(1) ?? '—'}/100k` : metricsLoading ? '…' : 'N/D'}
+              trend={leystop?.var_ultima_semana ?? null}
               trendLabel="var. semana"
               trendDown={true}
               sparkData={undefined}
-              extra={[security?.delito_1, security?.delito_2].filter(Boolean).join(' · ') || undefined}
+              extra={[leystop?.mayor_registro_1, leystop?.mayor_registro_2].filter(Boolean).join(' · ') || undefined}
             />
             <MetricCard
               title="PIB Regional"

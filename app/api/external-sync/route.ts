@@ -5,7 +5,6 @@
  *   1. censo_regiones.json  → updates region_metrics (wide format, census 2024 fields)
  *   2. bcn_indicadores.db   → SQLite with LeyStop weekly crime data
  *      - tasa_delictual time series → regional_metrics
- *      - Security snapshot         → security_weekly
  *
  * Auth: same pattern as ine-sync
  *   GET  — Vercel Cron (x-vercel-cron: 1 header)
@@ -18,19 +17,13 @@ import { NextRequest } from 'next/server'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { INE_CODE } from '@/lib/regions'
+import { INE_INVERSE } from '@/lib/regions'
 
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
 export const maxDuration = 60
 
 const REPO_RAW = 'https://raw.githubusercontent.com/manuelcarvallo97-tech/dashboard-regional-chile/main'
-
-// Reverse INE_CODE: region_id → region_cod (e.g. 1 → 'I', 13 → 'RM')
-const REVERSE_INE: Record<number, string> = {}
-for (const [cod, id] of Object.entries(INE_CODE)) {
-  if (id > 0) REVERSE_INE[id] = cod
-}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -70,7 +63,7 @@ async function runSync() {
     let censoCnt = 0
     for (const [key, r] of Object.entries(datos)) {
       const regionId = parseInt(key)
-      const regionCod = REVERSE_INE[regionId]
+      const regionCod = INE_INVERSE[regionId]
       if (!regionCod) continue
 
       const safeDiv = (a: number | null | undefined, b: number | null | undefined, scale = 100) =>
@@ -167,51 +160,10 @@ async function runSync() {
       tsRows = upsertBatch.length
     }
 
-    // ── B2: Snapshot (latest week per region) → security_weekly ─────────────
-    const snapResult = db.exec(`
-      SELECT rl.*
-      FROM registros_leystop rl
-      INNER JOIN (
-        SELECT id_region, MAX(fecha_hasta_iso) AS max_fecha
-        FROM registros_leystop
-        GROUP BY id_region
-      ) latest ON rl.id_region = latest.id_region AND rl.fecha_hasta_iso = latest.max_fecha
-    `)
-
-    let snapRows = 0
-    if (snapResult.length > 0) {
-      const cols = snapResult[0].columns
-      const col = (name: string) => cols.indexOf(name)
-
-      const snapBatch = (snapResult[0].values as (string | number | null)[][]).map(row => ({
-        region_id:      row[col('id_region')] as number,
-        fecha_desde:    row[col('fecha_desde_iso')] as string,
-        fecha_hasta:    row[col('fecha_hasta_iso')] as string,
-        anno:           row[col('anno')] as number | null,
-        semana:         row[col('semana')] as string | null,
-        tasa_registro:  row[col('tasa_registro')] as number | null,
-        casos_semana:   row[col('casos_ultima_semana')] as number | null,
-        var_semana_pct: row[col('var_ultima_semana')] as number | null,
-        delito_1:       row[col('mayor_registro_1')] as string | null,
-        pct_1:          row[col('pct_1')] as number | null,
-        delito_2:       row[col('mayor_registro_2')] as string | null,
-        pct_2:          row[col('pct_2')] as number | null,
-        delito_3:       row[col('mayor_registro_3')] as string | null,
-        pct_3:          row[col('pct_3')] as number | null,
-      }))
-
-      const { error } = await sb
-        .from('security_weekly')
-        .upsert(snapBatch, { onConflict: 'region_id,fecha_hasta' })
-
-      if (error) console.error('[external-sync] security_weekly:', error.message)
-      snapRows = snapBatch.length
-    }
-
     db.close()
 
-    results.leystop = { time_series_rows: tsRows, snapshot_rows: snapRows }
-    console.log(`[external-sync] LeyStop: ${tsRows} series, ${snapRows} snapshot`)
+    results.leystop = { time_series_rows: tsRows }
+    console.log(`[external-sync] LeyStop: ${tsRows} series`)
   } catch (err) {
     console.error('[external-sync] leystop error:', err)
     results.leystop = { error: String(err) }

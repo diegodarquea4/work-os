@@ -45,6 +45,11 @@ export const INE_CODE: Record<string, number> = {
   NAC: 0,
 }
 
+/** Reverse of INE_CODE: numeric region id → our region cod string. */
+export const INE_INVERSE: Record<number, string> = Object.fromEntries(
+  Object.entries(INE_CODE).map(([cod, id]) => [id, cod])
+)
+
 /** Maps BCCh PIB regional codes (01-16) to our region string codes.
  *  Used in ine-sync to map F035 series to regionCod. */
 export const BCCh_PIB_CODE: Record<string, string> = {
