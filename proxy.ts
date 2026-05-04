@@ -1,6 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
+const SECURITY_HEADERS: [string, string][] = [
+  ['X-Frame-Options',        'DENY'],
+  ['X-Content-Type-Options', 'nosniff'],
+  ['Referrer-Policy',        'strict-origin-when-cross-origin'],
+  ['Permissions-Policy',     'camera=(), microphone=(), geolocation=()'],
+]
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -44,6 +51,11 @@ export async function proxy(request: NextRequest) {
 
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Attach security headers to every response
+  for (const [key, value] of SECURITY_HEADERS) {
+    response.headers.set(key, value)
   }
 
   return response
