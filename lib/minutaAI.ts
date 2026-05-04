@@ -9,6 +9,7 @@ export type MinutaEjecutivaContent = {
   alertas: string[]                 // 2-3 alertas narrativas
   contexto_region: string           // 2-3 oraciones de síntesis
   iniciativas_destacadas: string[]  // 3-4 iniciativas con estado
+  tendencia_general?: string        // 1 línea: "Mejora en empleo; deterioro en seguridad"
 }
 
 export type CifraSubseccion = {
@@ -29,6 +30,12 @@ export type MinutaCompletaContent = {
   avances_ejes: Record<string, EjeAvanceCompleto>  // un entry por eje presente en los datos
   alertas_criticas: string[]
   recomendaciones: string[]
+  tendencias?: {
+    titulo: string   // "Evolución de indicadores clave"
+    texto: string    // 3-4 oraciones sintetizando tendencias
+  }
+  posicion_nacional?: string   // 2-3 oraciones posicionando región vs país
+  cambios_periodo?: string[]   // 3-5 bullets de qué cambió en el último periodo
 }
 
 export type MinutaTipo = 'ejecutiva' | 'completo'
@@ -60,6 +67,33 @@ export type LeystopMinuta = {
   decomisos_anno: number | null
 }
 
+// ── Enriched context types (computed in route.ts) ────────────────────────────
+
+export type SeguimientoMinuta = {
+  prioridad_id: number
+  nombre: string
+  estado_semaforo: string | null
+  pct_avance: number | null
+  entries: { fecha: string; tipo: string; descripcion: string }[]
+}
+
+export type SemaforoTrendSummary = {
+  deteriorated: string[]  // "Nombre: verde→rojo"
+  improved: string[]      // "Nombre: rojo→ambar"
+  chronic: string[]       // names of initiatives in rojo >90 days with no change
+}
+
+export type NationalBenchmark = {
+  metric_name: string
+  national_value: number
+  period: string
+}
+
+export type TrendSummaries = {
+  unemployment: { current: number; previous: number; delta: number; months: number } | null
+  crime: { avgRecent4w: number; avgPrevious4w: number | null; pctChange: number | null } | null
+}
+
 // ── Context builder ──────────────────────────────────────────────────────────
 
 function buildContext(
@@ -70,6 +104,10 @@ function buildContext(
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
   leystopData?: LeystopMinuta | null,
+  seguimientos?: SeguimientoMinuta[],
+  semaforoTrends?: SemaforoTrendSummary | null,
+  nationalBenchmark?: NationalBenchmark[],
+  trendSummaries?: TrendSummaries | null,
 ): string {
   const total = projects.length
   const rojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
@@ -139,6 +177,63 @@ ${mopProjects.slice(0, 8).map(p =>
   ).join('\n')}
 Total MOP listados: ${mopProjects.length}` : ''
 
+  // ── NEW: Seguimientos narrativa ──
+  const segStr = seguimientos?.length ? `
+ACTIVIDAD RECIENTE POR INICIATIVA (últimos 60 días):
+${seguimientos.map(s =>
+    `- ${s.nombre} (${s.estado_semaforo ?? 'S/E'}, ${s.pct_avance ?? 0}%):\n${s.entries.map(e =>
+      `  * [${e.fecha}, ${e.tipo}] ${e.descripcion}`
+    ).join('\n')}`
+  ).join('\n')}` : ''
+
+  // ── NEW: Semaforo trends ──
+  const trendStr = semaforoTrends ? (() => {
+    const parts: string[] = []
+    if (semaforoTrends.deteriorated.length)
+      parts.push(`Deterioraron: ${semaforoTrends.deteriorated.length} (${semaforoTrends.deteriorated.join(', ')})`)
+    if (semaforoTrends.improved.length)
+      parts.push(`Mejoraron: ${semaforoTrends.improved.length} (${semaforoTrends.improved.join(', ')})`)
+    if (semaforoTrends.chronic.length)
+      parts.push(`Críticas sin mejora (>90 días en rojo): ${semaforoTrends.chronic.join(', ')}`)
+    return parts.length ? `\nTENDENCIA SEMÁFOROS (últimos 90 días):\n${parts.join('\n')}` : ''
+  })() : ''
+
+  // ── NEW: National benchmark ──
+  const benchStr = nationalBenchmark?.length ? (() => {
+    const METRIC_LABELS: Record<string, string> = {
+      tasa_desocupacion: 'Desempleo',
+      tasa_delictual: 'Tasa delictual',
+    }
+    const lines = nationalBenchmark.map(b => {
+      const label = METRIC_LABELS[b.metric_name] ?? b.metric_name
+      const regional = metrics?.[b.metric_name as keyof RegionMetrics]
+      if (regional == null || typeof regional !== 'number') return null
+      const diff = parseFloat((regional - b.national_value).toFixed(1))
+      const sign = diff > 0 ? '+' : ''
+      return `- ${label}: ${regional} regional vs ${b.national_value} nacional (${sign}${diff})`
+    }).filter(Boolean)
+    return lines.length ? `\nCOMPARACIÓN CON PROMEDIO NACIONAL:\n${lines.join('\n')}` : ''
+  })() : ''
+
+  // ── NEW: Time-series trends ──
+  const tsStr = trendSummaries ? (() => {
+    const parts: string[] = []
+    if (trendSummaries.unemployment) {
+      const u = trendSummaries.unemployment
+      const dir = u.delta < 0 ? 'mejorando' : u.delta > 0 ? 'empeorando' : 'estable'
+      parts.push(`- Desempleo: ${u.previous}% → ${u.current}% (${dir}, ${u.delta > 0 ? '+' : ''}${u.delta} pp en ${u.months} meses)`)
+    }
+    if (trendSummaries.crime) {
+      const c = trendSummaries.crime
+      if (c.avgPrevious4w != null && c.pctChange != null) {
+        parts.push(`- Delitos: promedio semanal ${c.avgPrevious4w} → ${c.avgRecent4w} casos (${c.pctChange > 0 ? '+' : ''}${c.pctChange}% últimas 4 sem vs 4 anteriores)`)
+      } else {
+        parts.push(`- Delitos: promedio semanal últimas 4 sem: ${c.avgRecent4w} casos`)
+      }
+    }
+    return parts.length ? `\nTENDENCIAS (series de tiempo):\n${parts.join('\n')}` : ''
+  })() : ''
+
   return `
 FECHA: ${fecha}
 REGIÓN: ${regionNombre}
@@ -179,6 +274,10 @@ SEGURIDAD PÚBLICA — LeyStop / Carabineros de Chile (${leystopData.semana ?? '
 - Fiscalizaciones: ${leystopData.fiscalizaciones ?? 'N/D'}
 - Incautaciones: ${leystopData.incautaciones ?? 'N/D'} (${leystopData.incaut_fuego ?? 'N/D'} armas de fuego, ${leystopData.incaut_blancas ?? 'N/D'} armas blancas)
 - Allanamientos año: ${leystopData.allanamientos_anno ?? 'N/D'} | Vehículos recuperados año: ${leystopData.vehiculos_recuperados_anno ?? 'N/D'} | Decomisos año: ${leystopData.decomisos_anno ?? 'N/D'}` : ''}
+${segStr}
+${trendStr}
+${benchStr}
+${tsStr}
 `.trim()
 }
 
@@ -194,19 +293,33 @@ export async function generateMinutaContent(
   seiaProjects?: SeiaProject[] | null,
   mopProjects?: MopProject[] | null,
   leystopData?: LeystopMinuta | null,
+  seguimientos?: SeguimientoMinuta[],
+  semaforoTrends?: SemaforoTrendSummary | null,
+  nationalBenchmark?: NationalBenchmark[],
+  trendSummaries?: TrendSummaries | null,
 ): Promise<MinutaEjecutivaContent | MinutaCompletaContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
-  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData)
+  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData, seguimientos, semaforoTrends, nationalBenchmark, trendSummaries)
   const ejes = [...new Set(projects.map(p => p.eje))]
 
+  console.log(`[minutaAI] context length: ${context.length} chars (~${Math.round(context.length / 4)} tokens)`)
+
   const systemPrompt = tipo === 'ejecutiva'
-    ? `Eres el experto en coordinación territorial de la Región de ${regionNombre} del Ministerio del Interior y Seguridad Pública de Chile. Redacta contenido para una minuta ejecutiva de visita oficial. Usa tono formal institucional, español de Chile. Sé preciso, conciso y útil para el tomador de decisión.`
+    ? `Eres el experto en coordinación territorial de la Región de ${regionNombre} del Ministerio del Interior y Seguridad Pública de Chile. Redacta contenido para una minuta ejecutiva de visita oficial. Usa tono formal institucional, español de Chile. Sé preciso, conciso y útil para el tomador de decisión.
+
+Utiliza los datos de seguimiento reciente y tendencias de semáforo para contextualizar alertas con hechos, fechas y actores concretos. Si hay datos de comparación nacional, posiciona la región respecto al promedio país.`
     : `Eres analista senior de la División de Coordinación Interregional del Ministerio del Interior y Seguridad Pública de Chile, experto en la Región de ${regionNombre}. Tu tarea es redactar el Informe de Avances del Plan Regional de Gobierno que el Presidente de la República llevará en su visita a la región.
 
 Si se adjunta el Plan Regional de Gobierno como documento, léelo en su TOTALIDAD. Extrae los compromisos presidenciales, objetivos estratégicos, metas y ejes prioritarios más importantes definidos en ese plan. Usa esa información junto con los datos de seguimiento del panel para construir un informe sustancial que refleje fielmente los compromisos asumidos y su estado de avance.
+
+INSTRUCCIONES ADICIONALES PARA ANÁLISIS ENRIQUECIDO:
+- Utiliza la actividad reciente de seguimiento por iniciativa para contextualizar alertas y recomendaciones con hechos específicos, fechas y actores concretos. Prioriza información de seguimiento por sobre descripciones genéricas.
+- Usa las tendencias de semáforo para distinguir deterioro reciente (que requiere acción urgente) de problemas crónicos (que requieren cambio de estrategia).
+- Cuando haya datos de comparación nacional, posiciona explícitamente la región respecto al promedio país en los indicadores clave.
+- Cuando haya tendencias de series de tiempo, describe la dirección y magnitud del cambio, no solo el valor actual.
 
 Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono formal e institucional, en español de Chile.`
 
@@ -215,7 +328,8 @@ Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono f
   "avances_relevantes": ["string (4-5 bullets, máx 120 chars c/u, con cifras concretas)"],
   "alertas": ["string (2-3 alertas críticas narrativas, máx 150 chars c/u)"],
   "contexto_region": "string (2-3 oraciones que sintetizan la situación regional actual)",
-  "iniciativas_destacadas": ["string (3-4 iniciativas con su estado, máx 120 chars c/u)"]
+  "iniciativas_destacadas": ["string (3-4 iniciativas con su estado, máx 120 chars c/u)"],
+  "tendencia_general": "string (1 oración que resume la dirección general: mejoras y deterioros clave)"
 }`
     : `{
   "resumen_ejecutivo": "2-3 oraciones que sintetizan el estado actual de la región y el avance de su Plan Regional de Gobierno. Incluye la cifra de avance promedio y los elementos más destacados.",
@@ -230,7 +344,7 @@ Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono f
     },
     {
       "titulo": "Empleo y mercado laboral",
-      "texto": "Párrafo de 3-4 oraciones con datos de desocupación, participación laboral, ocupación informal y tendencias recientes."
+      "texto": "Párrafo de 3-4 oraciones con datos de desocupación, participación laboral, ocupación informal y tendencias recientes. Incluir comparación con media nacional y dirección de la tendencia."
     },
     {
       "titulo": "Pobreza y vulnerabilidad social",
@@ -238,14 +352,20 @@ Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono f
     },
     {
       "titulo": "Seguridad pública",
-      "texto": "Párrafo de 3-4 oraciones con datos de tasa delictual LeyStop/Carabineros, variación respecto al año anterior, principales tipos de delito y actividad operativa policial (controles, fiscalizaciones, incautaciones). Complementar con indicadores CASEN de victimización y percepción de inseguridad si están disponibles."
+      "texto": "Párrafo de 3-4 oraciones con datos de tasa delictual LeyStop/Carabineros, variación respecto al año anterior, tendencia reciente de casos semanales, principales tipos de delito y actividad operativa policial (controles, fiscalizaciones, incautaciones). Complementar con indicadores CASEN de victimización y percepción de inseguridad si están disponibles."
     }
   ],
+  "tendencias": {
+    "titulo": "Evolución de indicadores clave",
+    "texto": "Párrafo de 3-4 oraciones sintetizando las principales tendencias: dirección del desempleo, evolución de la actividad delictual, y posición de la región respecto al promedio nacional. Destacar mejoras y deterioros."
+  },
+  "posicion_nacional": "2-3 oraciones posicionando la región respecto al promedio país en indicadores clave (empleo, seguridad, etc.), mencionando las brechas más significativas.",
   "gps_narrativa": "Párrafo de 3-4 oraciones que introduce los proyectos de inversión privada y obras públicas en la región, destacando montos totales, sectores predominantes y relevancia para el desarrollo regional.",
   "avances_ejes": {
-    ${ejes.map(e => `"${e}": {\n      "resumen": "2-3 oraciones sobre el estado general de este eje, sus logros más relevantes y los principales desafíos pendientes.",\n      "logros": ["Bullet específico con cifra concreta o hito alcanzado", "Bullet específico", "Bullet específico", "Bullet específico"]\n    }`).join(',\n    ')}
+    ${ejes.map(e => `"${e}": {\n      "resumen": "2-3 oraciones sobre el estado general de este eje, sus logros más relevantes y los principales desafíos pendientes. Integrar información de seguimiento reciente si está disponible.",\n      "logros": ["Bullet específico con cifra concreta o hito alcanzado", "Bullet específico", "Bullet específico", "Bullet específico"]\n    }`).join(',\n    ')}
   },
-  "alertas_criticas": ["Alerta narrativa con contexto específico (máx 180 chars)", "Alerta 2"],
+  "alertas_criticas": ["Alerta narrativa con contexto específico basado en seguimiento y tendencia de semáforo (máx 180 chars)", "Alerta 2"],
+  "cambios_periodo": ["Cambio relevante del periodo: qué iniciativa cambió de estado, qué hito se alcanzó o qué bloqueo surgió (máx 150 chars)", "Cambio 2", "Cambio 3"],
   "recomendaciones": ["Recomendación accionable y específica para el gobierno central (máx 180 chars)", "Recomendación 2", "Recomendación 3"]
 }`
 

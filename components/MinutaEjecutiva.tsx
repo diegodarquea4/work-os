@@ -424,6 +424,12 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
                 </View>
               ) : null}
 
+              {ai?.tendencia_general ? (
+                <View style={{ backgroundColor: '#f0fdf4', padding: 6, borderLeftWidth: 2, borderLeftColor: C.greenHdr, borderRadius: 2, marginBottom: 6 }}>
+                  <Text style={{ fontSize: 7.5, color: C.navy, fontFamily: 'Helvetica-Oblique', lineHeight: 1.4 }}>{ai.tendencia_general}</Text>
+                </View>
+              ) : null}
+
               {/* Métricas socioeconómicas */}
               {m && (
                 <View>

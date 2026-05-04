@@ -587,6 +587,23 @@ export default function MinutaDocument({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* I-bis. TENDENCIAS Y POSICIÓN NACIONAL (new)                         */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {(ai?.tendencias || ai?.posicion_nacional) && (
+          <View>
+            <Text style={s.sectionTitle}>{ai?.tendencias?.titulo ?? 'Tendencias y Evolución'}</Text>
+            {ai?.tendencias?.texto && (
+              <View style={{ backgroundColor: C.lightBlue, padding: 10, borderLeftWidth: 3, borderLeftColor: C.navy, marginBottom: 6, borderRadius: 2 }}>
+                <Text style={{ fontSize: 9, color: C.textDark, lineHeight: 1.5 }}>{ai.tendencias.texto}</Text>
+              </View>
+            )}
+            {ai?.posicion_nacional && (
+              <Text style={{ fontSize: 9, color: C.textMid, lineHeight: 1.5, marginBottom: 8 }}>{ai.posicion_nacional}</Text>
+            )}
+          </View>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* II. ESTADO DEL PLAN REGIONAL                                        */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <Text style={s.sectionTitle}>II.   Estado del Plan Regional</Text>
@@ -745,6 +762,21 @@ export default function MinutaDocument({
             Sin proyectos de inversión privada registrados para esta región.
           </Text>
         )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* V-pre. CAMBIOS DEL PERIODO (new)                                    */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {ai?.cambios_periodo?.length ? (
+          <View>
+            <Text style={s.sectionTitle}>Cambios del Periodo</Text>
+            {ai.cambios_periodo.map((cambio, i) => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 3, paddingLeft: 4 }}>
+                <Text style={{ fontSize: 9, color: C.navy, marginRight: 6, fontFamily: 'Helvetica-Bold' }}>△</Text>
+                <Text style={{ fontSize: 9, color: C.textDark, lineHeight: 1.4, flex: 1 }}>{cambio}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* V. ALERTAS Y RECOMENDACIONES                                        */}

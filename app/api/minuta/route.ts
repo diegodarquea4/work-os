@@ -5,11 +5,11 @@ import fs from 'fs'
 import MinutaDocument from '@/components/MinutaDocument'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { generateMinutaContent, type MinutaTipo, type LeystopMinuta } from '@/lib/minutaAI'
+import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries } from '@/lib/minutaAI'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
@@ -74,6 +74,11 @@ export async function POST(request: Request) {
   let planPdfBase64: string | null = null
   let cachedAiContent: unknown = null
   let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
+  // Enriched context data (fase 2)
+  let seguimientosMinuta: SeguimientoMinuta[] = []
+  let semaforoTrends: SemaforoTrendSummary | null = null
+  let nationalBenchmark: NationalBenchmark[] = []
+  let trendSummaries: TrendSummaries | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getIniciativasByCod, getMetricsByCod } = await import('@/lib/db')
@@ -138,6 +143,154 @@ export async function POST(request: Request) {
     } catch {
       // No plan regional uploaded — AI will work with panel data only
     }
+
+    // ── FASE 2: Enriched context (needs initiative IDs from fase 1) ──────────
+    if (!cachedAiContent) {
+      const allIds = projects.map(p => p.n)
+      const rojoAmbarIds = projects
+        .filter(p => p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
+        .map(p => p.n)
+
+      const sixtyDaysAgo  = new Date(Date.now() - 60  * 86400000).toISOString()
+      const ninetyDaysAgo = new Date(Date.now() - 90  * 86400000).toISOString()
+
+      const [seguimientosRes, semaforoLogRes, nationalRes, stopHistoryRes, regionalTsRes] = await Promise.all([
+        // Recent seguimientos for rojo/ambar initiatives
+        rojoAmbarIds.length > 0
+          ? sb.from('seguimientos')
+              .select('prioridad_id, fecha, tipo, descripcion, estado')
+              .in('prioridad_id', rojoAmbarIds)
+              .gte('created_at', sixtyDaysAgo)
+              .order('created_at', { ascending: false })
+              .limit(100)
+          : Promise.resolve({ data: null }),
+        // Semaforo change history
+        allIds.length > 0
+          ? sb.from('semaforo_log')
+              .select('prioridad_id, valor_anterior, valor_nuevo, created_at')
+              .in('prioridad_id', allIds)
+              .eq('campo', 'semaforo')
+              .gte('created_at', ninetyDaysAgo)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: null }),
+        // National benchmark metrics (region_id = 0)
+        sb.from('regional_metrics')
+          .select('metric_name, value, period')
+          .eq('region_id', 0)
+          .in('metric_name', ['tasa_desocupacion', 'tasa_delictual'])
+          .order('period', { ascending: false })
+          .limit(10),
+        // Stop stats history (8 weeks) for crime trend
+        regionId !== undefined
+          ? sb.from('stop_stats')
+              .select('semana_id, fecha_desde, casos_ultima_semana, controles_total')
+              .eq('region_id', regionId)
+              .order('semana_id', { ascending: false })
+              .limit(8)
+          : Promise.resolve({ data: null }),
+        // Regional unemployment time-series (6 months)
+        regionId !== undefined
+          ? sb.from('regional_metrics')
+              .select('metric_name, value, period')
+              .eq('region_id', regionId)
+              .eq('metric_name', 'tasa_desocupacion')
+              .order('period', { ascending: false })
+              .limit(6)
+          : Promise.resolve({ data: null }),
+      ])
+
+      // Build seguimientos lookup
+      const segData = (seguimientosRes.data ?? []) as Pick<Seguimiento, 'prioridad_id' | 'fecha' | 'tipo' | 'descripcion' | 'estado'>[]
+      const nameMap = new Map(projects.map(p => [p.n, p.nombre]))
+      const segByInit = new Map<number, typeof segData>()
+      for (const s of segData) {
+        const arr = segByInit.get(s.prioridad_id) ?? []
+        if (arr.length < 3) arr.push(s)  // max 3 per initiative
+        segByInit.set(s.prioridad_id, arr)
+      }
+      seguimientosMinuta = Array.from(segByInit.entries()).map(([pid, entries]) => ({
+        prioridad_id: pid,
+        nombre: nameMap.get(pid) ?? `#${pid}`,
+        estado_semaforo: projects.find(p => p.n === pid)?.estado_semaforo ?? null,
+        pct_avance: projects.find(p => p.n === pid)?.pct_avance ?? null,
+        entries: entries.map(e => ({ fecha: e.fecha, tipo: e.tipo, descripcion: e.descripcion })),
+      }))
+
+      // Build semaforo trends
+      const logData = (semaforoLogRes.data ?? []) as Pick<SemaforoLog, 'prioridad_id' | 'valor_anterior' | 'valor_nuevo' | 'created_at'>[]
+      const SEVERITY: Record<string, number> = { gris: 0, verde: 1, ambar: 2, rojo: 3 }
+      const deteriorated: string[] = []
+      const improved: string[] = []
+      const chronic: string[] = []
+
+      // Group log by initiative — check first and last change
+      const logByInit = new Map<number, typeof logData>()
+      for (const l of logData) {
+        const arr = logByInit.get(l.prioridad_id) ?? []
+        arr.push(l)
+        logByInit.set(l.prioridad_id, arr)
+      }
+      const initIdsWithChanges = new Set(logByInit.keys())
+      for (const [pid, logs] of logByInit.entries()) {
+        const name = nameMap.get(pid) ?? `#${pid}`
+        const first = logs[logs.length - 1]  // oldest (sorted desc)
+        const last = logs[0]                  // newest
+        const oldSev = SEVERITY[first.valor_anterior ?? ''] ?? 0
+        const newSev = SEVERITY[last.valor_nuevo] ?? 0
+        if (newSev > oldSev) deteriorated.push(`${name}: ${first.valor_anterior}→${last.valor_nuevo}`)
+        else if (newSev < oldSev) improved.push(`${name}: ${first.valor_anterior}→${last.valor_nuevo}`)
+      }
+      // Chronic: currently rojo with no improving change in 90 days
+      for (const p of projects) {
+        if (p.estado_semaforo === 'rojo' && !initIdsWithChanges.has(p.n)) {
+          chronic.push(p.nombre)
+        }
+      }
+      semaforoTrends = { deteriorated, improved, chronic }
+
+      // Build national benchmark (latest value per metric)
+      const natData = (nationalRes.data ?? []) as { metric_name: string; value: number; period: string }[]
+      const natMap = new Map<string, { value: number; period: string }>()
+      for (const r of natData) {
+        if (!natMap.has(r.metric_name)) natMap.set(r.metric_name, { value: r.value, period: r.period })
+      }
+      nationalBenchmark = Array.from(natMap.entries()).map(([metric, d]) => ({
+        metric_name: metric,
+        national_value: d.value,
+        period: d.period,
+      }))
+
+      // Build trend summaries
+      const stopData = (stopHistoryRes.data ?? []) as { semana_id: number; casos_ultima_semana: number | null }[]
+      const regTsData = (regionalTsRes.data ?? []) as { value: number; period: string }[]
+
+      let unemploymentTrend: TrendSummaries['unemployment'] = null
+      if (regTsData.length >= 2) {
+        const latest = regTsData[0]
+        const oldest = regTsData[regTsData.length - 1]
+        unemploymentTrend = {
+          current: latest.value,
+          previous: oldest.value,
+          delta: parseFloat((latest.value - oldest.value).toFixed(1)),
+          months: regTsData.length,
+        }
+      }
+
+      let crimeTrend: TrendSummaries['crime'] = null
+      if (stopData.length >= 4) {
+        const recent4 = stopData.slice(0, 4).map(d => d.casos_ultima_semana ?? 0)
+        const older4  = stopData.slice(4, 8).map(d => d.casos_ultima_semana ?? 0)
+        const avgRecent = recent4.reduce((a, b) => a + b, 0) / recent4.length
+        const avgOlder  = older4.length > 0 ? older4.reduce((a, b) => a + b, 0) / older4.length : null
+        crimeTrend = {
+          avgRecent4w: Math.round(avgRecent),
+          avgPrevious4w: avgOlder ? Math.round(avgOlder) : null,
+          pctChange: avgOlder && avgOlder > 0 ? parseFloat(((avgRecent - avgOlder) / avgOlder * 100).toFixed(1)) : null,
+        }
+      }
+
+      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend }
+    }
   } else {
     const { getProjects } = await import('@/lib/projects')
     const all = getProjects()
@@ -150,7 +303,7 @@ export async function POST(request: Request) {
     console.log(`[minuta] cache HIT ${body.region.cod}/${tipo}`)
     aiContent = cachedAiContent
   } else {
-    console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}`)
+    console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}, seguimientos: ${seguimientosMinuta.length}, trends: ${!!trendSummaries}`)
     aiContent = await generateMinutaContent(
       tipo,
       body.region.nombre,
@@ -161,6 +314,10 @@ export async function POST(request: Request) {
       seiaProjects,
       mopProjects,
       leystopData,
+      seguimientosMinuta,
+      semaforoTrends,
+      nationalBenchmark,
+      trendSummaries,
     )
     // Store in cache (fire-and-forget — don't delay the PDF response)
     if (sbRef) {
