@@ -794,6 +794,29 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
         </div>
 
       </div>
+
+      {/* ── Minuta loading overlay ─────────────────────────────────────────── */}
+      {downloadingMinuta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-xs mx-4 px-6 py-8 text-center">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#1a2744" strokeWidth="2" className="animate-spin mx-auto mb-4">
+              <circle cx="12" cy="12" r="10" strokeDasharray="31" strokeDashoffset="10" strokeLinecap="round" />
+            </svg>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">
+              {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
+                ? 'Descargando minuta...'
+                : 'Generando minuta con IA...'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
+                ? 'Usando versión en cache de hoy.'
+                : downloadingTipo === 'completo'
+                  ? 'Analizando plan regional, iniciativas, indicadores y tendencias. Esto puede tomar hasta 40 segundos.'
+                  : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
