@@ -40,18 +40,18 @@ function fmtDate(iso?: string | null): string {
   } catch { return iso.slice(0, 10) }
 }
 
+/** SEIA inversion_mm = millions of USD from SEIA API */
 function fmtSeia(mm?: number | null): string {
   if (mm == null) return '—'
-  if (mm >= 1_000_000) return `USD ${(mm / 1_000_000).toFixed(1)}B MM`
-  if (mm >= 1_000)     return `USD ${(mm / 1_000).toFixed(0)}M MM`
-  return `${mm.toFixed(0)} MM$`
+  return `USD ${mm.toLocaleString('es-CL')} MM`
 }
 
+/** MOP inversion_miles = thousands of CLP */
 function fmtMop(miles?: number | null): string {
   if (miles == null) return '—'
-  if (miles >= 1_000_000) return `$${(miles / 1_000_000).toFixed(2)}B MM`
-  if (miles >= 1_000)     return `$${(miles / 1_000).toFixed(0)}M MM`
-  return `$${miles} mil`
+  const mmPesos = miles / 1_000
+  if (mmPesos >= 1) return `$${mmPesos.toLocaleString('es-CL', { maximumFractionDigits: 0 })} MM`
+  return `$${miles.toLocaleString('es-CL')} mil`
 }
 
 function arcPath(cx: number, cy: number, r: number, a1: number, a2: number): string {
@@ -376,46 +376,51 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
               <Text style={s.boldSub}>Los avances más relevantes del periodo fueron:</Text>
               {bullets.map((b, i) => <BL key={i} text={b} />)}
 
-              <View style={{ marginTop: 14 }}>
-                <SH t="Avance Sectorial" />
-                {/* Legend */}
-                <View style={[s.leg, { marginBottom: 8 }]}>
-                  <LegItem color={C.red}   label="Rojo"       />
-                  <LegItem color={C.amber} label="Ambar"      />
-                  <LegItem color={C.verde} label="Verde"      />
-                  <LegItem color={C.gris}  label="Sin evaluar"/>
+              {total > 0 && (
+                <View style={{ marginTop: 14 }}>
+                  <SH t="Avance Sectorial" />
+                  <View style={[s.leg, { marginBottom: 8 }]}>
+                    <LegItem color={C.red}   label="Rojo"       />
+                    <LegItem color={C.amber} label="Ambar"      />
+                    <LegItem color={C.verde} label="Verde"      />
+                    <LegItem color={C.gris}  label="Sin evaluar"/>
+                  </View>
+                  <EjeChart projects={projects} />
                 </View>
-                <EjeChart projects={projects} />
-              </View>
+              )}
             </View>
 
             {/* ── COLUMNA DERECHA ── */}
             <View style={s.colR}>
-              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>
-                Estado de Avance Iniciativas Plan Región
-              </Text>
-              <Text style={{ fontSize: 8, color: C.textMid, marginBottom: 8 }}>
-                Total Iniciativas: {total}
-              </Text>
+              {total > 0 && (
+                <View>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>
+                    Estado de Avance Iniciativas Plan Región
+                  </Text>
+                  <Text style={{ fontSize: 8, color: C.textMid, marginBottom: 8 }}>
+                    Total Iniciativas: {total}
+                  </Text>
 
-              {/* Stat boxes */}
-              <View style={s.statRow}>
-                <View style={[s.statBox, { borderColor: C.red   }]}><Text style={s.statNR}>{rojo}</Text><Text  style={s.statL}>Rojo</Text></View>
-                <View style={[s.statBox, { borderColor: C.amber }]}><Text style={s.statNA}>{ambar}</Text><Text style={s.statL}>Ambar</Text></View>
-                <View style={[s.statBox, { borderColor: C.verde }]}><Text style={s.statNV}>{verde}</Text><Text style={s.statL}>Verde</Text></View>
-                <View style={[s.statBox, { borderColor: C.border}]}><Text style={s.statNGr}>{gris}</Text><Text style={s.statL}>S/E</Text></View>
-              </View>
+                  {/* Stat boxes */}
+                  <View style={s.statRow}>
+                    <View style={[s.statBox, { borderColor: C.red   }]}><Text style={s.statNR}>{rojo}</Text><Text  style={s.statL}>Rojo</Text></View>
+                    <View style={[s.statBox, { borderColor: C.amber }]}><Text style={s.statNA}>{ambar}</Text><Text style={s.statL}>Ambar</Text></View>
+                    <View style={[s.statBox, { borderColor: C.verde }]}><Text style={s.statNV}>{verde}</Text><Text style={s.statL}>Verde</Text></View>
+                    <View style={[s.statBox, { borderColor: C.border}]}><Text style={s.statNGr}>{gris}</Text><Text style={s.statL}>S/E</Text></View>
+                  </View>
 
-              {/* Donut */}
-              <DonutChart rojo={rojo} ambar={ambar} verde={verde} gris={gris} />
+                  {/* Donut */}
+                  <DonutChart rojo={rojo} ambar={ambar} verde={verde} gris={gris} />
 
-              {/* Legend */}
-              <View style={s.leg}>
-                <LegItem color={C.red}   label={`Rojo (${rojo})`}    />
-                <LegItem color={C.amber} label={`Ambar (${ambar})`}  />
-                <LegItem color={C.verde} label={`Verde (${verde})`}  />
-                <LegItem color={C.gris}  label={`S/E (${gris})`}     />
-              </View>
+                  {/* Legend */}
+                  <View style={s.leg}>
+                    <LegItem color={C.red}   label={`Rojo (${rojo})`}    />
+                    <LegItem color={C.amber} label={`Ambar (${ambar})`}  />
+                    <LegItem color={C.verde} label={`Verde (${verde})`}  />
+                    <LegItem color={C.gris}  label={`S/E (${gris})`}     />
+                  </View>
+                </View>
+              )}
 
               {/* AI context box */}
               {ai?.contexto_region ? (
@@ -435,11 +440,13 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
                 <View>
                   <Text style={s.mTitle}>Contexto Socioeconómico</Text>
                   {m.poblacion_total         != null && <View style={s.mRow}><Text style={s.mLbl}>Población (Censo 2024)</Text><Text style={s.mVal}>{m.poblacion_total.toLocaleString('es-CL')} hab.</Text></View>}
-                  {m.tasa_desocupacion       != null && <View style={s.mRow}><Text style={s.mLbl}>Tasa desocupación</Text><Text style={s.mVal}>{m.tasa_desocupacion}%</Text></View>}
-                  {m.pct_pobreza_ingresos    != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza por ingresos</Text><Text style={s.mVal}>{m.pct_pobreza_ingresos}%</Text></View>}
-                  {m.pct_pobreza_multidimensional != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza multidimensional</Text><Text style={s.mVal}>{m.pct_pobreza_multidimensional}%</Text></View>}
+                  {m.tasa_desocupacion       != null && <View style={s.mRow}><Text style={s.mLbl}>Tasa desocupación</Text><Text style={s.mVal}>{Math.round(m.tasa_desocupacion * 10) / 10}%</Text></View>}
+                  {m.pct_pobreza_ingresos    != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza por ingresos</Text><Text style={s.mVal}>{Math.round(m.pct_pobreza_ingresos * 10) / 10}%</Text></View>}
+                  {m.pct_pobreza_multidimensional != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza multidimensional</Text><Text style={s.mVal}>{Math.round(m.pct_pobreza_multidimensional * 10) / 10}%</Text></View>}
                   {m.pib_regional            != null && <View style={s.mRow}><Text style={s.mLbl}>PIB regional</Text><Text style={s.mVal}>{m.pib_regional.toLocaleString('es-CL', { maximumFractionDigits: 2 })} MM$</Text></View>}
-                  {m.pct_pib_nacional        != null && <View style={s.mRow}><Text style={s.mLbl}>% PIB nacional</Text><Text style={s.mVal}>{m.pct_pib_nacional}%</Text></View>}
+                  {m.pct_pib_nacional        != null && <View style={s.mRow}><Text style={s.mLbl}>% PIB nacional</Text><Text style={s.mVal}>{Math.round(m.pct_pib_nacional * 10) / 10}%</Text></View>}
+                  {m.pct_hogares_victimas_dmcs != null && <View style={s.mRow}><Text style={s.mLbl}>Hogares víctimas DMCS</Text><Text style={s.mVal}>{Math.round(m.pct_hogares_victimas_dmcs * 10) / 10}%</Text></View>}
+                  {m.pct_percepcion_inseguridad != null && <View style={s.mRow}><Text style={s.mLbl}>Percepción inseguridad</Text><Text style={s.mVal}>{Math.round(m.pct_percepcion_inseguridad * 10) / 10}%</Text></View>}
                 </View>
               )}
             </View>

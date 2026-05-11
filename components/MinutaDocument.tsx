@@ -344,7 +344,8 @@ function n(val?: number | null): string | null {
 
 function pct(val?: number | null): string | null {
   if (val == null) return null
-  return `${String(val).replace('.', ',')}%`
+  const rounded = Math.round(val * 10) / 10
+  return `${String(rounded).replace('.', ',')}%`
 }
 
 function fmtDate(iso?: string | null): string {
@@ -356,16 +357,18 @@ function fmtDate(iso?: string | null): string {
   } catch { return iso.slice(0, 10) }
 }
 
+/** SEIA inversion_mm = millions of USD from SEIA API */
 function fmtSeia(mm?: number | null): string {
   if (mm == null) return '—'
-  if (mm >= 1_000) return `USD ${(mm / 1_000).toFixed(1)}B`
-  return `USD ${mm.toFixed(0)}M`
+  return `USD ${mm.toLocaleString('es-CL')} MM`
 }
 
+/** MOP inversion_miles = thousands of CLP */
 function fmtMop(miles?: number | null): string {
   if (miles == null) return '—'
-  if (miles >= 1_000_000) return `$${(miles / 1_000_000).toFixed(1)}B`
-  if (miles >= 1_000)     return `$${(miles / 1_000).toFixed(0)}M`
+  const mmPesos = miles / 1_000  // convert to MM$
+  if (mmPesos >= 1_000) return `$${mmPesos.toLocaleString('es-CL', { maximumFractionDigits: 0 })} MM`
+  if (mmPesos >= 1) return `$${mmPesos.toLocaleString('es-CL', { maximumFractionDigits: 0 })} MM`
   return `$${miles.toLocaleString('es-CL')} mil`
 }
 
@@ -604,56 +607,59 @@ export default function MinutaDocument({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* II. ESTADO DEL PLAN REGIONAL                                        */}
+        {/* II. ESTADO DEL PLAN REGIONAL (hidden when 0 initiatives)            */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <Text style={s.sectionTitle}>II.   Estado del Plan Regional</Text>
-
-        <View>
-          {/* Header row */}
-          <View style={s.statsHdr}>
-            <Text style={[s.statsColEje, s.statsHdrTxt]}>Eje Estratégico</Text>
-            <Text style={[s.statsColN,   s.statsHdrTxt, { textAlign: 'center' }]}>N°</Text>
-            <Text style={[s.statsColPct, s.statsHdrTxt, { textAlign: 'center' }]}>Avance</Text>
-            <Text style={[s.statsColR,   s.statsHdrTxt, { color: C.white }]}>Rojo</Text>
-            <Text style={[s.statsColA,   s.statsHdrTxt, { color: C.white }]}>Ámbar</Text>
-            <Text style={[s.statsColV,   s.statsHdrTxt, { color: C.white }]}>Verde</Text>
-          </View>
-
-          {ejes.map((eje, i) => {
-            const items = sorted.filter(p => p.eje === eje)
-            const r     = items.filter(p => p.estado_semaforo === 'rojo').length
-            const a     = items.filter(p => p.estado_semaforo === 'ambar').length
-            const v     = items.filter(p => p.estado_semaforo === 'verde').length
-            const avg   = Math.round(items.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / items.length)
-            return (
-              <View key={eje} style={[s.statsRow, i % 2 === 1 ? s.statsRowAlt : {}]}>
-                <Text style={s.statsColEje}>{tr(eje, 52)}</Text>
-                <Text style={[s.statsColN,  { textAlign: 'center' }]}>{items.length}</Text>
-                <Text style={[s.statsColPct,{ textAlign: 'center' }]}>{avg}%</Text>
-                <Text style={s.statsColR}>{r > 0 ? r : '—'}</Text>
-                <Text style={s.statsColA}>{a > 0 ? a : '—'}</Text>
-                <Text style={s.statsColV}>{v > 0 ? v : '—'}</Text>
+        {totalInit > 0 && (
+          <View>
+            <Text style={s.sectionTitle}>II.   Estado del Plan Regional</Text>
+            <View>
+              <View style={s.statsHdr}>
+                <Text style={[s.statsColEje, s.statsHdrTxt]}>Eje Estratégico</Text>
+                <Text style={[s.statsColN,   s.statsHdrTxt, { textAlign: 'center' }]}>N°</Text>
+                <Text style={[s.statsColPct, s.statsHdrTxt, { textAlign: 'center' }]}>Avance</Text>
+                <Text style={[s.statsColR,   s.statsHdrTxt, { color: C.white }]}>Rojo</Text>
+                <Text style={[s.statsColA,   s.statsHdrTxt, { color: C.white }]}>Ámbar</Text>
+                <Text style={[s.statsColV,   s.statsHdrTxt, { color: C.white }]}>Verde</Text>
               </View>
-            )
-          })}
 
-          {/* Total row */}
-          <View style={[s.statsRow, s.statsRowTotal]}>
-            <Text style={[s.statsColEje, { fontFamily: 'Helvetica-Bold' }]}>TOTAL</Text>
-            <Text style={[s.statsColN,   { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{totalInit}</Text>
-            <Text style={[s.statsColPct, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{avgPct}%</Text>
-            <Text style={[s.statsColR,   { fontFamily: 'Helvetica-Bold' }]}>{totalRojo  > 0 ? totalRojo  : '—'}</Text>
-            <Text style={[s.statsColA,   { fontFamily: 'Helvetica-Bold' }]}>{totalAmbar > 0 ? totalAmbar : '—'}</Text>
-            <Text style={[s.statsColV,   { fontFamily: 'Helvetica-Bold' }]}>{totalVerde > 0 ? totalVerde : '—'}</Text>
+              {ejes.map((eje, i) => {
+                const items = sorted.filter(p => p.eje === eje)
+                const r     = items.filter(p => p.estado_semaforo === 'rojo').length
+                const a     = items.filter(p => p.estado_semaforo === 'ambar').length
+                const v     = items.filter(p => p.estado_semaforo === 'verde').length
+                const avg   = Math.round(items.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / items.length)
+                return (
+                  <View key={eje} style={[s.statsRow, i % 2 === 1 ? s.statsRowAlt : {}]}>
+                    <Text style={s.statsColEje}>{tr(eje, 52)}</Text>
+                    <Text style={[s.statsColN,  { textAlign: 'center' }]}>{items.length}</Text>
+                    <Text style={[s.statsColPct,{ textAlign: 'center' }]}>{avg}%</Text>
+                    <Text style={s.statsColR}>{r > 0 ? r : '—'}</Text>
+                    <Text style={s.statsColA}>{a > 0 ? a : '—'}</Text>
+                    <Text style={s.statsColV}>{v > 0 ? v : '—'}</Text>
+                  </View>
+                )
+              })}
+
+              <View style={[s.statsRow, s.statsRowTotal]}>
+                <Text style={[s.statsColEje, { fontFamily: 'Helvetica-Bold' }]}>TOTAL</Text>
+                <Text style={[s.statsColN,   { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{totalInit}</Text>
+                <Text style={[s.statsColPct, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{avgPct}%</Text>
+                <Text style={[s.statsColR,   { fontFamily: 'Helvetica-Bold' }]}>{totalRojo  > 0 ? totalRojo  : '—'}</Text>
+                <Text style={[s.statsColA,   { fontFamily: 'Helvetica-Bold' }]}>{totalAmbar > 0 ? totalAmbar : '—'}</Text>
+                <Text style={[s.statsColV,   { fontFamily: 'Helvetica-Bold' }]}>{totalVerde > 0 ? totalVerde : '—'}</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* III. PRINCIPALES AVANCES DEL PLAN                                  */}
+        {/* III. PRINCIPALES AVANCES DEL PLAN (hidden when 0 initiatives)      */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <Text style={s.sectionTitle}>III.   Principales avances del Plan</Text>
+        {totalInit > 0 && (
+          <Text style={s.sectionTitle}>III.   Principales avances del Plan</Text>
+        )}
 
-        {ejes.map(eje => {
+        {totalInit > 0 && ejes.map(eje => {
           const items  = sorted.filter(p => p.eje === eje)
           const r      = items.filter(p => p.estado_semaforo === 'rojo').length
           const a      = items.filter(p => p.estado_semaforo === 'ambar').length
@@ -848,7 +854,7 @@ export default function MinutaDocument({
           <Text style={[s.annexColLabel, s.annexHdrTxt]}>Indicador</Text>
           <Text style={[s.annexColValue, s.annexHdrTxt, { textAlign: 'right' }]}>Valor regional</Text>
         </View>
-        {annexRows.map((r, i) => (
+        {annexRows.filter(r => r.val !== '—').map((r, i) => (
           <View key={i} style={[s.annexRow, i % 2 === 1 ? s.annexRowAlt : {}]}>
             <Text style={s.annexColLabel}>{r.label}</Text>
             <Text style={s.annexColValue}>{r.val}</Text>
