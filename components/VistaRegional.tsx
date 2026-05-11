@@ -168,11 +168,12 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   const [selectedCod, setSelectedCod] = useState<string | null>(null)
   const [indicadoresOpen, setIndicadoresOpen] = useState(false)
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
-  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | null>(null)
+  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
-  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'completo', { cached: boolean; generated_at: string | null }>>({
+  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'completo' | 'ficha', { cached: boolean; generated_at: string | null }>>({
     ejecutiva: { cached: false, generated_at: null },
     completo:  { cached: false, generated_at: null },
+    ficha:     { cached: false, generated_at: null },
   })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
@@ -217,10 +218,12 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
     Promise.all([
       fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ejecutiva`).then(r => r.ok ? r.json() : null),
       fetch(`/api/minuta?region_cod=${selectedCod}&tipo=completo`).then(r => r.ok ? r.json() : null),
-    ]).then(([ej, comp]) => {
+      fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ficha`).then(r => r.ok ? r.json() : null),
+    ]).then(([ej, comp, ficha]) => {
       setMinutaCache({
-        ejecutiva: ej ?? { cached: false, generated_at: null },
-        completo:  comp ?? { cached: false, generated_at: null },
+        ejecutiva: ej    ?? { cached: false, generated_at: null },
+        completo:  comp  ?? { cached: false, generated_at: null },
+        ficha:     ficha ?? { cached: false, generated_at: null },
       })
     }).catch(() => {})
   }, [selectedCod])
@@ -331,7 +334,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
   // ── Minuta handler ───────────────────────────────────────────────────────────
 
-  async function handleMinuta(tipo: 'ejecutiva' | 'completo' = 'ejecutiva', force = false) {
+  async function handleMinuta(tipo: 'ejecutiva' | 'completo' | 'ficha' = 'ejecutiva', force = false) {
     if (!region || downloadingMinuta) return
     setDownloadingMinuta(true)
     setDownloadingTipo(tipo)
@@ -576,6 +579,27 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
                           Regenerar con IA
                         </button>
                       )}
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => handleMinuta('ficha')}
+                        className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        {downloadingMinuta && downloadingTipo === 'ficha' ? (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                              <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+                            </svg>
+                            Generando...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="6"/><line x1="6" y1="6" x2="8" y2="7"/>
+                            </svg>
+                            {minutaCache.ficha.cached ? 'Descargar Ficha Regional' : 'Generar Ficha Regional'}
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -812,7 +836,9 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
                 ? 'Usando versión en cache de hoy.'
                 : downloadingTipo === 'completo'
                   ? 'Analizando plan regional, iniciativas, indicadores y tendencias. Esto puede tomar hasta 40 segundos.'
-                  : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
+                  : downloadingTipo === 'ficha'
+                    ? 'Compilando datos regionales para la ficha. Esto toma unos segundos.'
+                    : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
             </p>
           </div>
         </div>

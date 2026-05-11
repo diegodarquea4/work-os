@@ -9,7 +9,7 @@ import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog }
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries } from '@/lib/minutaAI'
+import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent } from '@/lib/minutaAI'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
@@ -341,7 +341,17 @@ export async function POST(request: Request) {
 
   let element: React.ReactElement
 
-  if (tipo === 'ejecutiva') {
+  if (tipo === 'ficha') {
+    const FichaRegional = (await import('@/components/FichaRegional')).default
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    element = React.createElement(FichaRegional as any, {
+      region: body.region,
+      metrics,
+      leystopData,
+      fecha: body.fecha,
+      aiContent,
+    })
+  } else if (tipo === 'ejecutiva') {
     const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     element = React.createElement(MinutaEjecutiva as any, {
@@ -376,7 +386,7 @@ export async function POST(request: Request) {
     console.error('[minuta] renderToBuffer error:', err)
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
   }
-  const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : ''
+  const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : tipo === 'ficha' ? '-ficha' : ''
 
   return new Response(new Uint8Array(buffer), {
     status: 200,

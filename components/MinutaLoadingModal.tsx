@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-const MESSAGES = {
+const MESSAGES: Record<string, string[]> = {
   ejecutiva: [
     'Analizando datos de la región...',
     'Redactando síntesis ejecutiva...',
@@ -17,10 +17,20 @@ const MESSAGES = {
     'Compilando el informe completo...',
     'Generando documento PDF...',
   ],
+  ficha: [
+    'Compilando indicadores regionales...',
+    'Generando ficha regional PDF...',
+  ],
 }
 
-export default function MinutaLoadingModal({ tipo }: { tipo: 'ejecutiva' | 'completo' }) {
-  const messages = MESSAGES[tipo]
+const TIPO_LABEL: Record<string, string> = {
+  ejecutiva: 'Minuta Ejecutiva',
+  completo: 'Reporte Completo',
+  ficha: 'Ficha Regional',
+}
+
+export default function MinutaLoadingModal({ tipo }: { tipo: string }) {
+  const messages = MESSAGES[tipo] ?? MESSAGES.ejecutiva
   const [msgIdx, setMsgIdx] = useState(0)
   const [fadeIn, setFadeIn] = useState(true)
 
@@ -60,7 +70,7 @@ export default function MinutaLoadingModal({ tipo }: { tipo: 'ejecutiva' | 'comp
             </div>
             <div>
               <p className="text-white font-semibold text-sm leading-tight">
-                {tipo === 'ejecutiva' ? 'Minuta Ejecutiva' : 'Reporte Completo'}
+                {TIPO_LABEL[tipo] ?? 'Minuta'}
               </p>
               <p className="text-white/50 text-xs mt-0.5">División de Coordinación Interregional</p>
             </div>
@@ -118,7 +128,9 @@ export default function MinutaLoadingModal({ tipo }: { tipo: 'ejecutiva' | 'comp
             <p className="text-xs text-gray-400 text-center">
               {tipo === 'completo'
                 ? 'El agente IA está analizando el Plan Regional — puede demorar hasta 40 seg.'
-                : 'Generando documento — puede demorar hasta 15 seg.'}
+                : tipo === 'ficha'
+                  ? 'Compilando datos regionales — unos segundos.'
+                  : 'Generando documento — puede demorar hasta 15 seg.'}
             </p>
           </div>
 

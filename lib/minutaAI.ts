@@ -38,7 +38,11 @@ export type MinutaCompletaContent = {
   cambios_periodo?: string[]   // 3-5 bullets de qué cambió en el último periodo
 }
 
-export type MinutaTipo = 'ejecutiva' | 'completo'
+export type MinutaTipo = 'ejecutiva' | 'completo' | 'ficha'
+
+export type FichaRegionalContent = {
+  introduccion: string  // 3-4 oraciones de contexto geográfico-político de la región
+}
 
 // Subset of registros_leystop used in minuta context (DB field names — pct_N not n_N)
 export type LeystopMinuta = {
@@ -297,11 +301,39 @@ export async function generateMinutaContent(
   semaforoTrends?: SemaforoTrendSummary | null,
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
-): Promise<MinutaEjecutivaContent | MinutaCompletaContent | null> {
+): Promise<MinutaEjecutivaContent | MinutaCompletaContent | FichaRegionalContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
+
+  // Ficha Regional: only needs a short intro paragraph, no full context
+  if (tipo === 'ficha') {
+    const metricsSnippet = metrics
+      ? `Población: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? '?'} hab. Capital: datos del panel. PIB regional: ${metrics.pib_regional ?? '?'} MM$, ${metrics.pct_pib_nacional ?? '?'}% del PIB nacional. Tasa desocupación: ${metrics.tasa_desocupacion ?? '?'}%. Sectores: ${metrics.sectores_productivos_principales ?? 'N/D'}. Vocación: ${metrics.vocacion_regional ?? 'N/D'}.`
+      : ''
+
+    try {
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 512,
+        system: `Eres redactor institucional del Ministerio del Interior de Chile. Escribe en tono formal, español de Chile.`,
+        messages: [{
+          role: 'user',
+          content: `Redacta un párrafo introductorio de 3-4 oraciones para una Ficha Regional de la Región de ${regionNombre} (${fecha}). El párrafo debe contextualizar la ubicación geográfica, importancia estratégica y características principales de la región. Datos de referencia: ${metricsSnippet}\n\nResponde ÚNICAMENTE con un JSON válido (sin markdown):\n{"introduccion": "texto del párrafo"}`,
+        }],
+      })
+      const text = response.content.find(b => b.type === 'text')?.text ?? ''
+      const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
+      const parsed = JSON.parse(cleaned) as FichaRegionalContent
+      console.log(`[minutaAI] ficha intro generated for ${regionNombre}`)
+      return parsed
+    } catch (err) {
+      console.error(`[minutaAI] Failed to generate ficha intro for ${regionNombre}:`, err)
+      return null
+    }
+  }
+
   const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData, seguimientos, semaforoTrends, nationalBenchmark, trendSummaries)
   const ejes = [...new Set(projects.map(p => p.eje))]
 

@@ -46,7 +46,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
   const canEditAny = useCanEditAny()
   const [downloading, setDownloading]       = useState(false)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
-  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | null>(null)
+  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [selectedPrioridad, setSelectedPrioridad] = useState<Iniciativa | null>(null)
   const [actividad, setActividad]           = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(false)
@@ -128,7 +128,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
       return 0
     })
 
-  async function handleDownload(tipo: 'ejecutiva' | 'completo') {
+  async function handleDownload(tipo: 'ejecutiva' | 'completo' | 'ficha') {
     setDownloadingTipo(tipo)
     setDownloading(true)
     setMinutaMenuOpen(false)
@@ -324,6 +324,27 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                           <rect x="2" y="1" width="8" height="10" rx="1"/><line x1="4" y1="4" x2="8" y2="4"/><line x1="4" y1="6" x2="8" y2="6"/><line x1="4" y1="8" x2="6" y2="8"/>
                         </svg>
                         Reporte Completo
+                      </>
+                    )}
+                  </button>
+                  <div className="border-t border-gray-100 my-0.5" />
+                  <button
+                    onClick={() => handleDownload('ficha')}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    {downloading && downloadingTipo === 'ficha' ? (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                          <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
+                        </svg>
+                        Generando...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="6"/><line x1="6" y1="6" x2="8" y2="7"/>
+                        </svg>
+                        Ficha Regional
                       </>
                     )}
                   </button>
