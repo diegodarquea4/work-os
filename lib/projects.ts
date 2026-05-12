@@ -26,6 +26,7 @@ export type Iniciativa = {
   pct_avance: number
   responsable: string | null
   codigo_iniciativa: string | null
+  origen: string | null
 }
 
 export function getIniciativas(): Iniciativa[] {
@@ -107,5 +108,6 @@ function parseCSV(content: string): Project[] {
     pct_avance: 0,
     responsable: null,
     codigo_iniciativa: null,
+    origen: null,
   }))
 }

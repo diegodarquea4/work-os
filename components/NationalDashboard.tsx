@@ -208,6 +208,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS',                                            wch: 20 },
     { key: 'codigo_iniciativa',     label: 'Código Iniciativa',     desc: 'Código interno DCI — puede estar vacío',                                                                                    wch: 22 },
     { key: 'inversion_mm',          label: 'Inversión ($MM)',       desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                            wch: 18 },
+    { key: 'origen',                label: 'Origen',                desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                 wch: 24 },
     { key: 'descripcion',           label: 'Descripción',           desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                  wch: 54 },
   ] as const
 
@@ -386,6 +387,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           ['Ministerio', 'ministerio'],
           ['Código BIP', 'codigo_bip'],
           ['Código Iniciativa', 'codigo_iniciativa'],
+          ['Origen', 'origen'],
           ['Descripción', 'descripcion'],
           ['Comuna', 'comuna'],
         ] as [string, string][]) {

@@ -25,6 +25,7 @@ export type Prioridad = {
   pct_avance: number | null
   responsable: string | null
   codigo_iniciativa: string | null
+  origen: string | null
 }
 
 // ── Semáforo Log ─────────────────────────────────────────────────────────────

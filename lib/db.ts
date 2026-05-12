@@ -32,6 +32,7 @@ function mapRow(row: Prioridad): Iniciativa {
     pct_avance:             row.pct_avance ?? 0,
     responsable:            row.responsable ?? null,
     codigo_iniciativa:      row.codigo_iniciativa ?? null,
+    origen:                 row.origen ?? null,
   }
 }
 
