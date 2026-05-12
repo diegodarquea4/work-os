@@ -734,7 +734,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             <MetricCard
               title="Seguridad"
               subtitle={leystop ? `Sem. ${leystop.semana ?? ''}` : 'Semanal LeyStop'}
-              value={leystop ? `${leystop.tasa_registro?.toFixed(1) ?? '—'}/100k` : metricsLoading ? '…' : 'N/D'}
+              value={leystop?.casos_ultima_semana != null ? `${leystop.casos_ultima_semana.toLocaleString('es-CL')} casos` : metricsLoading ? '…' : 'N/D'}
               trend={leystop?.var_ultima_semana ?? null}
               trendLabel="var. semana"
               trendDown={true}

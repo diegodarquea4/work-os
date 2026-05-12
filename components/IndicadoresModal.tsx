@@ -393,9 +393,9 @@ function PulsoSection({ regionCod, region, allLeystop, leystopSemana, leystopHis
           color={(regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : accentColor}
         />
         <KpiCard
-          label="Tasa /100k hab."
+          label="Tasa delictual"
           value={regionRow?.tasa_registro?.toFixed(0) ?? '—'}
-          sub="tasa delictual regional"
+          sub="casos cada 100 mil hab."
           color="#2563eb"
         />
         <KpiCard
@@ -452,7 +452,7 @@ function PulsoSection({ regionCod, region, allLeystop, leystopSemana, leystopHis
           {/* Sparkline evolución tasa */}
           <div className="bg-white rounded-xl border border-gray-100 p-5">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Evolución tasa /100k — últimas 12 semanas
+              Evolución tasa delictual — últimas 12 semanas
             </h3>
             {sparkData.length > 0 ? (
               <ResponsiveContainer width="100%" height={180}>
@@ -460,7 +460,7 @@ function PulsoSection({ regionCod, region, allLeystop, leystopSemana, leystopHis
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                   <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={2} />
                   <YAxis tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                  <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} /100k`, 'Tasa']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)} casos`, 'Tasa delictual']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
                   <Bar dataKey="tasa" fill={accentColor} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -564,7 +564,7 @@ function PulsoSection({ regionCod, region, allLeystop, leystopSemana, leystopHis
                   <th className="text-left px-3 py-2.5 font-medium">Región</th>
                   <th className="text-right px-3 py-2.5 font-medium">Casos/sem</th>
                   <th className="text-right px-3 py-2.5 font-medium">Var%</th>
-                  <th className="text-right px-3 py-2.5 font-medium">Tasa/100k</th>
+                  <th className="text-right px-3 py-2.5 font-medium">Tasa delictual</th>
                   <th className="text-right px-3 py-2.5 font-medium">Desocup%</th>
                   <th className="text-left px-3 py-2.5 font-medium">Delito #1</th>
                 </tr>
@@ -1055,8 +1055,8 @@ const TABLA_CONFIGS: Record<TableDimension, { label: string; columns: { label: s
     columns: [
       { label: 'Víctimas DMCS %', fmt: r => pct(r.pct_hogares_victimas_dmcs) },
       { label: 'Perc. inseg. %',  fmt: r => pct(r.pct_percepcion_inseguridad) },
-      { label: 'Denuncias /100k', fmt: r => r.tasa_denuncias_100k != null ? r.tasa_denuncias_100k.toFixed(0) : '—' },
-      { label: 'Delitos /100k',   fmt: r => r.tasa_delitos_100k != null ? r.tasa_delitos_100k.toFixed(0) : '—' },
+      { label: 'Denuncias', fmt: r => r.tasa_denuncias_100k != null ? r.tasa_denuncias_100k.toFixed(0) : '—' },
+      { label: 'Delitos',   fmt: r => r.tasa_delitos_100k != null ? r.tasa_delitos_100k.toFixed(0) : '—' },
     ],
   },
 }
@@ -1273,8 +1273,8 @@ function PerfilSection({ metrics: m, allRegions, regionCod, openSections, toggle
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <KpiCard label="Hogares víctimas (DMCS)" value={pct(m.pct_hogares_victimas_dmcs)}      sub="% hogares · ENUSC 2022"    color={ROSE} />
               <KpiCard label="Percepción inseguridad"  value={pct(m.pct_percepcion_inseguridad)}     sub="% personas · ENUSC 2022"   color={ROSE} />
-              <KpiCard label="Tasa denuncias"          value={fmt(m.tasa_denuncias_100k, 0, ' /100k')} sub="por 100.000 hab."        color={ROSE} />
-              <KpiCard label="Tasa delitos"            value={fmt(m.tasa_delitos_100k, 0, ' /100k')} sub="por 100.000 hab."          color={ROSE} />
+              <KpiCard label="Denuncias"                value={fmt(m.tasa_denuncias_100k, 0)} sub="cada 100 mil hab."        color={ROSE} />
+              <KpiCard label="Delitos"                 value={fmt(m.tasa_delitos_100k, 0)} sub="cada 100 mil hab."          color={ROSE} />
             </div>
             {allRegions.length > 0 && (() => {
               const chartData = [...allRegions]

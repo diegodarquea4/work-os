@@ -498,7 +498,7 @@ export default function MinutaDocument({
     ['Alfabetismo',                  pct(m?.tasa_alfabetismo) ?? '—'],
     ['Hogares víctimas DMCS',        pct(m?.pct_hogares_victimas_dmcs) ?? '—'],
     ['Percepción de inseguridad',    pct(m?.pct_percepcion_inseguridad) ?? '—'],
-    ['Tasa denuncias / 100k hab.',   m?.tasa_denuncias_100k   != null ? String(m.tasa_denuncias_100k) : '—'],
+    ['Tasa denuncias (cada 100 mil hab.)',   m?.tasa_denuncias_100k   != null ? String(m.tasa_denuncias_100k) : '—'],
   ] as [string, string][]).map(([label, val]) => ({ label, val }))
 
   // ── Render ────────────────────────────────────────────────────────────────

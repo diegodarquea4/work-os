@@ -397,6 +397,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       }
 
       for (const row of dataRows) {
+        // Skip completely empty rows (common at end of Excel files)
+        if (row.every(cell => String(cell ?? '').trim() === '')) continue
+
         const nStr = col(row, '#')
 
         if (!nStr) {
