@@ -331,7 +331,7 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
   const verde = projects.filter(p => p.estado_semaforo === 'verde').length
   const gris  = projects.filter(p => p.estado_semaforo === 'gris').length
 
-  const avgPct = Math.round(projects.reduce((acc, p) => acc + p.pct_avance, 0) / (total || 1))
+  const avgPct = Math.round(projects.reduce((acc, p) => acc + (p.pct_avance ?? 0), 0) / (total || 1))
 
   // Próximos hitos — next 8 ordered by date
   const hitos = [...projects]
@@ -487,7 +487,7 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
                   <Text style={[s.tTxt, { flex: 1 }]}>{tr(p.nombre, 55)}</Text>
                   <Text style={[s.tTxt, { width: '16%', color: C.red }]}>Rojo</Text>
                   <Text style={[s.tTxt, { width: '24%' }]}>{tr(p.etapa_actual ?? '—', 28)}</Text>
-                  <Text style={[s.tTxt, { width: '10%', textAlign: 'center' }]}>{p.pct_avance}%</Text>
+                  <Text style={[s.tTxt, { width: '10%', textAlign: 'center' }]}>{p.pct_avance ?? 0}%</Text>
                 </View>
               ))}
             </View>

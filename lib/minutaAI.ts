@@ -341,7 +341,7 @@ export async function generateMinutaContent(
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 512,
-        system: `Eres redactor institucional del Ministerio del Interior de Chile. Escribe en tono formal, español de Chile.`,
+        system: `Eres redactor institucional del Ministerio del Interior de Chile. Escribe en tono formal, español de Chile. IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados. NO inventes características, cifras, detalles geográficos ni económicos que no estén explícitamente en los datos de referencia. Si un dato no está disponible, omítelo.`,
         messages: [{
           role: 'user',
           content: `Redacta un párrafo introductorio de 3-4 oraciones para una Ficha Regional de la Región de ${regionNombre} (${fecha}). El párrafo debe contextualizar la ubicación geográfica, importancia estratégica y características principales de la región. Datos de referencia: ${metricsSnippet}\n\nResponde ÚNICAMENTE con un JSON válido (sin markdown):\n{"introduccion": "texto del párrafo"}`,
@@ -366,7 +366,9 @@ export async function generateMinutaContent(
   const systemPrompt = tipo === 'ejecutiva'
     ? `Eres el experto en coordinación territorial de la Región de ${regionNombre} del Ministerio del Interior y Seguridad Pública de Chile. Redacta contenido para una minuta ejecutiva de visita oficial. Usa tono formal institucional, español de Chile. Sé preciso, conciso y útil para el tomador de decisión.
 
-Utiliza los datos de seguimiento reciente y tendencias de semáforo para contextualizar alertas con hechos, fechas y actores concretos. Si hay datos de comparación nacional, posiciona la región respecto al promedio país.`
+Utiliza los datos de seguimiento reciente y tendencias de semáforo para contextualizar alertas con hechos, fechas y actores concretos. Si hay datos de comparación nacional, posiciona la región respecto al promedio país.
+
+IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes cifras, fechas, porcentajes ni nombres de iniciativas que no aparezcan explícitamente en los datos. Si falta información para un campo, escribe con lo disponible sin fabricar datos.`
     : `Eres analista senior de la División de Coordinación Interregional del Ministerio del Interior y Seguridad Pública de Chile, experto en la Región de ${regionNombre}. Tu tarea es redactar el Kit de Viaje Regional — un documento de briefing que una autoridad (Ministro o Presidente) leerá antes de viajar a la región. Debe poder entender la región en 15 minutos de lectura.
 
 Si se adjunta el Plan Regional de Gobierno como documento, léelo en su TOTALIDAD. Extrae los compromisos presidenciales, objetivos estratégicos, metas y ejes prioritarios más importantes definidos en ese plan.
@@ -379,7 +381,9 @@ ORIENTACIÓN DE ESCRITURA:
 - Posiciona la región respecto al promedio nacional en cada indicador clave.
 - Describe dirección y magnitud de cambios, no solo valores estáticos.
 
-Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono formal e institucional, en español de Chile.`
+Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono formal e institucional, en español de Chile.
+
+IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes cifras, fechas, porcentajes, nombres de autoridades ni características regionales que no aparezcan explícitamente en los datos. Si un compromiso del Plan Regional no está disponible, indica que no se dispone del documento. Si falta información para una sección, escribe con lo disponible sin fabricar datos.`
 
   const jsonSchema = tipo === 'ejecutiva'
     ? `{

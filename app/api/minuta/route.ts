@@ -360,8 +360,8 @@ export async function POST(request: Request) {
         const avgOlder  = older4.length > 0 ? older4.reduce((a, b) => a + b, 0) / older4.length : null
         crimeTrend = {
           avgRecent4w: Math.round(avgRecent),
-          avgPrevious4w: avgOlder ? Math.round(avgOlder) : null,
-          pctChange: avgOlder && avgOlder > 0 ? parseFloat(((avgRecent - avgOlder) / avgOlder * 100).toFixed(1)) : null,
+          avgPrevious4w: avgOlder != null ? Math.round(avgOlder) : null,
+          pctChange: avgOlder != null && avgOlder > 0 ? parseFloat(((avgRecent - avgOlder) / avgOlder * 100).toFixed(1)) : null,
         }
       }
 

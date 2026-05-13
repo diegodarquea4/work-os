@@ -130,7 +130,7 @@ export default function FichaRegional({ region, metrics, leystopData, fecha, aiC
   if (m?.pct_hombres != null && m?.pct_mujeres != null && m?.poblacion_total != null) {
     const hombres = Math.round(m.poblacion_total * m.pct_hombres / 100)
     const mujeres = Math.round(m.poblacion_total * m.pct_mujeres / 100)
-    const ratio = m.pct_hombres > 0 ? (m.pct_hombres / m.pct_mujeres * 100).toFixed(1).replace('.', ',') : '?'
+    const ratio = m.pct_hombres > 0 && m.pct_mujeres > 0 ? (m.pct_hombres / m.pct_mujeres * 100).toFixed(1).replace('.', ',') : '?'
     demoItems.push({ text: <>De ese total, {fmt(mujeres)} son mujeres y {fmt(hombres)} hombres, con una razón de {ratio} hombres por cada 100 mujeres (Censo 2024).</> })
   }
   if (m?.prom_edad != null || m?.promedio_edad != null) {
@@ -158,7 +158,7 @@ export default function FichaRegional({ region, metrics, leystopData, fecha, aiC
   // ── III. Población Vulnerable ──
   const vulnItems: ItemEntry[] = []
   if (m?.n_discapacidad != null) {
-    const pctTxt = m.poblacion_total != null ? ` (${pct1(m.n_discapacidad / m.poblacion_total * 100)} de la población)` : ''
+    const pctTxt = m.poblacion_total != null && m.poblacion_total > 0 ? ` (${pct1(m.n_discapacidad / m.poblacion_total * 100)} de la población)` : ''
     vulnItems.push({ text: <>{fmt(m.n_discapacidad)} personas presentan algún tipo de discapacidad{pctTxt} (Censo 2024).</> })
   }
   if (m?.hogares_rsh_tramo40 != null) {

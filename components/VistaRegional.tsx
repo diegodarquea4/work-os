@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRegionIndicadores } from '@/lib/hooks/useRegionIndicadores'
-import { useColegaSeguridadRegion } from '@/lib/hooks/useColegaSeguridad'
+import { useColegaSeguridadRegion, useColegaSeguridadAll } from '@/lib/hooks/useColegaSeguridad'
+import { useAllRegionsMetrics } from '@/lib/hooks/useAllRegionsMetrics'
+import { rankOf, deltaLabel, perCapita } from '@/lib/indicatorUtils'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
-import { REGIONS } from '@/lib/regions'
+import { REGIONS, INE_CODE } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
@@ -106,7 +108,7 @@ function AlertCard({ icon, title, color, items }: {
 
 // ── MetricCard ────────────────────────────────────────────────────────────────
 
-function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, trendDown, trendSuffix = 'pp', sparkData, sparkColor, extra, period }: {
+function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, trendDown, trendSuffix = 'pp', sparkData, sparkColor, extra, period, comparison, comparisonGood, ranking }: {
   title: string
   subtitle: string
   value: string
@@ -119,10 +121,14 @@ function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, tren
   sparkColor?: string
   extra?: string
   period?: string
+  comparison?: string
+  comparisonGood?: boolean | null
+  ranking?: string | null
 }) {
   const trendGood = trend === null ? null : (trendDown ? trend < 0 : trend > 0)
   const trendIcon = trend === null ? null : trend > 0 ? '↑' : trend < 0 ? '↓' : '→'
   const trendCls  = trendGood === null ? '' : trendGood ? 'text-green-600' : 'text-red-600'
+  const compCls   = comparisonGood == null ? 'text-gray-500' : comparisonGood ? 'text-green-600' : 'text-red-600'
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -140,6 +146,11 @@ function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, tren
       {trend !== null && (
         <p className={`text-xs mt-1 ${trendCls}`}>
           {trendIcon} {Math.abs(trend).toFixed(1)}{trendSuffix} {trendLabel}
+        </p>
+      )}
+      {(comparison || ranking) && (
+        <p className={`text-[10px] mt-1 font-medium ${compCls}`}>
+          {comparison}{comparison && ranking ? ' · ' : ''}{ranking}
         </p>
       )}
       {extra && <p className="text-[10px] text-gray-400 mt-1 truncate">{extra}</p>}
@@ -247,8 +258,10 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   )
 
   // External data hooks
-  const { timeSeries, loading: metricsLoading } = useRegionIndicadores(selectedCod ?? '')
+  const { timeSeries, nationalSeries, metrics: regionMetrics, loading: metricsLoading } = useRegionIndicadores(selectedCod ?? '')
   const { history: leystopHistory } = useColegaSeguridadRegion(selectedCod ?? '')
+  const { allRegions } = useAllRegionsMetrics()
+  const { rows: allLeystop } = useColegaSeguridadAll()
   const leystop = leystopHistory.at(-1) ?? null
   const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
   const { proyectos: mopProjects, total: mopTotal } = useMopProjects(selectedCod ?? '')
@@ -326,6 +339,27 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   })()
 
   const invTotal = regionIniciativas.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
+
+  // ── Comparison context for Métricas Clave ─────────────────────────────────
+  const natDesempleo = nationalSeries.find(s => s.metric_name === 'tasa_desocupacion')?.data.at(-1)?.value ?? null
+  const desempleoComp = deltaLabel(lastDesempleo?.value ?? null, natDesempleo, true)
+  const desempleoRank = selectedCod ? rankOf(allRegions, selectedCod, 'tasa_desocupacion', true) : null
+
+  const regionLeystop = allLeystop.find(r => INE_CODE[selectedCod ?? ''] === r.id_region)
+  const leystopAvgTasa = allLeystop.length > 0
+    ? allLeystop.reduce((s, r) => s + (r.tasa_registro ?? 0), 0) / allLeystop.filter(r => r.tasa_registro != null).length
+    : null
+  const leystopRank = (() => {
+    if (!regionLeystop || allLeystop.length === 0) return null
+    const sorted = [...allLeystop].filter(r => r.tasa_registro != null).sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
+    const idx = sorted.findIndex(r => r.id_region === regionLeystop.id_region)
+    return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
+  })()
+  const leystopIsGood = regionLeystop?.tasa_registro != null && leystopAvgTasa != null ? regionLeystop.tasa_registro < leystopAvgTasa : null
+
+  const pibRank = selectedCod ? rankOf(allRegions, selectedCod, 'pct_pib_nacional', false) : null
+
+  const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, regionMetrics?.poblacion_total)
 
   const showRegionSelector =
     profile?.role === 'admin' ||
@@ -722,7 +756,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MetricCard
               title="Desocupación"
-              subtitle="BCCh mensual"
+              subtitle="BCCh trimestre móvil"
               value={lastDesempleo ? `${lastDesempleo.value.toFixed(1)}%` : metricsLoading ? '…' : 'N/D'}
               trend={lastDesempleo && prevDesempleo ? lastDesempleo.value - prevDesempleo.value : null}
               trendLabel="vs mes anterior"
@@ -730,22 +764,29 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
               sparkData={desempleo?.data.slice(-8).map(d => d.value)}
               sparkColor="#EF4444"
               period={lastDesempleo?.period}
+              comparison={desempleoComp?.text}
+              comparisonGood={desempleoComp?.isGood ?? null}
+              ranking={desempleoRank}
             />
             <MetricCard
               title="Seguridad"
-              subtitle={leystop ? `Sem. ${leystop.semana ?? ''}` : 'Semanal LeyStop'}
-              value={leystop?.casos_ultima_semana != null ? `${leystop.casos_ultima_semana.toLocaleString('es-CL')} casos` : metricsLoading ? '…' : 'N/D'}
+              subtitle={leystop ? `Sem. ${leystop.semana ?? ''} · LeyStop` : 'Semanal LeyStop'}
+              value={regionLeystop?.tasa_registro != null ? `Tasa: ${regionLeystop.tasa_registro.toFixed(0)}` : leystop?.casos_ultima_semana != null ? `${leystop.casos_ultima_semana.toLocaleString('es-CL')} casos` : metricsLoading ? '…' : 'N/D'}
+              valueNote={regionLeystop?.tasa_registro != null ? 'casos cada 100 mil hab.' : undefined}
               trend={leystop?.var_ultima_semana ?? null}
               trendLabel="var. semana"
               trendDown={true}
               sparkData={undefined}
+              comparison={leystopAvgTasa != null ? `Prom: ${leystopAvgTasa.toFixed(0)}` : undefined}
+              comparisonGood={leystopIsGood}
+              ranking={leystopRank}
               extra={[leystop?.mayor_registro_1, leystop?.mayor_registro_2].filter(Boolean).join(' · ') || undefined}
             />
             <MetricCard
               title="PIB Regional"
               subtitle="BCCh trimestral"
-              value={lastPib ? `$${Math.round(lastPib.value).toLocaleString('es-CL')} MM${pibPctNacional !== null ? ` (${pibPctNacional.toFixed(1)}%)` : ''}` : metricsLoading ? '…' : 'N/D'}
-              valueNote="del PIB nacional · miles de MM CLP"
+              value={pibPctNacional !== null ? `${pibPctNacional.toFixed(1)}% del PIB nacional` : lastPib ? `$${Math.round(lastPib.value).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
+              valueNote={pibPctNacional !== null && lastPib ? `$${Math.round(lastPib.value).toLocaleString('es-CL')} MM CLP` : undefined}
               trend={lastPib && prevPib ? ((lastPib.value - prevPib.value) / prevPib.value) * 100 : null}
               trendLabel="var. trim."
               trendSuffix="%"
@@ -753,12 +794,13 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
               sparkData={pibSeries?.data.slice(-6).map(d => d.value)}
               sparkColor="#3B82F6"
               period={lastPib?.period}
+              ranking={pibRank}
             />
             <MetricCard
               title="Inversión"
               subtitle="Iniciativas región"
               value={invTotal > 0 ? `$${Math.round(invTotal).toLocaleString('es-CL')} MM` : '—'}
-              valueNote={`${regionIniciativas.length} iniciativas`}
+              valueNote={invPerCapita != null ? `$${invPerCapita.toFixed(1)} MM per cápita · ${regionIniciativas.length} iniciativas` : `${regionIniciativas.length} iniciativas`}
               trend={null}
               trendLabel=""
               trendDown={false}

@@ -15,6 +15,7 @@ import { useColegaEmpleoRegion, useColegaEmpleoAll } from '@/lib/hooks/useColega
 import { ZONA_COLORS, REGIONS, INE_CODE } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
+import { rankOf, nationalAvg, perCapita } from '@/lib/indicatorUtils'
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
@@ -89,14 +90,17 @@ function fnum(v: number | null | undefined, d = 1) {
 
 // ── Shared components ─────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, sub, color }: {
+function KpiCard({ label, value, sub, color, context, contextGood }: {
   label: string; value: string; sub?: string; color: string
+  context?: string; contextGood?: boolean | null
 }) {
+  const ctxCls = contextGood == null ? 'text-gray-400' : contextGood ? 'text-green-600' : 'text-red-600'
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: color }}>
       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 leading-none">{label}</p>
       <p className="text-2xl font-bold text-gray-900 leading-none">{value}</p>
       {sub && <p className="text-xs text-gray-500 mt-1.5 leading-snug">{sub}</p>}
+      {context && <p className={`text-[10px] font-medium mt-1 leading-snug ${ctxCls}`}>{context}</p>}
     </div>
   )
 }
@@ -311,6 +315,8 @@ export default function IndicadoresModal({ region, onClose }: Props) {
                   zoneColor={zoneColor}
                   timeSeries={timeSeries}
                   nationalSeries={nationalSeries}
+                  allRegions={allRegions}
+                  regionCod={activeRegionCod}
                 />
               )}
               {mainTab === 'perfil' && (
@@ -383,32 +389,58 @@ function PulsoSection({ regionCod, region, allLeystop, leystopSemana, leystopHis
     <div className="p-6 space-y-6">
 
       {/* ── 4 KPI cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard
-          label="Casos última semana"
-          value={regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}
-          sub={leystopSemana || 'LeyStop'}
-          color={accentColor}
-        />
-        <KpiCard
-          label="Var. semana anterior"
-          value={regionRow?.var_ultima_semana != null ? `${regionRow.var_ultima_semana > 0 ? '+' : ''}${regionRow.var_ultima_semana.toFixed(1)}%` : '—'}
-          sub="vs semana previa"
-          color={(regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : accentColor}
-        />
-        <KpiCard
-          label="Tasa delictual"
-          value={regionRow?.tasa_registro?.toFixed(0) ?? '—'}
-          sub="casos cada 100 mil hab."
-          color="#2563eb"
-        />
-        <KpiCard
-          label="Desocupación"
-          value={latestEmpleo?.tasa != null ? `${latestEmpleo.tasa.toFixed(1)}%` : pct(m?.tasa_desocupacion)}
-          sub={latestEmpleo ? `${latestEmpleo.periodo} · BCE/INE` : 'Censo 2024'}
-          color="#0891b2"
-        />
-      </div>
+      {(() => {
+        const validTasa = allLeystop.filter(r => r.tasa_registro != null)
+        const avgTasa = validTasa.length > 0 ? validTasa.reduce((s, r) => s + (r.tasa_registro ?? 0), 0) / validTasa.length : null
+        const validCasos = allLeystop.filter(r => r.casos_ultima_semana != null)
+        const avgCasos = validCasos.length > 0 ? Math.round(validCasos.reduce((s, r) => s + (r.casos_ultima_semana ?? 0), 0) / validCasos.length) : null
+        const tasaRank = (() => {
+          if (!regionRow?.tasa_registro || validTasa.length === 0) return null
+          const sorted = [...validTasa].sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
+          const idx = sorted.findIndex(r => r.id_region === regionRow.id_region)
+          return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
+        })()
+        const casosAboveAvg = regionRow?.casos_ultima_semana != null && avgCasos != null ? regionRow.casos_ultima_semana > avgCasos : null
+        const tasaAboveAvg = regionRow?.tasa_registro != null && avgTasa != null ? regionRow.tasa_registro > avgTasa : null
+        const desocNat = latestNat
+        const desocRegional = latestEmpleo?.tasa ?? m?.tasa_desocupacion ?? null
+        const desocDelta = desocRegional != null && desocNat != null ? desocRegional - desocNat : null
+
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <KpiCard
+              label="Casos última semana"
+              value={regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}
+              sub={leystopSemana || 'LeyStop'}
+              color={casosAboveAvg === true ? '#dc2626' : casosAboveAvg === false ? '#16a34a' : accentColor}
+              context={avgCasos != null ? `Prom: ${avgCasos.toLocaleString('es-CL')}` : undefined}
+              contextGood={casosAboveAvg != null ? !casosAboveAvg : null}
+            />
+            <KpiCard
+              label="Var. semana anterior"
+              value={regionRow?.var_ultima_semana != null ? `${regionRow.var_ultima_semana > 0 ? '+' : ''}${regionRow.var_ultima_semana.toFixed(1)}%` : '—'}
+              sub="vs semana previa"
+              color={(regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : accentColor}
+            />
+            <KpiCard
+              label="Tasa delictual"
+              value={regionRow?.tasa_registro?.toFixed(0) ?? '—'}
+              sub="casos cada 100 mil hab."
+              color={tasaAboveAvg === true ? '#dc2626' : tasaAboveAvg === false ? '#16a34a' : '#2563eb'}
+              context={[avgTasa != null ? `Prom: ${avgTasa.toFixed(0)}` : null, tasaRank].filter(Boolean).join(' · ') || undefined}
+              contextGood={tasaAboveAvg != null ? !tasaAboveAvg : null}
+            />
+            <KpiCard
+              label="Desocupación"
+              value={latestEmpleo?.tasa != null ? `${latestEmpleo.tasa.toFixed(1)}%` : pct(m?.tasa_desocupacion)}
+              sub={latestEmpleo ? `${latestEmpleo.periodo} · BCE/INE` : 'Censo 2024'}
+              color={desocDelta != null ? (desocDelta > 0 ? '#dc2626' : '#16a34a') : '#0891b2'}
+              context={desocNat != null && desocDelta != null ? `Nac: ${desocNat.toFixed(1)}% · ${desocDelta > 0 ? '+' : ''}${desocDelta.toFixed(1)} pp` : undefined}
+              contextGood={desocDelta != null ? desocDelta < 0 : null}
+            />
+          </div>
+        )
+      })()}
 
       {/* ── Seguridad ── */}
       {allLeystop.length > 0 && (
@@ -718,7 +750,7 @@ function PulsoActividad({ regionCod, history, accentColor }: {
 type PibSectorT = import('@/lib/hooks/usePibSectorial').PibSector
 
 function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores, sectPeriod,
-  sectLoading, colegaEmpleo, empleoData, zoneColor, timeSeries, nationalSeries }: {
+  sectLoading, colegaEmpleo, empleoData, zoneColor, timeSeries, nationalSeries, allRegions, regionCod }: {
   region: Region
   pibData: { period: string; regional: number | null; national: number | null }[]
   pibMode: PibMode
@@ -732,6 +764,8 @@ function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sec
   zoneColor: string
   timeSeries: import('@/lib/types').MetricSeries[]
   nationalSeries: import('@/lib/types').MetricSeries[]
+  allRegions: RegionMetrics[]
+  regionCod: string
 }) {
   const latestReg  = pibData.at(-1)?.regional ?? null
   const lastPeriod = pibData.at(-1)?.period ?? sectPeriod ?? null
@@ -749,16 +783,87 @@ function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sec
     <div className="p-6 space-y-6">
 
       {/* KPI cards */}
-      {m && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          <KpiCard label="PIB Regional"         value={m.pib_regional != null ? `${m.pib_regional.toLocaleString('es-CL')} MM$` : '—'} sub="Miles de millones de pesos" color="#2563eb" />
-          <KpiCard label="% del PIB Nacional"   value={pct(m.pct_pib_nacional)}                                                         sub="Participación regional"     color="#2563eb" />
-          <KpiCard label="Variación interanual" value={m.variacion_interanual != null ? `${m.variacion_interanual > 0 ? '+' : ''}${m.variacion_interanual.toFixed(1)}%` : '—'} sub="Crecimiento anual" color={m.variacion_interanual != null && m.variacion_interanual < 0 ? '#dc2626' : '#16a34a'} />
-          <KpiCard label="Inversión pública"    value={m.inversion_publica_ejecutada != null ? `${m.inversion_publica_ejecutada.toLocaleString('es-CL')} MM$` : '—'} sub="Ejecutado" color="#0891b2" />
-          <KpiCard label="FNDR"                 value={m.inversion_fndr != null ? `${m.inversion_fndr.toLocaleString('es-CL')} MM$` : '—'} sub="Fondo Nacional de Desarrollo Regional" color="#0891b2" />
-          <KpiCard label="Tasa desocupación"    value={latestColega?.tasa != null ? `${latestColega.tasa.toFixed(1)}%` : pct(m?.tasa_desocupacion)} sub={latestColega ? `${latestColega.periodo} · BCE/INE` : 'último dato'} color="#0891b2" />
-        </div>
-      )}
+      {m && (() => {
+        const pibPC = perCapita(m.pib_regional, m.poblacion_total)
+        const avgPibPC = (() => {
+          const vals = allRegions.filter(r => r.pib_regional != null && r.poblacion_total != null).map(r => perCapita(r.pib_regional, r.poblacion_total)!).filter(v => v != null)
+          return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+        })()
+        const pibPcRank = (() => {
+          const valid = allRegions.filter(r => r.pib_regional != null && r.poblacion_total != null).map(r => ({ cod: r.region_cod, pc: perCapita(r.pib_regional, r.poblacion_total)! })).filter(r => r.pc != null)
+          const sorted = [...valid].sort((a, b) => b.pc - a.pc)
+          const idx = sorted.findIndex(r => r.cod === regionCod)
+          return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
+        })()
+        const invPC = perCapita(m.inversion_publica_ejecutada, m.poblacion_total)
+        const invPcRank = (() => {
+          const valid = allRegions.filter(r => r.inversion_publica_ejecutada != null && r.poblacion_total != null).map(r => ({ cod: r.region_cod, pc: perCapita(r.inversion_publica_ejecutada, r.poblacion_total)! })).filter(r => r.pc != null)
+          const sorted = [...valid].sort((a, b) => b.pc - a.pc)
+          const idx = sorted.findIndex(r => r.cod === regionCod)
+          return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
+        })()
+        const fndrPC = perCapita(m.inversion_fndr, m.poblacion_total)
+        const fndrPcRank = (() => {
+          const valid = allRegions.filter(r => r.inversion_fndr != null && r.poblacion_total != null).map(r => ({ cod: r.region_cod, pc: perCapita(r.inversion_fndr, r.poblacion_total)! })).filter(r => r.pc != null)
+          const sorted = [...valid].sort((a, b) => b.pc - a.pc)
+          const idx = sorted.findIndex(r => r.cod === regionCod)
+          return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
+        })()
+        const varRank = rankOf(allRegions, regionCod, 'variacion_interanual', false)
+        const desocVal = latestColega?.tasa ?? m.tasa_desocupacion ?? null
+        const desocDelta = desocVal != null && latestNat != null ? desocVal - latestNat : null
+        const desocRank = rankOf(allRegions, regionCod, 'tasa_desocupacion', true)
+
+        return (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <KpiCard
+              label="PIB Regional"
+              value={m.pct_pib_nacional != null ? `${m.pct_pib_nacional.toFixed(1)}%` : m.pib_regional != null ? `${m.pib_regional.toLocaleString('es-CL')} MM$` : '—'}
+              sub={m.pct_pib_nacional != null ? `$${m.pib_regional?.toLocaleString('es-CL') ?? '—'} MM` : 'Miles de millones de pesos'}
+              color="#2563eb"
+              context={rankOf(allRegions, regionCod, 'pct_pib_nacional', false) ?? undefined}
+            />
+            <KpiCard
+              label="PIB per cápita"
+              value={pibPC != null ? `$${pibPC.toFixed(1)} MM` : '—'}
+              sub="por millón de hab."
+              color="#2563eb"
+              context={[avgPibPC != null ? `Prom: $${avgPibPC.toFixed(1)}` : null, pibPcRank].filter(Boolean).join(' · ') || undefined}
+              contextGood={pibPC != null && avgPibPC != null ? pibPC > avgPibPC : null}
+            />
+            <KpiCard
+              label="Variación interanual"
+              value={m.variacion_interanual != null ? `${m.variacion_interanual > 0 ? '+' : ''}${m.variacion_interanual.toFixed(1)}%` : '—'}
+              sub="Crecimiento anual"
+              color={m.variacion_interanual != null && m.variacion_interanual < 0 ? '#dc2626' : '#16a34a'}
+              context={varRank ?? undefined}
+            />
+            <KpiCard
+              label="Inversión pública"
+              value={invPC != null ? `$${invPC.toFixed(1)} MM/M hab` : m.inversion_publica_ejecutada != null ? `${m.inversion_publica_ejecutada.toLocaleString('es-CL')} MM$` : '—'}
+              sub={invPC != null ? `Total: $${m.inversion_publica_ejecutada?.toLocaleString('es-CL') ?? '—'} MM` : 'Ejecutado'}
+              color="#0891b2"
+              context={invPcRank ?? undefined}
+              contextGood={invPC != null && avgPibPC != null ? true : null}
+            />
+            <KpiCard
+              label="FNDR"
+              value={fndrPC != null ? `$${fndrPC.toFixed(1)} MM/M hab` : m.inversion_fndr != null ? `${m.inversion_fndr.toLocaleString('es-CL')} MM$` : '—'}
+              sub={fndrPC != null ? `Total: $${m.inversion_fndr?.toLocaleString('es-CL') ?? '—'} MM` : 'FNDR'}
+              color="#0891b2"
+              context={fndrPcRank ?? undefined}
+            />
+            <KpiCard
+              label="Tasa desocupación"
+              value={latestColega?.tasa != null ? `${latestColega.tasa.toFixed(1)}%` : pct(m?.tasa_desocupacion)}
+              sub={latestColega ? `${latestColega.periodo} · BCE/INE` : 'último dato'}
+              color={desocDelta != null ? (desocDelta > 0 ? '#dc2626' : '#16a34a') : '#0891b2'}
+              context={[latestNat != null && desocDelta != null ? `Nac: ${latestNat.toFixed(1)}% · ${desocDelta > 0 ? '+' : ''}${desocDelta.toFixed(1)} pp` : null, desocRank].filter(Boolean).join(' · ') || undefined}
+              contextGood={desocDelta != null ? desocDelta < 0 : null}
+            />
+          </div>
+        )
+      })()}
 
       {/* PIB evolution */}
       <SectionHeader
@@ -1210,16 +1315,32 @@ function PerfilSection({ metrics: m, allRegions, regionCod, openSections, toggle
     <div className="p-6 space-y-4">
 
       {/* Resumen demográfico — KpiCards, misma gramática que Pulso y Economía */}
-      {m && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          <KpiCard label="Habitantes"    value={num(m.poblacion_total)}     sub="Censo 2024"      color={PURPLE} />
-          <KpiCard label="Urbana"        value={pct(m.pct_urbana)}          sub="% de la población" color={PURPLE} />
-          <KpiCard label="60+ años"      value={pct(m.pct_edad_60_mas)}     sub="% de la población" color={PURPLE} />
-          <KpiCard label="Inmigrantes"   value={pct(m.pct_inmigrantes)}     sub="% de la población" color={PURPLE} />
-          <KpiCard label="Pueblos orig." value={pct(m.pct_indigena)}        sub="% de la población" color={PURPLE} />
-          <KpiCard label="Jef. femenina" value={pct(m.pct_jefatura_mujer)}  sub="% de hogares"      color={PURPLE} />
-        </div>
-      )}
+      {m && (() => {
+        const totalPob = allRegions.reduce((s, r) => s + (r.poblacion_total ?? 0), 0)
+        const popShare = totalPob > 0 && m.poblacion_total ? ((m.poblacion_total / totalPob) * 100).toFixed(1) : null
+        const popRank = rankOf(allRegions, regionCod, 'poblacion_total', false)
+        const avgUrbana = nationalAvg(allRegions, 'pct_urbana')
+        const avg60 = nationalAvg(allRegions, 'pct_edad_60_mas')
+        const avgInm = nationalAvg(allRegions, 'pct_inmigrantes')
+        const avgInd = nationalAvg(allRegions, 'pct_indigena')
+        const avgJef = nationalAvg(allRegions, 'pct_jefatura_mujer')
+        return (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <KpiCard label="Habitantes" value={num(m.poblacion_total)} sub="Censo 2024" color={PURPLE}
+              context={[popShare ? `${popShare}% del país` : null, popRank].filter(Boolean).join(' · ') || undefined} />
+            <KpiCard label="Urbana" value={pct(m.pct_urbana)} sub="% de la población" color={PURPLE}
+              context={[avgUrbana != null ? `Prom: ${avgUrbana.toFixed(1)}%` : null, rankOf(allRegions, regionCod, 'pct_urbana', false)].filter(Boolean).join(' · ') || undefined} />
+            <KpiCard label="60+ años" value={pct(m.pct_edad_60_mas)} sub="% de la población" color={PURPLE}
+              context={[avg60 != null ? `Prom: ${avg60.toFixed(1)}%` : null, rankOf(allRegions, regionCod, 'pct_edad_60_mas', false)].filter(Boolean).join(' · ') || undefined} />
+            <KpiCard label="Inmigrantes" value={pct(m.pct_inmigrantes)} sub="% de la población" color={PURPLE}
+              context={[avgInm != null ? `Prom: ${avgInm.toFixed(1)}%` : null, rankOf(allRegions, regionCod, 'pct_inmigrantes', false)].filter(Boolean).join(' · ') || undefined} />
+            <KpiCard label="Pueblos orig." value={pct(m.pct_indigena)} sub="% de la población" color={PURPLE}
+              context={[avgInd != null ? `Prom: ${avgInd.toFixed(1)}%` : null, rankOf(allRegions, regionCod, 'pct_indigena', false)].filter(Boolean).join(' · ') || undefined} />
+            <KpiCard label="Jef. femenina" value={pct(m.pct_jefatura_mujer)} sub="% de hogares" color={PURPLE}
+              context={[avgJef != null ? `Prom: ${avgJef.toFixed(1)}%` : null, rankOf(allRegions, regionCod, 'pct_jefatura_mujer', false)].filter(Boolean).join(' · ') || undefined} />
+          </div>
+        )
+      })()}
 
       {/* Indicadores Sociales */}
       <SectionHeader
