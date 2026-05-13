@@ -82,6 +82,46 @@ const SERIES_CONFIG: { seriesId: string; metric: string; regionCod: string | nul
   // ── Nacional de ocupados ──
   { seriesId: 'F049.OCU.PMT.INE9.10.M',  metric: 'ocupados_miles',    regionCod: 'NAC' },
 
+  // ── Fuerza de trabajo regional (F049.FTR.STO.INE9.{R3}.M, miles de personas, trimestre móvil) ──
+  // Codes are 3-letter region abbreviations, different from INE numeric codes
+  { seriesId: 'F049.FTR.STO.INE9.RAP.M', metric: 'fuerza_trabajo_miles', regionCod: 'XV'  }, // Arica y Parinacota
+  { seriesId: 'F049.FTR.STO.INE9.RTA.M', metric: 'fuerza_trabajo_miles', regionCod: 'I'   }, // Tarapacá
+  { seriesId: 'F049.FTR.STO.INE9.RAN.M', metric: 'fuerza_trabajo_miles', regionCod: 'II'  }, // Antofagasta
+  { seriesId: 'F049.FTR.STO.INE9.RAT.M', metric: 'fuerza_trabajo_miles', regionCod: 'III' }, // Atacama
+  { seriesId: 'F049.FTR.STO.INE9.RCO.M', metric: 'fuerza_trabajo_miles', regionCod: 'IV'  }, // Coquimbo
+  { seriesId: 'F049.FTR.STO.INE9.RVA.M', metric: 'fuerza_trabajo_miles', regionCod: 'V'   }, // Valparaíso
+  { seriesId: 'F049.FTR.STO.INE9.RLI.M', metric: 'fuerza_trabajo_miles', regionCod: 'VI'  }, // O'Higgins
+  { seriesId: 'F049.FTR.STO.INE9.RMA.M', metric: 'fuerza_trabajo_miles', regionCod: 'VII' }, // Maule
+  { seriesId: 'F049.FTR.STO.INE9.RBI.M', metric: 'fuerza_trabajo_miles', regionCod: 'VIII'}, // Biobío
+  { seriesId: 'F049.FTR.STO.INE9.RNB.M', metric: 'fuerza_trabajo_miles', regionCod: 'XVI' }, // Ñuble
+  { seriesId: 'F049.FTR.STO.INE9.RAR.M', metric: 'fuerza_trabajo_miles', regionCod: 'IX'  }, // La Araucanía
+  { seriesId: 'F049.FTR.STO.INE9.RLR.M', metric: 'fuerza_trabajo_miles', regionCod: 'XIV' }, // Los Ríos
+  { seriesId: 'F049.FTR.STO.INE9.RLL.M', metric: 'fuerza_trabajo_miles', regionCod: 'X'   }, // Los Lagos
+  { seriesId: 'F049.FTR.STO.INE9.RAI.M', metric: 'fuerza_trabajo_miles', regionCod: 'XI'  }, // Aysén
+  { seriesId: 'F049.FTR.STO.INE9.RML.M', metric: 'fuerza_trabajo_miles', regionCod: 'XII' }, // Magallanes
+  { seriesId: 'F049.FTR.STO.INE9.RRM.M', metric: 'fuerza_trabajo_miles', regionCod: 'RM'  }, // Metropolitana
+
+  // ── Ventas regionales (F035.CVRV, miles de millones CLP, mensual, facturación electrónica) ──
+  // Codes 01-16 are BCCh sequential region ordering (same as PIB regional)
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.15.0.M', metric: 'ventas_regionales', regionCod: 'XV'  }, // Arica y Parinacota
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.01.0.M', metric: 'ventas_regionales', regionCod: 'I'   }, // Tarapacá
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.02.0.M', metric: 'ventas_regionales', regionCod: 'II'  }, // Antofagasta
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.03.0.M', metric: 'ventas_regionales', regionCod: 'III' }, // Atacama
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.04.0.M', metric: 'ventas_regionales', regionCod: 'IV'  }, // Coquimbo
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.05.0.M', metric: 'ventas_regionales', regionCod: 'V'   }, // Valparaíso
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.06.0.M', metric: 'ventas_regionales', regionCod: 'VI'  }, // O'Higgins
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.07.0.M', metric: 'ventas_regionales', regionCod: 'VII' }, // Maule
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.08.0.M', metric: 'ventas_regionales', regionCod: 'VIII'}, // Biobío
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.16.0.M', metric: 'ventas_regionales', regionCod: 'XVI' }, // Ñuble
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.09.0.M', metric: 'ventas_regionales', regionCod: 'IX'  }, // La Araucanía
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.14.0.M', metric: 'ventas_regionales', regionCod: 'XIV' }, // Los Ríos
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.10.0.M', metric: 'ventas_regionales', regionCod: 'X'   }, // Los Lagos
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.11.0.M', metric: 'ventas_regionales', regionCod: 'XI'  }, // Aysén
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.12.0.M', metric: 'ventas_regionales', regionCod: 'XII' }, // Magallanes
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.13.0.M', metric: 'ventas_regionales', regionCod: 'RM'  }, // Metropolitana
+  // Nacional
+  { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.T.0.M',  metric: 'ventas_regionales', regionCod: 'NAC' },
+
   // ── PIB regional (F035.PIB.FLU.R.CLP.2018.Z.Z.Z.{01-16}.0.T, quarterly) ──
   // Confirmed via BCCh cuadro CCNN2018_PIB_REGIONAL_T on 2026-04-05.
   // Codes 01-16 are BCCh's sequential region ordering (not INE employment codes).

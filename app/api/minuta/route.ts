@@ -263,14 +263,14 @@ export async function POST(request: Request) {
               .order('period', { ascending: false })
               .limit(6)
           : Promise.resolve({ data: null }),
-        // Latest ocupados from INE (miles de personas, trimestre móvil)
+        // Latest ocupados, fuerza de trabajo, ventas from INE/BCCh
         regionId !== undefined
           ? sb.from('regional_metrics')
               .select('metric_name, value, period')
               .eq('region_id', regionId)
-              .eq('metric_name', 'ocupados_miles')
+              .in('metric_name', ['ocupados_miles', 'fuerza_trabajo_miles', 'ventas_regionales'])
               .order('period', { ascending: false })
-              .limit(1)
+              .limit(6)
           : Promise.resolve({ data: null }),
       ])
 
@@ -365,15 +365,25 @@ export async function POST(request: Request) {
         }
       }
 
-      // Build INE employment data (ocupados in thousands, trimestre móvil)
+      // Build INE employment + ventas data
       const empleoIneData = (empleoIneRes.data ?? []) as { metric_name: string; value: number; period: string }[]
       let empleoINE: TrendSummaries['empleoINE'] = null
       const ocuRow = empleoIneData.find(r => r.metric_name === 'ocupados_miles')
+      const ftrRow = empleoIneData.find(r => r.metric_name === 'fuerza_trabajo_miles')
       if (ocuRow) {
-        empleoINE = { ocupados_miles: ocuRow.value, period: ocuRow.period }
+        empleoINE = {
+          ocupados_miles: ocuRow.value,
+          fuerza_trabajo_miles: ftrRow?.value,
+          period: ocuRow.period,
+        }
+      }
+      let ventas: TrendSummaries['ventas'] = null
+      const ventasRow = empleoIneData.find(r => r.metric_name === 'ventas_regionales')
+      if (ventasRow) {
+        ventas = { current: ventasRow.value, period: ventasRow.period }
       }
 
-      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE }
+      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE, ventas }
     }
   } else {
     const { getProjects } = await import('@/lib/projects')

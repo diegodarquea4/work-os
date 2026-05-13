@@ -5,7 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { INE_CODE } from '@/lib/regions'
 import type { MetricSeries, RegionalMetric, RegionMetrics } from '@/lib/types'
 
-export const INDICADOR_METRICS = ['tasa_desocupacion', 'pib_regional'] as const
+export const INDICADOR_METRICS = ['tasa_desocupacion', 'pib_regional', 'ventas_regionales', 'fuerza_trabajo_miles'] as const
 
 export function useRegionIndicadores(regionCod: string) {
   const [timeSeries,     setTimeSeries]     = useState<MetricSeries[]>([])

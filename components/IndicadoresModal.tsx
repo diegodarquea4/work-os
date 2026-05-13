@@ -53,8 +53,10 @@ const ZONES = Object.entries(
 )
 
 const COMP_METRICS = [
-  { name: 'tasa_desocupacion', label: 'Desocupación (%)',   yFmt: (v: number) => `${v.toFixed(1)}%`   },
-  { name: 'pib_regional',      label: 'PIB Regional (MM$)', yFmt: (v: number) => `${v.toFixed(0)} MM$` },
+  { name: 'tasa_desocupacion',    label: 'Desocupación (%)',       yFmt: (v: number) => `${v.toFixed(1)}%`   },
+  { name: 'pib_regional',         label: 'PIB Regional (MM$)',     yFmt: (v: number) => `${v.toFixed(0)} MM$` },
+  { name: 'ventas_regionales',    label: 'Ventas Regionales (MM$)', yFmt: (v: number) => `${v.toFixed(0)} MM$` },
+  { name: 'fuerza_trabajo_miles', label: 'Fuerza de Trabajo (miles)', yFmt: (v: number) => `${v.toFixed(0)} mil` },
 ] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -307,6 +309,8 @@ export default function IndicadoresModal({ region, onClose }: Props) {
                   colegaEmpleo={colegaEmpleo}
                   empleoData={empleoData}
                   zoneColor={zoneColor}
+                  timeSeries={timeSeries}
+                  nationalSeries={nationalSeries}
                 />
               )}
               {mainTab === 'perfil' && (
@@ -714,7 +718,7 @@ function PulsoActividad({ regionCod, history, accentColor }: {
 type PibSectorT = import('@/lib/hooks/usePibSectorial').PibSector
 
 function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sectores, sectPeriod,
-  sectLoading, colegaEmpleo, empleoData, zoneColor }: {
+  sectLoading, colegaEmpleo, empleoData, zoneColor, timeSeries, nationalSeries }: {
   region: Region
   pibData: { period: string; regional: number | null; national: number | null }[]
   pibMode: PibMode
@@ -726,6 +730,8 @@ function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sec
   colegaEmpleo: import('@/lib/hooks/useColegaEmpleo').EmpleoPoint[]
   empleoData: { period: string; regional: number | null; national: number | null }[]
   zoneColor: string
+  timeSeries: import('@/lib/types').MetricSeries[]
+  nationalSeries: import('@/lib/types').MetricSeries[]
 }) {
   const latestReg  = pibData.at(-1)?.regional ?? null
   const lastPeriod = pibData.at(-1)?.period ?? sectPeriod ?? null
@@ -796,6 +802,91 @@ function EconomiaSection({ region, pibData, pibMode, setPibMode, metrics: m, sec
         )}
         <Source text="Fuente: Banco Central de Chile · Actualización trimestral" updated={updatedLabel} />
       </div>
+
+      {/* Ventas Regionales */}
+      {(() => {
+        const ventasSeries = timeSeries.find(s => s.metric_name === 'ventas_regionales')
+        if (!ventasSeries?.data.length) return null
+        const ventasNat = nationalSeries.find(s => s.metric_name === 'ventas_regionales')
+        const natMap = new Map((ventasNat?.data ?? []).map(d => [d.period, d.value]))
+        const ventasData = ventasSeries.data.slice(-24).map(d => ({
+          period: d.period,
+          regional: d.value,
+          ...(natMap.has(d.period) ? { national: natMap.get(d.period) } : {}),
+        }))
+        const latest = ventasSeries.data[ventasSeries.data.length - 1]
+        return (
+          <>
+            <SectionHeader
+              title="Ventas Regionales"
+              subtitle="Actividad comercial basada en facturación electrónica"
+              badge="BCCh · Mensual"
+              color="#059669"
+            />
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              {latest && (
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-xs px-3 py-1.5 rounded-full font-semibold text-white bg-emerald-600">
+                    Último: {Math.round(latest.value).toLocaleString('es-CL')} MM$
+                  </span>
+                  <span className="text-xs text-gray-400">{fmtMonthly(latest.period)}</span>
+                </div>
+              )}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={ventasData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                  <XAxis dataKey="period" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tickFormatter={(v: number) => `${Math.round(v)} MM`} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={54} />
+                  <Tooltip formatter={(value: unknown) => [`${Math.round(Number(value)).toLocaleString('es-CL')} MM$`, 'Ventas']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Line type="monotone" dataKey="regional" stroke="#059669" strokeWidth={2.5} dot={{ r: 1.5, fill: '#059669' }} activeDot={{ r: 5 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+              <Source text="Fuente: Banco Central de Chile — Compraventas por facturación electrónica · Mensual" />
+            </div>
+          </>
+        )
+      })()}
+
+      {/* Fuerza de Trabajo */}
+      {(() => {
+        const ftrSeries = timeSeries.find(s => s.metric_name === 'fuerza_trabajo_miles')
+        if (!ftrSeries?.data.length) return null
+        const ftrData = ftrSeries.data.slice(-24).map(d => ({
+          period: d.period,
+          value: d.value,
+        }))
+        const latest = ftrSeries.data[ftrSeries.data.length - 1]
+        return (
+          <>
+            <SectionHeader
+              title="Fuerza de Trabajo"
+              subtitle="Personas en edad de trabajar que participan en el mercado laboral"
+              badge="INE-ENE · Trimestre móvil"
+              color="#7c3aed"
+            />
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              {latest && (
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-xs px-3 py-1.5 rounded-full font-semibold text-white bg-violet-600">
+                    Último: {Math.round(latest.value * 1000).toLocaleString('es-CL')} personas
+                  </span>
+                  <span className="text-xs text-gray-400">{fmtMonthly(latest.period)}</span>
+                </div>
+              )}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={ftrData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                  <XAxis dataKey="period" tickFormatter={fmtMonthly} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tickFormatter={(v: number) => `${Math.round(v)}k`} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={54} />
+                  <Tooltip formatter={(value: unknown) => [`${Math.round(Number(value) * 1000).toLocaleString('es-CL')} personas`, 'Fuerza de trabajo']} labelFormatter={(l) => typeof l === 'string' ? fmtMonthly(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Line type="monotone" dataKey="value" stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 1.5, fill: '#7c3aed' }} activeDot={{ r: 5 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+              <Source text="Fuente: INE — Encuesta Nacional de Empleo · Trimestre móvil" />
+            </div>
+          </>
+        )
+      })()}
 
       {/* Sectores productivos */}
       <SectionHeader

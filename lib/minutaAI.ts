@@ -97,7 +97,8 @@ export type NationalBenchmark = {
 export type TrendSummaries = {
   unemployment: { current: number; previous: number; delta: number; months: number; latestPeriod: string } | null
   crime: { avgRecent4w: number; avgPrevious4w: number | null; pctChange: number | null } | null
-  empleoINE: { ocupados_miles: number; period: string } | null
+  empleoINE: { ocupados_miles: number; fuerza_trabajo_miles?: number; period: string } | null
+  ventas: { current: number; period: string } | null
 }
 
 // ── Context builder ──────────────────────────────────────────────────────────
@@ -180,8 +181,9 @@ Indicadores socioeconómicos:
 - Tasa participación laboral: ${metrics.tasa_participacion_laboral ?? 'N/D'}%
 - Déficit habitacional: ${metrics.deficit_habitacional?.toLocaleString('es-CL') ?? 'N/D'}
 - Hogares víctimas DMCS: ${metrics.pct_hogares_victimas_dmcs ?? 'N/D'}% (ENUSC)
-${trendSummaries?.empleoINE ? `- Personas ocupadas: ${(trendSummaries.empleoINE.ocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${trendSummaries.empleoINE.period})` : `- Personas ocupadas: ${metrics.n_ocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)`}
+${trendSummaries?.empleoINE ? `- Personas ocupadas: ${(trendSummaries.empleoINE.ocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${trendSummaries.empleoINE.period})${trendSummaries.empleoINE.fuerza_trabajo_miles ? `\n- Fuerza de trabajo: ${(trendSummaries.empleoINE.fuerza_trabajo_miles * 1000).toLocaleString('es-CL')} personas (INE-ENE)` : ''}` : `- Personas ocupadas: ${metrics.n_ocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)`}
 - Personas desocupadas: ${metrics.n_desocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024)
+${trendSummaries?.ventas ? `- Ventas regionales (facturación electrónica): ${trendSummaries.ventas.current.toLocaleString('es-CL', { maximumFractionDigits: 0 })} miles de millones CLP (${trendSummaries.ventas.period}, BCCh)` : ''}
 - Sectores productivos: ${metrics.sectores_productivos_principales ?? 'N/D'}
 - Vocación regional: ${metrics.vocacion_regional ?? 'N/D'}
 
