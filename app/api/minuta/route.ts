@@ -263,14 +263,14 @@ export async function POST(request: Request) {
               .order('period', { ascending: false })
               .limit(6)
           : Promise.resolve({ data: null }),
-        // Latest ocupados/desocupados from INE (miles de personas)
+        // Latest ocupados from INE (miles de personas, trimestre móvil)
         regionId !== undefined
           ? sb.from('regional_metrics')
               .select('metric_name, value, period')
               .eq('region_id', regionId)
-              .in('metric_name', ['ocupados_miles', 'desocupados_miles'])
+              .eq('metric_name', 'ocupados_miles')
               .order('period', { ascending: false })
-              .limit(2)
+              .limit(1)
           : Promise.resolve({ data: null }),
       ])
 
@@ -365,13 +365,12 @@ export async function POST(request: Request) {
         }
       }
 
-      // Build INE employment data (ocupados/desocupados in thousands)
+      // Build INE employment data (ocupados in thousands, trimestre móvil)
       const empleoIneData = (empleoIneRes.data ?? []) as { metric_name: string; value: number; period: string }[]
       let empleoINE: TrendSummaries['empleoINE'] = null
       const ocuRow = empleoIneData.find(r => r.metric_name === 'ocupados_miles')
-      const desRow = empleoIneData.find(r => r.metric_name === 'desocupados_miles')
-      if (ocuRow && desRow) {
-        empleoINE = { ocupados_miles: ocuRow.value, desocupados_miles: desRow.value, period: ocuRow.period }
+      if (ocuRow) {
+        empleoINE = { ocupados_miles: ocuRow.value, period: ocuRow.period }
       }
 
       trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE }

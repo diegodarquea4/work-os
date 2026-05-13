@@ -79,27 +79,8 @@ const SERIES_CONFIG: { seriesId: string; metric: string; regionCod: string | nul
   { seriesId: 'F049.OCU.PMT.INE9.22.M',  metric: 'ocupados_miles', regionCod: 'XII' },
   { seriesId: 'F049.OCU.PMT.INE9.23.M',  metric: 'ocupados_miles', regionCod: 'RM'  },
 
-  // ── Personas desocupadas regional (F049.DES.PMT.INE9.{CODE}.M, miles de personas, trimestre móvil) ──
-  { seriesId: 'F049.DES.PMT.INE9.25.M',  metric: 'desocupados_miles', regionCod: 'XV'  },
-  { seriesId: 'F049.DES.PMT.INE9.11.M',  metric: 'desocupados_miles', regionCod: 'I'   },
-  { seriesId: 'F049.DES.PMT.INE9.12.M',  metric: 'desocupados_miles', regionCod: 'II'  },
-  { seriesId: 'F049.DES.PMT.INE9.13.M',  metric: 'desocupados_miles', regionCod: 'III' },
-  { seriesId: 'F049.DES.PMT.INE9.14.M',  metric: 'desocupados_miles', regionCod: 'IV'  },
-  { seriesId: 'F049.DES.PMT.INE9.15.M',  metric: 'desocupados_miles', regionCod: 'V'   },
-  { seriesId: 'F049.DES.PMT.INE9.16.M',  metric: 'desocupados_miles', regionCod: 'VI'  },
-  { seriesId: 'F049.DES.PMT.INE9.17.M',  metric: 'desocupados_miles', regionCod: 'VII' },
-  { seriesId: 'F049.DES.PMT.INE9.18N.M', metric: 'desocupados_miles', regionCod: 'VIII'},
-  { seriesId: 'F049.DES.PMT.INE9.26.M',  metric: 'desocupados_miles', regionCod: 'XVI' },
-  { seriesId: 'F049.DES.PMT.INE9.19.M',  metric: 'desocupados_miles', regionCod: 'IX'  },
-  { seriesId: 'F049.DES.PMT.INE9.24.M',  metric: 'desocupados_miles', regionCod: 'XIV' },
-  { seriesId: 'F049.DES.PMT.INE9.20.M',  metric: 'desocupados_miles', regionCod: 'X'   },
-  { seriesId: 'F049.DES.PMT.INE9.21.M',  metric: 'desocupados_miles', regionCod: 'XI'  },
-  { seriesId: 'F049.DES.PMT.INE9.22.M',  metric: 'desocupados_miles', regionCod: 'XII' },
-  { seriesId: 'F049.DES.PMT.INE9.23.M',  metric: 'desocupados_miles', regionCod: 'RM'  },
-
-  // ── Nacionales de ocupados/desocupados ──
+  // ── Nacional de ocupados ──
   { seriesId: 'F049.OCU.PMT.INE9.10.M',  metric: 'ocupados_miles',    regionCod: 'NAC' },
-  { seriesId: 'F049.DES.PMT.INE9.10.M',  metric: 'desocupados_miles', regionCod: 'NAC' },
 
   // ── PIB regional (F035.PIB.FLU.R.CLP.2018.Z.Z.Z.{01-16}.0.T, quarterly) ──
   // Confirmed via BCCh cuadro CCNN2018_PIB_REGIONAL_T on 2026-04-05.
