@@ -95,8 +95,9 @@ export type NationalBenchmark = {
 }
 
 export type TrendSummaries = {
-  unemployment: { current: number; previous: number; delta: number; months: number } | null
+  unemployment: { current: number; previous: number; delta: number; months: number; latestPeriod: string } | null
   crime: { avgRecent4w: number; avgPrevious4w: number | null; pctChange: number | null } | null
+  empleoINE: { ocupados_miles: number; desocupados_miles: number; period: string } | null
 }
 
 // ── Context builder ──────────────────────────────────────────────────────────
@@ -152,20 +153,40 @@ function buildContext(
     .map(([eje, d]) => `  • ${eje}: ${d.total} iniciativas, ${d.avgPct}% avance promedio, ${d.rojo} rojo, ${d.ambar} ambar, ${d.verde} verde`)
     .join('\n')
 
+  // Compute the real period label for unemployment data
+  const desempleoPeriod = trendSummaries?.unemployment?.latestPeriod
+    ? (() => {
+        const d = new Date(trendSummaries.unemployment!.latestPeriod + 'T12:00:00')
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+        const m = d.getMonth()
+        const y = d.getFullYear()
+        // INE reports rolling trimesters: the period date is the last month of the trimester
+        const m1 = meses[(m - 2 + 12) % 12]
+        const m3 = meses[m]
+        const y1 = m < 2 ? y - 1 : y
+        return `trimestre ${m1} ${y1}-${m3} ${y}`
+      })()
+    : null
+
   const metricsStr = metrics ? `
 Indicadores socioeconómicos:
-- Población total: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? 'N/D'} hab
-- Tasa desocupación: ${metrics.tasa_desocupacion ?? 'N/D'}%
-- Pobreza por ingresos: ${metrics.pct_pobreza_ingresos ?? 'N/D'}%
-- Pobreza multidimensional: ${metrics.pct_pobreza_multidimensional ?? 'N/D'}%
-- PIB regional: ${metrics.pib_regional ?? 'N/D'} MM$
+- Población total: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? 'N/D'} hab (Censo 2024)
+- Tasa desocupación: ${metrics.tasa_desocupacion ?? 'N/D'}%${desempleoPeriod ? ` (${desempleoPeriod}, INE-ENE)` : ' (fuente: INE-ENE, trimestre móvil)'}
+- Pobreza por ingresos: ${metrics.pct_pobreza_ingresos ?? 'N/D'}% (CASEN 2024)
+- Pobreza multidimensional: ${metrics.pct_pobreza_multidimensional ?? 'N/D'}% (CASEN 2024)
+- PIB regional: ${metrics.pib_regional ?? 'N/D'} MM$ (BCCh)
 - % PIB nacional: ${metrics.pct_pib_nacional ?? 'N/D'}%
 - Variación actividad económica: ${metrics.variacion_interanual ?? 'N/D'}%
 - Tasa participación laboral: ${metrics.tasa_participacion_laboral ?? 'N/D'}%
 - Déficit habitacional: ${metrics.deficit_habitacional?.toLocaleString('es-CL') ?? 'N/D'}
-- Hogares víctimas DMCS: ${metrics.pct_hogares_victimas_dmcs ?? 'N/D'}%
+- Hogares víctimas DMCS: ${metrics.pct_hogares_victimas_dmcs ?? 'N/D'}% (ENUSC)
+${trendSummaries?.empleoINE ? `- Personas ocupadas: ${(trendSummaries.empleoINE.ocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${trendSummaries.empleoINE.period})
+- Personas desocupadas: ${(trendSummaries.empleoINE.desocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${trendSummaries.empleoINE.period})` : `- Personas ocupadas: ${metrics.n_ocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)
+- Personas desocupadas: ${metrics.n_desocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)`}
 - Sectores productivos: ${metrics.sectores_productivos_principales ?? 'N/D'}
 - Vocación regional: ${metrics.vocacion_regional ?? 'N/D'}
+
+IMPORTANTE: La tasa de desocupación proviene de la Encuesta Nacional de Empleo (ENE) del INE y corresponde a un trimestre móvil${desempleoPeriod ? ` (último disponible: ${desempleoPeriod})` : ''}. NO atribuir este dato al mes de la fecha del documento. Los datos de n_ocupado y n_desocupado son del Censo 2024 (dato puntual) y NO deben presentarse como cifras actuales de empleo.
 ` : 'Indicadores socioeconómicos: no disponibles.'
 
   const seiaStr = seiaProjects?.length ? `
@@ -226,7 +247,8 @@ ${seguimientos.map(s =>
     if (trendSummaries.unemployment) {
       const u = trendSummaries.unemployment
       const dir = u.delta < 0 ? 'mejorando' : u.delta > 0 ? 'empeorando' : 'estable'
-      parts.push(`- Desempleo: ${u.previous}% → ${u.current}% (${dir}, ${u.delta > 0 ? '+' : ''}${u.delta} pp en ${u.months} meses)`)
+      const periodNote = desempleoPeriod ? `, último dato: ${desempleoPeriod}` : ''
+      parts.push(`- Desempleo: ${u.previous}% → ${u.current}% (${dir}, ${u.delta > 0 ? '+' : ''}${u.delta} pp en ${u.months} meses${periodNote})`)
     }
     if (trendSummaries.crime) {
       const c = trendSummaries.crime

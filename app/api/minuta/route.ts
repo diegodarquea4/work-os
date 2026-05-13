@@ -220,7 +220,7 @@ export async function POST(request: Request) {
       const sixtyDaysAgo  = new Date(Date.now() - 60  * 86400000).toISOString()
       const ninetyDaysAgo = new Date(Date.now() - 90  * 86400000).toISOString()
 
-      const [seguimientosRes, semaforoLogRes, nationalRes, stopHistoryRes, regionalTsRes] = await Promise.all([
+      const [seguimientosRes, semaforoLogRes, nationalRes, stopHistoryRes, regionalTsRes, empleoIneRes] = await Promise.all([
         // Recent seguimientos for rojo/ambar initiatives
         rojoAmbarIds.length > 0
           ? sb.from('seguimientos')
@@ -262,6 +262,15 @@ export async function POST(request: Request) {
               .eq('metric_name', 'tasa_desocupacion')
               .order('period', { ascending: false })
               .limit(6)
+          : Promise.resolve({ data: null }),
+        // Latest ocupados/desocupados from INE (miles de personas)
+        regionId !== undefined
+          ? sb.from('regional_metrics')
+              .select('metric_name, value, period')
+              .eq('region_id', regionId)
+              .in('metric_name', ['ocupados_miles', 'desocupados_miles'])
+              .order('period', { ascending: false })
+              .limit(2)
           : Promise.resolve({ data: null }),
       ])
 
@@ -339,6 +348,7 @@ export async function POST(request: Request) {
           previous: oldest.value,
           delta: parseFloat((latest.value - oldest.value).toFixed(1)),
           months: regTsData.length,
+          latestPeriod: latest.period,
         }
       }
 
@@ -355,7 +365,16 @@ export async function POST(request: Request) {
         }
       }
 
-      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend }
+      // Build INE employment data (ocupados/desocupados in thousands)
+      const empleoIneData = (empleoIneRes.data ?? []) as { metric_name: string; value: number; period: string }[]
+      let empleoINE: TrendSummaries['empleoINE'] = null
+      const ocuRow = empleoIneData.find(r => r.metric_name === 'ocupados_miles')
+      const desRow = empleoIneData.find(r => r.metric_name === 'desocupados_miles')
+      if (ocuRow && desRow) {
+        empleoINE = { ocupados_miles: ocuRow.value, desocupados_miles: desRow.value, period: ocuRow.period }
+      }
+
+      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE }
     }
   } else {
     const { getProjects } = await import('@/lib/projects')
