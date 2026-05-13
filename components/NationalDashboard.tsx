@@ -200,12 +200,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     { key: 'comuna',                label: 'Comuna',                desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                        wch: 20 },
     { key: 'etapa_actual',          label: 'Etapa Actual',          desc: 'Valores: Preinversión | Diseño | Ejecución | Terminado',                                                                    wch: 20 },
     { key: 'estado_termino_gobierno', label: 'Estado Término Gob.', desc: 'Inaugurado/Terminado/Presentado | Término Diseño | Inicio Obras/Programa | Término Obras/Programa | Término Etapa Preinversional | Adjudicación de Licitación | Otro', wch: 40 },
-    { key: 'proximo_hito',          label: 'Próximo Hito',          desc: 'Otro | Obtención RS | Obtención Financiamiento | Presentación Core | Publicación Bases Licitación | Adjudicación Licitación | Término Diseño/Preinversión | Primera Piedra | Inicio Obras/Programa | Término Obras/Programa | Inauguración | Finalizado', wch: 42 },
+    { key: 'proximo_hito',          label: 'Próximo Hito',          desc: 'Otro | Obtención RS | Obtención Financiamiento | Presentación Core | Publicación Bases Licitación | Adjudicación Licitación | Término Diseño/Preinversión | Primera Piedra | Inicio Obras/Programa | Inicio Obras | Término Obras/Programa | Término Obras | Inauguración | Finalizado', wch: 42 },
     { key: 'fecha_proximo_hito',    label: 'Fecha Próximo Hito',    desc: 'Formato DD-MM-AAAA  (ej: 31-12-2027)  — puede estar vacío',                                                                wch: 22 },
     { key: 'prioridad',             label: 'Prioridad',             desc: 'Valores: Alta | Media | Baja',                                                                                              wch: 14 },
     { key: 'fuente_financiamiento', label: 'Fuente Financiamiento', desc: 'Valores: FNDR | Mixto | Sectorial | Privado | FONDEMA | PEDZE — puede estar vacío',                                        wch: 24 },
     { key: 'codigo_bip',            label: 'Código BIP',            desc: 'Código numérico del BIP — puede estar vacío si no aplica',                                                                  wch: 16 },
-    { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS',                                            wch: 20 },
+    { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS | AD',                                      wch: 20 },
     { key: 'codigo_iniciativa',     label: 'Código Iniciativa',     desc: 'Código interno DCI — puede estar vacío',                                                                                    wch: 22 },
     { key: 'inversion_mm',          label: 'Inversión ($MM)',       desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                            wch: 18 },
     { key: 'origen',                label: 'Origen',                desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                 wch: 24 },
@@ -267,10 +267,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
   const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja']
-  const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS']
+  const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS', 'AD']
   const VALID_ETAPA          = ['Preinversión', 'Diseño', 'Ejecución', 'Terminado']
   const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro']
-  const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Inauguración', 'Finalizado']
+  const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Inicio Obras', 'Término Obras/Programa', 'Término Obras', 'Inauguración', 'Finalizado']
   const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE']
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {

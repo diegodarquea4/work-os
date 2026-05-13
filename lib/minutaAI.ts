@@ -23,6 +23,7 @@ export type EjeAvanceCompleto = {
 }
 
 export type MinutaCompletaContent = {
+  contexto_rapido?: string                         // 1-2 oraciones posicionando la región para la portada
   resumen_ejecutivo: string                        // 2-3 oraciones de síntesis del estado general
   compromisos_plan: string[]                       // 5-7 compromisos/objetivos clave extraídos del Plan Regional PDF
   cifras: CifraSubseccion[]                        // 3-4 subsecciones temáticas con párrafos
@@ -343,15 +344,17 @@ export async function generateMinutaContent(
     ? `Eres el experto en coordinación territorial de la Región de ${regionNombre} del Ministerio del Interior y Seguridad Pública de Chile. Redacta contenido para una minuta ejecutiva de visita oficial. Usa tono formal institucional, español de Chile. Sé preciso, conciso y útil para el tomador de decisión.
 
 Utiliza los datos de seguimiento reciente y tendencias de semáforo para contextualizar alertas con hechos, fechas y actores concretos. Si hay datos de comparación nacional, posiciona la región respecto al promedio país.`
-    : `Eres analista senior de la División de Coordinación Interregional del Ministerio del Interior y Seguridad Pública de Chile, experto en la Región de ${regionNombre}. Tu tarea es redactar el Informe de Avances del Plan Regional de Gobierno que el Presidente de la República llevará en su visita a la región.
+    : `Eres analista senior de la División de Coordinación Interregional del Ministerio del Interior y Seguridad Pública de Chile, experto en la Región de ${regionNombre}. Tu tarea es redactar el Kit de Viaje Regional — un documento de briefing que una autoridad (Ministro o Presidente) leerá antes de viajar a la región. Debe poder entender la región en 15 minutos de lectura.
 
-Si se adjunta el Plan Regional de Gobierno como documento, léelo en su TOTALIDAD. Extrae los compromisos presidenciales, objetivos estratégicos, metas y ejes prioritarios más importantes definidos en ese plan. Usa esa información junto con los datos de seguimiento del panel para construir un informe sustancial que refleje fielmente los compromisos asumidos y su estado de avance.
+Si se adjunta el Plan Regional de Gobierno como documento, léelo en su TOTALIDAD. Extrae los compromisos presidenciales, objetivos estratégicos, metas y ejes prioritarios más importantes definidos en ese plan.
 
-INSTRUCCIONES ADICIONALES PARA ANÁLISIS ENRIQUECIDO:
-- Utiliza la actividad reciente de seguimiento por iniciativa para contextualizar alertas y recomendaciones con hechos específicos, fechas y actores concretos. Prioriza información de seguimiento por sobre descripciones genéricas.
-- Usa las tendencias de semáforo para distinguir deterioro reciente (que requiere acción urgente) de problemas crónicos (que requieren cambio de estrategia).
-- Cuando haya datos de comparación nacional, posiciona explícitamente la región respecto al promedio país en los indicadores clave.
-- Cuando haya tendencias de series de tiempo, describe la dirección y magnitud del cambio, no solo el valor actual.
+ORIENTACIÓN DE ESCRITURA:
+- Escribe para un tomador de decisión que NO conoce la región en profundidad. Contextualiza cada dato.
+- Prioriza lo que la autoridad NECESITA saber: qué funciona, qué está mal, qué requiere su atención.
+- Utiliza la actividad reciente de seguimiento para contextualizar alertas con hechos, fechas y actores concretos.
+- Usa tendencias de semáforo para distinguir deterioro reciente de problemas crónicos.
+- Posiciona la región respecto al promedio nacional en cada indicador clave.
+- Describe dirección y magnitud de cambios, no solo valores estáticos.
 
 Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono formal e institucional, en español de Chile.`
 
@@ -364,6 +367,7 @@ Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono f
   "tendencia_general": "string (1 oración que resume la dirección general: mejoras y deterioros clave)"
 }`
     : `{
+  "contexto_rapido": "1-2 oraciones que posicionan la región respecto al país: su principal fortaleza, su principal desafío, y un dato de contexto geográfico/económico relevante. Va en la portada del documento.",
   "resumen_ejecutivo": "2-3 oraciones que sintetizan el estado actual de la región y el avance de su Plan Regional de Gobierno. Incluye la cifra de avance promedio y los elementos más destacados.",
   "compromisos_plan": [
     "Compromiso o objetivo estratégico clave extraído del Plan Regional de Gobierno (si se adjuntó el PDF). Debe ser específico y atribuible al plan. Incluir meta o indicador si está disponible.",
