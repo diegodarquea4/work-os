@@ -195,6 +195,12 @@ async function runSync() {
         .from('stop_stats')
         .upsert(batch, { onConflict: 'region_id,semana_id' })
       if (dbErr) errors.push(`DB upsert semana ${semana.id}: ${dbErr.message}`)
+
+      // v2 dual-write → v2_seguridad_semanal
+      const v2Batch = batch.map(toV2Seguridad)
+      supabase.from('v2_seguridad_semanal')
+        .upsert(v2Batch, { onConflict: 'region_id,semana_iso' })
+        .then(({ error }) => { if (error) console.error('[stop-sync] v2 upsert:', error.message) })
     }
   }
 
@@ -204,6 +210,12 @@ async function runSync() {
       .from('stop_stats')
       .upsert(rows, { onConflict: 'region_id,semana_id' })
     if (dbErr) errors.push(`DB final upsert: ${dbErr.message}`)
+
+    // v2 dual-write
+    const v2Batch = rows.map(toV2Seguridad)
+    supabase.from('v2_seguridad_semanal')
+      .upsert(v2Batch, { onConflict: 'region_id,semana_iso' })
+      .then(({ error }) => { if (error) console.error('[stop-sync] v2 final upsert:', error.message) })
   }
 
   const totalUpserted = newSemanas.length * REGION_CODS.length - errors.filter(e => e.includes('semana=')).length
@@ -322,6 +334,45 @@ type StopStat = {
   mayor_registro_4_valor?: number | string | null
   mayor_registro_5_nombre?: string | null
   mayor_registro_5_valor?: number | string | null
+}
+
+/** Map a v1 StopRow to the v2_seguridad_semanal schema */
+function toV2Seguridad(r: StopRow) {
+  // Build ISO week string from semana_id and fecha
+  const year = r.fecha_hasta.slice(0, 4)
+  const semanaIso = `${year}-W${String(r.semana_id).padStart(2, '0')}`
+
+  return {
+    region_id:            r.region_id,
+    semana_iso:           semanaIso,
+    fecha_desde:          r.fecha_desde,
+    fecha_hasta:          r.fecha_hasta,
+    tasa_registro:        null, // not available from stop_stats directly
+    casos_total:          r.casos_total,
+    casos_ultima_semana:  r.casos_ultima_semana,
+    casos_28dias:         r.casos_28dias,
+    casos_anno_fecha:     r.casos_anno_fecha,
+    mayor_registro_1:     r.mayor_registro_1,
+    pct_1:                r.pct_1,
+    mayor_registro_2:     r.mayor_registro_2,
+    pct_2:                r.pct_2,
+    mayor_registro_3:     r.mayor_registro_3,
+    pct_3:                r.pct_3,
+    mayor_registro_4:     r.mayor_registro_4,
+    pct_4:                r.pct_4,
+    mayor_registro_5:     r.mayor_registro_5,
+    pct_5:                r.pct_5,
+    controles_total:      r.controles_total,
+    controles_identidad:  r.controles_identidad,
+    controles_vehicular:  r.controles_vehicular,
+    fiscalizaciones:      r.fiscalizaciones,
+    incautaciones:        r.incautaciones,
+    incaut_fuego:         r.incaut_fuego,
+    incaut_blancas:       r.incaut_blancas,
+    allanamientos_anno:   r.allanamientos_anno,
+    vehiculos_rec_anno:   r.vehiculos_rec_anno,
+    decomisos_anno:       r.decomisos_anno,
+  }
 }
 
 type StopRow = {

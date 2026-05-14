@@ -24,6 +24,23 @@ export const maxDuration = 300
 
 const BCCH_API = 'https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx'
 
+// v2 mapping: pib-sync metric names → v2 indicator codes
+const V2_PIB_MAP: Record<string, string> = {
+  pib_sector_agropecuario:          'ECO_PIB_AGRO',
+  pib_sector_pesca:                 'ECO_PIB_PESCA',
+  pib_sector_mineria:               'ECO_PIB_MINERIA',
+  pib_sector_industria:             'ECO_PIB_INDUSTRIA',
+  pib_sector_electricidad:          'ECO_PIB_ELECTRIC',
+  pib_sector_construccion:          'ECO_PIB_CONSTRUC',
+  pib_sector_comercio:              'ECO_PIB_COMERCIO',
+  pib_sector_restaurantes_hoteles:  'ECO_PIB_REST_HOT',
+  pib_sector_transporte:            'ECO_PIB_TRANSPORTE',
+  pib_sector_servicios_financieros: 'ECO_PIB_FINANCIERO',
+  pib_sector_vivienda:              'ECO_PIB_VIVIENDA',
+  pib_sector_servicios_personales:  'ECO_PIB_SERV_PERS',
+  pib_sector_administracion_publica:'ECO_PIB_ADM_PUB',
+}
+
 // ── Series configuration ─────────────────────────────────────────────────────
 // Source: BCCh BDE — F035.PIB.FLU.N.CLP.2018 (nominal, annual, base 2018)
 // 13 sectors × 16 regions = 208 series
@@ -352,12 +369,34 @@ async function runSync() {
     return Response.json({ ok: false, error: `Supabase upsert: ${dbErr.message}` }, { status: 500 })
   }
 
+  // ── v2 dual-write ─────────────────────────────────────────────────────────
+  const v2Rows = rows
+    .filter(r => V2_PIB_MAP[r.metric_name])
+    .map(r => ({
+      codigo_indicador: V2_PIB_MAP[r.metric_name],
+      region_id:        r.region_id,
+      valor:            r.value,
+      periodo:          r.period,
+      calidad:          'verificado' as const,
+      cargado_por:      'pib-sync',
+    }))
+
+  if (v2Rows.length > 0) {
+    for (let i = 0; i < v2Rows.length; i += 500) {
+      const batch = v2Rows.slice(i, i + 500)
+      await supabase.from('v2_indicadores_valores')
+        .upsert(batch, { onConflict: 'codigo_indicador,region_id,periodo' })
+    }
+    supabase.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+  }
+
   return Response.json({
     ok: true,
     synced_at:  new Date().toISOString(),
     upserted:   rows.length,
     regions:    [...new Set(rows.map(r => r.region_id))].length,
     sectors:    [...new Set(rows.map(r => r.metric_name))],
+    v2:         { upserted: v2Rows.length },
     errors:     errors.length > 0 ? errors : undefined,
   })
 }

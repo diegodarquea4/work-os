@@ -36,6 +36,17 @@ export const runtime = 'nodejs'
 
 const BCCH_API = 'https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx'
 
+// ── v2 dual-write mapping: v1 metric_name → v2 codigo_indicador ─────────────
+const V2_METRIC_MAP: Record<string, string> = {
+  tasa_desocupacion:    'EMP_DESOC_TASA',
+  ocupados_miles:       'EMP_OCUP_MILES',
+  fuerza_trabajo_miles: 'EMP_FT_MILES',
+  ventas_regionales:    'ECO_VENTAS_REG',
+  pib_regional:         'ECO_PIB_REG',
+  pib_nacional:         'ECO_PIB_NAC',
+  imacec:               'ECO_IMACEC',
+}
+
 // ── Series configuration ─────────────────────────────────────────────────────
 // regionCod: string  → stored by region (INE_CODE lookup)
 // regionCod: 'NAC'   → stored as national (region_id = 0)
@@ -255,12 +266,78 @@ async function runSync() {
     return Response.json({ ok: false, error: `Supabase upsert: ${dbErr.message}` }, { status: 500 })
   }
 
+  // ── v2 dual-write ─────────────────────────────────────────────────────────
+  // Write same data to v2_indicadores_valores in parallel. Non-blocking:
+  // if v2 write fails, v1 data is already saved.
+  const start = Date.now()
+  let v2Upserted = 0
+  let v2Error: string | undefined
+  const v2Rows = rows
+    .filter(r => V2_METRIC_MAP[r.metric_name])
+    .map(r => ({
+      codigo_indicador: V2_METRIC_MAP[r.metric_name],
+      region_id:        r.region_id,
+      valor:            r.value,
+      periodo:          r.period,
+      calidad:          'verificado' as const,
+      cargado_por:      'ine-sync',
+    }))
+  try {
+    if (v2Rows.length > 0) {
+      // Batch in groups of 500
+      for (let i = 0; i < v2Rows.length; i += 500) {
+        const batch = v2Rows.slice(i, i + 500)
+        const { error: v2Err } = await supabase
+          .from('v2_indicadores_valores')
+          .upsert(batch, { onConflict: 'codigo_indicador,region_id,periodo' })
+        if (v2Err) {
+          v2Error = v2Err.message
+          break
+        }
+        v2Upserted += batch.length
+      }
+
+      // Refresh materialized view (fire-and-forget)
+      if (!v2Error) {
+        supabase.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+      }
+    }
+  } catch (err) {
+    v2Error = err instanceof Error ? err.message : String(err)
+  }
+
+  // ── v2 pipeline log ────────────────────────────────────────────────────────
+  // Log each metric's sync result for the pipeline monitoring dashboard
+  const syncEnd = Date.now()
+  const v2Metrics = [...new Set(v2Rows.map(r => r.codigo_indicador))]
+  for (const codigo of v2Metrics) {
+    const metricRows = v2Rows.filter(r => r.codigo_indicador === codigo)
+    supabase.from('v2_indicadores_pipeline_log').insert({
+      codigo_indicador: codigo,
+      estado: v2Error ? 'error' : 'ok',
+      filas_persistidas: metricRows.length,
+      duracion_ms: syncEnd - start,
+      errores: v2Error ? { message: v2Error } : null,
+    }).then(() => {})
+
+    // Update pipeline status
+    supabase.from('v2_indicadores_pipeline')
+      .update({
+        ultima_ejecucion: new Date().toISOString(),
+        ultima_ejecucion_estado: v2Error ? 'error' : 'ok',
+        ultima_ejecucion_mensaje: v2Error ?? `${metricRows.length} filas`,
+      })
+      .eq('codigo_indicador', codigo)
+      .then(() => {})
+  }
+
   return Response.json({
     ok: true,
     synced_at: new Date().toISOString(),
     upserted:  rows.length,
     regions:   [...new Set(rows.map(r => r.region_id))].length,
     errors:    errors.length > 0 ? errors : undefined,
+    v2: { upserted: v2Upserted, error: v2Error },
   })
 }
 

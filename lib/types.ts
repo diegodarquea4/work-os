@@ -253,3 +253,137 @@ export const PREGO_ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: str
   completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
   bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
 }
+
+// ── v2 Types ────────────────────────────────────────────────────────────────
+// New data model for the indicators/minutas reset.
+// v1 types above remain unchanged until cutover.
+
+export type V2Region = {
+  id: number           // 0=NAC, 1-16 (matches INE_CODE)
+  cod: string
+  nombre: string
+  capital: string | null
+  zona: string | null
+}
+
+export type V2Fuente = {
+  id: number
+  codigo: string
+  nombre: string
+  institucion: string | null
+  url_base: string | null
+  notas_metodologicas: string | null
+  ultima_publicacion: string | null
+  proxima_publicacion: string | null
+}
+
+export type V2Indicador = {
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  categoria: string
+  subcategoria: string | null
+  unidad: string
+  fuente_id: number | null
+  frecuencia_esperada: string
+  lower_is_better: boolean
+  comparable_temporalmente: boolean
+  nivel_territorial_min: string
+  nivel_criticidad: 'esencial' | 'complementario' | 'archivo'
+  aparece_en_ejecutiva: boolean
+  aparece_en_kit_viaje: boolean
+  aparece_en_ficha: boolean
+  orden_presentacion: number | null
+  vigente_desde: string | null
+  vigente_hasta: string | null
+  notas: string | null
+  // joined from v2_fuentes
+  fuente?: V2Fuente
+}
+
+export type V2CalidadDato = 'verificado' | 'preliminar' | 'calculado' | 'manual'
+
+export type V2IndicadorValor = {
+  id: number
+  codigo_indicador: string
+  region_id: number
+  valor: number | null
+  periodo: string            // ISO date YYYY-MM-DD
+  calidad: V2CalidadDato
+  fecha_publicacion_fuente: string | null
+  fecha_carga_sistema: string
+  cargado_por: string | null
+  notas: string | null
+}
+
+export type V2IndicadorUltimo = {
+  codigo_indicador: string
+  region_id: number
+  valor: number | null
+  periodo: string
+  calidad: string
+  fecha_carga_sistema: string
+}
+
+export type V2Iniciativa = {
+  id: number
+  codigo_iniciativa: string | null
+  region_id: number
+  eje_id: number | null
+  ministerio_id: number | null
+  nombre: string
+  descripcion: string | null
+  prioridad: 'Alta' | 'Media' | 'Baja' | null
+  etapa_actual: string | null
+  estado_planificacion: 'planificada' | 'en_marcha' | 'cerrada'
+  estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'sin_evaluar'
+  pct_avance: number
+  proximo_hito: string | null
+  fecha_proximo_hito: string | null
+  fuente_financiamiento: string | null
+  codigo_bip: string | null
+  inversion_mm_clp: number | null
+  comuna: string | null
+  responsable: string | null
+  fecha_apertura_monitoreo: string | null
+  cargado_por: string | null
+  fuente_origen: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type V2MinutaLog = {
+  id: number
+  region_id: number
+  tipo: 'ejecutiva' | 'kit_viaje' | 'ficha'
+  generado_por: string | null
+  generado_at: string
+  hash_pdf: string | null
+  parametros: Record<string, unknown> | null
+  duracion_ms: number | null
+}
+
+export type V2PipelineConfig = {
+  id: number
+  codigo_indicador: string
+  metodo: 'api_rest' | 'sdmx' | 'descarga' | 'scraping' | 'manual'
+  fuente_endpoint: string | null
+  cron_schedule: string | null
+  formato_origen: string | null
+  parser_module: string | null
+  ultima_ejecucion: string | null
+  ultima_ejecucion_estado: 'ok' | 'parcial' | 'error' | 'pendiente' | null
+  ultima_ejecucion_mensaje: string | null
+  tolerancia_atraso_dias: number
+  activo: boolean
+}
+
+export type V2PipelineLog = {
+  id: number
+  codigo_indicador: string
+  ejecutado_at: string
+  duracion_ms: number | null
+  estado: 'ok' | 'error' | 'sin_datos' | 'parcial' | 'schema_changed'
+  filas_persistidas: number
+  errores: Record<string, unknown> | null
+}
