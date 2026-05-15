@@ -787,9 +787,9 @@ export default function MinutaDocument({
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* V. ALERTAS Y RECOMENDACIONES                                        */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {(ai?.alertas_criticas?.length || ai?.recomendaciones?.length || sorted.some(p => p.estado_semaforo === 'rojo')) ? (
+        {(ai?.alertas_criticas?.length || sorted.some(p => p.estado_semaforo === 'rojo')) ? (
           <View>
-            <Text style={s.sectionTitle}>V.   Alertas y Recomendaciones</Text>
+            <Text style={s.sectionTitle}>V.   Alertas</Text>
 
             {ai?.alertas_criticas?.length ? (
               ai.alertas_criticas.map((alerta, i) => (
@@ -809,17 +809,6 @@ export default function MinutaDocument({
                 </View>
               ))
             )}
-
-            {ai?.recomendaciones?.length ? (
-              <View style={{ marginTop: 6 }}>
-                {ai.recomendaciones.map((rec, i) => (
-                  <View key={i} style={s.recRow}>
-                    <Text style={s.recMarker}>→</Text>
-                    <Text style={s.recText}>{rec}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
           </View>
         ) : null}
 

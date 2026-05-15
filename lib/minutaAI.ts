@@ -30,7 +30,7 @@ export type MinutaCompletaContent = {
   gps_narrativa: string                            // párrafo sobre inversión privada GPS
   avances_ejes: Record<string, EjeAvanceCompleto>  // un entry por eje presente en los datos
   alertas_criticas: string[]
-  recomendaciones: string[]
+  // recomendaciones: ELIMINADO — decisión cerrada #6 del documento rector
   tendencias?: {
     titulo: string   // "Evolución de indicadores clave"
     texto: string    // 3-4 oraciones sintetizando tendencias
@@ -341,7 +341,7 @@ export async function generateMinutaContent(
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 512,
-        system: `Eres redactor institucional del Ministerio del Interior de Chile. Escribe en tono formal, español de Chile. IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados. NO inventes características, cifras, detalles geográficos ni económicos que no estén explícitamente en los datos de referencia. Si un dato no está disponible, omítelo.`,
+        system: `Eres redactor técnico de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Tono formal, directo, español de Chile. Usa ÚNICAMENTE los datos proporcionados. NO inventes características, cifras ni detalles que no estén explícitamente en los datos. NO uses adjetivos valorativos. Si un dato no está disponible, omítelo. Cada cifra con fuente entre paréntesis.`,
         messages: [{
           role: 'user',
           content: `Redacta un párrafo introductorio de 3-4 oraciones para una Ficha Regional de la Región de ${regionNombre} (${fecha}). El párrafo debe contextualizar la ubicación geográfica, importancia estratégica y características principales de la región. Datos de referencia: ${metricsSnippet}\n\nResponde ÚNICAMENTE con un JSON válido (sin markdown):\n{"introduccion": "texto del párrafo"}`,
@@ -363,27 +363,31 @@ export async function generateMinutaContent(
 
   console.log(`[minutaAI] context length: ${context.length} chars (~${Math.round(context.length / 4)} tokens)`)
 
+  const AI_RULES = `
+REGLAS OBLIGATORIAS:
+1. Usa ÚNICAMENTE los datos proporcionados. NO inventes cifras, fechas, porcentajes ni nombres.
+2. NO recomiendes acciones, decisiones ni políticas. NO uses "debe", "debería", "se recomienda".
+3. NO atribuyas causas a un dato. NO proyectes consecuencias.
+4. NO compares entre periodos de gobierno (2018-2022 vs 2022-2026).
+5. NO uses adjetivos valorativos: "preocupante", "favorable", "estratégico", "alentador", "crítico", "robusto", "credibilidad".
+6. NO digas que un dato "refleja" o "evidencia" algo más allá de lo que mide.
+7. Tono: directo, seco, informativo. Estilo de minuta técnica. Cero literatura.
+8. Cada cifra debe tener fuente entre paréntesis: (INE-ENE), (CASEN 2024), (BCCh), (LeyStop).
+9. Si falta información, escribe con lo disponible sin fabricar datos.`
+
   const systemPrompt = tipo === 'ejecutiva'
-    ? `Eres el experto en coordinación territorial de la Región de ${regionNombre} del Ministerio del Interior y Seguridad Pública de Chile. Redacta contenido para una minuta ejecutiva de visita oficial. Usa tono formal institucional, español de Chile. Sé preciso, conciso y útil para el tomador de decisión.
+    ? `Eres redactor técnico de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Redacta contenido para una minuta ejecutiva de 2 páginas sobre la Región de ${regionNombre}. Tono formal institucional, español de Chile.
+${AI_RULES}`
+    : `Eres analista senior de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Redacta el Kit de Viaje Regional de la Región de ${regionNombre} — un briefing de 15 minutos de lectura para una autoridad que viaja a la región.
 
-Utiliza los datos de seguimiento reciente y tendencias de semáforo para contextualizar alertas con hechos, fechas y actores concretos. Si hay datos de comparación nacional, posiciona la región respecto al promedio país.
+Si se adjunta el Plan Regional de Gobierno, extrae los compromisos y objetivos estratégicos clave.
 
-IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes cifras, fechas, porcentajes ni nombres de iniciativas que no aparezcan explícitamente en los datos. Si falta información para un campo, escribe con lo disponible sin fabricar datos.`
-    : `Eres analista senior de la División de Coordinación Interregional del Ministerio del Interior y Seguridad Pública de Chile, experto en la Región de ${regionNombre}. Tu tarea es redactar el Kit de Viaje Regional — un documento de briefing que una autoridad (Ministro o Presidente) leerá antes de viajar a la región. Debe poder entender la región en 15 minutos de lectura.
-
-Si se adjunta el Plan Regional de Gobierno como documento, léelo en su TOTALIDAD. Extrae los compromisos presidenciales, objetivos estratégicos, metas y ejes prioritarios más importantes definidos en ese plan.
-
-ORIENTACIÓN DE ESCRITURA:
-- Escribe para un tomador de decisión que NO conoce la región en profundidad. Contextualiza cada dato.
-- Prioriza lo que la autoridad NECESITA saber: qué funciona, qué está mal, qué requiere su atención.
-- Utiliza la actividad reciente de seguimiento para contextualizar alertas con hechos, fechas y actores concretos.
-- Usa tendencias de semáforo para distinguir deterioro reciente de problemas crónicos.
-- Posiciona la región respecto al promedio nacional en cada indicador clave.
+ORIENTACIÓN:
+- Escribe para quien NO conoce la región. Contextualiza cada dato.
+- Prioriza lo que la autoridad necesita saber: qué funciona, qué no, qué requiere atención.
+- Posiciona la región respecto al promedio nacional en cada indicador.
 - Describe dirección y magnitud de cambios, no solo valores estáticos.
-
-Escribe párrafos sustanciales con datos concretos y cifras específicas. Tono formal e institucional, en español de Chile.
-
-IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes cifras, fechas, porcentajes, nombres de autoridades ni características regionales que no aparezcan explícitamente en los datos. Si un compromiso del Plan Regional no está disponible, indica que no se dispone del documento. Si falta información para una sección, escribe con lo disponible sin fabricar datos.`
+${AI_RULES}`
 
   const jsonSchema = tipo === 'ejecutiva'
     ? `{
@@ -427,9 +431,8 @@ IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes
   "avances_ejes": {
     ${ejes.map(e => `"${e}": {\n      "resumen": "2-3 oraciones sobre el estado general de este eje, sus logros más relevantes y los principales desafíos pendientes. Integrar información de seguimiento reciente si está disponible.",\n      "logros": ["Bullet específico con cifra concreta o hito alcanzado", "Bullet específico", "Bullet específico", "Bullet específico"]\n    }`).join(',\n    ')}
   },
-  "alertas_criticas": ["Alerta narrativa con contexto específico basado en seguimiento y tendencia de semáforo (máx 180 chars)", "Alerta 2"],
-  "cambios_periodo": ["Cambio relevante del periodo: qué iniciativa cambió de estado, qué hito se alcanzó o qué bloqueo surgió (máx 150 chars)", "Cambio 2", "Cambio 3"],
-  "recomendaciones": ["Recomendación accionable y específica para el gobierno central (máx 180 chars)", "Recomendación 2", "Recomendación 3"]
+  "alertas_criticas": ["Observación cuantitativa factual basada en seguimiento y tendencia de semáforo (máx 180 chars). Sin recomendaciones.", "Alerta 2"],
+  "cambios_periodo": ["Cambio relevante del periodo: qué iniciativa cambió de estado, qué hito se alcanzó o qué bloqueo surgió (máx 150 chars)", "Cambio 2", "Cambio 3"]
 }`
 
   const userContent: Anthropic.MessageParam['content'] = []
@@ -464,9 +467,63 @@ IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados en el contexto. NO inventes
     const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
     const parsed = JSON.parse(cleaned) as MinutaEjecutivaContent | MinutaCompletaContent
     console.log(`[minutaAI] ${tipo} content generated for ${regionNombre} (stop_reason: ${response.stop_reason})`)
+
+    // ── QA check ──
+    const qaResult = runQA(parsed)
+    if (!qaResult.pass) {
+      console.warn(`[minutaAI] QA failed for ${regionNombre} (${tipo}): ${qaResult.issues.join('; ')}`)
+      // Strip offending fields rather than returning null
+      if ('recomendaciones' in parsed) delete (parsed as Record<string, unknown>).recomendaciones
+    }
+
     return parsed
   } catch (err) {
     console.error(`[minutaAI] Failed to generate ${tipo} content for ${regionNombre}:`, err)
     return null
   }
+}
+
+// ── QA System ────────────────────────────────────────────────────────────────
+
+const BLACKLIST = [
+  'preocupante', 'favorable', 'credibilidad', 'debe', 'debería',
+  'estratégico', 'se juega', 'refleja un', 'evidencia un', 'alentador',
+  'crítico', 'robusto', 'se recomienda', 'exigir', 'diferenciador',
+]
+
+/** Recursively extract all string values from an object */
+function extractStrings(obj: unknown): string[] {
+  if (typeof obj === 'string') return [obj]
+  if (Array.isArray(obj)) return obj.flatMap(extractStrings)
+  if (obj && typeof obj === 'object') return Object.values(obj).flatMap(extractStrings)
+  return []
+}
+
+function runQA(content: unknown): { pass: boolean; issues: string[] } {
+  const issues: string[] = []
+  const allText = extractStrings(content)
+  const fullText = allText.join(' ').toLowerCase()
+
+  // 1. Blacklist check
+  for (const word of BLACKLIST) {
+    if (fullText.includes(word.toLowerCase())) {
+      issues.push(`Blacklist: "${word}" encontrado`)
+    }
+  }
+
+  // 2. Check for recommendation patterns
+  const recPatterns = [/\bse\s+debe\b/i, /\bse\s+recomienda\b/i, /\bexigir\s+a\b/i, /\bes\s+necesario\s+que\b/i]
+  for (const pat of recPatterns) {
+    if (pat.test(fullText)) {
+      issues.push(`Patrón de recomendación: ${pat.source}`)
+    }
+  }
+
+  // 3. Currency format check (invalid patterns)
+  const badCurrency = /USD\s+[\d.]+\.[\d.]+\.[\d.]+ MM/
+  if (badCurrency.test(allText.join(' '))) {
+    issues.push('Formato moneda inválido detectado')
+  }
+
+  return { pass: issues.length === 0, issues }
 }
