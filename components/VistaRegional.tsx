@@ -18,6 +18,7 @@ import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
 
 const IndicadoresModal = dynamic(() => import('./IndicadoresModal'))
+const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
   const [selectedCod, setSelectedCod] = useState<string | null>(null)
   const [indicadoresOpen, setIndicadoresOpen] = useState(false)
+  const [useV2, setUseV2] = useState(true) // v2 dashboard by default
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
@@ -425,7 +427,9 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
         {/* IndicadoresModal — self-contained overlay */}
         {indicadoresOpen && region && (
-          <IndicadoresModal region={region} onClose={() => setIndicadoresOpen(false)} />
+          useV2
+            ? <IndicadoresModalV2 region={region} onClose={() => setIndicadoresOpen(false)} />
+            : <IndicadoresModal region={region} onClose={() => setIndicadoresOpen(false)} />
         )}
 
         {/* Region selector */}
@@ -784,16 +788,16 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             />
             <MetricCard
               title="PIB Regional"
-              subtitle="BCCh trimestral"
-              value={pibPctNacional !== null ? `${pibPctNacional.toFixed(1)}% del PIB nacional` : lastPib ? `$${Math.round(lastPib.value).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
-              valueNote={pibPctNacional !== null && lastPib ? `$${Math.round(lastPib.value).toLocaleString('es-CL')} MM CLP` : undefined}
-              trend={lastPib && prevPib ? ((lastPib.value - prevPib.value) / prevPib.value) * 100 : null}
-              trendLabel="var. trim."
-              trendSuffix="%"
+              subtitle="BCCh · Anual"
+              value={regionMetrics?.pct_pib_nacional != null ? `${regionMetrics.pct_pib_nacional.toFixed(1)}% del PIB nacional` : regionMetrics?.pib_regional != null ? `$${Math.round(regionMetrics.pib_regional).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
+              valueNote={regionMetrics?.pib_regional != null ? `$${Math.round(regionMetrics.pib_regional).toLocaleString('es-CL')} MM CLP` : undefined}
+              trend={null}
+              trendLabel=""
+              trendSuffix=""
               trendDown={false}
               sparkData={pibSeries?.data.slice(-6).map(d => d.value)}
               sparkColor="#3B82F6"
-              period={lastPib?.period}
+              period={undefined}
               ranking={pibRank}
             />
             <MetricCard
