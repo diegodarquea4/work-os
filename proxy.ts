@@ -43,7 +43,16 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/pib-sync')      ||
     pathname.startsWith('/api/pib-discover')  ||
     pathname.startsWith('/api/stop-sync')     ||
-    pathname.startsWith('/api/external-sync')
+    pathname.startsWith('/api/external-sync') ||
+    pathname.startsWith('/api/sinca-sync')   ||
+    pathname.startsWith('/api/cne-sync')     ||
+    pathname.startsWith('/api/deis-sync')    ||
+    pathname.startsWith('/api/dipres-sync')  ||
+    pathname.startsWith('/api/mineduc-sync') ||
+    pathname.startsWith('/api/subtel-sync')  ||
+    pathname.startsWith('/api/mercadopublico-sync') ||
+    pathname.startsWith('/api/seed-fase3')   ||
+    pathname.startsWith('/api/v2/')
 
   if (!user && !isLoginPage && !isAuthCallback && !isCronRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
