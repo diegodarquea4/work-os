@@ -79,3 +79,8 @@ ECO_PIB_FINANCIERO,PIB sector servicios financieros,Economía,PIB sectorial,MM C
 ECO_PIB_VIVIENDA,PIB sector propiedad de vivienda,Economía,PIB sectorial,MM CLP nom. 2018,BCCH_CCNN,anual,false,true,complementario,false,false,false,
 ECO_PIB_SERV_PERS,PIB sector servicios personales,Economía,PIB sectorial,MM CLP nom. 2018,BCCH_CCNN,anual,false,true,complementario,false,false,false,
 ECO_PIB_ADM_PUB,PIB sector administración pública,Economía,PIB sectorial,MM CLP nom. 2018,BCCH_CCNN,anual,false,true,complementario,false,false,false,
+AMB_MP25,Material particulado PM2.5 (promedio regional),Ambiente,Calidad del aire,µg/m³,SINCA_MMA,diario,true,true,esencial,false,true,true,Promedio de estaciones de monitoreo SINCA
+AMB_MP10,Material particulado PM10 (promedio regional),Ambiente,Calidad del aire,µg/m³,SINCA_MMA,diario,true,true,complementario,false,true,true,Promedio de estaciones de monitoreo SINCA
+ENE_CAP_INSTALADA,Capacidad instalada de generación,Energía,,MW,CNE_API,mensual,false,true,complementario,false,true,true,Suma potencia neta MW por región
+ENE_ERNC_PCT,Porcentaje ERNC en capacidad instalada,Energía,,%,CNE_API,mensual,false,true,esencial,false,true,true,% de capacidad instalada clasificada como ERNC
+ECO_COMPRAS_PUB,Compras públicas adjudicadas,Economía,,MM CLP,CHILECOMPRA,anual,false,true,complementario,false,true,true,Monto total órdenes de compra por región

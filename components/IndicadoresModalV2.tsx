@@ -469,7 +469,7 @@ function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color,
 
   return (
     <div className="space-y-6">
-      <KpiGrid codigos={['ECO_PCT_PIB', 'ECO_PIB_SNAP', 'ECO_VENTAS_REG', 'ECO_VAR_IA']}
+      <KpiGrid codigos={['ECO_PCT_PIB', 'ECO_PIB_SNAP', 'ECO_VENTAS_REG', 'ECO_VAR_IA', 'ECO_INV_PUB', 'ECO_INV_FNDR', 'ECO_COMPRAS_PUB']}
         indicadores={indicadores} accentColor={color} />
 
       {/* PIB chart + ranking */}
@@ -626,13 +626,21 @@ function AmbienteTab({ indicadores, allRegionsUltimos, regionId, color }: TabPro
         <KpiGrid codigos={['GEO_SUP_KM2', 'GEO_PCT_TERR', 'AMB_PROTEGIDA']}
           indicadores={indicadores} accentColor={color} cols={3} />
       </Section>
+      <Section title="Calidad del aire" subtitle="Promedio estaciones SINCA" badge="SINCA/MMA" color="#ef4444">
+        <KpiGrid codigos={['AMB_MP25', 'AMB_MP10']}
+          indicadores={indicadores} accentColor="#ef4444" cols={2} />
+      </Section>
+      <Section title="Energía" subtitle="Capacidad instalada y renovables" badge="CNE" color="#f59e0b">
+        <KpiGrid codigos={['ENE_CAP_INSTALADA', 'ENE_ERNC_PCT']}
+          indicadores={indicadores} accentColor="#f59e0b" cols={2} />
+      </Section>
       <Section title="Conectividad" subtitle="Acceso a internet y aislamiento" badge="Censo 2024" color="#0ea5e9">
         <KpiGrid codigos={['CON_INTERNET']}
           indicadores={indicadores} accentColor="#0ea5e9" />
       </Section>
 
-      <Section title="Comparación regional" subtitle="Conectividad en las 16 regiones" color="#6b7280">
-        <ComparisonTable codigos={['CON_INTERNET', 'AMB_PROTEGIDA', 'GEO_SUP_KM2']}
+      <Section title="Comparación regional" subtitle="Ambiente y energía en las 16 regiones" color="#6b7280">
+        <ComparisonTable codigos={['AMB_MP25', 'ENE_ERNC_PCT', 'CON_INTERNET', 'AMB_PROTEGIDA']}
           indicadores={indicadores} allRegionsUltimos={allRegionsUltimos} regionId={regionId} />
       </Section>
     </div>

@@ -5,6 +5,13 @@
     { "path": "/api/mop-sync",  "schedule": "0 9 * * 1" },
     { "path": "/api/pib-sync",  "schedule": "0 11 * * 1" },
     { "path": "/api/stop-sync",      "schedule": "0 10 * * 3" },
-    { "path": "/api/external-sync", "schedule": "0 12 * * 1" }
+    { "path": "/api/external-sync", "schedule": "0 12 * * 1" },
+    { "path": "/api/sinca-sync",   "schedule": "0 6 * * *" },
+    { "path": "/api/cne-sync",     "schedule": "0 13 * * 1" },
+    { "path": "/api/deis-sync",    "schedule": "0 14 1 * *" },
+    { "path": "/api/subtel-sync",  "schedule": "0 15 1 1,7 *" },
+    { "path": "/api/dipres-sync",  "schedule": "0 16 5 1,4,7,10 *" },
+    { "path": "/api/mineduc-sync", "schedule": "0 14 15 3 *" },
+    { "path": "/api/mercadopublico-sync", "schedule": "0 15 5 1,7 *" }
   ]
 }
