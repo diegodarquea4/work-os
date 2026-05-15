@@ -8,7 +8,7 @@ import type { FichaRegionalContent, LeystopMinuta } from '@/lib/minutaAI'
 // ── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: {
-    fontFamily: 'Helvetica',
+    fontFamily: 'Carlito',
     fontSize: 10,
     color: '#111',
     paddingTop: 50,
@@ -16,12 +16,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 56,
   },
   headerBlock: { alignItems: 'center', marginBottom: 20 },
-  headerLine: { fontSize: 10, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', marginBottom: 2 },
-  headerOrg: { fontSize: 10, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginBottom: 1 },
+  headerLine: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', marginBottom: 2 },
+  headerOrg: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textAlign: 'center', marginBottom: 1 },
   headerOrgSub: { fontSize: 10, textAlign: 'center', marginBottom: 8 },
-  headerTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', textAlign: 'center', marginBottom: 14 },
+  headerTitle: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', textAlign: 'center', marginBottom: 14 },
   intro: { fontSize: 10, lineHeight: 1.6, textAlign: 'justify', marginBottom: 16 },
-  sectionHead: { fontSize: 10, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', marginTop: 12, marginBottom: 6 },
+  sectionHead: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', marginTop: 12, marginBottom: 6 },
   item: { flexDirection: 'row', marginBottom: 4, paddingLeft: 24 },
   itemNum: { width: 20, fontSize: 10 },
   itemText: { flex: 1, fontSize: 10, lineHeight: 1.5 },

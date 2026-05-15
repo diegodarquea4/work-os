@@ -67,7 +67,7 @@ function arcPath(cx: number, cy: number, r: number, a1: number, a2: number): str
 // ── Stylesheet ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: {
-    fontFamily: 'Helvetica', fontSize: 9,
+    fontFamily: 'Carlito', fontSize: 9,
     color: C.textDark, backgroundColor: C.white, paddingBottom: 34,
   },
 
@@ -78,17 +78,17 @@ const s = StyleSheet.create({
     borderBottomWidth: 1.5, borderBottomColor: '#c0c0c0', marginBottom: 14,
   },
   phOrg:    { fontSize: 7,  color: C.textLight },
-  phBold:   { fontSize: 8,  fontFamily: 'Helvetica-Bold', color: C.navy },
+  phBold:   { fontSize: 8,  fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
   phR:      { alignItems: 'flex-end' },
-  phRegion: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.navy },
+  phRegion: { fontSize: 13, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
   phDate:   { fontSize: 8,  color: C.textLight },
   phChip:   { backgroundColor: C.navy, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 2, marginTop: 3 },
-  phChipTx: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.white, letterSpacing: 0.5 },
+  phChipTx: { fontSize: 6.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white, letterSpacing: 0.5 },
 
   // Section headers
   sh:    { backgroundColor: C.greenHdr,  paddingVertical: 4, paddingHorizontal: 8, marginBottom: 7 },
   sho:   { backgroundColor: C.orangeHdr, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 7 },
-  shTxt: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white },
+  shTxt: { fontSize: 9, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white },
 
   // Layout
   body: { paddingHorizontal: 22 },
@@ -100,23 +100,23 @@ const s = StyleSheet.create({
   bl:    { flexDirection: 'row', marginBottom: 5 },
   blDot: { width: 12, flexShrink: 0, color: C.textMid },
   blTxt: { flex: 1, fontSize: 9, lineHeight: 1.5 },
-  blBold:{ fontFamily: 'Helvetica-Bold' },
-  boldSub: { fontSize: 9, fontFamily: 'Helvetica-Bold', marginBottom: 6, marginTop: 1 },
+  blBold:{ fontFamily: 'Carlito', fontWeight: 'bold' },
+  boldSub: { fontSize: 9, fontFamily: 'Carlito', fontWeight: 'bold', marginBottom: 6, marginTop: 1 },
 
   // Stat boxes (right col)
   statRow: { flexDirection: 'row', gap: 4, marginBottom: 10 },
   statBox: { flex: 1, alignItems: 'center', paddingVertical: 5, borderWidth: 0.5, borderColor: C.border, borderRadius: 2 },
-  statN:   { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.navy },
-  statNR:  { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.red   },
-  statNA:  { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.amber },
-  statNV:  { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.verde },
-  statNGr: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.gris  },
+  statN:   { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
+  statNR:  { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: C.red   },
+  statNA:  { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: C.amber },
+  statNV:  { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: C.verde },
+  statNGr: { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: C.gris  },
   statL:   { fontSize: 6.5, color: C.textLight, textAlign: 'center', marginTop: 1 },
 
   // Donut center overlay
   dc:    { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  dcPct: { fontSize: 11, fontFamily: 'Helvetica-Bold' },
-  dcN:   { fontSize: 20, fontFamily: 'Helvetica-Bold', color: C.navy },
+  dcPct: { fontSize: 11, fontFamily: 'Carlito', fontWeight: 'bold' },
+  dcN:   { fontSize: 20, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
   dcSub: { fontSize: 7.5, color: C.textLight },
 
   // Legend
@@ -126,24 +126,24 @@ const s = StyleSheet.create({
 
   // Metrics table (right col)
   mTitle: {
-    fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.textDark,
+    fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark,
     marginTop: 8, marginBottom: 4,
     borderBottomWidth: 0.5, borderBottomColor: C.border, paddingBottom: 2,
   },
   mRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2.5, borderBottomWidth: 0.5, borderBottomColor: '#eeeeee' },
   mLbl:  { fontSize: 7.5, color: C.textMid },
-  mVal:  { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.navy },
+  mVal:  { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
 
   // Tables (page 2)
   tHdr:    { flexDirection: 'row', backgroundColor: '#e2e2e2', paddingVertical: 3.5, paddingHorizontal: 5, marginTop: 4 },
-  tHdrTxt: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#222' },
+  tHdrTxt: { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: '#222' },
   tRow:    { flexDirection: 'row', paddingVertical: 3.5, paddingHorizontal: 5, borderBottomWidth: 0.5, borderBottomColor: '#e8e8e8' },
   tRowAlt: { backgroundColor: '#f8f8f8' },
   tTxt:    { fontSize: 7.5, color: '#333' },
 
   // GPS side-by-side
   gpsRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  gpsSub: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.textDark, marginBottom: 4 },
+  gpsSub: { fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark, marginBottom: 4 },
 
   // AI highlight box
   aiBox: {
@@ -166,8 +166,8 @@ function PH({ region, fecha }: { region: Region; fecha: string }) {
     <View style={s.ph}>
       <View>
         <Text style={s.phOrg}>República de Chile</Text>
-        <Text style={s.phBold}>Ministerio del Interior y Seguridad Pública</Text>
-        <Text style={s.phOrg}>División de Coordinación Interregional</Text>
+        <Text style={s.phBold}>Ministerio del Interior</Text>
+        <Text style={s.phOrg}>División de Coordinación Interministerial</Text>
       </View>
       <View style={s.phR}>
         <Text style={s.phRegion}>{regionLabel(region)}</Text>
@@ -243,7 +243,7 @@ function DonutChart({ rojo, ambar, verde, gris }: { rojo: number; ambar: number;
           <Text style={[s.dcPct, { color: domColor }]}>{domPct}%</Text>
           <Text style={s.dcN}>{total}</Text>
           <Text style={s.dcSub}>iniciativas</Text>
-          <Text style={[s.dcSub, { color: C.verde, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>
+          <Text style={[s.dcSub, { color: C.verde, fontFamily: 'Carlito', fontWeight: 'bold', fontSize: 8 }]}>
             {verdePct}% verde
           </Text>
         </View>
@@ -260,8 +260,8 @@ function EjeChart({ projects }: { projects: Iniciativa[] }) {
     <View>
       {/* Column labels */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-        <Text style={{ width: 110, fontSize: 6.5, color: C.textLight, fontFamily: 'Helvetica-Bold' }}>EJE REGIONAL</Text>
-        <Text style={{ width: 130, fontSize: 6.5, color: C.textLight, fontFamily: 'Helvetica-Bold', textAlign: 'center' }}>DISTRIBUCIÓN SEMÁFORO</Text>
+        <Text style={{ width: 110, fontSize: 6.5, color: C.textLight, fontFamily: 'Carlito', fontWeight: 'bold' }}>EJE REGIONAL</Text>
+        <Text style={{ width: 130, fontSize: 6.5, color: C.textLight, fontFamily: 'Carlito', fontWeight: 'bold', textAlign: 'center' }}>DISTRIBUCIÓN SEMÁFORO</Text>
         <Text style={{ width: 22, fontSize: 6.5, color: C.textLight, textAlign: 'right' }}>N°</Text>
         <Text style={{ width: 28, fontSize: 6.5, color: C.verde, textAlign: 'right' }}>Verde</Text>
       </View>
@@ -394,7 +394,7 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
             <View style={s.colR}>
               {total > 0 && (
                 <View>
-                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Carlito', fontWeight: 'bold', marginBottom: 2 }}>
                     Estado de Avance Iniciativas Plan Región
                   </Text>
                   <Text style={{ fontSize: 8, color: C.textMid, marginBottom: 8 }}>
@@ -455,7 +455,7 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
         </View>
 
         <View style={s.foot} fixed>
-          <Text style={s.footTxt}>División de Coordinación Interregional — Ministerio del Interior y Seguridad Pública</Text>
+          <Text style={s.footTxt}>División de Coordinación Interministerial — Ministerio del Interior</Text>
           <Text style={s.footTxt} render={({ pageNumber, totalPages }) => `${fecha}  ·  Página ${pageNumber} de ${totalPages}`} />
         </View>
       </Page>
@@ -573,7 +573,7 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
         </View>
 
         <View style={s.foot} fixed>
-          <Text style={s.footTxt}>División de Coordinación Interregional — Ministerio del Interior y Seguridad Pública</Text>
+          <Text style={s.footTxt}>División de Coordinación Interministerial — Ministerio del Interior</Text>
           <Text style={s.footTxt} render={({ pageNumber, totalPages }) => `${fecha}  ·  Minuta Ejecutiva  ·  Página ${pageNumber} de ${totalPages}`} />
         </View>
       </Page>

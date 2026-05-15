@@ -19,6 +19,32 @@ import { join } from 'path'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_INVERSE } from '@/lib/regions'
 
+// ── v2 mapping: Census fields → v2 indicator codes ──────────────────────────
+// Only maps computed census fields that the external-sync calculates (pct_*, etc.)
+const CENSUS_V2_MAP: Record<string, string> = {
+  poblacion_total:          'DEM_POB_TOTAL',
+  pct_hombres:              'DEM_PCT_HOMBRES',
+  pct_mujeres:              'DEM_PCT_MUJERES',
+  pct_inmigrantes:          'DEM_PCT_INMIGRANTES',
+  pct_indigena:             'DEM_PCT_INDIGENA',
+  n_inmigrantes:            'DEM_N_INMIGRANTES',
+  n_pueblos_orig:           'DEM_N_PUEBLOS_ORIG',
+  prom_edad:                'DEM_PROM_EDAD',
+  pct_edad_60_mas:          'DEM_PCT_60MAS',
+  anios_escolaridad_promedio: 'EDU_ESCOLARIDAD',
+  n_discapacidad:           'DEM_N_DISCAPACIDAD',
+  n_ocupado:                'EMP_N_OCUP',
+  n_desocupado:             'EMP_N_DESOC',
+  n_deficit_cuantitativo:   'VIV_DEF_CUANT',
+  pct_hacinamiento:         'VIV_HACINAMIENTO',
+  pct_acceso_agua_publica:  'VIV_AGUA',
+  pct_hogares_internet:     'CON_INTERNET',
+  pct_internet_movil:       'CON_INT_MOVIL',
+  pct_internet_fijo:        'CON_INT_FIJO',
+  pct_jefatura_mujer:       'DEM_PCT_JEF_MUJER',
+  pct_educacion_superior:   'EDU_SUPERIOR',
+}
+
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
 export const maxDuration = 60
@@ -102,6 +128,66 @@ async function runSync() {
     }
     results.census = { regions_updated: censoCnt }
     console.log(`[external-sync] Censo: ${censoCnt} regiones actualizadas`)
+
+    // ── v2 dual-write: census → v2_indicadores_valores ──────────────────
+    try {
+      const v2Rows: { codigo_indicador: string; region_id: number; valor: number; periodo: string; calidad: string; cargado_por: string }[] = []
+      for (const [key, r] of Object.entries(datos)) {
+        const regionId = parseInt(key)
+        if (!INE_INVERSE[regionId]) continue
+
+        const safeDiv = (a: number | null | undefined, b: number | null | undefined, scale = 100) =>
+          a != null && b != null && b > 0 ? parseFloat(((a / b) * scale).toFixed(4)) : null
+
+        const computed: Record<string, number | null> = {
+          poblacion_total: r.n_per ?? null,
+          pct_hombres: safeDiv(r.n_hombres, r.n_per),
+          pct_mujeres: safeDiv(r.n_mujeres, r.n_per),
+          pct_inmigrantes: safeDiv(r.n_inmigrantes, r.n_per),
+          pct_indigena: safeDiv(r.n_pueblos_orig, r.n_per),
+          n_inmigrantes: r.n_inmigrantes ?? null,
+          n_pueblos_orig: r.n_pueblos_orig ?? null,
+          prom_edad: r.prom_edad ?? null,
+          pct_edad_60_mas: safeDiv(r.n_edad_60_mas, r.n_per),
+          anios_escolaridad_promedio: r.prom_escolaridad18 ?? null,
+          n_discapacidad: r.n_discapacidad ?? null,
+          n_ocupado: r.n_ocupado ?? null,
+          n_desocupado: r.n_desocupado ?? null,
+          n_deficit_cuantitativo: r.n_deficit_cuantitativo ?? null,
+          pct_hacinamiento: safeDiv(r.n_viv_hacinadas, r.n_vp_ocupada),
+          pct_acceso_agua_publica: safeDiv(r.n_fuente_agua_publica, r.n_vp_ocupada),
+          pct_hogares_internet: safeDiv(r.n_internet, r.n_hog),
+          pct_internet_movil: safeDiv(r.n_internet_movil ?? null, r.n_hog),
+          pct_internet_fijo: safeDiv(r.n_internet_fijo ?? null, r.n_hog),
+          pct_jefatura_mujer: safeDiv(r.n_jefatura_mujer, r.n_hog),
+          pct_educacion_superior: safeDiv(r.n_cine_terciaria_maestria_doctorado, r.n_per),
+        }
+
+        for (const [field, v2Code] of Object.entries(CENSUS_V2_MAP)) {
+          const val = computed[field]
+          if (val === null || val === undefined) continue
+          v2Rows.push({
+            codigo_indicador: v2Code,
+            region_id: regionId,
+            valor: val,
+            periodo: '2024-01-01',
+            calidad: 'verificado',
+            cargado_por: 'external-sync',
+          })
+        }
+      }
+
+      if (v2Rows.length > 0) {
+        for (let i = 0; i < v2Rows.length; i += 500) {
+          await sb.from('v2_indicadores_valores')
+            .upsert(v2Rows.slice(i, i + 500), { onConflict: 'codigo_indicador,region_id,periodo' })
+        }
+        sb.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+        console.log(`[external-sync] v2 census: ${v2Rows.length} valores`)
+      }
+    } catch (v2Err) {
+      console.error('[external-sync] v2 census error:', v2Err)
+    }
   } catch (err) {
     console.error('[external-sync] censo error:', err)
     results.census = { error: String(err) }

@@ -131,6 +131,25 @@ async function runSync() {
             errors.push(`${region.cod} offset=${offset}: Supabase: ${dbErr.message}`)
           } else {
             totalUpserted += pageRows.length
+            // v2 dual-write → v2_proyectos_inversion
+            const v2Rows = pageRows.map(r => ({
+              id: `seia_${r.id}`,
+              region_id: r.region_id,
+              sistema_origen: 'seia' as const,
+              nombre: r.nombre,
+              tipo: r.tipo,
+              estado: r.estado,
+              titular: r.titular,
+              etapa: null,
+              inversion: r.inversion_mm,
+              moneda: 'USD_MM' as const,
+              fecha_presentacion: r.fecha_presentacion,
+              url_ficha: r.url_ficha,
+              synced_at: r.synced_at,
+            }))
+            supabase.from('v2_proyectos_inversion')
+              .upsert(v2Rows, { onConflict: 'id' })
+              .then(({ error }) => { if (error) console.error('[seia-sync] v2:', error.message) })
           }
         }
 

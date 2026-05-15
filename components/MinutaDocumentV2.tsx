@@ -89,7 +89,7 @@ const C = {
 function createStyles(accent: string) {
   return StyleSheet.create({
     page: {
-      fontFamily: 'Helvetica', fontSize: 9, color: C.textDark,
+      fontFamily: 'Carlito', fontSize: 9, color: C.textDark,
       paddingTop: 32, paddingBottom: 52, paddingHorizontal: 44,
     },
 
@@ -98,7 +98,7 @@ function createStyles(accent: string) {
     headerLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     logoBar: { width: 5, height: 40, backgroundColor: accent },
     orgBlock: { justifyContent: 'center' },
-    orgBold:  { fontSize: 8, fontFamily: 'Helvetica-Bold', color: accent },
+    orgBold:  { fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: accent },
     orgLight: { fontSize: 7, color: C.textLight, marginTop: 1 },
     headerDate: { fontSize: 8, color: C.textLight, textAlign: 'right' },
     divider: { borderBottomWidth: 2, borderBottomColor: accent, marginBottom: 14 },
@@ -106,29 +106,29 @@ function createStyles(accent: string) {
     // ── Portada ──
     portadaBlock: { alignItems: 'center', marginBottom: 16 },
     portadaSupra: { fontSize: 7.5, color: C.textLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 },
-    portadaMain: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: accent, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 },
-    portadaSub: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.textDark, textAlign: 'center', marginBottom: 2 },
+    portadaMain: { fontSize: 15, fontFamily: 'Carlito', fontWeight: 'bold', color: accent, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 },
+    portadaSub: { fontSize: 11, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark, textAlign: 'center', marginBottom: 2 },
     portadaMeta: { fontSize: 8, color: C.textLight, textAlign: 'center' },
 
     // ── Stat boxes ──
     statRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
     statBox: { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 3, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center' },
-    statValue: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: accent },
+    statValue: { fontSize: 14, fontFamily: 'Carlito', fontWeight: 'bold', color: accent },
     statLabel: { fontSize: 7, color: C.textLight, textAlign: 'center', marginTop: 2 },
 
     // ── Resumen box ──
     resumenBox: { backgroundColor: C.lightBlue, borderLeftWidth: 3, borderLeftColor: accent, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 14 },
-    resumenLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: accent, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 3 },
+    resumenLabel: { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: accent, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 3 },
     resumenText: { fontSize: 9, color: C.textDark, lineHeight: 1.5, textAlign: 'justify' },
 
     // ── Section heading ──
-    sectionTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', color: accent, marginTop: 14, marginBottom: 7 },
+    sectionTitle: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', color: accent, marginTop: 14, marginBottom: 7 },
 
     // ── Sub sections ──
     subRow: { flexDirection: 'row', marginBottom: 9, paddingLeft: 4 },
-    subLetter: { width: 18, fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.textDark },
+    subLetter: { width: 18, fontSize: 9.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark },
     subContent: { flex: 1 },
-    subTitle: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.textDark, marginBottom: 2 },
+    subTitle: { fontSize: 9.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark, marginBottom: 2 },
     subText: { fontSize: 9, color: C.textMid, lineHeight: 1.55, textAlign: 'justify' },
 
     // ── Bullets ──
@@ -138,7 +138,7 @@ function createStyles(accent: string) {
 
     // ── Tables ──
     tHdr: { flexDirection: 'row', backgroundColor: accent, paddingVertical: 3, paddingHorizontal: 5 },
-    tHdrTxt: { color: C.white, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
+    tHdrTxt: { color: C.white, fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold' },
     tRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: C.border, paddingVertical: 2.5, paddingHorizontal: 5 },
     tRowAlt: { backgroundColor: C.bg },
     tRowTotal: { backgroundColor: '#e8eef5' },
@@ -151,7 +151,7 @@ function createStyles(accent: string) {
 
     // ── Eje header band ──
     ejeHeader: { backgroundColor: accent, paddingVertical: 5, paddingHorizontal: 8, marginTop: 10 },
-    ejeHeaderText: { color: C.white, fontSize: 9, fontFamily: 'Helvetica-Bold' },
+    ejeHeaderText: { color: C.white, fontSize: 9, fontFamily: 'Carlito', fontWeight: 'bold' },
     ejeResumenBox: { backgroundColor: '#EEF3F8', paddingHorizontal: 8, paddingVertical: 5, marginBottom: 3 },
     ejeResumenText: { fontSize: 8.5, color: C.textMid, fontStyle: 'italic', lineHeight: 1.5 },
 
@@ -166,15 +166,15 @@ function createStyles(accent: string) {
 
     // ── Alertas ──
     alertRow: { flexDirection: 'row', marginBottom: 4, paddingLeft: 4 },
-    alertMarker: { width: 14, fontSize: 9, color: C.alertRed, fontFamily: 'Helvetica-Bold' },
+    alertMarker: { width: 14, fontSize: 9, color: C.alertRed, fontFamily: 'Carlito', fontWeight: 'bold' },
     alertText: { flex: 1, fontSize: 9, color: C.textMid },
     recRow: { flexDirection: 'row', marginBottom: 4, paddingLeft: 4 },
-    recMarker: { width: 14, fontSize: 9, color: C.recGreen, fontFamily: 'Helvetica-Bold' },
+    recMarker: { width: 14, fontSize: 9, color: C.recGreen, fontFamily: 'Carlito', fontWeight: 'bold' },
     recText: { flex: 1, fontSize: 9, color: C.textMid },
 
     // ── Annex ──
     annexColLabel: { flex: 1, fontSize: 8, color: C.textMid },
-    annexColValue: { width: '35%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.textDark, textAlign: 'right' },
+    annexColValue: { width: '35%', fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textDark, textAlign: 'right' },
 
     // ── Hitos ──
     hitosColNombre: { flex: 1, fontSize: 7.5, paddingRight: 4 },
@@ -190,7 +190,7 @@ function createStyles(accent: string) {
     footer: { position: 'absolute', bottom: 0, left: 0, right: 0 },
     footerBar: { height: 3, backgroundColor: accent },
     footerRedBar: { height: 3, backgroundColor: C.red },
-    footerBrand: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: accent, textAlign: 'center', letterSpacing: 1.5, paddingVertical: 3, backgroundColor: C.white },
+    footerBrand: { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: accent, textAlign: 'center', letterSpacing: 1.5, paddingVertical: 3, backgroundColor: C.white },
 
     placeholder: { fontSize: 8.5, color: C.textLight, fontStyle: 'italic' },
   })
@@ -329,8 +329,8 @@ export default function MinutaDocumentV2({
           <View style={s.headerLeft}>
             <View style={s.logoBar} />
             <View style={s.orgBlock}>
-              <Text style={s.orgBold}>Ministerio del Interior y Seguridad Pública</Text>
-              <Text style={s.orgLight}>División de Coordinación Interregional</Text>
+              <Text style={s.orgBold}>Ministerio del Interior</Text>
+              <Text style={s.orgLight}>División de Coordinación Interministerial</Text>
               <Text style={s.orgLight}>República de Chile</Text>
             </View>
           </View>
@@ -388,7 +388,7 @@ export default function MinutaDocumentV2({
               <Text style={[s.tColEje, s.tHdrTxt]}>Indicador</Text>
               <Text style={[s.tColPct, s.tHdrTxt, { textAlign: 'center' }]}>2018-2022</Text>
               <Text style={[s.tColPct, s.tHdrTxt, { textAlign: 'center' }]}>2022-2026</Text>
-              <Text style={[s.tColPct, s.tHdrTxt, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>Actual</Text>
+              <Text style={[s.tColPct, s.tHdrTxt, { textAlign: 'center', fontFamily: 'Carlito', fontWeight: 'bold' }]}>Actual</Text>
             </View>
             {periodMetrics.map((pm, i) => {
               const LABELS: Record<string, string> = {
@@ -398,10 +398,10 @@ export default function MinutaDocumentV2({
               }
               return (
                 <View key={pm.metric_name} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]}>
-                  <Text style={[s.tColEje, { fontFamily: 'Helvetica-Bold' }]}>{LABELS[pm.metric_name] ?? pm.metric_name}</Text>
+                  <Text style={[s.tColEje, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{LABELS[pm.metric_name] ?? pm.metric_name}</Text>
                   <Text style={[s.tColPct, { textAlign: 'center' }]}>{pm.period_2018 != null ? String(Math.round(pm.period_2018 * 10) / 10) : '—'}</Text>
                   <Text style={[s.tColPct, { textAlign: 'center' }]}>{pm.period_2022 != null ? String(Math.round(pm.period_2022 * 10) / 10) : '—'}</Text>
-                  <Text style={[s.tColPct, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{pm.current != null ? String(Math.round(pm.current * 10) / 10) : '—'}</Text>
+                  <Text style={[s.tColPct, { textAlign: 'center', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{pm.current != null ? String(Math.round(pm.current * 10) / 10) : '—'}</Text>
                 </View>
               )
             })}
@@ -449,7 +449,7 @@ export default function MinutaDocumentV2({
         {/* Tendencias + posición nacional (fusionadas) */}
         {ai?.tendencias?.texto && (
           <View style={{ backgroundColor: C.lightBlue, padding: 10, borderLeftWidth: 3, borderLeftColor: accent, marginBottom: 6, borderRadius: 2 }}>
-            <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: accent, marginBottom: 3 }}>{ai.tendencias.titulo ?? 'Evolución de indicadores clave'}</Text>
+            <Text style={{ fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: accent, marginBottom: 3 }}>{ai.tendencias.titulo ?? 'Evolución de indicadores clave'}</Text>
             <Text style={{ fontSize: 9, color: C.textDark, lineHeight: 1.5 }}>{ai.tendencias.texto}</Text>
           </View>
         )}
@@ -467,7 +467,7 @@ export default function MinutaDocumentV2({
             {autoridadGroups.flatMap(group =>
               group.items.map((a, i) => (
                 <View key={`${group.cargoLabel}-${i}`} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]}>
-                  <Text style={[{ flex: 1, fontSize: 7.5, fontFamily: 'Helvetica-Bold' }]}>
+                  <Text style={[{ flex: 1, fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold' }]}>
                     {i === 0 ? (a.territorio ? `${group.cargoLabel} ${a.territorio}` : group.cargoLabel) : (a.territorio ? `${group.cargoLabel} ${a.territorio}` : '')}
                   </Text>
                   <Text style={[{ flex: 1, fontSize: 7.5 }]}>
@@ -509,12 +509,12 @@ export default function MinutaDocumentV2({
               )
             })}
             <View style={[s.tRow, s.tRowTotal]}>
-              <Text style={[s.tColEje, { fontFamily: 'Helvetica-Bold' }]}>TOTAL</Text>
-              <Text style={[s.tColN, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{totalInit}</Text>
-              <Text style={[s.tColPct, { textAlign: 'center', fontFamily: 'Helvetica-Bold' }]}>{avgPct}%</Text>
-              <Text style={[s.tColR, { fontFamily: 'Helvetica-Bold' }]}>{totalRojo > 0 ? totalRojo : '—'}</Text>
-              <Text style={[s.tColA, { fontFamily: 'Helvetica-Bold' }]}>{totalAmbar > 0 ? totalAmbar : '—'}</Text>
-              <Text style={[s.tColV, { fontFamily: 'Helvetica-Bold' }]}>{totalVerde > 0 ? totalVerde : '—'}</Text>
+              <Text style={[s.tColEje, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>TOTAL</Text>
+              <Text style={[s.tColN, { textAlign: 'center', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{totalInit}</Text>
+              <Text style={[s.tColPct, { textAlign: 'center', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{avgPct}%</Text>
+              <Text style={[s.tColR, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{totalRojo > 0 ? totalRojo : '—'}</Text>
+              <Text style={[s.tColA, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{totalAmbar > 0 ? totalAmbar : '—'}</Text>
+              <Text style={[s.tColV, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{totalVerde > 0 ? totalVerde : '—'}</Text>
             </View>
           </View>
         )}
@@ -605,10 +605,10 @@ export default function MinutaDocumentV2({
           </View>
         )}
 
-        {/* ══════════ SECCIÓN VII — ALERTAS, CAMBIOS Y RECOMENDACIONES ══════════ */}
-        {(ai?.alertas_criticas?.length || ai?.cambios_periodo?.length || ai?.recomendaciones?.length || sorted.some(p => p.estado_semaforo === 'rojo')) && (
+        {/* ══════════ SECCIÓN VII — ALERTAS Y CAMBIOS DEL PERIODO ══════════ */}
+        {(ai?.alertas_criticas?.length || ai?.cambios_periodo?.length || sorted.some(p => p.estado_semaforo === 'rojo')) && (
           <View>
-            <Text style={s.sectionTitle}>Alertas y Recomendaciones</Text>
+            <Text style={s.sectionTitle}>Alertas y Cambios del Periodo</Text>
 
             {/* Alertas */}
             {ai?.alertas_criticas?.length ? (
@@ -630,24 +630,11 @@ export default function MinutaDocumentV2({
             {/* Cambios del periodo */}
             {ai?.cambios_periodo?.length ? (
               <View style={{ marginTop: 6 }}>
-                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: accent, marginBottom: 3 }}>Cambios del periodo</Text>
+                <Text style={{ fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: accent, marginBottom: 3 }}>Cambios del periodo</Text>
                 {ai.cambios_periodo.map((cambio, i) => (
                   <View key={i} style={{ flexDirection: 'row', marginBottom: 3, paddingLeft: 4 }}>
-                    <Text style={{ fontSize: 9, color: accent, marginRight: 6, fontFamily: 'Helvetica-Bold' }}>△</Text>
+                    <Text style={{ fontSize: 9, color: accent, marginRight: 6, fontFamily: 'Carlito', fontWeight: 'bold' }}>△</Text>
                     <Text style={{ fontSize: 9, color: C.textDark, lineHeight: 1.4, flex: 1 }}>{cambio}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {/* Recomendaciones */}
-            {ai?.recomendaciones?.length ? (
-              <View style={{ marginTop: 6 }}>
-                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.recGreen, marginBottom: 3 }}>Recomendaciones</Text>
-                {ai.recomendaciones.map((rec, i) => (
-                  <View key={i} style={s.recRow}>
-                    <Text style={s.recMarker}>→</Text>
-                    <Text style={s.recText}>{rec}</Text>
                   </View>
                 ))}
               </View>

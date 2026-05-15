@@ -2,6 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import path from 'path'
 import fs from 'fs'
+import { createHash } from 'crypto'
 import MinutaDocumentV2 from '@/components/MinutaDocumentV2'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
@@ -11,6 +12,7 @@ import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent } from '@/lib/minutaAI'
 import { getSupabaseColega } from '@/lib/supabaseColega'
+import { registerPdfFonts } from '@/lib/pdfFonts'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
 
@@ -433,6 +435,9 @@ export async function POST(request: Request) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
+  // Register Carlito font for all PDF renders
+  registerPdfFonts()
+
   let element: React.ReactElement
 
   if (tipo === 'ficha') {
@@ -468,8 +473,8 @@ export async function POST(request: Request) {
       mopProjects,
       fecha: body.fecha,
       aiContent,
-      autoridades,
-      periodMetrics,
+      autoridades: [],      // Eliminado: decisión v2 — tabla vacía
+      periodMetrics: [],    // Eliminado: decisión v2 — no comparar gobiernos
     })
   }
 
@@ -482,6 +487,20 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
   }
   const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : tipo === 'ficha' ? '-ficha' : ''
+
+  // Log to v2_minutas_log (no content stored — just metadata + hash)
+  if (sbRef) {
+    const regionId = INE_CODE[body.region.cod]
+    const tipoLog = tipo === 'completo' ? 'kit_viaje' : tipo
+    const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 16)
+    sbRef.from('v2_minutas_log').insert({
+      region_id: regionId,
+      tipo: tipoLog,
+      generado_por: authProfile.id,
+      hash_pdf: hash,
+      parametros: { fecha: body.fecha, force, ai: !!aiContent },
+    }).then(({ error }) => { if (error) console.error('[minuta] v2_minutas_log:', error.message) })
+  }
 
   return new Response(new Uint8Array(buffer), {
     status: 200,

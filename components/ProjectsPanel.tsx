@@ -8,7 +8,7 @@ import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { INE_CODE } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import IndicadoresModal from './IndicadoresModal'
+import IndicadoresModalV2 from './IndicadoresModalV2'
 import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
 import CollapsibleSection from './CollapsibleSection'
@@ -709,7 +709,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
       )}
 
       {indicadoresOpen && (
-        <IndicadoresModal
+        <IndicadoresModalV2
           region={region}
           onClose={() => setIndicadoresOpen(false)}
         />

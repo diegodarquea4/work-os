@@ -263,6 +263,26 @@ async function runSync() {
           errors.push(`${region.cod} upsert: ${dbErr.message}`)
         } else {
           totalUpserted += upsertRows.length
+          // v2 dual-write → v2_proyectos_inversion
+          const v2Rows = upsertRows.map(r => ({
+            id: `mop_${r.cod_p}`,
+            region_id: r.region_id,
+            sistema_origen: 'mop' as const,
+            nombre: r.nombre,
+            tipo: null,
+            estado: null,
+            titular: null,
+            servicio: r.servicio,
+            programa: r.programa,
+            etapa: r.etapa,
+            inversion: r.inversion_miles,
+            moneda: 'CLP_MILES' as const,
+            descripcion: r.descripcion,
+            synced_at: r.synced_at,
+          }))
+          supabase.from('v2_proyectos_inversion')
+            .upsert(v2Rows, { onConflict: 'id' })
+            .then(({ error }) => { if (error) console.error('[mop-sync] v2:', error.message) })
         }
       }
     } catch (e) {
