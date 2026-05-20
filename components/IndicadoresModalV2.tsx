@@ -283,63 +283,178 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
   allLeystop, leystopSemana, leystopHistory }: TabProps) {
   const desoc = indicadores.get('EMP_DESOC_TASA')
   const regionRow = allLeystop.find(r => INE_CODE[regionCod] === r.id_region) ?? null
+  const [selectedDelito, setSelectedDelito] = useState<string | null>(null)
 
-  // Security KPIs from LeyStop
+  // Extract unique delitos from history, sorted by total frequency
+  const allDelitos = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const week of leystopHistory) {
+      for (let i = 1; i <= 5; i++) {
+        const name = (week as Record<string, unknown>)[`mayor_registro_${i}`] as string | null
+        const n = (week as Record<string, unknown>)[`n_${i}`] as number | null
+        if (name) counts.set(name, (counts.get(name) ?? 0) + (n ?? 0))
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name]) => name)
+  }, [leystopHistory])
+
+  // Build WoW series for selected delito (or total cases)
+  const wowData = useMemo(() => {
+    const weeks = leystopHistory.slice(-16)
+    if (!selectedDelito) {
+      return weeks.map(w => ({ semana: w.fecha_hasta_iso, casos: w.casos_ultima_semana ?? 0 }))
+    }
+    return weeks.map(w => {
+      let count = 0
+      for (let i = 1; i <= 5; i++) {
+        if ((w as Record<string, unknown>)[`mayor_registro_${i}`] === selectedDelito) {
+          count = ((w as Record<string, unknown>)[`n_${i}`] as number) ?? 0
+          break
+        }
+      }
+      return { semana: w.fecha_hasta_iso, casos: count }
+    })
+  }, [leystopHistory, selectedDelito])
+
+  // Contextual KPIs for selected delito
+  const delitoKpis = useMemo(() => {
+    if (!selectedDelito || leystopHistory.length === 0) return null
+    const last = leystopHistory.at(-1)
+    if (!last) return null
+
+    // Current week count for this delito
+    let currentCount = 0
+    for (let i = 1; i <= 5; i++) {
+      if ((last as Record<string, unknown>)[`mayor_registro_${i}`] === selectedDelito) {
+        currentCount = ((last as Record<string, unknown>)[`n_${i}`] as number) ?? 0
+        break
+      }
+    }
+
+    // % of total
+    const pctTotal = last.casos_ultima_semana && last.casos_ultima_semana > 0
+      ? (currentCount / last.casos_ultima_semana) * 100 : 0
+
+    // Average last 4 weeks
+    const last4 = leystopHistory.slice(-4)
+    let sum4 = 0
+    for (const w of last4) {
+      for (let i = 1; i <= 5; i++) {
+        if ((w as Record<string, unknown>)[`mayor_registro_${i}`] === selectedDelito) {
+          sum4 += ((w as Record<string, unknown>)[`n_${i}`] as number) ?? 0
+          break
+        }
+      }
+    }
+    const avg4 = last4.length > 0 ? sum4 / last4.length : 0
+
+    // Trend vs 4 weeks ago
+    const prev = leystopHistory.at(-5)
+    let prevCount = 0
+    if (prev) {
+      for (let i = 1; i <= 5; i++) {
+        if ((prev as Record<string, unknown>)[`mayor_registro_${i}`] === selectedDelito) {
+          prevCount = ((prev as Record<string, unknown>)[`n_${i}`] as number) ?? 0
+          break
+        }
+      }
+    }
+    const trend = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : null
+
+    return { currentCount, pctTotal, avg4, trend }
+  }, [leystopHistory, selectedDelito])
+
+  // National avg tasa for comparison
   const validTasa = allLeystop.filter(r => r.tasa_registro != null)
   const avgTasa = validTasa.length > 0 ? validTasa.reduce((s, r) => s + (r.tasa_registro ?? 0), 0) / validTasa.length : null
-  const tasaRank = (() => {
-    if (!regionRow?.tasa_registro || validTasa.length === 0) return null
-    const sorted = [...validTasa].sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
-    const idx = sorted.findIndex(r => r.id_region === regionRow.id_region)
-    return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
-  })()
-
-  // Sparkline: last 12 weeks
-  const sparkData = leystopHistory.slice(-12).map(s => ({
-    period: s.fecha_hasta_iso,
-    tasa: s.tasa_registro ?? 0,
-  }))
-
-  // Ranking nacional
-  const rankingFlash = useMemo(() => {
-    return allLeystop.map(row => ({
-      nombre: row.nombre_region,
-      id_region: row.id_region,
-      casos: row.casos_ultima_semana,
-      var_sem: row.var_ultima_semana,
-      tasa: row.tasa_registro,
-      delito1: row.mayor_registro_1,
-    })).sort((a, b) => (b.tasa ?? 0) - (a.tasa ?? 0))
-  }, [allLeystop])
 
   return (
     <div className="space-y-6">
-      {/* 4 hero KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCardV2 ctx={desoc ?? { codigo: 'EMP_DESOC_TASA', nombre: 'Desocupación', valor: null, periodo: null, unidad: '%', calidad: 'verificado', edadDias: null, nacional: null, ranking: null, delta: null, deltaGood: null, fuente: 'INE-ENE', stale: false, catalogo: null, lowerIsBetter: true }} accentColor={color} />
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: regionRow?.casos_ultima_semana != null ? '#dc2626' : '#d1d5db' }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Casos última semana</p>
-          <p className="text-2xl font-bold text-gray-900">{regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</p>
-          <p className="text-[10px] text-gray-600 mt-1">{leystopSemana || 'LeyStop'}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.tasa_registro ?? 0) > (avgTasa ?? 0) ? '#dc2626' : '#16a34a' }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Tasa delictual</p>
-          <p className="text-2xl font-bold text-gray-900">{regionRow?.tasa_registro?.toFixed(0) ?? '—'}</p>
-          <p className="text-[10px] text-gray-600 mt-1">casos / 100k hab</p>
-          {avgTasa != null && <p className={`text-[10px] font-medium mt-1 ${(regionRow?.tasa_registro ?? 0) > avgTasa ? 'text-red-600' : 'text-green-600'}`}>Prom: {avgTasa.toFixed(0)}{tasaRank ? ` · ${tasaRank}` : ''}</p>}
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : '#16a34a' }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Var. semanal</p>
-          <p className={`text-2xl font-bold ${(regionRow?.var_ultima_semana ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {regionRow?.var_ultima_semana != null ? `${regionRow.var_ultima_semana > 0 ? '+' : ''}${regionRow.var_ultima_semana.toFixed(1)}%` : '—'}
-          </p>
-          <p className="text-[10px] text-gray-600 mt-1">vs semana anterior</p>
-        </div>
+      {/* Filtro por delito */}
+      <div className="flex flex-wrap gap-1.5">
+        <ToggleBtn active={selectedDelito === null} onClick={() => setSelectedDelito(null)}>Todos</ToggleBtn>
+        {allDelitos.map(d => (
+          <ToggleBtn key={d} active={selectedDelito === d} onClick={() => setSelectedDelito(d)}>
+            {d.length > 20 ? d.slice(0, 18) + '…' : d}
+          </ToggleBtn>
+        ))}
       </div>
 
-      {/* Seguridad: top 5 + sparkline */}
+      {/* 4 KPIs — contextual to filter */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {selectedDelito && delitoKpis ? (
+          <>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#dc2626' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Casos/sem</p>
+              <p className="text-2xl font-bold text-gray-900">{delitoKpis.currentCount.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-gray-600 mt-1">{selectedDelito}</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#6366f1' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">% del total</p>
+              <p className="text-2xl font-bold text-gray-900">{delitoKpis.pctTotal.toFixed(1)}%</p>
+              <p className="text-[10px] text-gray-600 mt-1">de todos los casos</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: delitoKpis.trend != null && delitoKpis.trend > 0 ? '#dc2626' : '#16a34a' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Tendencia</p>
+              <p className={`text-2xl font-bold ${delitoKpis.trend != null && delitoKpis.trend > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {delitoKpis.trend != null ? `${delitoKpis.trend > 0 ? '+' : ''}${delitoKpis.trend.toFixed(1)}%` : '—'}
+              </p>
+              <p className="text-[10px] text-gray-600 mt-1">vs 4 semanas atrás</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#d1d5db' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Prom. 4 sem</p>
+              <p className="text-2xl font-bold text-gray-900">{Math.round(delitoKpis.avg4).toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-gray-600 mt-1">casos/semana</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <KpiCardV2 ctx={desoc ?? { codigo: 'EMP_DESOC_TASA', nombre: 'Desocupación', valor: null, periodo: null, unidad: '%', calidad: 'verificado', edadDias: null, nacional: null, ranking: null, delta: null, deltaGood: null, fuente: 'INE-ENE', stale: false, catalogo: null, lowerIsBetter: true }} accentColor={color} />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: regionRow?.casos_ultima_semana != null ? '#dc2626' : '#d1d5db' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Casos última semana</p>
+              <p className="text-2xl font-bold text-gray-900">{regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</p>
+              <p className="text-[10px] text-gray-600 mt-1">{leystopSemana || 'LeyStop'}</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.tasa_registro ?? 0) > (avgTasa ?? 0) ? '#dc2626' : '#16a34a' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Tasa delictual</p>
+              <p className="text-2xl font-bold text-gray-900">{regionRow?.tasa_registro?.toFixed(0) ?? '—'}</p>
+              <p className="text-[10px] text-gray-600 mt-1">casos / 100k hab</p>
+              {avgTasa != null && <p className={`text-[10px] font-medium mt-1 ${(regionRow?.tasa_registro ?? 0) > avgTasa ? 'text-red-600' : 'text-green-600'}`}>Prom. nacional: {avgTasa.toFixed(0)}</p>}
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : '#16a34a' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Var. semanal</p>
+              <p className={`text-2xl font-bold ${(regionRow?.var_ultima_semana ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {regionRow?.var_ultima_semana != null ? `${regionRow.var_ultima_semana > 0 ? '+' : ''}${regionRow.var_ultima_semana.toFixed(1)}%` : '—'}
+              </p>
+              <p className="text-[10px] text-gray-600 mt-1">vs semana anterior</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* WoW Trend Chart */}
+      {wowData.length > 0 && (
+        <Section title={selectedDelito ? `Tendencia — ${selectedDelito}` : 'Tendencia — Total casos'} subtitle="Evolución semanal (últimas 16 semanas)" badge={leystopSemana ? `LeyStop · ${leystopSemana}` : 'LeyStop'} color={color}>
+          <ChartCard title={selectedDelito ?? 'Total DMCS'} unit="casos/semana" source="Fuente: LeyStop Carabineros">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={wowData} margin={{ top: 4, right: 8, left: -16, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="semana" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={2} />
+                <YAxis tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => v.toLocaleString('es-CL')} />
+                <Tooltip formatter={(v: unknown) => [`${Number(v).toLocaleString('es-CL')}`, 'Casos']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                <Line type="monotone" dataKey="casos" stroke={color} strokeWidth={2.5} dot={{ fill: color, r: 3 }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </Section>
+      )}
+
+      {/* Top 5 delitos + Operativa */}
       {regionRow && (
-        <Section title="Seguridad" subtitle="Top delitos, evolución tasa y actividad policial" badge={leystopSemana ? `LeyStop · ${leystopSemana}` : 'LeyStop'} color={color}>
+        <Section title="Seguridad" subtitle="Top delitos y actividad policial" badge={leystopSemana ? `LeyStop · ${leystopSemana}` : 'LeyStop'} color={color}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Top 5 delitos */}
             {(() => {
@@ -352,16 +467,16 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
               ].filter(d => d.nombre)
               const maxN = Math.max(...delitos.map(d => d.n ?? 0), 1)
               return (
-                <ChartCard title={`Top 5 delitos — ${regionRow.nombre_region}`}>
+                <ChartCard title={`Top 5 delitos — última semana`}>
                   <div className="space-y-3">
                     {delitos.map((d, i) => (
-                      <div key={i}>
+                      <div key={i} className="cursor-pointer hover:opacity-80" onClick={() => setSelectedDelito(d.nombre)}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-700 pr-4 truncate">{d.nombre}</span>
+                          <span className={`text-xs pr-4 truncate ${selectedDelito === d.nombre ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{d.nombre}</span>
                           <span className="text-xs font-bold text-gray-900 flex-shrink-0">{d.n?.toLocaleString('es-CL') ?? '—'}</span>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${((d.n ?? 0) / maxN) * 100}%`, backgroundColor: i === 0 ? color : '#86efac' }} />
+                          <div className="h-full rounded-full transition-colors" style={{ width: `${((d.n ?? 0) / maxN) * 100}%`, backgroundColor: selectedDelito === d.nombre ? color : i === 0 ? color : '#86efac' }} />
                         </div>
                       </div>
                     ))}
@@ -370,75 +485,29 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
               )
             })()}
 
-            {/* Sparkline tasa + actividad operativa */}
-            <ChartCard title="Evolución tasa delictual — últimas 12 semanas">
-              {sparkData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={sparkData} margin={{ top: 4, right: 8, left: -24, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="period" tickFormatter={fmtShortDate} tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" interval={2} />
-                    <YAxis tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(v: unknown) => [`${Number(v).toFixed(0)}`, 'Tasa']} labelFormatter={(l) => typeof l === 'string' ? fmtShortDate(l) : String(l)} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                    <Bar dataKey="tasa" fill={color} radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-600 text-center py-8">Sin histórico disponible</p>}
-              <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-3 gap-3">
+            {/* Actividad operativa */}
+            <ChartCard title="Actividad operativa — última semana">
+              <div className="grid grid-cols-2 gap-4 py-2">
                 <div className="text-center">
-                  <p className="text-lg font-bold text-gray-800">{num(regionRow.controles)}</p>
-                  <p className="text-[10px] text-gray-600 uppercase">Controles</p>
+                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.controles)}</p>
+                  <p className="text-[10px] text-gray-600 uppercase mt-1">Controles</p>
+                  <p className="text-[10px] text-gray-500">{num(regionRow.controles_identidad)} identidad · {num(regionRow.controles_vehicular)} vehicular</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-gray-800">{num(regionRow.fiscalizaciones)}</p>
-                  <p className="text-[10px] text-gray-600 uppercase">Fiscalizaciones</p>
+                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.fiscalizaciones)}</p>
+                  <p className="text-[10px] text-gray-600 uppercase mt-1">Fiscalizaciones</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-gray-800">{num((regionRow.incaut_fuego ?? 0) + (regionRow.incaut_blancas ?? 0))}</p>
-                  <p className="text-[10px] text-gray-600 uppercase">Incautaciones</p>
+                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.incautaciones)}</p>
+                  <p className="text-[10px] text-gray-600 uppercase mt-1">Incautaciones</p>
+                  <p className="text-[10px] text-gray-500">{num(regionRow.incaut_fuego)} fuego · {num(regionRow.incaut_blancas)} blancas</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.allanamientos_anno)}</p>
+                  <p className="text-[10px] text-gray-600 uppercase mt-1">Allanamientos (año)</p>
                 </div>
               </div>
             </ChartCard>
-          </div>
-        </Section>
-      )}
-
-      {/* Ranking Nacional */}
-      {rankingFlash.length > 0 && (
-        <Section title="Ranking Nacional" subtitle="16 regiones ordenadas por tasa delictual" badge="LeyStop" color={color}>
-          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-[#1a1a2e] text-white">
-                    <th className="text-left px-4 py-2.5 font-medium">#</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Región</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Casos/sem</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Var%</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Tasa</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Delito #1</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankingFlash.map((row, idx) => {
-                    const isActive = row.id_region === regionRow?.id_region
-                    return (
-                      <tr key={row.id_region}
-                        className={`border-b border-gray-50 hover:bg-blue-50 ${isActive ? 'bg-blue-50 font-semibold' : ''}`}
-                        style={isActive ? { borderLeft: '4px solid #3b82f6' } : {}}>
-                        <td className="px-4 py-2 text-gray-700">{idx + 1}</td>
-                        <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.nombre}</td>
-                        <td className="px-3 py-2 text-right text-gray-800">{num(row.casos)}</td>
-                        <td className={`px-3 py-2 text-right font-semibold ${(row.var_sem ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {row.var_sem != null ? `${row.var_sem > 0 ? '+' : ''}${row.var_sem.toFixed(1)}%` : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-800 font-medium">{row.tasa?.toFixed(0) ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate">{row.delito1 ?? '—'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
           </div>
         </Section>
       )}
