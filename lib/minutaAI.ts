@@ -509,6 +509,8 @@ ${fichaSchema}`,
     }
 
     try {
+      // ── PASS 1: Generate draft ──
+      const t0 = Date.now()
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
@@ -521,9 +523,53 @@ ${fichaRules}`,
       })
       const text = response.content.find(b => b.type === 'text')?.text ?? ''
       const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
-      const parsed = JSON.parse(cleaned) as FichaRegionalContent
-      console.log(`[minutaAI] Kit de Viaje generated for ${regionNombre}: ${Object.keys(parsed).length} fields`)
-      return parsed
+      const draft = JSON.parse(cleaned) as FichaRegionalContent
+      const t1 = Date.now()
+      console.log(`[minutaAI] Kit de Viaje DRAFT for ${regionNombre}: ${Object.keys(draft).length} fields (${t1 - t0}ms)`)
+
+      // ── PASS 2: Review & rewrite ──
+      // A second AI call reviews the draft against the source data and rewrites for quality.
+      const reviewResponse = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: `Eres editor senior de minutas ministeriales. Recibes un borrador de MINUTA REGIONAL y los datos fuente originales. Tu trabajo es revisar y REESCRIBIR el borrador completo para máxima calidad.
+
+CRITERIOS DE REVISIÓN:
+1. CONCISIÓN: Cada campo debe respetar su límite de oraciones. Si excede, recorta sin perder datos clave.
+2. NO REPETICIÓN: Si un párrafo repite cifras que ya aparecen en otro campo (ej: % edad ya está en el bullet de estructura etaria), elimina la repetición.
+3. PRECISIÓN: Verifica que las cifras del borrador coincidan con los datos fuente. Si hay discrepancia, usa el dato fuente.
+4. FORMATO: Los sub-items del PREGO deben comenzar con "En **tema en negrita**," (doble asterisco markdown).
+5. TONO: Formal, seco, técnico. Cero adjetivos valorativos. Cero recomendaciones.
+6. FUENTES: Cada cifra debe tener fuente entre paréntesis: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop).
+7. CLARIDAD: Si algo se puede mostrar más directo o claro, hazlo. Privilegia datos concretos sobre narrativa.
+
+Responde ÚNICAMENTE con el JSON completo reescrito (misma estructura, sin markdown, sin \`\`\`).`,
+        messages: [{
+          role: 'user',
+          content: `BORRADOR A REVISAR:
+${JSON.stringify(draft, null, 2)}
+
+DATOS FUENTE ORIGINALES:
+${dataContext}
+
+Revisa el borrador contra los datos fuente. Reescribe lo que sea necesario para maximizar concisión, precisión y claridad. Mantén la misma estructura JSON exacta.`,
+        }],
+      })
+      const reviewText = reviewResponse.content.find(b => b.type === 'text')?.text ?? ''
+      const reviewCleaned = reviewText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
+
+      let final: FichaRegionalContent
+      try {
+        final = JSON.parse(reviewCleaned) as FichaRegionalContent
+        const t2 = Date.now()
+        console.log(`[minutaAI] Kit de Viaje REVIEWED for ${regionNombre} (${t2 - t1}ms review, ${t2 - t0}ms total)`)
+      } catch {
+        // If review JSON parsing fails, use the draft
+        console.warn(`[minutaAI] Review parse failed for ${regionNombre}, using draft`)
+        final = draft
+      }
+
+      return final
     } catch (err) {
       console.error(`[minutaAI] Failed to generate Kit de Viaje for ${regionNombre}:`, err)
       return null
