@@ -753,29 +753,23 @@ function SeguridadTab({ indicadores, allRegionsUltimos, regionId, color }: TabPr
 }
 
 function AmbienteTab({ indicadores, allRegionsUltimos, regionId, color }: TabProps) {
+  // Only show indicators that have data
+  const allCodigos = ['GEO_SUP_KM2', 'GEO_PCT_TERR', 'AMB_PROTEGIDA', 'CON_INTERNET', 'AMB_MP25', 'AMB_MP10', 'ENE_CAP_INSTALADA', 'ENE_ERNC_PCT']
+  const withData = allCodigos.filter(c => indicadores.get(c)?.valor != null)
+  const compCodigos = ['CON_INTERNET', 'AMB_PROTEGIDA', 'AMB_MP25', 'ENE_ERNC_PCT'].filter(c => indicadores.get(c)?.valor != null)
+
   return (
     <div className="space-y-6">
-      <Section title="Territorio y medio ambiente" badge="Varias fuentes" color={color}>
-        <KpiGrid codigos={['GEO_SUP_KM2', 'GEO_PCT_TERR', 'AMB_PROTEGIDA']}
-          indicadores={indicadores} accentColor={color} cols={3} />
-      </Section>
-      <Section title="Calidad del aire" subtitle="Promedio estaciones SINCA" badge="SINCA/MMA" color="#ef4444">
-        <KpiGrid codigos={['AMB_MP25', 'AMB_MP10']}
-          indicadores={indicadores} accentColor="#ef4444" cols={2} />
-      </Section>
-      <Section title="Energía" subtitle="Capacidad instalada y renovables" badge="CNE" color="#f59e0b">
-        <KpiGrid codigos={['ENE_CAP_INSTALADA', 'ENE_ERNC_PCT']}
-          indicadores={indicadores} accentColor="#f59e0b" cols={2} />
-      </Section>
-      <Section title="Conectividad" subtitle="Acceso a internet y aislamiento" badge="Censo 2024" color="#0ea5e9">
-        <KpiGrid codigos={['CON_INTERNET']}
-          indicadores={indicadores} accentColor="#0ea5e9" />
+      <Section title="Territorio, ambiente y conectividad" badge="Varias fuentes" color={color}>
+        <KpiGrid codigos={withData} indicadores={indicadores} accentColor={color} />
       </Section>
 
-      <Section title="Comparación regional" subtitle="Ambiente y energía en las 16 regiones" color="#6b7280">
-        <ComparisonTable codigos={['AMB_MP25', 'ENE_ERNC_PCT', 'CON_INTERNET', 'AMB_PROTEGIDA']}
-          indicadores={indicadores} allRegionsUltimos={allRegionsUltimos} regionId={regionId} />
-      </Section>
+      {compCodigos.length > 0 && (
+        <Section title="Comparación regional" subtitle="16 regiones" color="#6b7280">
+          <ComparisonTable codigos={compCodigos}
+            indicadores={indicadores} allRegionsUltimos={allRegionsUltimos} regionId={regionId} />
+        </Section>
+      )}
     </div>
   )
 }
