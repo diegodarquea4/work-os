@@ -734,22 +734,18 @@ function SaludEduTab({ indicadores, allRegionsUltimos, regionId, color }: TabPro
 function SeguridadTab({ indicadores, allRegionsUltimos, regionId, color }: TabProps) {
   return (
     <div className="space-y-6">
-      <KpiGrid codigos={['SEG_VICTIMAS', 'SEG_DEL_100K', 'SEG_INSEG']}
-        indicadores={indicadores} accentColor={color} />
-      {['SEG_VICTIMAS', 'SEG_INSEG'].some(c => indicadores.get(c)?.catalogo?.comparable_temporalmente === false) && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
-          <p className="text-xs text-amber-800"><span className="font-semibold">Quiebre metodológico:</span> ENUSC 2022 no es comparable con versiones anteriores.</p>
-        </div>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <RankingTable codigo="SEG_DEL_100K" indicadores={indicadores} regionId={regionId}
-          allRegionsUltimos={allRegionsUltimos} label="Ranking tasa delitos / 100k" color={color} />
-        <RankingTable codigo="SEG_VICTIMAS" indicadores={indicadores} regionId={regionId}
-          allRegionsUltimos={allRegionsUltimos} label="Ranking hogares víctimas DMCS" color={color} />
-      </div>
+      <Section title="Encuesta Nacional de Seguridad Ciudadana" badge="ENUSC" color={color}>
+        <KpiGrid codigos={['SEG_VICTIMAS', 'SEG_DEL_100K', 'SEG_INSEG', 'SEG_DEN_100K']}
+          indicadores={indicadores} accentColor={color} />
+        {['SEG_VICTIMAS', 'SEG_INSEG'].some(c => indicadores.get(c)?.catalogo?.comparable_temporalmente === false) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mt-3">
+            <p className="text-xs text-amber-800"><span className="font-semibold">Quiebre metodológico:</span> ENUSC 2022 no es comparable con versiones anteriores.</p>
+          </div>
+        )}
+      </Section>
 
       <Section title="Comparación regional" subtitle="Seguridad en las 16 regiones" color="#6b7280">
-        <ComparisonTable codigos={['SEG_DEL_100K', 'SEG_VICTIMAS']}
+        <ComparisonTable codigos={['SEG_DEL_100K', 'SEG_VICTIMAS', 'SEG_INSEG']}
           indicadores={indicadores} allRegionsUltimos={allRegionsUltimos} regionId={regionId} />
       </Section>
     </div>
