@@ -194,7 +194,7 @@ function RankingTable({ codigo, indicadores, regionId, allRegionsUltimos, label,
                 <td className="px-3 py-2 text-gray-700 w-8">{row.rank}</td>
                 <td className="px-2 py-2 text-gray-900">{row.nombre}</td>
                 <td className="px-3 py-2 text-right text-gray-800 font-mono font-medium">
-                  {ctx?.unidad === '%' ? `${row.valor.toFixed(1)}%` : row.valor.toLocaleString('es-CL', { maximumFractionDigits: 1 })}
+                  {ctx?.unidad === '%' ? `${row.valor.toFixed(1)}%` : row.valor.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                 </td>
               </tr>
             ))}

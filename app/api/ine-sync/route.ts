@@ -317,6 +317,41 @@ async function runSync() {
         v2Upserted += batch.length
       }
 
+      // Recalculate ECO_PCT_PIB from latest annual PIB data
+      if (!v2Error) {
+        const pibAnualRows = v2Rows.filter(r => r.codigo_indicador === 'ECO_PIB_ANUAL')
+        if (pibAnualRows.length > 0) {
+          // Group by period, take the latest
+          const byPeriod = new Map<string, typeof pibAnualRows>()
+          for (const r of pibAnualRows) {
+            if (!byPeriod.has(r.periodo)) byPeriod.set(r.periodo, [])
+            byPeriod.get(r.periodo)!.push(r)
+          }
+          const latestPeriod = [...byPeriod.keys()].sort().pop()
+          if (latestPeriod) {
+            const latestRows = byPeriod.get(latestPeriod)!.filter(r => r.region_id > 0)
+            const total = latestRows.reduce((s, r) => s + r.valor, 0)
+            if (total > 0) {
+              const pctRows = latestRows.map(r => ({
+                codigo_indicador: 'ECO_PCT_PIB',
+                region_id: r.region_id,
+                valor: parseFloat(((r.valor / total) * 100).toFixed(1)),
+                periodo: latestPeriod,
+                calidad: 'calculado' as const,
+                cargado_por: 'ine-sync',
+              }))
+              const { error: pctErr } = await supabase
+                .from('v2_indicadores_valores')
+                .upsert(pctRows, { onConflict: 'codigo_indicador,region_id,periodo' })
+              if (!pctErr) {
+                v2Upserted += pctRows.length
+                console.log(`[ine-sync] Recalculated ECO_PCT_PIB: ${pctRows.length} regions from ${latestPeriod}, total=${Math.round(total)} MM`)
+              }
+            }
+          }
+        }
+      }
+
       // Refresh materialized view (fire-and-forget)
       if (!v2Error) {
         supabase.rpc('refresh_v2_indicadores_ultimo').then(() => {})
