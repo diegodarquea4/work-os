@@ -28,7 +28,7 @@ const TABS: { id: TabId; label: string; badge: string; color: string }[] = [
 ]
 
 const SERIES_CODIGOS = [
-  'EMP_DESOC_TASA', 'ECO_VENTAS_REG', 'ECO_PIB_REG', 'EMP_OCUP_MILES', 'EMP_FT_MILES',
+  'EMP_DESOC_TASA', 'ECO_VENTAS_REG', 'ECO_PIB_REG', 'ECO_PIB_ANUAL', 'EMP_OCUP_MILES', 'EMP_FT_MILES',
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -94,6 +94,19 @@ function KpiGrid({ codigos, indicadores, accentColor, cols = 4 }: {
         </div>
       )}
     </>
+  )
+}
+
+function ToggleBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${
+        active
+          ? 'bg-gray-800 text-white'
+          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+      }`}
+    >{children}</button>
   )
 }
 
@@ -455,6 +468,9 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
 }
 
 function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color, regionNombre }: TabProps) {
+  const [pibFreq, setPibFreq] = useState<'anual' | 'trimestral'>('anual')
+  const [pibUnit, setPibUnit] = useState<'mm' | 'pct'>('mm')
+
   const sectorCodes = [
     'ECO_PIB_MINERIA', 'ECO_PIB_INDUSTRIA', 'ECO_PIB_COMERCIO', 'ECO_PIB_CONSTRUC',
     'ECO_PIB_AGRO', 'ECO_PIB_TRANSPORTE', 'ECO_PIB_FINANCIERO', 'ECO_PIB_PESCA',
@@ -467,6 +483,51 @@ function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color,
 
   const SECTOR_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff', '#818cf8', '#a78bfa', '#c4b5fd', '#ddd6fe', '#e9d5ff', '#f3e8ff']
 
+  // Build PIB chart data with optional % conversion
+  const pibSerie = pibFreq === 'anual' ? series.get('ECO_PIB_ANUAL') : series.get('ECO_PIB_REG')
+
+  // For % mode: compute national total per period from allRegionsUltimos or use a fixed national series
+  const pibChartData = useMemo(() => {
+    if (!pibSerie) return null
+    if (pibUnit === 'mm') return pibSerie
+
+    // For % of national: we need national PIB per period
+    // Use the same frequency national series to compute shares
+    const natSerie = pibFreq === 'anual'
+      ? series.get('ECO_PIB_ANUAL') // We need national annual — use allRegions sum as proxy
+      : series.get('ECO_PIB_REG')
+
+    if (!natSerie) return pibSerie
+
+    // Sum all regions for each period from allRegionsUltimos to approximate national total
+    // For the chart, we compute share = region / sum(all regions) * 100
+    // This is a rough approach — allRegionsUltimos only has the latest value per region
+    // For a proper time-series %, we'd need national series data
+    // Instead, use the latest national total as denominator (constant %)
+    const allRegPib = allRegionsUltimos
+      .filter(r => r.codigo_indicador === (pibFreq === 'anual' ? 'ECO_PIB_ANUAL' : 'ECO_PIB_REG') && r.region_id > 0)
+    const natTotal = allRegPib.reduce((s, r) => s + (r.valor ?? 0), 0)
+
+    if (natTotal <= 0) return pibSerie
+
+    return {
+      ...pibSerie,
+      data: pibSerie.data.map(p => ({
+        ...p,
+        valor: parseFloat(((p.valor / natTotal) * 100).toFixed(2)),
+      })),
+    }
+  }, [pibSerie, pibUnit, pibFreq, series, allRegionsUltimos])
+
+  const pibLabel = pibFreq === 'anual' ? 'Evolución anual' : 'Evolución trimestral'
+  const pibUnitLabel = pibUnit === 'mm' ? 'MM CLP enc. 2018' : '% del PIB nacional'
+  const pibYFmt = pibUnit === 'mm'
+    ? (v: number) => `${Math.round(v).toLocaleString('es-CL')} MM`
+    : (v: number) => `${v.toFixed(1)}%`
+  const pibLabelFmt = pibFreq === 'anual'
+    ? (iso: string) => new Date(iso + 'T12:00:00').getFullYear().toString()
+    : fmtQuarter
+
   return (
     <div className="space-y-6">
       <KpiGrid codigos={['ECO_PCT_PIB', 'ECO_PIB_ANUAL', 'ECO_VENTAS_REG', 'ECO_VAR_IA', 'ECO_INV_PUB', 'ECO_INV_FNDR', 'ECO_COMPRAS_PUB']}
@@ -474,11 +535,18 @@ function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color,
 
       {/* PIB chart + ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        {series.get('ECO_PIB_REG') && (
+        {pibChartData && (
           <div className="lg:col-span-3">
             <Section title="PIB Regional" badge="BCCh · CCNN" color={color}>
-              <ChartCard title="Evolución trimestral" unit="MM CLP enc. 2018" source="Fuente: BCCh — Cuentas Nacionales">
-                <TimeSeriesChart serie={series.get('ECO_PIB_REG')!} color={color} yFmt={v => `${Math.round(v)} MM`} labelFmt={fmtQuarter} />
+              <ChartCard title={pibLabel} unit={pibUnitLabel} source="Fuente: BCCh — Cuentas Nacionales">
+                <div className="flex gap-1.5 mb-3">
+                  <ToggleBtn active={pibFreq === 'anual'} onClick={() => setPibFreq('anual')}>Anual</ToggleBtn>
+                  <ToggleBtn active={pibFreq === 'trimestral'} onClick={() => setPibFreq('trimestral')}>Trimestral</ToggleBtn>
+                  <span className="w-px bg-gray-200 mx-1" />
+                  <ToggleBtn active={pibUnit === 'mm'} onClick={() => setPibUnit('mm')}>$MM</ToggleBtn>
+                  <ToggleBtn active={pibUnit === 'pct'} onClick={() => setPibUnit('pct')}>% Nacional</ToggleBtn>
+                </div>
+                <TimeSeriesChart serie={pibChartData} color={color} yFmt={pibYFmt} labelFmt={pibLabelFmt} />
               </ChartCard>
             </Section>
           </div>
