@@ -99,6 +99,19 @@ export type TrendSummaries = {
   crime: { avgRecent4w: number; avgPrevious4w: number | null; pctChange: number | null } | null
   empleoINE: { ocupados_miles: number; fuerza_trabajo_miles?: number; period: string } | null
   ventas: { current: number; period: string } | null
+  pibAnual: { value: number; period: string } | null
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+
+/** Format ISO period (e.g. "2026-03-01") to human-readable ("marzo 2026") */
+function formatPeriod(period: string): string {
+  const d = new Date(period + 'T12:00:00')
+  const m = d.getMonth()
+  const y = d.getFullYear()
+  return `${MESES[m]} ${y}`
 }
 
 // ── Context builder ──────────────────────────────────────────────────────────
@@ -175,15 +188,15 @@ Indicadores socioeconómicos:
 - Tasa desocupación: ${metrics.tasa_desocupacion ?? 'N/D'}%${desempleoPeriod ? ` (${desempleoPeriod}, INE-ENE)` : ' (fuente: INE-ENE, trimestre móvil)'}
 - Pobreza por ingresos: ${metrics.pct_pobreza_ingresos ?? 'N/D'}% (CASEN 2024)
 - Pobreza multidimensional: ${metrics.pct_pobreza_multidimensional ?? 'N/D'}% (CASEN 2024)
-- PIB regional: ${metrics.pib_regional ?? 'N/D'} MM$ (BCCh)
+- PIB regional: ${trendSummaries?.pibAnual ? `${Math.round(trendSummaries.pibAnual.value).toLocaleString('es-CL')} MM$ (BCCh, ${formatPeriod(trendSummaries.pibAnual.period)})` : `${metrics.pib_regional ?? 'N/D'} MM$ (BCCh)`}
 - % PIB nacional: ${metrics.pct_pib_nacional ?? 'N/D'}%
 - Variación actividad económica: ${metrics.variacion_interanual ?? 'N/D'}%
 - Tasa participación laboral: ${metrics.tasa_participacion_laboral ?? 'N/D'}%
 - Déficit habitacional: ${metrics.deficit_habitacional?.toLocaleString('es-CL') ?? 'N/D'}
 - Hogares víctimas DMCS: ${metrics.pct_hogares_victimas_dmcs ?? 'N/D'}% (ENUSC)
-${trendSummaries?.empleoINE ? `- Personas ocupadas: ${(trendSummaries.empleoINE.ocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${trendSummaries.empleoINE.period})${trendSummaries.empleoINE.fuerza_trabajo_miles ? `\n- Fuerza de trabajo: ${(trendSummaries.empleoINE.fuerza_trabajo_miles * 1000).toLocaleString('es-CL')} personas (INE-ENE)` : ''}` : `- Personas ocupadas: ${metrics.n_ocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)`}
+${trendSummaries?.empleoINE ? `- Personas ocupadas: ${(trendSummaries.empleoINE.ocupados_miles * 1000).toLocaleString('es-CL')} (INE-ENE, trimestre móvil al ${formatPeriod(trendSummaries.empleoINE.period)})${trendSummaries.empleoINE.fuerza_trabajo_miles ? `\n- Fuerza de trabajo: ${(trendSummaries.empleoINE.fuerza_trabajo_miles * 1000).toLocaleString('es-CL')} personas (INE-ENE)` : ''}` : `- Personas ocupadas: ${metrics.n_ocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024, dato estático)`}
 - Personas desocupadas: ${metrics.n_desocupado?.toLocaleString('es-CL') ?? 'N/D'} (Censo 2024)
-${trendSummaries?.ventas ? `- Ventas regionales (facturación electrónica): ${trendSummaries.ventas.current.toLocaleString('es-CL', { maximumFractionDigits: 0 })} miles de millones CLP (${trendSummaries.ventas.period}, BCCh)` : ''}
+${trendSummaries?.ventas ? `- Ventas regionales (facturación electrónica): ${trendSummaries.ventas.current.toLocaleString('es-CL', { maximumFractionDigits: 0 })} miles de millones CLP (${formatPeriod(trendSummaries.ventas.period)}, BCCh)` : ''}
 - Sectores productivos: ${metrics.sectores_productivos_principales ?? 'N/D'}
 - Vocación regional: ${metrics.vocacion_regional ?? 'N/D'}
 

@@ -167,14 +167,14 @@ export async function POST(request: Request) {
           ? sb.from('regional_metrics')
               .select('value, period')
               .eq('region_id', regionId)
-              .eq('metric_name', 'pib_regional')
+              .eq('metric_name', 'pib_regional_anual')
               .order('period', { ascending: true })
           : Promise.resolve({ data: null }),
       ])
 
       autoridades = (autoridadesRes.data ?? []) as typeof autoridades
 
-      // Build period comparison: closest value to mar-2018, mar-2022, mar-2026
+      // Build period comparison: closest value to 2018, 2022, 2025 (annual)
       function closestTo(series: { value: number; period: string }[], target: string): number | null {
         if (!series.length) return null
         let best = series[0]
@@ -202,10 +202,10 @@ export async function POST(request: Request) {
       }
       if (pibSeries.length > 0) {
         pmList.push({
-          metric_name: 'pib_regional',
-          period_2018: closestTo(pibSeries, '2018-03-01'),
-          period_2022: closestTo(pibSeries, '2022-03-01'),
-          period_2026: closestTo(pibSeries, '2026-03-01'),
+          metric_name: 'pib_regional_anual',
+          period_2018: closestTo(pibSeries, '2018-01-01'),
+          period_2022: closestTo(pibSeries, '2022-01-01'),
+          period_2026: closestTo(pibSeries, '2025-01-01'),
           current: pibSeries[pibSeries.length - 1]?.value ?? null,
         })
       }
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       const sixtyDaysAgo  = new Date(Date.now() - 60  * 86400000).toISOString()
       const ninetyDaysAgo = new Date(Date.now() - 90  * 86400000).toISOString()
 
-      const [seguimientosRes, semaforoLogRes, nationalRes, stopHistoryRes, regionalTsRes, empleoIneRes] = await Promise.all([
+      const [seguimientosRes, semaforoLogRes, nationalRes, stopHistoryRes, regionalTsRes, empleoIneRes, pibAnualRes] = await Promise.all([
         // Recent seguimientos for rojo/ambar initiatives
         rojoAmbarIds.length > 0
           ? sb.from('seguimientos')
@@ -273,6 +273,15 @@ export async function POST(request: Request) {
               .in('metric_name', ['ocupados_miles', 'fuerza_trabajo_miles', 'ventas_regionales'])
               .order('period', { ascending: false })
               .limit(6)
+          : Promise.resolve({ data: null }),
+        // Latest PIB regional anual from BCCh (for minuta context)
+        regionId !== undefined
+          ? sb.from('regional_metrics')
+              .select('metric_name, value, period')
+              .eq('region_id', regionId)
+              .eq('metric_name', 'pib_regional_anual')
+              .order('period', { ascending: false })
+              .limit(1)
           : Promise.resolve({ data: null }),
       ])
 
@@ -385,7 +394,14 @@ export async function POST(request: Request) {
         ventas = { current: ventasRow.value, period: ventasRow.period }
       }
 
-      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE, ventas }
+      // Build PIB anual from BCCh
+      let pibAnual: TrendSummaries['pibAnual'] = null
+      const pibAnualData = (pibAnualRes.data ?? []) as { metric_name: string; value: number; period: string }[]
+      if (pibAnualData.length > 0) {
+        pibAnual = { value: pibAnualData[0].value, period: pibAnualData[0].period }
+      }
+
+      trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE, ventas, pibAnual }
     }
   } else {
     const { getProjects } = await import('@/lib/projects')

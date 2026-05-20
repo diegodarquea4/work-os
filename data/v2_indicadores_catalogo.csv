@@ -63,7 +63,8 @@ EMP_DESOC_TASA,Tasa de desocupación (trimestre móvil),Empleo,,%,INE_ENE,mensua
 EMP_OCUP_MILES,Personas ocupadas (trimestre móvil),Empleo,,miles personas,INE_ENE,mensual,false,true,esencial,false,true,true,Serie BCCh F049.OCU.PMT
 EMP_FT_MILES,Fuerza de trabajo (trimestre móvil),Empleo,,miles personas,INE_ENE,mensual,false,true,complementario,false,true,true,Serie BCCh F049.FTR.STO
 ECO_VENTAS_REG,Ventas regionales,Economía,,MM CLP,BCCH_VENTAS,mensual,false,true,esencial,false,true,true,Serie BCCh F035.CVRV
-ECO_PIB_REG,PIB regional (serie trimestral),Economía,,MM CLP enc. 2018,BCCH_CCNN,trimestral,false,true,esencial,true,true,true,Serie BCCh F035.PIB
+ECO_PIB_REG,PIB regional (serie trimestral),Economía,,MM CLP enc. 2018,BCCH_CCNN,trimestral,false,true,complementario,false,true,true,Serie BCCh F035.PIB — solo para gráfico tendencia
+ECO_PIB_ANUAL,PIB regional (anual),Economía,,MM CLP enc. 2018,BCCH_CCNN,anual,false,true,esencial,true,true,true,Serie BCCh F035.PIB .A — usar en minutas y KPI
 ECO_PIB_NAC,PIB nacional (serie trimestral),Economía,,MM CLP enc. 2018,BCCH_CCNN,trimestral,false,true,esencial,false,true,false,Solo region_id=0
 ECO_IMACEC,IMACEC,Economía,,índice base 2018,BCCH_IMACEC,mensual,false,true,esencial,true,true,false,Solo region_id=0
 ECO_PIB_AGRO,PIB sector agropecuario-silvícola,Economía,PIB sectorial,MM CLP nom. 2018,BCCH_CCNN,anual,false,true,complementario,false,false,false,

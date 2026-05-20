@@ -469,7 +469,7 @@ function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color,
 
   return (
     <div className="space-y-6">
-      <KpiGrid codigos={['ECO_PCT_PIB', 'ECO_PIB_SNAP', 'ECO_VENTAS_REG', 'ECO_VAR_IA', 'ECO_INV_PUB', 'ECO_INV_FNDR', 'ECO_COMPRAS_PUB']}
+      <KpiGrid codigos={['ECO_PCT_PIB', 'ECO_PIB_ANUAL', 'ECO_VENTAS_REG', 'ECO_VAR_IA', 'ECO_INV_PUB', 'ECO_INV_FNDR', 'ECO_COMPRAS_PUB']}
         indicadores={indicadores} accentColor={color} />
 
       {/* PIB chart + ranking */}
