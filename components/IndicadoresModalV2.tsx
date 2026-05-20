@@ -520,7 +520,7 @@ function EconomicoTab({ indicadores, series, allRegionsUltimos, regionId, color,
   }, [pibSerie, pibUnit, pibFreq, series, allRegionsUltimos])
 
   const pibLabel = pibFreq === 'anual' ? 'Evolución anual' : 'Evolución trimestral'
-  const pibUnitLabel = pibUnit === 'mm' ? 'MM CLP enc. 2018' : '% del PIB nacional'
+  const pibUnitLabel = pibUnit === 'mm' ? 'Miles de MM CLP' : '% del PIB nacional'
   const pibYFmt = pibUnit === 'mm'
     ? (v: number) => `${Math.round(v).toLocaleString('es-CL')} MM`
     : (v: number) => `${v.toFixed(1)}%`

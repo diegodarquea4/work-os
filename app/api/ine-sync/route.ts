@@ -134,45 +134,44 @@ const SERIES_CONFIG: { seriesId: string; metric: string; regionCod: string | nul
   // Nacional
   { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.T.0.M',  metric: 'ventas_regionales', regionCod: 'NAC' },
 
-  // ── PIB regional (F035.PIB.FLU.R.CLP.2018.Z.Z.Z.{01-16}.0.T, quarterly) ──
-  // Confirmed via BCCh cuadro CCNN2018_PIB_REGIONAL_T on 2026-04-05.
-  // Codes 01-16 are BCCh's sequential region ordering (not INE employment codes).
-  // Values in miles de millones de pesos encadenados (referencia 2018).
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.15.0.T', metric: 'pib_regional', regionCod: 'XV'  }, // Arica y Parinacota
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.01.0.T', metric: 'pib_regional', regionCod: 'I'   }, // Tarapacá
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.02.0.T', metric: 'pib_regional', regionCod: 'II'  }, // Antofagasta
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.03.0.T', metric: 'pib_regional', regionCod: 'III' }, // Atacama
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.04.0.T', metric: 'pib_regional', regionCod: 'IV'  }, // Coquimbo
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.05.0.T', metric: 'pib_regional', regionCod: 'V'   }, // Valparaíso
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.06.0.T', metric: 'pib_regional', regionCod: 'VI'  }, // O'Higgins
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.07.0.T', metric: 'pib_regional', regionCod: 'VII' }, // Maule
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.08.0.T', metric: 'pib_regional', regionCod: 'VIII'}, // Biobío
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.16.0.T', metric: 'pib_regional', regionCod: 'XVI' }, // Ñuble
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.09.0.T', metric: 'pib_regional', regionCod: 'IX'  }, // La Araucanía
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.14.0.T', metric: 'pib_regional', regionCod: 'XIV' }, // Los Ríos
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.10.0.T', metric: 'pib_regional', regionCod: 'X'   }, // Los Lagos
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.11.0.T', metric: 'pib_regional', regionCod: 'XI'  }, // Aysén
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.12.0.T', metric: 'pib_regional', regionCod: 'XII' }, // Magallanes
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.13.0.T', metric: 'pib_regional', regionCod: 'RM'  }, // Metropolitana
+  // ── PIB regional TRIMESTRAL NOMINAL (F035.PIB.FLU.N.CLP.2018.Z.Z.Z.{01-16}.0.T) ──
+  // Precios corrientes — coincide con cuadro CCNN2018_PIB_REGIONAL_N de BCCh.
+  // Miles de millones de pesos, precios corrientes.
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.15.0.T', metric: 'pib_regional', regionCod: 'XV'  }, // Arica y Parinacota
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.01.0.T', metric: 'pib_regional', regionCod: 'I'   }, // Tarapacá
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.02.0.T', metric: 'pib_regional', regionCod: 'II'  }, // Antofagasta
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.03.0.T', metric: 'pib_regional', regionCod: 'III' }, // Atacama
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.04.0.T', metric: 'pib_regional', regionCod: 'IV'  }, // Coquimbo
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.05.0.T', metric: 'pib_regional', regionCod: 'V'   }, // Valparaíso
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.06.0.T', metric: 'pib_regional', regionCod: 'VI'  }, // O'Higgins
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.07.0.T', metric: 'pib_regional', regionCod: 'VII' }, // Maule
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.08.0.T', metric: 'pib_regional', regionCod: 'VIII'}, // Biobío
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.16.0.T', metric: 'pib_regional', regionCod: 'XVI' }, // Ñuble
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.09.0.T', metric: 'pib_regional', regionCod: 'IX'  }, // La Araucanía
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.14.0.T', metric: 'pib_regional', regionCod: 'XIV' }, // Los Ríos
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.10.0.T', metric: 'pib_regional', regionCod: 'X'   }, // Los Lagos
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.11.0.T', metric: 'pib_regional', regionCod: 'XI'  }, // Aysén
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.12.0.T', metric: 'pib_regional', regionCod: 'XII' }, // Magallanes
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.13.0.T', metric: 'pib_regional', regionCod: 'RM'  }, // Metropolitana
 
-  // ── PIB regional ANUAL (F035.PIB.FLU.R.CLP.2018.Z.Z.Z.{01-16}.0.A) ──────
-  // Para minutas y dashboard — siempre reportar anual, no trimestral.
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.15.0.A', metric: 'pib_regional_anual', regionCod: 'XV'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.01.0.A', metric: 'pib_regional_anual', regionCod: 'I'   },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.02.0.A', metric: 'pib_regional_anual', regionCod: 'II'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.03.0.A', metric: 'pib_regional_anual', regionCod: 'III' },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.04.0.A', metric: 'pib_regional_anual', regionCod: 'IV'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.05.0.A', metric: 'pib_regional_anual', regionCod: 'V'   },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.06.0.A', metric: 'pib_regional_anual', regionCod: 'VI'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.07.0.A', metric: 'pib_regional_anual', regionCod: 'VII' },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.08.0.A', metric: 'pib_regional_anual', regionCod: 'VIII'},
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.16.0.A', metric: 'pib_regional_anual', regionCod: 'XVI' },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.09.0.A', metric: 'pib_regional_anual', regionCod: 'IX'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.14.0.A', metric: 'pib_regional_anual', regionCod: 'XIV' },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.10.0.A', metric: 'pib_regional_anual', regionCod: 'X'   },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.11.0.A', metric: 'pib_regional_anual', regionCod: 'XI'  },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.12.0.A', metric: 'pib_regional_anual', regionCod: 'XII' },
-  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.13.0.A', metric: 'pib_regional_anual', regionCod: 'RM'  },
+  // ── PIB regional ANUAL NOMINAL (F035.PIB.FLU.N.CLP.2018.Z.Z.Z.{01-16}.0.A) ──
+  // Precios corrientes, anual — para minutas, dashboard KPI y ranking.
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.15.0.A', metric: 'pib_regional_anual', regionCod: 'XV'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.01.0.A', metric: 'pib_regional_anual', regionCod: 'I'   },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.02.0.A', metric: 'pib_regional_anual', regionCod: 'II'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.03.0.A', metric: 'pib_regional_anual', regionCod: 'III' },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.04.0.A', metric: 'pib_regional_anual', regionCod: 'IV'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.05.0.A', metric: 'pib_regional_anual', regionCod: 'V'   },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.06.0.A', metric: 'pib_regional_anual', regionCod: 'VI'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.07.0.A', metric: 'pib_regional_anual', regionCod: 'VII' },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.08.0.A', metric: 'pib_regional_anual', regionCod: 'VIII'},
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.16.0.A', metric: 'pib_regional_anual', regionCod: 'XVI' },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.09.0.A', metric: 'pib_regional_anual', regionCod: 'IX'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.14.0.A', metric: 'pib_regional_anual', regionCod: 'XIV' },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.10.0.A', metric: 'pib_regional_anual', regionCod: 'X'   },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.11.0.A', metric: 'pib_regional_anual', regionCod: 'XI'  },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.12.0.A', metric: 'pib_regional_anual', regionCod: 'XII' },
+  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.13.0.A', metric: 'pib_regional_anual', regionCod: 'RM'  },
 
   // ── Indicadores nacionales (regionCod: 'NAC' → region_id = 0) ────────────
   // IMACEC empalmado mensual — índice actividad económica (base 2018=100)
