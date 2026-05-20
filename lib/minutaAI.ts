@@ -516,7 +516,10 @@ ${fichaSchema}`,
         max_tokens: 8192,
         system: `Eres redactor técnico senior de la División de Coordinación Interministerial (DCI), Gobierno Interior y División de Estudios del Ministerio del Interior de Chile. Redactas la MINUTA REGIONAL PARA LA AUTORIDAD — documento que acompaña a la máxima autoridad en visitas regionales.
 
-Si se adjunta un Plan Regional de Gobierno (PREGO), extrae los ejes estratégicos con sus sub-items específicos. Si no hay PDF adjunto, genera el PREGO basándote en las prioridades evidentes de los datos regionales (máximo 3 ejes genéricos).
+INSTRUCCIÓN CRÍTICA SOBRE EL PREGO:
+- Si se adjunta un Plan Regional de Gobierno (PDF), DEBES extraer los ejes estratégicos con todos sus sub-items. El campo prego_ejes NO PUEDE quedar vacío si hay PDF adjunto.
+- Si NO hay PDF adjunto, genera 3 ejes genéricos basados en los indicadores de la región (ej: si hay alta desocupación → eje de empleo; si hay pobreza alta → eje social; seguridad siempre es eje).
+- prego_ejes SIEMPRE debe tener al menos 3 ejes con al menos 2 items cada uno.
 
 ${fichaRules}`,
         messages: [{ role: 'user', content: userContent }],
@@ -525,7 +528,7 @@ ${fichaRules}`,
       const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
       const draft = JSON.parse(cleaned) as FichaRegionalContent
       const t1 = Date.now()
-      console.log(`[minutaAI] Kit de Viaje DRAFT for ${regionNombre}: ${Object.keys(draft).length} fields (${t1 - t0}ms)`)
+      console.log(`[minutaAI] Kit de Viaje DRAFT for ${regionNombre}: ${Object.keys(draft).length} fields, prego_ejes: ${draft.prego_ejes?.length ?? 0}, planPdf: ${!!planPdfBase64} (${t1 - t0}ms)`)
 
       // ── PASS 2: Review & rewrite ──
       // A second AI call reviews the draft against the source data and rewrites for quality.
@@ -542,6 +545,7 @@ CRITERIOS DE REVISIÓN:
 5. TONO: Formal, seco, técnico. Cero adjetivos valorativos. Cero recomendaciones.
 6. FUENTES: Cada cifra debe tener fuente entre paréntesis: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop).
 7. CLARIDAD: Si algo se puede mostrar más directo o claro, hazlo. Privilegia datos concretos sobre narrativa.
+8. PREGO: NUNCA elimines ni vacíes prego_ejes. Si el borrador tiene ejes, mantenlos y mejóralos. Si están vacíos, genera al menos 3 ejes basados en los datos.
 
 Responde ÚNICAMENTE con el JSON completo reescrito (misma estructura, sin markdown, sin \`\`\`).`,
         messages: [{
@@ -561,8 +565,14 @@ Revisa el borrador contra los datos fuente. Reescribe lo que sea necesario para 
       let final: FichaRegionalContent
       try {
         final = JSON.parse(reviewCleaned) as FichaRegionalContent
+        // Safety: if review lost PREGO ejes that draft had, restore them
+        if ((!final.prego_ejes || final.prego_ejes.length === 0) && draft.prego_ejes?.length > 0) {
+          console.warn(`[minutaAI] Review lost PREGO ejes for ${regionNombre}, restoring from draft`)
+          final.prego_ejes = draft.prego_ejes
+          final.prego_intro = final.prego_intro || draft.prego_intro
+        }
         const t2 = Date.now()
-        console.log(`[minutaAI] Kit de Viaje REVIEWED for ${regionNombre} (${t2 - t1}ms review, ${t2 - t0}ms total)`)
+        console.log(`[minutaAI] Kit de Viaje REVIEWED for ${regionNombre}: prego_ejes: ${final.prego_ejes?.length ?? 0} (${t2 - t1}ms review, ${t2 - t0}ms total)`)
       } catch {
         // If review JSON parsing fails, use the draft
         console.warn(`[minutaAI] Review parse failed for ${regionNombre}, using draft`)
