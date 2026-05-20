@@ -460,27 +460,30 @@ REGLAS OBLIGATORIAS:
 6. Cada cifra debe tener su fuente: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop Carabineros).
 7. Si falta información, omítela sin mencionar su ausencia.
 8. Escribe en español de Chile.
-9. Los párrafos deben ser densos en datos, no retóricos.`
+9. Los párrafos deben ser densos en datos, no retóricos.
+10. NO repitas cifras que ya aparecen en los bullets de datos (%, habitantes, km²). Los campos narrativos agregan CONTEXTO e IMPLICANCIAS, no repiten números.
+11. Sé CONCISO. Cada campo tiene un límite estricto de oraciones. No lo excedas.
+12. En los sub-items del PREGO, usa "En **tema**," al inicio para indicar negrita (con doble asterisco).`
 
     const fichaSchema = `{
-  "introduccion": "3-4 oraciones contextualizando ubicación geográfica, importancia y características principales de la región",
-  "estructura_etaria": "2-3 oraciones sobre rangos etarios, edad promedio, proceso de envejecimiento y sus implicancias",
-  "composicion": "2-3 oraciones sobre pueblos originarios, inmigración y discapacidad con cifras y contexto",
-  "pib_comentario": "2-3 oraciones sobre la evolución del PIB en los últimos años, crecimiento y posición nacional",
-  "matriz_productiva": "2-3 oraciones describiendo la matriz productiva regional, sectores líderes y vocación",
-  "mercado_laboral_nota": "1-2 oraciones contextualizando la tasa de desocupación respecto al promedio nacional",
-  "ingresos_pobreza": "Párrafo de 4-5 oraciones sobre ingresos, pobreza por ingresos, extrema y multidimensional con comparación nacional. Incluir variación respecto a medición anterior si hay datos.",
-  "educacion_nota": "2-3 oraciones sobre escolaridad, educación superior y contexto educativo regional",
-  "salud_nota": "2-3 oraciones sobre cobertura FONASA, acceso a atención, lista de espera y brechas",
-  "vivienda_nota": "2-3 oraciones sobre déficit habitacional, hacinamiento, acceso a servicios básicos",
-  "seguridad_nota": "3-4 oraciones sobre LeyStop semana actual, variación anual, delitos más frecuentes y contexto ENUSC",
-  "prego_intro": "Párrafo de 2-3 oraciones introduciendo el Plan Regional de Gobierno",
+  "introduccion": "MÁXIMO 2 oraciones. Ubicación geográfica y principal característica de la región.",
+  "estructura_etaria": "MÁXIMO 2 oraciones. Implicancias del envejecimiento o juventud. NO repitas la edad promedio ni el % de 60+ (ya están en el bullet).",
+  "composicion": "MÁXIMO 2 oraciones. Contexto territorial de pueblos originarios e inmigración. NO repitas los porcentajes (ya están en el bullet).",
+  "pib_comentario": "MÁXIMO 2 oraciones. Evolución del PIB en los últimos años y tendencia.",
+  "matriz_productiva": "MÁXIMO 2 oraciones. Vocación productiva y sectores estratégicos.",
+  "mercado_laboral_nota": "MÁXIMO 2 oraciones. Contexto de la desocupación respecto al promedio nacional.",
+  "ingresos_pobreza": "MÁXIMO 3 oraciones. Pobreza por ingresos, extrema y multidimensional con comparación nacional.",
+  "educacion_nota": "MÁXIMO 2 oraciones. Escolaridad y contexto educativo.",
+  "salud_nota": "MÁXIMO 2 oraciones. Cobertura y brechas de salud.",
+  "vivienda_nota": "MÁXIMO 2 oraciones. Déficit habitacional y acceso a servicios.",
+  "seguridad_nota": "MÁXIMO 2 oraciones. LeyStop casos año y delitos más frecuentes.",
+  "prego_intro": "MÁXIMO 2 oraciones introduciendo el Plan Regional.",
   "prego_ejes": [
     {
       "numero": 1,
-      "nombre": "Nombre del eje estratégico",
+      "nombre": "Nombre del eje",
       "items": [
-        { "letra": "a", "texto": "Descripción detallada del sub-item con En [tema en negrita], se [acción concreta]. Incluir cifras, montos, plazos si están en el plan." }
+        { "letra": "a", "texto": "En **tema en negrita**, se ejecuta/implementa [acción concreta con cifras y plazos]. Máximo 2 oraciones por item." }
       ]
     }
   ]

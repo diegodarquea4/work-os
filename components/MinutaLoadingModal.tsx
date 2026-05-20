@@ -19,14 +19,14 @@ const MESSAGES: Record<string, string[]> = {
   ],
   ficha: [
     'Compilando indicadores regionales...',
-    'Generando ficha regional PDF...',
+    'Generando Kit de Viaje PDF...',
   ],
 }
 
 const TIPO_LABEL: Record<string, string> = {
   ejecutiva: 'Minuta Ejecutiva',
   completo: 'Reporte Completo',
-  ficha: 'Ficha Regional',
+  ficha: 'Kit de Viaje',
 }
 
 export default function MinutaLoadingModal({ tipo }: { tipo: string }) {

@@ -3,7 +3,7 @@ import {
 } from '@react-pdf/renderer'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
-import type { FichaRegionalContent, LeystopMinuta } from '@/lib/minutaAI'
+import type { FichaRegionalContent, LeystopMinuta, TrendSummaries } from '@/lib/minutaAI'
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
@@ -62,6 +62,16 @@ function pct1(val?: number | null): string {
 function dec1(val?: number | null): string {
   if (val == null) return ''
   return (Math.round(val * 10) / 10).toString().replace('.', ',')
+}
+
+/** Parse **bold** markdown into react-pdf Text elements */
+function parseBold(text: string): React.ReactNode[] {
+  const parts = text.split(/\*\*/)
+  return parts.map((part, i) =>
+    i % 2 === 1
+      ? <Text key={i} style={{ fontWeight: 'bold' }}>{part}</Text>
+      : <Text key={i}>{part}</Text>
+  )
 }
 
 function regionFullName(region: Region): string {
@@ -136,13 +146,14 @@ type Props = {
   provinciasData?: { nombre: string; comunas: string }[]
   allRegionsPib?: { region_id: number; nombre: string; pib_mm: number; pct_pib: number }[]
   pibSectorial?: { sector: string; valor: number; pct: number }[]
+  trendSummaries?: TrendSummaries | null
   logoSrc?: string | null
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 export default function FichaRegional({
   region, metrics, leystopData, fecha, aiContent,
-  provinciasData: provs, allRegionsPib, pibSectorial, logoSrc,
+  provinciasData: provs, allRegionsPib, pibSectorial, trendSummaries: ts, logoSrc,
 }: Props) {
   const ai = (aiContent && typeof aiContent === 'object' && 'introduccion' in aiContent)
     ? aiContent as FichaRegionalContent : null
@@ -239,7 +250,7 @@ export default function FichaRegional({
 
         {/* PIB Regional */}
         <Bullet label="PIB regional:">
-          ${regionPib ? `${fmt(Math.round(regionPib.pib_mm))} miles de millones de pesos (${new Date().getFullYear() - 1})` : `${fmt(m?.pib_regional)} MM$`}, equivalentes al {regionPib ? `${regionPib.pct_pib.toFixed(2).replace('.', ',')}%` : pct1(m?.pct_pib_nacional)} del PIB nacional{pibRank >= 0 ? `, manteniéndose como la ${pibRank + 1}ª economía regional del país` : ''}.
+          ${regionPib ? `${fmt(Math.round(regionPib.pib_mm))} miles de millones de pesos (${new Date().getFullYear() - 1})` : `${fmt(m?.pib_regional)} MM$`}, equivalentes al {regionPib ? `${regionPib.pct_pib.toFixed(2).replace('.', ',')}%` : pct1(m?.pct_pib_nacional)} del PIB nacional{pibRank >= 0 ? `, manteniéndose como la ${pibRank + 1}ª economía regional del país` : ''}.{regionPib && m?.poblacion_total ? ` PIB per cápita: $${fmt(Math.round(regionPib.pib_mm / m.poblacion_total * 1_000_000))} (${new Date().getFullYear() - 1}).` : ''}
         </Bullet>
 
         {ai?.matriz_productiva && (
@@ -286,8 +297,8 @@ export default function FichaRegional({
           headers={['Indicador', regionShortName(region), 'Contexto']}
           rows={[
             ['Tasa de desocupación', m?.tasa_desocupacion != null ? `${pct1(m.tasa_desocupacion)}` : '—', ai?.mercado_laboral_nota ?? '—'],
-            ['Ocupados', m?.n_ocupado != null ? `${fmt(Math.round((m.n_ocupado)))} mil` : '—', '—'],
-            ['Fuerza de trabajo', m?.n_desocupado != null && m?.n_ocupado != null ? `${fmt(Math.round(m.n_ocupado + m.n_desocupado))} mil` : '—', '—'],
+            ['Ocupados', ts?.empleoINE?.ocupados_miles != null ? `${fmt(Math.round(ts.empleoINE.ocupados_miles))} mil` : '—', '—'],
+            ['Fuerza de trabajo', ts?.empleoINE?.fuerza_trabajo_miles != null ? `${fmt(Math.round(ts.empleoINE.fuerza_trabajo_miles))} mil` : '—', '—'],
             ['Informalidad laboral (CASEN 2024)', m?.tasa_ocupacion_informal != null ? `${pct1(m.tasa_ocupacion_informal)} de hogares` : '—', '—'],
           ]}
           colWidths={[40, 25, 35]}
@@ -331,9 +342,12 @@ export default function FichaRegional({
           <Bullet label="Vivienda (Censo 2024):">
             {ai.vivienda_nota}
           </Bullet>
-        ) : m?.deficit_habitacional != null ? (
+        ) : (m?.deficit_habitacional != null || m?.pct_hacinamiento != null || m?.pct_acceso_agua_publica != null) ? (
           <Bullet label="Vivienda (Censo 2024):">
-            Déficit habitacional de {fmt(m.deficit_habitacional)} viviendas{m.pct_hacinamiento != null ? `; hacinamiento en ${pct1(m.pct_hacinamiento)} de las viviendas` : ''}.
+            {m?.pct_hacinamiento != null ? `Hacinamiento en ${pct1(m.pct_hacinamiento)} de las viviendas` : ''}
+            {m?.pct_acceso_agua_publica != null ? `${m?.pct_hacinamiento != null ? '; ' : ''}acceso a agua de red pública ${pct1(m.pct_acceso_agua_publica)}` : ''}
+            {m?.deficit_habitacional != null ? `${(m?.pct_hacinamiento != null || m?.pct_acceso_agua_publica != null) ? '; ' : ''}déficit habitacional de ${fmt(m.deficit_habitacional)} viviendas` : ''}
+            {m?.pct_jefatura_mujer != null ? `; jefatura femenina de hogar ${pct1(m.pct_jefatura_mujer)}` : ''}.
           </Bullet>
         ) : null}
 
@@ -364,7 +378,7 @@ export default function FichaRegional({
             {eje.items.map((item, i) => (
               <View key={i} style={s.ejeItem}>
                 <Text style={s.ejeLetter}>{item.letra}.</Text>
-                <Text style={s.ejeText}>{item.texto}</Text>
+                <Text style={s.ejeText}>{parseBold(item.texto)}</Text>
               </View>
             ))}
           </View>

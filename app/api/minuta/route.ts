@@ -548,6 +548,7 @@ export async function POST(request: Request) {
       provinciasData: regionProvs,
       allRegionsPib: fichaExtra?.allRegionsPib ?? [],
       pibSectorial: fichaExtra?.pibSectorial ?? [],
+      trendSummaries,
       logoSrc: LOGO_DATA_URL,
     })
   } else if (tipo === 'ejecutiva') {
