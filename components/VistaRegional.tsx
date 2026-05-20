@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRegionIndicadores } from '@/lib/hooks/useRegionIndicadores'
 import { useColegaSeguridadRegion, useColegaSeguridadAll } from '@/lib/hooks/useColegaSeguridad'
-import { useAllRegionsMetrics } from '@/lib/hooks/useAllRegionsMetrics'
-import { rankOf, deltaLabel, perCapita } from '@/lib/indicatorUtils'
+import { useV2Dashboard } from '@/lib/hooks/useV2Dashboard'
+import { perCapita } from '@/lib/indicatorUtils'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
@@ -190,21 +189,6 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
-  const [pibNacional, setPibNacional] = useState<{ period: string; value: number }[]>([])
-
-  // Fetch national PIB series (stored as pib_nacional, region_id=0)
-  useEffect(() => {
-    getSupabase()
-      .from('regional_metrics')
-      .select('period, value')
-      .eq('region_id', 0)
-      .eq('metric_name', 'pib_nacional')
-      .order('period', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (data) setPibNacional(data as { period: string; value: number }[])
-      })
-  }, [])
 
   // Set default region when profile loads
   useEffect(() => {
@@ -260,9 +244,9 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   )
 
   // External data hooks
-  const { timeSeries, nationalSeries, metrics: regionMetrics, loading: metricsLoading } = useRegionIndicadores(selectedCod ?? '')
+  const V2_SERIES = ['EMP_DESOC_TASA', 'ECO_PIB_ANUAL', 'ECO_PIB_REG']
+  const { indicadores: v2Ind, series: v2Series, allRegionsUltimos, loading: metricsLoading } = useV2Dashboard(selectedCod ?? undefined, V2_SERIES)
   const { history: leystopHistory } = useColegaSeguridadRegion(selectedCod ?? '')
-  const { allRegions } = useAllRegionsMetrics()
   const { rows: allLeystop } = useColegaSeguridadAll()
   const leystop = leystopHistory.at(-1) ?? null
   const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
@@ -324,29 +308,17 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
       .sort((a, b) => a.eje.localeCompare(b.eje))
   }, [regionIniciativas])
 
-  // Metric series
-  const desempleo    = timeSeries.find(s => s.metric_name === 'tasa_desocupacion')
-  const pibSeries    = timeSeries.find(s => s.metric_name === 'pib_regional')
-  const lastDesempleo = desempleo?.data.at(-1)
-  const prevDesempleo = desempleo?.data.at(-2)
-  const lastPib       = pibSeries?.data.at(-1)
-  const prevPib       = pibSeries?.data.at(-2)
-
-  // % of national PIB for the same quarter
-  const pibPctNacional: number | null = (() => {
-    if (!lastPib) return null
-    const nat = pibNacional.find(r => r.period === lastPib.period)
-    if (!nat || nat.value === 0) return null
-    return (lastPib.value / nat.value) * 100
-  })()
+  // Metric series from v2
+  const desocCtx = v2Ind.get('EMP_DESOC_TASA')
+  const pibAnualCtx = v2Ind.get('ECO_PIB_ANUAL')
+  const pibPctCtx = v2Ind.get('ECO_PCT_PIB')
+  const pibSerie = v2Series.get('ECO_PIB_ANUAL')
+  const desocSerie = v2Series.get('EMP_DESOC_TASA')
+  const pobCtx = v2Ind.get('DEM_POB_TOTAL')
 
   const invTotal = regionIniciativas.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
 
   // ── Comparison context for Métricas Clave ─────────────────────────────────
-  const natDesempleo = nationalSeries.find(s => s.metric_name === 'tasa_desocupacion')?.data.at(-1)?.value ?? null
-  const desempleoComp = deltaLabel(lastDesempleo?.value ?? null, natDesempleo, true)
-  const desempleoRank = selectedCod ? rankOf(allRegions, selectedCod, 'tasa_desocupacion', true) : null
-
   const regionLeystop = allLeystop.find(r => INE_CODE[selectedCod ?? ''] === r.id_region)
   const leystopAvgTasa = allLeystop.length > 0
     ? allLeystop.reduce((s, r) => s + (r.tasa_registro ?? 0), 0) / allLeystop.filter(r => r.tasa_registro != null).length
@@ -359,9 +331,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   })()
   const leystopIsGood = regionLeystop?.tasa_registro != null && leystopAvgTasa != null ? regionLeystop.tasa_registro < leystopAvgTasa : null
 
-  const pibRank = selectedCod ? rankOf(allRegions, selectedCod, 'pct_pib_nacional', false) : null
-
-  const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, regionMetrics?.poblacion_total)
+  const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, pobCtx?.valor)
 
   const showRegionSelector =
     profile?.role === 'admin' ||
@@ -761,16 +731,16 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             <MetricCard
               title="Desocupación"
               subtitle="BCCh trimestre móvil"
-              value={lastDesempleo ? `${lastDesempleo.value.toFixed(1)}%` : metricsLoading ? '…' : 'N/D'}
-              trend={lastDesempleo && prevDesempleo ? lastDesempleo.value - prevDesempleo.value : null}
+              value={desocCtx?.valor != null ? `${desocCtx.valor.toFixed(1)}%` : metricsLoading ? '…' : 'N/D'}
+              trend={desocSerie?.data && desocSerie.data.length >= 2 ? desocSerie.data.at(-1)!.valor - desocSerie.data.at(-2)!.valor : null}
               trendLabel="vs mes anterior"
               trendDown={true}
-              sparkData={desempleo?.data.slice(-8).map(d => d.value)}
+              sparkData={desocSerie?.data.slice(-8).map(d => d.valor)}
               sparkColor="#EF4444"
-              period={lastDesempleo?.period}
-              comparison={desempleoComp?.text}
-              comparisonGood={desempleoComp?.isGood ?? null}
-              ranking={desempleoRank}
+              period={desocCtx?.periodo ?? undefined}
+              comparison={desocCtx?.delta ? `Nac: ${desocCtx.nacional?.toFixed(1)}% (${desocCtx.delta})` : undefined}
+              comparisonGood={desocCtx?.deltaGood ?? null}
+              ranking={desocCtx?.ranking ?? undefined}
             />
             <MetricCard
               title="Seguridad"
@@ -788,17 +758,17 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             />
             <MetricCard
               title="PIB Regional"
-              subtitle="BCCh · Anual"
-              value={regionMetrics?.pct_pib_nacional != null ? `${regionMetrics.pct_pib_nacional.toFixed(1)}% del PIB nacional` : regionMetrics?.pib_regional != null ? `$${Math.round(regionMetrics.pib_regional).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
-              valueNote={regionMetrics?.pib_regional != null ? `$${Math.round(regionMetrics.pib_regional).toLocaleString('es-CL')} MM CLP` : undefined}
+              subtitle="BCCh · Nominal anual"
+              value={pibPctCtx?.valor != null ? `${pibPctCtx.valor.toFixed(1)}% del PIB nacional` : pibAnualCtx?.valor != null ? `$${Math.round(pibAnualCtx.valor).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
+              valueNote={pibAnualCtx?.valor != null ? `$${Math.round(pibAnualCtx.valor).toLocaleString('es-CL')} miles de MM CLP` : undefined}
               trend={null}
               trendLabel=""
               trendSuffix=""
               trendDown={false}
-              sparkData={pibSeries?.data.slice(-6).map(d => d.value)}
+              sparkData={pibSerie?.data.slice(-8).map(d => d.valor)}
               sparkColor="#3B82F6"
-              period={undefined}
-              ranking={pibRank}
+              period={pibAnualCtx?.periodo ?? undefined}
+              ranking={pibPctCtx?.ranking ?? pibAnualCtx?.ranking ?? undefined}
             />
             <MetricCard
               title="Inversión"
