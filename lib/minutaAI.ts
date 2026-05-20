@@ -347,7 +347,7 @@ export async function generateMinutaContent(
   // Ficha Regional: only needs a short intro paragraph, no full context
   if (tipo === 'ficha') {
     const metricsSnippet = metrics
-      ? `Población: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? '?'} hab. Capital: datos del panel. PIB regional: ${metrics.pib_regional ?? '?'} MM$, ${metrics.pct_pib_nacional ?? '?'}% del PIB nacional. Tasa desocupación: ${metrics.tasa_desocupacion ?? '?'}%. Sectores: ${metrics.sectores_productivos_principales ?? 'N/D'}. Vocación: ${metrics.vocacion_regional ?? 'N/D'}.`
+      ? `Población: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? '?'} hab. Capital: datos del panel. PIB regional: ${trendSummaries?.pibAnual ? `${Math.round(trendSummaries.pibAnual.value).toLocaleString('es-CL')} MM$ nominal (BCCh, ${formatPeriod(trendSummaries.pibAnual.period)})` : `${metrics.pib_regional ?? '?'} MM$`}, ${metrics.pct_pib_nacional ?? '?'}% del PIB nacional. Tasa desocupación: ${metrics.tasa_desocupacion ?? '?'}%. Sectores: ${metrics.sectores_productivos_principales ?? 'N/D'}. Vocación: ${metrics.vocacion_regional ?? 'N/D'}.`
       : ''
 
     try {
