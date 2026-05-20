@@ -10,7 +10,8 @@ import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog }
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent } from '@/lib/minutaAI'
+import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent, type FichaExtraData } from '@/lib/minutaAI'
+import provinciasData from '@/data/provincias-comunas.json'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 import { registerPdfFonts } from '@/lib/pdfFonts'
 
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
   // V2 extras
   let autoridades: { cargo: string; nombre: string; partido: string | null; territorio: string | null }[] = []
   let periodMetrics: { metric_name: string; period_2018?: number | null; period_2022?: number | null; period_2026?: number | null; current?: number | null }[] = []
+  let fichaExtra: FichaExtraData | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getIniciativasByCod, getMetricsByCod } = await import('@/lib/db')
@@ -403,6 +405,82 @@ export async function POST(request: Request) {
 
       trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE, ventas, pibAnual }
     }
+
+    // ── Kit de Viaje extra data (PIB all regions, sectorial, history) ────────
+    if (tipo === 'ficha' && regionId !== undefined) {
+      const [allPibRes, sectorRes, nacBenchRes, pibHistoryRes] = await Promise.all([
+        sb.from('v2_indicadores_ultimo')
+          .select('codigo_indicador, region_id, valor')
+          .in('codigo_indicador', ['ECO_PIB_ANUAL', 'ECO_PCT_PIB'])
+          .gt('region_id', 0),
+        sb.from('v2_indicadores_ultimo')
+          .select('codigo_indicador, valor')
+          .like('codigo_indicador', 'ECO_PIB_%')
+          .eq('region_id', regionId),
+        sb.from('v2_indicadores_ultimo')
+          .select('codigo_indicador, valor')
+          .eq('region_id', 0)
+          .in('codigo_indicador', ['EMP_DESOC_TASA']),
+        sb.from('regional_metrics')
+          .select('value, period')
+          .eq('region_id', regionId)
+          .eq('metric_name', 'pib_regional_anual')
+          .order('period', { ascending: true }),
+      ])
+
+      const allPib = (allPibRes.data ?? []) as { codigo_indicador: string; region_id: number; valor: number }[]
+      const pibByRegion = new Map<number, { pib: number; pct: number }>()
+      for (const r of allPib) {
+        const entry = pibByRegion.get(r.region_id) ?? { pib: 0, pct: 0 }
+        if (r.codigo_indicador === 'ECO_PIB_ANUAL') entry.pib = r.valor
+        if (r.codigo_indicador === 'ECO_PCT_PIB') entry.pct = r.valor
+        pibByRegion.set(r.region_id, entry)
+      }
+
+      const { REGIONS } = await import('@/lib/regions')
+      const allRegionsPib = [...pibByRegion.entries()]
+        .map(([rid, d]) => ({
+          region_id: rid,
+          nombre: REGIONS.find(r => INE_CODE[r.cod] === rid)?.nombre ?? `Región ${rid}`,
+          pib_mm: d.pib,
+          pct_pib: d.pct,
+        }))
+        .sort((a, b) => b.pib_mm - a.pib_mm)
+
+      // Sectorial breakdown
+      const sectorData = (sectorRes.data ?? []) as { codigo_indicador: string; valor: number }[]
+      const SECTOR_NAMES: Record<string, string> = {
+        ECO_PIB_AGRO: 'Agropecuario-silvícola', ECO_PIB_PESCA: 'Pesca',
+        ECO_PIB_MINERIA: 'Minería', ECO_PIB_INDUSTRIA: 'Industria manufacturera',
+        ECO_PIB_ELECTRIC: 'Electricidad, gas y agua', ECO_PIB_CONSTRUC: 'Construcción',
+        ECO_PIB_COMERCIO: 'Comercio', ECO_PIB_REST_HOT: 'Restaurantes y hoteles',
+        ECO_PIB_TRANSPORTE: 'Transporte y comunicaciones', ECO_PIB_FINANCIERO: 'Servicios financieros',
+        ECO_PIB_VIVIENDA: 'Propiedad de vivienda', ECO_PIB_SERV_PERS: 'Servicios personales',
+        ECO_PIB_ADM_PUB: 'Administración pública',
+      }
+      const sectorRows = sectorData
+        .filter(s => SECTOR_NAMES[s.codigo_indicador])
+        .map(s => ({ sector: SECTOR_NAMES[s.codigo_indicador], valor: s.valor }))
+        .sort((a, b) => b.valor - a.valor)
+      const sectorTotal = sectorRows.reduce((s, r) => s + r.valor, 0)
+      const pibSectorial = sectorRows.map(s => ({
+        ...s,
+        pct: sectorTotal > 0 ? (s.valor / sectorTotal) * 100 : 0,
+      }))
+
+      const nacBench = (nacBenchRes.data ?? []) as { codigo_indicador: string; valor: number }[]
+      const desocNac = nacBench.find(r => r.codigo_indicador === 'EMP_DESOC_TASA')?.valor ?? null
+
+      const pibHistory = (pibHistoryRes.data ?? []) as { value: number; period: string }[]
+
+      fichaExtra = {
+        allRegionsPib,
+        pibSectorial,
+        desocupacionNacional: desocNac,
+        pibAnualRegion: trendSummaries?.pibAnual ?? null,
+        pibAnualHistory: pibHistory.map(h => ({ period: h.period, value: h.value })),
+      }
+    }
   } else {
     const { getProjects } = await import('@/lib/projects')
     const all = getProjects()
@@ -430,6 +508,7 @@ export async function POST(request: Request) {
       semaforoTrends,
       nationalBenchmark,
       trendSummaries,
+      fichaExtra,
     )
     // Store in cache (fire-and-forget — don't delay the PDF response)
     if (sbRef) {
@@ -458,6 +537,7 @@ export async function POST(request: Request) {
 
   if (tipo === 'ficha') {
     const FichaRegional = (await import('@/components/FichaRegional')).default
+    const regionProvs = (provinciasData as Record<string, { provincias: { nombre: string; comunas: string }[] }>)[body.region.cod]?.provincias ?? []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     element = React.createElement(FichaRegional as any, {
       region: body.region,
@@ -465,6 +545,10 @@ export async function POST(request: Request) {
       leystopData,
       fecha: body.fecha,
       aiContent,
+      provinciasData: regionProvs,
+      allRegionsPib: fichaExtra?.allRegionsPib ?? [],
+      pibSectorial: fichaExtra?.pibSectorial ?? [],
+      logoSrc: LOGO_DATA_URL,
     })
   } else if (tipo === 'ejecutiva') {
     const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
@@ -502,7 +586,7 @@ export async function POST(request: Request) {
     console.error('[minuta] renderToBuffer error:', err)
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
   }
-  const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : tipo === 'ficha' ? '-ficha' : ''
+  const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : tipo === 'ficha' ? '-kit-viaje' : ''
 
   // Log to v2_minutas_log (no content stored — just metadata + hash)
   if (sbRef) {

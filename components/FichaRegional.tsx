@@ -1,5 +1,5 @@
 import {
-  Document, Page, Text, View, StyleSheet,
+  Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer'
 import type { Region } from '@/lib/regions'
 import type { RegionMetrics } from '@/lib/types'
@@ -7,31 +7,43 @@ import type { FichaRegionalContent, LeystopMinuta } from '@/lib/minutaAI'
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  page: {
-    fontFamily: 'Carlito',
-    fontSize: 10,
-    color: '#111',
-    paddingTop: 50,
-    paddingBottom: 50,
-    paddingHorizontal: 56,
-  },
-  headerBlock: { alignItems: 'center', marginBottom: 20 },
-  headerLine: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', marginBottom: 2 },
-  headerOrg: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textAlign: 'center', marginBottom: 1 },
-  headerOrgSub: { fontSize: 10, textAlign: 'center', marginBottom: 8 },
-  headerTitle: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', textAlign: 'center', marginBottom: 14 },
-  intro: { fontSize: 10, lineHeight: 1.6, textAlign: 'justify', marginBottom: 16 },
-  sectionHead: { fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', textDecoration: 'underline', marginTop: 12, marginBottom: 6 },
-  item: { flexDirection: 'row', marginBottom: 4, paddingLeft: 24 },
-  itemNum: { width: 20, fontSize: 10 },
-  itemText: { flex: 1, fontSize: 10, lineHeight: 1.5 },
-  subItem: { flexDirection: 'row', marginBottom: 2, paddingLeft: 48 },
-  subItemLetter: { width: 18, fontSize: 10 },
-  subItemText: { flex: 1, fontSize: 10, lineHeight: 1.4 },
-  footer: {
-    position: 'absolute', bottom: 24, left: 56, right: 56,
-    flexDirection: 'row', justifyContent: 'flex-end',
-  },
+  page: { fontFamily: 'Carlito', fontSize: 10, color: '#111', paddingTop: 50, paddingBottom: 50, paddingHorizontal: 56 },
+  // Header
+  logoRow: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 16 },
+  logo: { width: 80, height: 'auto' },
+  title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
+  titleRegion: { fontSize: 13, fontWeight: 'bold', textDecoration: 'underline', textAlign: 'center', marginBottom: 12 },
+  introBlock: { fontSize: 10, lineHeight: 1.5, marginBottom: 8 },
+  indexItem: { fontSize: 10, marginLeft: 40, marginBottom: 2 },
+  // Sections
+  sectionTitle: { fontSize: 11, fontWeight: 'bold', marginTop: 14, marginBottom: 8 },
+  subSectionTitle: { fontSize: 10, fontWeight: 'bold', marginTop: 8, marginBottom: 4 },
+  // Bullets
+  bullet: { flexDirection: 'row', marginBottom: 6 },
+  bulletDot: { width: 14, fontSize: 10 },
+  bulletText: { flex: 1, fontSize: 10, lineHeight: 1.5, textAlign: 'justify' },
+  boldText: { fontWeight: 'bold' },
+  // Dash list (for sectors)
+  dashItem: { flexDirection: 'row', marginBottom: 2, paddingLeft: 20 },
+  dashMark: { width: 14, fontSize: 10 },
+  dashText: { flex: 1, fontSize: 10, lineHeight: 1.4 },
+  // Paragraph
+  para: { fontSize: 10, lineHeight: 1.5, textAlign: 'justify', marginBottom: 8 },
+  // Tables
+  tableContainer: { marginTop: 4, marginBottom: 8, borderWidth: 0.5, borderColor: '#999' },
+  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#e8e8e8', borderBottomWidth: 0.5, borderColor: '#999' },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderColor: '#ddd' },
+  tableRowBold: { flexDirection: 'row', borderBottomWidth: 0.5, borderColor: '#ddd', backgroundColor: '#f0f5ff' },
+  tableCell: { fontSize: 9, paddingVertical: 3, paddingHorizontal: 6, lineHeight: 1.3 },
+  tableCellBold: { fontSize: 9, fontWeight: 'bold', paddingVertical: 3, paddingHorizontal: 6, lineHeight: 1.3 },
+  tableHeaderCell: { fontSize: 9, fontWeight: 'bold', paddingVertical: 4, paddingHorizontal: 6 },
+  // PREGO
+  ejeTitle: { fontSize: 10, fontWeight: 'bold', marginTop: 8, marginBottom: 4 },
+  ejeItem: { flexDirection: 'row', marginBottom: 4, paddingLeft: 20 },
+  ejeLetter: { width: 18, fontSize: 10 },
+  ejeText: { flex: 1, fontSize: 10, lineHeight: 1.5, textAlign: 'justify' },
+  // Footer
+  footer: { position: 'absolute', bottom: 24, left: 56, right: 56, flexDirection: 'row', justifyContent: 'flex-end' },
   footerTxt: { fontSize: 9, color: '#666' },
 })
 
@@ -61,30 +73,55 @@ function regionFullName(region: Region): string {
   return OVERRIDES[region.cod] ?? `Región de ${region.nombre}`
 }
 
-// Section builder helpers
-function SH({ num, title }: { num: string; title: string }) {
+function regionShortName(region: Region): string {
+  if (region.cod === 'RM') return 'Metropolitana'
+  return region.nombre
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function Bullet({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View style={{ flexDirection: 'row', marginTop: 12, marginBottom: 6 }}>
-      <Text style={s.sectionHead}>{num}  </Text>
-      <Text style={s.sectionHead}>{title}:</Text>
+    <View style={s.bullet}>
+      <Text style={s.bulletDot}>•</Text>
+      <Text style={s.bulletText}><Text style={s.boldText}>{label}</Text> {children}</Text>
     </View>
   )
 }
 
-function Item({ num, children }: { num: number; children: React.ReactNode }) {
+function DashItem({ text }: { text: string }) {
   return (
-    <View style={s.item}>
-      <Text style={s.itemNum}>{num}.</Text>
-      <Text style={s.itemText}>{children}</Text>
+    <View style={s.dashItem}>
+      <Text style={s.dashMark}>-</Text>
+      <Text style={s.dashText}>{text}</Text>
     </View>
   )
 }
 
-function SubItem({ letter, text }: { letter: string; text: string }) {
+function PdfTable({ headers, rows, boldRowIndex, colWidths }: {
+  headers: string[]
+  rows: string[][]
+  boldRowIndex?: number
+  colWidths: number[]
+}) {
   return (
-    <View style={s.subItem}>
-      <Text style={s.subItemLetter}>{letter}.</Text>
-      <Text style={s.subItemText}>{text}</Text>
+    <View style={s.tableContainer}>
+      <View style={s.tableHeaderRow}>
+        {headers.map((h, i) => (
+          <View key={i} style={{ width: `${colWidths[i]}%` }}>
+            <Text style={s.tableHeaderCell}>{h}</Text>
+          </View>
+        ))}
+      </View>
+      {rows.map((row, ri) => (
+        <View key={ri} style={ri === boldRowIndex ? s.tableRowBold : s.tableRow}>
+          {row.map((cell, ci) => (
+            <View key={ci} style={{ width: `${colWidths[ci]}%` }}>
+              <Text style={ri === boldRowIndex ? s.tableCellBold : s.tableCell}>{cell}</Text>
+            </View>
+          ))}
+        </View>
+      ))}
     </View>
   )
 }
@@ -96,298 +133,248 @@ type Props = {
   leystopData?: LeystopMinuta | null
   fecha: string
   aiContent?: FichaRegionalContent | null | unknown
+  provinciasData?: { nombre: string; comunas: string }[]
+  allRegionsPib?: { region_id: number; nombre: string; pib_mm: number; pct_pib: number }[]
+  pibSectorial?: { sector: string; valor: number; pct: number }[]
+  logoSrc?: string | null
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
-export default function FichaRegional({ region, metrics, leystopData, fecha, aiContent }: Props) {
+export default function FichaRegional({
+  region, metrics, leystopData, fecha, aiContent,
+  provinciasData: provs, allRegionsPib, pibSectorial, logoSrc,
+}: Props) {
   const ai = (aiContent && typeof aiContent === 'object' && 'introduccion' in aiContent)
     ? aiContent as FichaRegionalContent : null
   const m = metrics ?? null
   const ls = leystopData ?? null
+  const INE_CODE: Record<string, number> = { XV: 15, I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12, XIII: 13, XIV: 14, RM: 13, XVI: 16 }
+  const regionId = INE_CODE[region.cod] ?? 0
 
-  type ItemEntry = { text: React.ReactNode; subs?: string[] }
+  // Find this region's rank in PIB table
+  const pibSorted = allRegionsPib ? [...allRegionsPib].sort((a, b) => b.pib_mm - a.pib_mm) : []
+  const pibRank = pibSorted.findIndex(r => r.region_id === regionId)
+  const regionPib = pibSorted.find(r => r.region_id === regionId)
 
-  // ── I. Geográficos ──
-  const geoItems: ItemEntry[] = []
-  if (m?.superficie_km2 != null) {
-    const pctTxt = m.pct_territorio_nacional != null ? `, que representa el ${pct1(m.pct_territorio_nacional)} del territorio nacional` : ''
-    geoItems.push({ text: <>Consta de una superficie total de {fmt(m.superficie_km2)} km²{pctTxt}.</> })
-  }
-  geoItems.push({ text: <>Su capital es {region.capital}{m?.poblacion_total != null ? ` y concentra la mayor cantidad de habitantes de la Región` : ''}.</> })
-  if (m?.comunas_n != null) {
-    const provTxt = m.provincias_n != null ? `, distribuidas en ${m.provincias_n} provincias` : ''
-    geoItems.push({ text: <>La Región está dividida en {m.comunas_n} comunas{provTxt}.</> })
-  }
-  if (m?.densidad_poblacional != null) {
-    geoItems.push({ text: <>Densidad poblacional: {dec1(m.densidad_poblacional)} hab/km².</> })
-  }
-
-  // ── II. Demográficos ──
-  const demoItems: ItemEntry[] = []
-  if (m?.poblacion_total != null) {
-    demoItems.push({ text: <>En la Región habitan {fmt(m.poblacion_total)} personas (Censo 2024).</> })
-  }
-  if (m?.pct_hombres != null && m?.pct_mujeres != null && m?.poblacion_total != null) {
-    const hombres = Math.round(m.poblacion_total * m.pct_hombres / 100)
-    const mujeres = Math.round(m.poblacion_total * m.pct_mujeres / 100)
-    const ratio = m.pct_hombres > 0 && m.pct_mujeres > 0 ? (m.pct_hombres / m.pct_mujeres * 100).toFixed(1).replace('.', ',') : '?'
-    demoItems.push({ text: <>De ese total, {fmt(mujeres)} son mujeres y {fmt(hombres)} hombres, con una razón de {ratio} hombres por cada 100 mujeres (Censo 2024).</> })
-  }
-  if (m?.prom_edad != null || m?.promedio_edad != null) {
-    const edad = m?.prom_edad ?? m?.promedio_edad
-    demoItems.push({ text: <>El promedio de edad es de {dec1(edad)} años (Censo 2024).</> })
-  }
-  if (m?.pct_edad_60_mas != null) {
-    demoItems.push({ text: <>Un {pct1(m.pct_edad_60_mas)} de la población tiene 60 años o más (Censo 2024).</> })
-  }
-  if (m?.pct_urbana != null && m?.pct_rural != null) {
-    demoItems.push({ text: <>Distribución territorial: {pct1(m.pct_urbana)} urbana y {pct1(m.pct_rural)} rural.</> })
-  }
-  if (m?.n_inmigrantes != null) {
-    const pctTxt = m.pct_inmigrantes != null ? `, correspondiente al ${pct1(m.pct_inmigrantes)} de la población` : ''
-    demoItems.push({ text: <>Un {pct1(m.pct_inmigrantes)} de la población es inmigrante, correspondiente a {fmt(m.n_inmigrantes)} personas{pctTxt} (Censo 2024).</> })
-  }
-  if (m?.n_pueblos_orig != null) {
-    const pctTxt = m.pct_indigena != null ? `El ${pct1(m.pct_indigena)} de la población` : `${fmt(m.n_pueblos_orig)} personas`
-    demoItems.push({ text: <>{pctTxt} es o se considera perteneciente a un pueblo indígena (Censo 2024).</> })
-  }
-  if (m?.pct_jefatura_mujer != null) {
-    demoItems.push({ text: <>El {pct1(m.pct_jefatura_mujer)} de los hogares tiene jefatura femenina (Censo 2024).</> })
-  }
-
-  // ── III. Población Vulnerable ──
-  const vulnItems: ItemEntry[] = []
-  if (m?.n_discapacidad != null) {
-    const pctTxt = m.poblacion_total != null && m.poblacion_total > 0 ? ` (${pct1(m.n_discapacidad / m.poblacion_total * 100)} de la población)` : ''
-    vulnItems.push({ text: <>{fmt(m.n_discapacidad)} personas presentan algún tipo de discapacidad{pctTxt} (Censo 2024).</> })
-  }
-  if (m?.hogares_rsh_tramo40 != null) {
-    const pctTxt = m.pct_rsh_tramo40 != null ? `el ${pct1(m.pct_rsh_tramo40)} de las personas se encuentran en el tramo del 40% más vulnerable del RSH` : `${fmt(m.hogares_rsh_tramo40)} hogares en el tramo 40% más vulnerable del RSH`
-    vulnItems.push({ text: <>{pctTxt}.</> })
-  }
-  if (m?.pct_pobreza_severa != null) {
-    vulnItems.push({ text: <>La pobreza severa —que considera simultáneamente pobreza por ingresos y multidimensional— alcanza {pct1(m.pct_pobreza_severa)} en la Región (CASEN 2024).</> })
-  }
-  if (m?.pct_pobreza_ingresos != null) {
-    const extTxt = m.pct_pobreza_extrema != null ? `; mientras el ${pct1(m.pct_pobreza_extrema)} se encuentra en pobreza extrema` : ''
-    vulnItems.push({ text: <>El {pct1(m.pct_pobreza_ingresos)} de la población se encuentra en situación de pobreza por ingresos{extTxt} (CASEN 2024).</> })
-  }
-  if (m?.pct_pobreza_multidimensional != null) {
-    vulnItems.push({ text: <>En cuanto a pobreza multidimensional, el {pct1(m.pct_pobreza_multidimensional)} de la población de la Región se encuentra en esta condición (CASEN 2024).</> })
-  }
-
-  // ── IV. Economía ──
-  const econItems: ItemEntry[] = []
-  if (m?.pib_regional != null) {
-    const pctTxt = m.pct_pib_nacional != null ? `, equivalente al ${pct1(m.pct_pib_nacional)} del PIB nacional` : ''
-    econItems.push({ text: <>El PIB de la Región alcanza {fmt(m.pib_regional)} MM${pctTxt}.</> })
-  }
-  if (m?.sectores_productivos_principales) {
-    econItems.push({ text: <>Sus principales sectores productivos son: {m.sectores_productivos_principales}.</> })
-  }
-  if (m?.tasa_participacion_laboral != null) {
-    econItems.push({ text: <>La tasa de participación laboral es de {pct1(m.tasa_participacion_laboral)}.</> })
-  }
-  if (m?.tasa_desocupacion != null) {
-    econItems.push({ text: <>La tasa de desocupación es de {pct1(m.tasa_desocupacion)}.</> })
-  }
-  if (m?.tasa_ocupacion != null) {
-    econItems.push({ text: <>La tasa de ocupación es de {pct1(m.tasa_ocupacion)}.</> })
-  }
-  if (m?.tasa_ocupacion_informal != null) {
-    econItems.push({ text: <>La tasa de ocupación informal alcanza {pct1(m.tasa_ocupacion_informal)}.</> })
-  }
-  if (m?.n_ocupado != null && m?.n_desocupado != null) {
-    econItems.push({ text: <>{fmt(m.n_ocupado)} personas ocupadas y {fmt(m.n_desocupado)} desocupadas (Censo 2024).</> })
-  }
-  if (m?.variacion_interanual != null) {
-    econItems.push({ text: <>La variación interanual de actividad económica es de {m.variacion_interanual}%.</> })
-  }
-  if (m?.inversion_publica_ejecutada != null) {
-    econItems.push({ text: <>Inversión pública ejecutada: {fmt(m.inversion_publica_ejecutada)} MM$.</> })
-  }
-  if (m?.inversion_fndr != null) {
-    econItems.push({ text: <>Inversión FNDR: {fmt(m.inversion_fndr)} MM$.</> })
-  }
-  if (m?.vocacion_regional) {
-    econItems.push({ text: <>Vocación regional: {m.vocacion_regional}.</> })
-  }
-
-  // ── V. Educación ──
-  const eduItems: ItemEntry[] = []
-  if (m?.anios_escolaridad_promedio != null) {
-    eduItems.push({ text: <>La Región presenta {dec1(m.anios_escolaridad_promedio)} años de escolaridad promedio por habitante (Censo 2024).</> })
-  }
-  if (m?.pct_educacion_superior != null) {
-    eduItems.push({ text: <>El {pct1(m.pct_educacion_superior)} de la población cuenta con educación terciaria, maestría o doctorado (Censo 2024).</> })
-  }
-  if (m?.tasa_alfabetismo != null) {
-    eduItems.push({ text: <>Tasa de alfabetismo: {pct1(m.tasa_alfabetismo)}.</> })
-  }
-  if (m?.matricula_escolar_total != null) {
-    eduItems.push({ text: <>Matrícula escolar total: {fmt(m.matricula_escolar_total)} estudiantes.</> })
-  }
-  if (m?.cobertura_parvularia_pct != null) {
-    eduItems.push({ text: <>Cobertura de matrícula parvularia: {pct1(m.cobertura_parvularia_pct)}.</> })
-  }
-
-  // ── VI. Salud ──
-  const saludItems: ItemEntry[] = []
-  if (m?.hospitales_n != null) {
-    saludItems.push({ text: <>La Región posee {m.hospitales_n} hospitales.</> })
-  }
-  if (m?.camas_por_1000_hab != null) {
-    saludItems.push({ text: <>{dec1(m.camas_por_1000_hab)} camas hospitalarias por cada 1.000 habitantes.</> })
-  }
-  if (m?.pct_fonasa != null) {
-    saludItems.push({ text: <>El {pct1(m.pct_fonasa)} de la población está adscrita a FONASA.</> })
-  }
-  if (m?.lista_espera_n != null) {
-    saludItems.push({ text: <>{fmt(m.lista_espera_n)} personas en lista de espera de salud.</> })
-  }
-
-  // ── VII. Vivienda ──
-  const vivItems: ItemEntry[] = []
-  if (m?.deficit_habitacional != null) {
-    vivItems.push({ text: <>Déficit habitacional: {fmt(m.deficit_habitacional)} viviendas.</> })
-  }
-  if (m?.n_deficit_cuantitativo != null) {
-    vivItems.push({ text: <>Déficit cuantitativo: {fmt(m.n_deficit_cuantitativo)} viviendas (Censo 2024).</> })
-  }
-  if (m?.pct_hacinamiento != null || m?.pct_viv_hacinadas != null) {
-    const hac = m?.pct_hacinamiento ?? m?.pct_viv_hacinadas
-    vivItems.push({ text: <>Hacinamiento: {pct1(hac)} de las viviendas (Censo 2024).</> })
-  }
-  if (m?.pct_viv_irrecuperables != null) {
-    vivItems.push({ text: <>Viviendas irrecuperables: {pct1(m.pct_viv_irrecuperables)} (Censo 2024).</> })
-  }
-  if (m?.pct_tenencia_arrendada != null) {
-    vivItems.push({ text: <>Tenencia arrendada: {pct1(m.pct_tenencia_arrendada)} de hogares (Censo 2024).</> })
-  }
-  if (m?.pct_acceso_agua_publica != null) {
-    vivItems.push({ text: <>Acceso a agua de red pública: {pct1(m.pct_acceso_agua_publica)} de viviendas (Censo 2024).</> })
-  }
-
-  // ── VIII. Conectividad ──
-  const conItems: ItemEntry[] = []
-  if (m?.pct_hogares_internet != null) {
-    conItems.push({ text: <>El {pct1(m.pct_hogares_internet)} de los hogares tiene acceso a internet (Censo 2024).</> })
-  }
-  if (m?.pct_internet_movil != null) {
-    conItems.push({ text: <>Internet móvil: {pct1(m.pct_internet_movil)} de hogares (Censo 2024).</> })
-  }
-  if (m?.pct_internet_fijo != null) {
-    conItems.push({ text: <>Internet fijo: {pct1(m.pct_internet_fijo)} de hogares (Censo 2024).</> })
-  }
-  if (m?.localidades_aisladas_n != null) {
-    conItems.push({ text: <>{m.localidades_aisladas_n} localidades aisladas en la Región.</> })
-  }
-
-  // ── IX. Medio Ambiente ──
-  const maItems: ItemEntry[] = []
-  if (m?.pct_superficie_protegida != null) {
-    maItems.push({ text: <>Superficie protegida: {pct1(m.pct_superficie_protegida)} del territorio regional.</> })
-  }
-  if (m?.residuos_domiciliarios_percapita != null) {
-    maItems.push({ text: <>Residuos domiciliarios per cápita: {dec1(m.residuos_domiciliarios_percapita)} kg/hab/día.</> })
-  }
-
-  // ── X. Seguridad ──
-  const segItems: ItemEntry[] = []
-  if (m?.pct_hogares_victimas_dmcs != null) {
-    segItems.push({ text: <>Tasa de victimización: {pct1(m.pct_hogares_victimas_dmcs)} de hogares víctimas de delitos de mayor connotación social, DMCS (ENUSC).</> })
-  }
-  if (m?.pct_percepcion_inseguridad != null) {
-    segItems.push({ text: <>Percepción de aumento de la delincuencia: {pct1(m.pct_percepcion_inseguridad)} (ENUSC).</> })
-  }
-  if (m?.tasa_denuncias_100k != null) {
-    segItems.push({ text: <>Tasa de denuncias: {fmt(m.tasa_denuncias_100k)} por cada 100.000 habitantes.</> })
-  }
-  if (m?.tasa_delitos_100k != null) {
-    segItems.push({ text: <>Tasa de delitos: {fmt(m.tasa_delitos_100k)} por cada 100.000 habitantes.</> })
-  }
-  // LeyStop / Carabineros
-  if (ls) {
-    if (ls.tasa_registro != null) {
-      segItems.push({ text: <>Tasa de registro LeyStop: {ls.tasa_registro.toFixed(0)} casos por 100.000 hab ({ls.semana ?? 'última semana disponible'}) (Carabineros).</> })
-    }
-    if (ls.casos_ultima_semana != null) {
-      const varSem = ls.var_ultima_semana != null ? ` (${ls.var_ultima_semana > 0 ? '+' : ''}${ls.var_ultima_semana.toFixed(1)}% vs semana anterior)` : ''
-      segItems.push({ text: <>{fmt(ls.casos_ultima_semana)} casos registrados en la última semana{varSem} (Carabineros).</> })
-    }
-    if (ls.casos_anno_fecha != null && ls.casos_anno_fecha_anterior != null) {
-      const varAnno = ls.var_anno_fecha != null ? ` (${ls.var_anno_fecha > 0 ? '+' : ''}${ls.var_anno_fecha.toFixed(1)}%)` : ''
-      segItems.push({ text: <>Casos año a la fecha: {fmt(ls.casos_anno_fecha)} vs {fmt(ls.casos_anno_fecha_anterior)} mismo período año anterior{varAnno} (Carabineros).</> })
-    }
-    const topDelitos = [
-      ls.mayor_registro_1 ? `${ls.mayor_registro_1} (${ls.pct_1?.toFixed(0) ?? '?'}%)` : null,
-      ls.mayor_registro_2 ? `${ls.mayor_registro_2} (${ls.pct_2?.toFixed(0) ?? '?'}%)` : null,
-      ls.mayor_registro_3 ? `${ls.mayor_registro_3} (${ls.pct_3?.toFixed(0) ?? '?'}%)` : null,
-      ls.mayor_registro_4 ? `${ls.mayor_registro_4} (${ls.pct_4?.toFixed(0) ?? '?'}%)` : null,
-      ls.mayor_registro_5 ? `${ls.mayor_registro_5} (${ls.pct_5?.toFixed(0) ?? '?'}%)` : null,
-    ].filter(Boolean)
-    if (topDelitos.length > 0) {
-      segItems.push({ text: <>Delitos más frecuentes: {topDelitos.join(', ')} (Carabineros).</> })
-    }
-    if (ls.controles != null) {
-      segItems.push({ text: <>Actividad operativa: {fmt(ls.controles)} controles ({fmt(ls.controles_identidad)} de identidad, {fmt(ls.controles_vehicular)} vehiculares), {fmt(ls.fiscalizaciones)} fiscalizaciones (Carabineros).</> })
-    }
-    if (ls.incautaciones != null) {
-      segItems.push({ text: <>Incautaciones: {fmt(ls.incautaciones)} ({fmt(ls.incaut_fuego)} armas de fuego, {fmt(ls.incaut_blancas)} armas blancas) (Carabineros).</> })
-    }
-    const annoItems: string[] = []
-    if (ls.allanamientos_anno != null) annoItems.push(`${fmt(ls.allanamientos_anno)} allanamientos`)
-    if (ls.vehiculos_recuperados_anno != null) annoItems.push(`${fmt(ls.vehiculos_recuperados_anno)} vehículos recuperados`)
-    if (ls.decomisos_anno != null) annoItems.push(`${fmt(ls.decomisos_anno)} decomisos`)
-    if (annoItems.length > 0) {
-      segItems.push({ text: <>Año a la fecha: {annoItems.join(', ')} (Carabineros).</> })
-    }
-  }
-
-  const sections = [
-    { num: 'I.',    title: 'Geográficos',          items: geoItems },
-    { num: 'II.',   title: 'Demográficos',          items: demoItems },
-    { num: 'III.',  title: 'Población Vulnerable',   items: vulnItems },
-    { num: 'IV.',   title: 'Economía',               items: econItems },
-    { num: 'V.',    title: 'Educación',              items: eduItems },
-    { num: 'VI.',   title: 'Salud',                  items: saludItems },
-    { num: 'VII.',  title: 'Vivienda',               items: vivItems },
-    { num: 'VIII.', title: 'Conectividad',           items: conItems },
-    { num: 'IX.',   title: 'Medio Ambiente',          items: maItems },
-    { num: 'X.',    title: 'Seguridad',               items: segItems },
-  ].filter(s => s.items.length > 0)
+  // Top 5 sectors
+  const topSectors = pibSectorial?.slice(0, 5) ?? []
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={s.page} wrap>
 
-        {/* Header */}
-        <View style={s.headerBlock}>
-          <Text style={s.headerLine}>FICHA REGIONAL</Text>
-          <Text style={s.headerOrg}>Unidad de Regiones - División de Coordinación Interministerial</Text>
-          <Text style={s.headerOrgSub}>Ministerio del Interior</Text>
-          <Text style={s.headerTitle}>Data {regionFullName(region)} - {fecha}</Text>
-        </View>
+        {/* ── Header ─── */}
+        {logoSrc && (
+          <View style={s.logoRow}>
+            <Image src={logoSrc} style={s.logo} />
+          </View>
+        )}
+        <Text style={s.title}>MINUTA REGIONAL PARA LA AUTORIDAD</Text>
+        <Text style={s.titleRegion}>REGIÓN DEL {regionShortName(region).toUpperCase()}</Text>
 
-        {/* Intro paragraph (AI-generated) */}
-        {ai?.introduccion ? (
-          <Text style={s.intro}>{ai.introduccion}</Text>
+        <Text style={s.introBlock}>
+          La presente minuta trabajada por la División de Coordinación Interministerial, Gobierno Interior y Estudios considera:
+        </Text>
+
+        <Text style={s.indexItem}>I.     Caracterización general de la región</Text>
+        <Text style={s.indexItem}>II.    Indicadores socioeconómicos clave</Text>
+        <Text style={s.indexItem}>III.   Plan Regional de {regionShortName(region)}</Text>
+
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* I. CARACTERIZACIÓN GENERAL                                           */}
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>I. Caracterización general</Text>
+
+        {m?.superficie_km2 != null && (
+          <Bullet label="Localización y superficie:">
+            {m.vocacion_regional ? `${m.vocacion_regional}; ` : ''}{fmt(m.superficie_km2)} km², equivalente al {pct1(m.pct_territorio_nacional)} del territorio nacional.
+          </Bullet>
+        )}
+
+        <Bullet label="Organización político-administrativa:">
+          {m?.provincias_n ?? '?'} provincias y {m?.comunas_n ?? '?'} comunas. Capital regional: {region.capital}.
+        </Bullet>
+
+        {provs && provs.length > 0 && (
+          <PdfTable
+            headers={['Provincia', 'Comunas']}
+            rows={provs.map(p => [p.nombre, p.comunas])}
+            colWidths={[30, 70]}
+          />
+        )}
+
+        {m?.poblacion_total != null && (
+          <Bullet label="Población (Censo 2024):">
+            {fmt(m.poblacion_total)} habitantes ({pct1(m.poblacion_total / 19_960_889 * 100)} del total nacional), con {m.pct_mujeres != null && m.poblacion_total ? `${fmt(Math.round(m.poblacion_total * m.pct_mujeres / 100))} mujeres (${pct1(m.pct_mujeres)})` : ''} y {m.pct_hombres != null && m.poblacion_total ? `${fmt(Math.round(m.poblacion_total * m.pct_hombres / 100))} hombres (${pct1(m.pct_hombres)})` : ''}.
+          </Bullet>
+        )}
+
+        {ai?.estructura_etaria ? (
+          <Bullet label="Estructura etaria:">
+            {m?.pct_edad_60_mas != null ? `${pct1(m.pct_edad_60_mas)} de 60 años o más, ` : ''}con una edad promedio de {dec1(m?.promedio_edad ?? m?.prom_edad)} años. {ai.estructura_etaria}
+          </Bullet>
+        ) : m?.prom_edad != null || m?.promedio_edad != null ? (
+          <Bullet label="Estructura etaria:">
+            Edad promedio de {dec1(m?.promedio_edad ?? m?.prom_edad)} años{m?.pct_edad_60_mas != null ? `; ${pct1(m.pct_edad_60_mas)} de 60 años o más` : ''}.
+          </Bullet>
         ) : null}
 
-        {/* Numbered sections */}
-        {sections.map(sec => (
-          <View key={sec.num}>
-            <SH num={sec.num} title={sec.title} />
-            {sec.items.map((item, i) => (
-              <View key={i}>
-                <Item num={i + 1}>{item.text}</Item>
-                {item.subs?.map((sub, j) => (
-                  <SubItem key={j} letter={String.fromCharCode(97 + j)} text={sub} />
-                ))}
+        {ai?.composicion ? (
+          <Bullet label="Composición:">
+            {ai.composicion}
+          </Bullet>
+        ) : (m?.pct_indigena != null || m?.pct_inmigrantes != null) ? (
+          <Bullet label="Composición:">
+            {m?.pct_indigena != null ? `${pct1(m.pct_indigena)} perteneciente a pueblos originarios (${fmt(m.n_pueblos_orig)} personas)` : ''}
+            {m?.pct_indigena != null && m?.pct_inmigrantes != null ? '; ' : ''}
+            {m?.pct_inmigrantes != null ? `${pct1(m.pct_inmigrantes)} de población inmigrante (${fmt(m.n_inmigrantes)} personas)` : ''}.
+            {m?.n_discapacidad != null ? ` Un ${pct1(m.n_discapacidad / (m.poblacion_total ?? 1) * 100)} de la población presenta algún tipo de discapacidad.` : ''}
+          </Bullet>
+        ) : null}
+
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* II. INDICADORES SOCIOECONÓMICOS CLAVE                                */}
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>II. Indicadores socioeconómicos clave</Text>
+
+        {/* PIB Regional */}
+        <Bullet label="PIB regional:">
+          ${regionPib ? `${fmt(Math.round(regionPib.pib_mm))} miles de millones de pesos (${new Date().getFullYear() - 1})` : `${fmt(m?.pib_regional)} MM$`}, equivalentes al {regionPib ? `${regionPib.pct_pib.toFixed(2).replace('.', ',')}%` : pct1(m?.pct_pib_nacional)} del PIB nacional{pibRank >= 0 ? `, manteniéndose como la ${pibRank + 1}ª economía regional del país` : ''}.
+        </Bullet>
+
+        {ai?.matriz_productiva && (
+          <Text style={s.para}>
+            {ai.matriz_productiva}
+          </Text>
+        )}
+
+        {topSectors.length > 0 && (
+          <View style={{ marginBottom: 4, paddingLeft: 20 }}>
+            <Text style={{ fontSize: 10, marginBottom: 4 }}>
+              <Text style={s.boldText}>Principales sectores:</Text>
+            </Text>
+            {topSectors.map((sec, i) => (
+              <DashItem key={i} text={`${sec.sector} (${sec.pct.toFixed(1).replace('.', ',')}%)`} />
+            ))}
+          </View>
+        )}
+
+        {/* PIB 16-region table */}
+        {pibSorted.length > 0 && (
+          <PdfTable
+            headers={['Región', 'Miles de MM CLP', '% PIB Nacional']}
+            rows={pibSorted.map(r => [
+              r.nombre,
+              `$${fmt(Math.round(r.pib_mm))}`,
+              `${r.pct_pib.toFixed(1).replace('.', ',')}%`,
+            ])}
+            boldRowIndex={pibSorted.findIndex(r => r.region_id === regionId)}
+            colWidths={[45, 30, 25]}
+          />
+        )}
+
+        {ai?.pib_comentario && (
+          <Text style={s.para}>{ai.pib_comentario}</Text>
+        )}
+
+        {/* Mercado laboral */}
+        <Bullet label={`Mercado laboral (INE-ENE, ${fecha.slice(0, 7).replace('-', '/')}):`}>
+          {''}
+        </Bullet>
+
+        <PdfTable
+          headers={['Indicador', regionShortName(region), 'Contexto']}
+          rows={[
+            ['Tasa de desocupación', m?.tasa_desocupacion != null ? `${pct1(m.tasa_desocupacion)}` : '—', ai?.mercado_laboral_nota ?? '—'],
+            ['Ocupados', m?.n_ocupado != null ? `${fmt(Math.round((m.n_ocupado)))} mil` : '—', '—'],
+            ['Fuerza de trabajo', m?.n_desocupado != null && m?.n_ocupado != null ? `${fmt(Math.round(m.n_ocupado + m.n_desocupado))} mil` : '—', '—'],
+            ['Informalidad laboral (CASEN 2024)', m?.tasa_ocupacion_informal != null ? `${pct1(m.tasa_ocupacion_informal)} de hogares` : '—', '—'],
+          ]}
+          colWidths={[40, 25, 35]}
+        />
+
+        {/* Ingresos y pobreza */}
+        {ai?.ingresos_pobreza ? (
+          <Bullet label="Ingresos y pobreza (CASEN 2024):">
+            {ai.ingresos_pobreza}
+          </Bullet>
+        ) : m?.pct_pobreza_ingresos != null ? (
+          <Bullet label="Ingresos y pobreza (CASEN 2024):">
+            La pobreza por ingresos alcanza el {pct1(m.pct_pobreza_ingresos)} (nacional ~17,3%){m.pct_pobreza_extrema != null ? `; la pobreza extrema el ${pct1(m.pct_pobreza_extrema)}` : ''}{m.pct_pobreza_multidimensional != null ? `; la pobreza multidimensional el ${pct1(m.pct_pobreza_multidimensional)}` : ''}.
+          </Bullet>
+        ) : null}
+
+        {/* Educación */}
+        {ai?.educacion_nota ? (
+          <Bullet label="Educación (Censo 2024):">
+            {ai.educacion_nota}
+          </Bullet>
+        ) : m?.anios_escolaridad_promedio != null ? (
+          <Bullet label="Educación (Censo 2024):">
+            {dec1(m.anios_escolaridad_promedio)} años de escolaridad promedio en población de 18 años o más{m.pct_educacion_superior != null ? `; ${pct1(m.pct_educacion_superior)} con educación superior` : ''}.
+          </Bullet>
+        ) : null}
+
+        {/* Salud */}
+        {ai?.salud_nota ? (
+          <Bullet label="Salud (CASEN 2024):">
+            {ai.salud_nota}
+          </Bullet>
+        ) : m?.pct_fonasa != null ? (
+          <Bullet label="Salud:">
+            {pct1(m.pct_fonasa)} de la población adscrita a FONASA{m.lista_espera_n != null ? `; ${fmt(m.lista_espera_n)} personas en lista de espera` : ''}.
+          </Bullet>
+        ) : null}
+
+        {/* Vivienda */}
+        {ai?.vivienda_nota ? (
+          <Bullet label="Vivienda (Censo 2024):">
+            {ai.vivienda_nota}
+          </Bullet>
+        ) : m?.deficit_habitacional != null ? (
+          <Bullet label="Vivienda (Censo 2024):">
+            Déficit habitacional de {fmt(m.deficit_habitacional)} viviendas{m.pct_hacinamiento != null ? `; hacinamiento en ${pct1(m.pct_hacinamiento)} de las viviendas` : ''}.
+          </Bullet>
+        ) : null}
+
+        {/* Seguridad */}
+        {ai?.seguridad_nota ? (
+          <Bullet label={`Seguridad pública (LeyStop Carabineros${ls?.semana ? `, semana ${ls.semana}` : ''}):`}>
+            {ai.seguridad_nota}
+          </Bullet>
+        ) : ls ? (
+          <Bullet label={`Seguridad pública (LeyStop Carabineros${ls.semana ? `, semana ${ls.semana}` : ''}):`}>
+            {ls.casos_anno_fecha != null ? `${fmt(ls.casos_anno_fecha)} casos registrados en lo que va del año` : ''}
+            {ls.var_anno_fecha != null ? `, con una variación anual de ${ls.var_anno_fecha > 0 ? '+' : ''}${ls.var_anno_fecha.toFixed(1).replace('.', ',')}%` : ''}.
+          </Bullet>
+        ) : null}
+
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* III. PLAN REGIONAL DE GOBIERNO (PREGO)                               */}
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        <Text style={s.sectionTitle}>III. Plan Regional de Gobierno (PREGO)</Text>
+
+        {ai?.prego_intro && (
+          <Text style={s.para}>{ai.prego_intro}</Text>
+        )}
+
+        {ai?.prego_ejes?.map(eje => (
+          <View key={eje.numero}>
+            <Text style={s.ejeTitle}>{eje.numero}. {eje.nombre}</Text>
+            {eje.items.map((item, i) => (
+              <View key={i} style={s.ejeItem}>
+                <Text style={s.ejeLetter}>{item.letra}.</Text>
+                <Text style={s.ejeText}>{item.texto}</Text>
               </View>
             ))}
           </View>
         ))}
+
+        {!ai?.prego_ejes?.length && (
+          <Text style={s.para}>
+            El Plan Regional de Gobierno se encuentra en proceso de consolidación. Su detalle se incorporará en la siguiente iteración de la minuta.
+          </Text>
+        )}
 
         {/* Footer */}
         <View style={s.footer} fixed>

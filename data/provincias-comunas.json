@@ -1,0 +1,121 @@
+{
+  "XV": {
+    "provincias": [
+      { "nombre": "Arica (capital regional)", "comunas": "Arica, Camarones (2 comunas)" },
+      { "nombre": "Parinacota (capital Putre)", "comunas": "Putre, General Lagos (2 comunas)" }
+    ]
+  },
+  "I": {
+    "provincias": [
+      { "nombre": "Iquique (capital regional)", "comunas": "Iquique, Alto Hospicio (2 comunas)" },
+      { "nombre": "Tamarugal (capital Pozo Almonte)", "comunas": "Pozo Almonte, Camiña, Colchane, Huara, Pica (5 comunas)" }
+    ]
+  },
+  "II": {
+    "provincias": [
+      { "nombre": "Antofagasta (capital regional)", "comunas": "Antofagasta, Mejillones, Sierra Gorda, Taltal (4 comunas)" },
+      { "nombre": "El Loa (capital Calama)", "comunas": "Calama, Ollagüe, San Pedro de Atacama (3 comunas)" },
+      { "nombre": "Tocopilla (capital Tocopilla)", "comunas": "Tocopilla, María Elena (2 comunas)" }
+    ]
+  },
+  "III": {
+    "provincias": [
+      { "nombre": "Copiapó (capital regional)", "comunas": "Copiapó, Caldera, Tierra Amarilla (3 comunas)" },
+      { "nombre": "Chañaral (capital Chañaral)", "comunas": "Chañaral, Diego de Almagro (2 comunas)" },
+      { "nombre": "Huasco (capital Vallenar)", "comunas": "Vallenar, Alto del Carmen, Freirina, Huasco (4 comunas)" }
+    ]
+  },
+  "IV": {
+    "provincias": [
+      { "nombre": "Elqui (capital La Serena)", "comunas": "La Serena, Coquimbo, Andacollo, La Higuera, Paihuano, Vicuña (6 comunas)" },
+      { "nombre": "Limarí (capital Ovalle)", "comunas": "Ovalle, Combarbalá, Monte Patria, Punitaqui, Río Hurtado (5 comunas)" },
+      { "nombre": "Choapa (capital Illapel)", "comunas": "Illapel, Canela, Los Vilos, Salamanca (4 comunas)" }
+    ]
+  },
+  "V": {
+    "provincias": [
+      { "nombre": "Valparaíso (capital regional)", "comunas": "Valparaíso, Viña del Mar, Concón, Quintero, Puchuncaví, Casablanca, Juan Fernández, Isla de Pascua (8 comunas)" },
+      { "nombre": "Marga Marga (capital Quilpué)", "comunas": "Quilpué, Villa Alemana, Limache, Olmué (4 comunas)" },
+      { "nombre": "San Antonio (capital San Antonio)", "comunas": "San Antonio, Algarrobo, Cartagena, El Quisco, El Tabo, Santo Domingo (6 comunas)" },
+      { "nombre": "Petorca (capital La Ligua)", "comunas": "La Ligua, Cabildo, Papudo, Petorca, Zapallar (5 comunas)" },
+      { "nombre": "Quillota (capital Quillota)", "comunas": "Quillota, Calera, Hijuelas, La Cruz, Nogales (5 comunas)" },
+      { "nombre": "San Felipe de Aconcagua (capital San Felipe)", "comunas": "San Felipe, Catemu, Llay-Llay, Panquehue, Putaendo, Santa María (6 comunas)" },
+      { "nombre": "Los Andes (capital Los Andes)", "comunas": "Los Andes, Calle Larga, Rinconada, San Esteban (4 comunas)" }
+    ]
+  },
+  "RM": {
+    "provincias": [
+      { "nombre": "Santiago (capital regional)", "comunas": "Santiago, Cerrillos, Cerro Navia, Conchalí, El Bosque, Estación Central, Huechuraba, Independencia, La Cisterna, La Florida, La Granja, La Pintana, La Reina, Las Condes, Lo Barnechea, Lo Espejo, Lo Prado, Macul, Maipú, Ñuñoa, Pedro Aguirre Cerda, Peñalolén, Providencia, Pudahuel, Quilicura, Quinta Normal, Recoleta, Renca, San Joaquín, San Miguel, San Ramón, Vitacura (32 comunas)" },
+      { "nombre": "Cordillera (capital Puente Alto)", "comunas": "Puente Alto, Pirque, San José de Maipo (3 comunas)" },
+      { "nombre": "Chacabuco (capital Colina)", "comunas": "Colina, Lampa, Tiltil (3 comunas)" },
+      { "nombre": "Maipo (capital San Bernardo)", "comunas": "San Bernardo, Buin, Calera de Tango, Paine (4 comunas)" },
+      { "nombre": "Melipilla (capital Melipilla)", "comunas": "Melipilla, Alhué, Curacaví, María Pinto, San Pedro (5 comunas)" },
+      { "nombre": "Talagante (capital Talagante)", "comunas": "Talagante, El Monte, Isla de Maipo, Padre Hurtado, Peñaflor (5 comunas)" }
+    ]
+  },
+  "VI": {
+    "provincias": [
+      { "nombre": "Cachapoal (capital Rancagua)", "comunas": "Rancagua, Codegua, Coinco, Coltauco, Doñihue, Graneros, Las Cabras, Machalí, Malloa, Mostazal, Olivar, Peumo, Pichidegua, Quinta de Tilcoco, Rengo, Requínoa, San Vicente (17 comunas)" },
+      { "nombre": "Colchagua (capital San Fernando)", "comunas": "San Fernando, Chépica, Chimbarongo, Lolol, Nancagua, Palmilla, Peralillo, Placilla, Pumanque, Santa Cruz (10 comunas)" },
+      { "nombre": "Cardenal Caro (capital Pichilemu)", "comunas": "Pichilemu, La Estrella, Litueche, Marchihue, Navidad, Paredones (6 comunas)" }
+    ]
+  },
+  "VII": {
+    "provincias": [
+      { "nombre": "Talca (capital regional)", "comunas": "Talca, Constitución, Curepto, Empedrado, Maule, Pelarco, Pencahue, Río Claro, San Clemente, San Rafael (10 comunas)" },
+      { "nombre": "Curicó (capital Curicó)", "comunas": "Curicó, Hualañé, Licantén, Molina, Rauco, Romeral, Sagrada Familia, Teno, Vichuquén (9 comunas)" },
+      { "nombre": "Linares (capital Linares)", "comunas": "Linares, Colbún, Longaví, Parral, Retiro, San Javier, Villa Alegre, Yerbas Buenas (8 comunas)" },
+      { "nombre": "Cauquenes (capital Cauquenes)", "comunas": "Cauquenes, Chanco, Pelluhue (3 comunas)" }
+    ]
+  },
+  "XVI": {
+    "provincias": [
+      { "nombre": "Diguillín (capital Chillán)", "comunas": "Chillán, Bulnes, Chillán Viejo, El Carmen, Pemuco, Pinto, Quillón, San Ignacio, Yungay (9 comunas)" },
+      { "nombre": "Itata (capital Quirihue)", "comunas": "Quirihue, Cobquecura, Coelemu, Ninhue, Portezuelo, Ránquil, Treguaco (7 comunas)" },
+      { "nombre": "Punilla (capital San Carlos)", "comunas": "San Carlos, Coihueco, Ñiquén, San Fabián, San Nicolás (5 comunas)" }
+    ]
+  },
+  "VIII": {
+    "provincias": [
+      { "nombre": "Concepción (capital regional)", "comunas": "Concepción, Talcahuano, San Pedro de la Paz, Chiguayante, Coronel, Lota, Penco, Tomé, Hualpén, Hualqui, Santa Juana, Florida (12 comunas)" },
+      { "nombre": "Arauco (capital Lebu)", "comunas": "Arauco, Cañete, Contulmo, Curanilahue, Lebu, Los Álamos, Tirúa (7 comunas)" },
+      { "nombre": "Biobío (capital Los Ángeles)", "comunas": "Los Ángeles, Mulchén, Nacimiento, Negrete, Quilaco, Quilleco, San Rosendo, Santa Bárbara, Tucapel, Antuco, Cabrero, Yumbel, Laja, Alto Biobío (14 comunas)" }
+    ]
+  },
+  "IX": {
+    "provincias": [
+      { "nombre": "Cautín (capital Temuco)", "comunas": "Temuco, Padre Las Casas, Carahue, Cholchol, Cunco, Curarrehue, Freire, Galvarino, Gorbea, Lautaro, Loncoche, Melipeuco, Nueva Imperial, Perquenco, Pitrufquén, Pucón, Saavedra, Teodoro Schmidt, Toltén, Vilcún, Villarrica (21 comunas)" },
+      { "nombre": "Malleco (capital Angol)", "comunas": "Angol, Collipulli, Curacautín, Ercilla, Lonquimay, Los Sauces, Lumaco, Purén, Renaico, Traiguén, Victoria (11 comunas)" }
+    ]
+  },
+  "XIV": {
+    "provincias": [
+      { "nombre": "Valdivia (capital regional)", "comunas": "Valdivia, Corral, Lanco, Los Lagos, Máfil, Mariquina, Paillaco, Panguipulli (8 comunas)" },
+      { "nombre": "Ranco (capital La Unión)", "comunas": "La Unión, Futrono, Lago Ranco, Río Bueno (4 comunas)" }
+    ]
+  },
+  "X": {
+    "provincias": [
+      { "nombre": "Llanquihue (capital Puerto Montt)", "comunas": "Puerto Montt, Calbuco, Cochamó, Fresia, Frutillar, Los Muermos, Llanquihue, Maullín, Puerto Varas (9 comunas)" },
+      { "nombre": "Chiloé (capital Castro)", "comunas": "Castro, Ancud, Chonchi, Curaco de Vélez, Dalcahue, Puqueldón, Queilén, Quellón, Quemchi, Quinchao (10 comunas)" },
+      { "nombre": "Osorno (capital Osorno)", "comunas": "Osorno, Entre Lagos, Puyehue, Purranque, Río Negro, San Juan de la Costa, San Pablo (7 comunas)" },
+      { "nombre": "Palena (capital Chaitén)", "comunas": "Chaitén, Futaleufú, Hualaihué, Palena (4 comunas)" }
+    ]
+  },
+  "XI": {
+    "provincias": [
+      { "nombre": "Coyhaique (capital regional)", "comunas": "Coyhaique, Lago Verde (2 comunas)" },
+      { "nombre": "Aysén (capital Puerto Aysén)", "comunas": "Aysén, Cisnes, Guaitecas (3 comunas)" },
+      { "nombre": "General Carrera (capital Chile Chico)", "comunas": "Chile Chico, Río Ibáñez (2 comunas)" },
+      { "nombre": "Capitán Prat (capital Cochrane)", "comunas": "Cochrane, O'Higgins, Tortel (3 comunas)" }
+    ]
+  },
+  "XII": {
+    "provincias": [
+      { "nombre": "Magallanes (capital Punta Arenas)", "comunas": "Punta Arenas, Laguna Blanca, Río Verde, San Gregorio (4 comunas)" },
+      { "nombre": "Última Esperanza (capital Puerto Natales)", "comunas": "Natales, Torres del Paine (2 comunas)" },
+      { "nombre": "Tierra del Fuego (capital Porvenir)", "comunas": "Porvenir, Primavera, Timaukel (3 comunas)" },
+      { "nombre": "Antártica Chilena (capital Puerto Williams)", "comunas": "Cabo de Hornos, Antártica (2 comunas)" }
+    ]
+  }
+}

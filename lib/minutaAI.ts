@@ -42,7 +42,32 @@ export type MinutaCompletaContent = {
 export type MinutaTipo = 'ejecutiva' | 'completo' | 'ficha'
 
 export type FichaRegionalContent = {
-  introduccion: string  // 3-4 oraciones de contexto geográfico-político de la región
+  introduccion: string           // I. párrafo contextual geográfico-político
+  estructura_etaria: string      // I. narrativa edad/envejecimiento
+  composicion: string            // I. narrativa pueblos originarios/inmigrantes/discapacidad
+  pib_comentario: string         // II. variación PIB últimos años (2-3 oraciones)
+  matriz_productiva: string      // II. narrativa sectores productivos
+  mercado_laboral_nota: string   // II. contexto mercado laboral vs nacional (1-2 oraciones)
+  ingresos_pobreza: string       // II. CASEN 2024 párrafo completo
+  educacion_nota: string         // II. Censo 2024 educación
+  salud_nota: string             // II. CASEN 2024 salud
+  vivienda_nota: string          // II. Censo 2024 vivienda
+  seguridad_nota: string         // II. LeyStop narrativa seguridad
+  prego_intro: string            // III. párrafo intro PREGO
+  prego_ejes: {
+    numero: number
+    nombre: string
+    items: { letra: string; texto: string }[]
+  }[]
+}
+
+/** Data passed to AI for ficha/kit-de-viaje generation */
+export type FichaExtraData = {
+  allRegionsPib: { region_id: number; nombre: string; pib_mm: number; pct_pib: number }[]
+  pibSectorial: { sector: string; valor: number; pct: number }[]
+  desocupacionNacional: number | null
+  pibAnualRegion: { value: number; period: string } | null
+  pibAnualHistory: { period: string; value: number }[]
 }
 
 // Subset of registros_leystop used in minuta context (DB field names — pct_N not n_N)
@@ -338,35 +363,166 @@ export async function generateMinutaContent(
   semaforoTrends?: SemaforoTrendSummary | null,
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
+  fichaExtra?: FichaExtraData | null,
 ): Promise<MinutaEjecutivaContent | MinutaCompletaContent | FichaRegionalContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
 
-  // Ficha Regional: only needs a short intro paragraph, no full context
+  // Kit de Viaje (ex Ficha Regional): generates full narrative content for sections I, II, III
   if (tipo === 'ficha') {
-    const metricsSnippet = metrics
-      ? `Población: ${metrics.poblacion_total?.toLocaleString('es-CL') ?? '?'} hab. Capital: datos del panel. PIB regional: ${trendSummaries?.pibAnual ? `${Math.round(trendSummaries.pibAnual.value).toLocaleString('es-CL')} MM$ nominal (BCCh, ${formatPeriod(trendSummaries.pibAnual.period)})` : `${metrics.pib_regional ?? '?'} MM$`}, ${metrics.pct_pib_nacional ?? '?'}% del PIB nacional. Tasa desocupación: ${metrics.tasa_desocupacion ?? '?'}%. Sectores: ${metrics.sectores_productivos_principales ?? 'N/D'}. Vocación: ${metrics.vocacion_regional ?? 'N/D'}.`
-      : ''
+    const m = metrics
+    const fe = fichaExtra
+
+    // Build comprehensive data context for AI
+    const dataContext = `
+DATOS REGIÓN DE ${regionNombre.toUpperCase()} — ${fecha}
+
+=== GEOGRAFÍA Y DEMOGRAFÍA ===
+- Superficie: ${m?.superficie_km2?.toLocaleString('es-CL') ?? 'N/D'} km² (${m?.pct_territorio_nacional ?? 'N/D'}% del territorio nacional)
+- Provincias: ${m?.provincias_n ?? 'N/D'} | Comunas: ${m?.comunas_n ?? 'N/D'} | Capital: ${m?.region_nombre ?? regionNombre}
+- Población total (Censo 2024): ${m?.poblacion_total?.toLocaleString('es-CL') ?? 'N/D'} hab
+- Mujeres: ${m?.pct_mujeres ?? 'N/D'}% (${m?.poblacion_total && m?.pct_mujeres ? Math.round(m.poblacion_total * m.pct_mujeres / 100).toLocaleString('es-CL') : 'N/D'}) | Hombres: ${m?.pct_hombres ?? 'N/D'}% (${m?.poblacion_total && m?.pct_hombres ? Math.round(m.poblacion_total * m.pct_hombres / 100).toLocaleString('es-CL') : 'N/D'})
+- Promedio de edad: ${m?.promedio_edad ?? m?.prom_edad ?? 'N/D'} años | 60+ años: ${m?.pct_edad_60_mas ?? 'N/D'}%
+- Población urbana: ${m?.pct_urbana ?? 'N/D'}% | Rural: ${m?.pct_rural ?? 'N/D'}%
+- Pueblos originarios: ${m?.pct_indigena ?? 'N/D'}% (${m?.n_pueblos_orig?.toLocaleString('es-CL') ?? 'N/D'} personas)
+- Inmigrantes: ${m?.pct_inmigrantes ?? 'N/D'}% (${m?.n_inmigrantes?.toLocaleString('es-CL') ?? 'N/D'} personas)
+- Discapacidad: ${m?.n_discapacidad?.toLocaleString('es-CL') ?? 'N/D'} personas
+- Jefatura femenina de hogar: ${m?.pct_jefatura_mujer ?? 'N/D'}%
+- Densidad: ${m?.densidad_poblacional ?? 'N/D'} hab/km²
+
+=== PIB REGIONAL (BCCh, nominal precios corrientes) ===
+- PIB: $${fe?.pibAnualRegion ? Math.round(fe.pibAnualRegion.value).toLocaleString('es-CL') : 'N/D'} miles de millones (${fe?.pibAnualRegion ? formatPeriod(fe.pibAnualRegion.period) : 'N/D'})
+- % del PIB nacional: ${fe?.allRegionsPib?.find(r => r.nombre === regionNombre)?.pct_pib?.toFixed(1) ?? 'N/D'}%
+- Ranking: ${fe?.allRegionsPib ? (() => { const sorted = [...fe.allRegionsPib].sort((a, b) => b.pib_mm - a.pib_mm); const idx = sorted.findIndex(r => r.nombre === regionNombre); return idx >= 0 ? `${idx + 1}° de 16` : 'N/D' })() : 'N/D'}
+${fe?.pibAnualHistory && fe.pibAnualHistory.length > 1 ? `- Evolución PIB anual: ${fe.pibAnualHistory.map(h => `${h.period.slice(0, 4)}: $${Math.round(h.value).toLocaleString('es-CL')} MM`).join(' → ')}` : ''}
+
+=== PIB SECTORIAL (BCCh, top sectores) ===
+${fe?.pibSectorial?.slice(0, 8).map(s => `- ${s.sector}: $${Math.round(s.valor).toLocaleString('es-CL')} MM (${s.pct.toFixed(1)}%)`).join('\n') ?? 'N/D'}
+- Sectores principales: ${m?.sectores_productivos_principales ?? 'N/D'}
+- Vocación regional: ${m?.vocacion_regional ?? 'N/D'}
+
+=== MERCADO LABORAL (INE-ENE, trimestre móvil) ===
+- Tasa desocupación: ${m?.tasa_desocupacion ?? 'N/D'}% (nacional: ${fe?.desocupacionNacional?.toFixed(1) ?? 'N/D'}%)
+- Ocupados: ${trendSummaries?.empleoINE?.ocupados_miles ? `${Math.round(trendSummaries.empleoINE.ocupados_miles)} mil` : 'N/D'}
+- Fuerza de trabajo: ${trendSummaries?.empleoINE?.fuerza_trabajo_miles ? `${Math.round(trendSummaries.empleoINE.fuerza_trabajo_miles)} mil` : 'N/D'}
+- Tasa participación laboral: ${m?.tasa_participacion_laboral ?? 'N/D'}%
+- Informalidad laboral: ${m?.tasa_ocupacion_informal ?? 'N/D'}%
+${trendSummaries?.empleoINE?.period ? `- Período dato empleo: ${formatPeriod(trendSummaries.empleoINE.period)}` : ''}
+
+=== POBREZA E INGRESOS (CASEN 2024) ===
+- Pobreza por ingresos: ${m?.pct_pobreza_ingresos ?? 'N/D'}% (nacional ~17,3%)
+- Pobreza extrema: ${m?.pct_pobreza_extrema ?? 'N/D'}%
+- Pobreza multidimensional: ${m?.pct_pobreza_multidimensional ?? 'N/D'}%
+- Pobreza severa: ${m?.pct_pobreza_severa ?? 'N/D'}%
+- Hogares RSH tramo 40%: ${m?.hogares_rsh_tramo40?.toLocaleString('es-CL') ?? 'N/D'} (${m?.pct_rsh_tramo40 ?? 'N/D'}%)
+
+=== EDUCACIÓN (Censo 2024) ===
+- Escolaridad promedio: ${m?.anios_escolaridad_promedio ?? 'N/D'} años
+- Educación superior: ${m?.pct_educacion_superior ?? 'N/D'}%
+- Alfabetismo: ${m?.tasa_alfabetismo ?? 'N/D'}%
+- Matrícula escolar: ${m?.matricula_escolar_total?.toLocaleString('es-CL') ?? 'N/D'}
+- Cobertura parvularia: ${m?.cobertura_parvularia_pct ?? 'N/D'}%
+
+=== SALUD ===
+- FONASA: ${m?.pct_fonasa ?? 'N/D'}%
+- Hospitales: ${m?.hospitales_n ?? 'N/D'}
+- Camas/1.000 hab: ${m?.camas_por_1000_hab ?? 'N/D'}
+- Lista de espera: ${m?.lista_espera_n?.toLocaleString('es-CL') ?? 'N/D'}
+
+=== VIVIENDA (Censo 2024) ===
+- Déficit habitacional: ${m?.deficit_habitacional?.toLocaleString('es-CL') ?? 'N/D'}
+- Hacinamiento: ${m?.pct_hacinamiento ?? 'N/D'}%
+- Acceso agua pública: ${m?.pct_acceso_agua_publica ?? 'N/D'}%
+- Jefatura femenina hogar: ${m?.pct_jefatura_mujer ?? 'N/D'}%
+
+=== SEGURIDAD PÚBLICA ===
+${leystopData ? `- LeyStop Carabineros (semana ${leystopData.semana ?? '?'}):
+  Casos año a la fecha: ${leystopData.casos_anno_fecha?.toLocaleString('es-CL') ?? 'N/D'}
+  Variación anual: ${leystopData.var_anno_fecha != null ? `${leystopData.var_anno_fecha > 0 ? '+' : ''}${leystopData.var_anno_fecha.toFixed(1)}%` : 'N/D'}
+  Top delitos: ${[1, 2, 3, 4, 5].map(i => {
+    const d = leystopData[`mayor_registro_${i}` as keyof LeystopMinuta] as string | null
+    const p = leystopData[`pct_${i}` as keyof LeystopMinuta] as number | null
+    return d ? `${d} (${p?.toFixed(0) ?? '?'}%)` : null
+  }).filter(Boolean).join(', ')}` : '- Datos LeyStop no disponibles'}
+- ENUSC: Hogares víctimas DMCS ${m?.pct_hogares_victimas_dmcs ?? 'N/D'}% | Inseguridad percibida ${m?.pct_percepcion_inseguridad ?? 'N/D'}%
+- Tasa denuncias/100k: ${m?.tasa_denuncias_100k ?? 'N/D'} | Tasa delitos/100k: ${m?.tasa_delitos_100k ?? 'N/D'}
+`.trim()
+
+    const fichaRules = `
+REGLAS OBLIGATORIAS:
+1. Usa ÚNICAMENTE los datos proporcionados. NO inventes cifras, fechas, porcentajes ni nombres.
+2. NO recomiendes acciones. NO uses "debe", "debería", "se recomienda".
+3. NO atribuyas causas ni proyectes consecuencias.
+4. NO uses adjetivos valorativos: "preocupante", "favorable", "estratégico", "alentador", "crítico".
+5. Tono: formal, directo, informativo. Estilo de minuta técnica ministerial.
+6. Cada cifra debe tener su fuente: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop Carabineros).
+7. Si falta información, omítela sin mencionar su ausencia.
+8. Escribe en español de Chile.
+9. Los párrafos deben ser densos en datos, no retóricos.`
+
+    const fichaSchema = `{
+  "introduccion": "3-4 oraciones contextualizando ubicación geográfica, importancia y características principales de la región",
+  "estructura_etaria": "2-3 oraciones sobre rangos etarios, edad promedio, proceso de envejecimiento y sus implicancias",
+  "composicion": "2-3 oraciones sobre pueblos originarios, inmigración y discapacidad con cifras y contexto",
+  "pib_comentario": "2-3 oraciones sobre la evolución del PIB en los últimos años, crecimiento y posición nacional",
+  "matriz_productiva": "2-3 oraciones describiendo la matriz productiva regional, sectores líderes y vocación",
+  "mercado_laboral_nota": "1-2 oraciones contextualizando la tasa de desocupación respecto al promedio nacional",
+  "ingresos_pobreza": "Párrafo de 4-5 oraciones sobre ingresos, pobreza por ingresos, extrema y multidimensional con comparación nacional. Incluir variación respecto a medición anterior si hay datos.",
+  "educacion_nota": "2-3 oraciones sobre escolaridad, educación superior y contexto educativo regional",
+  "salud_nota": "2-3 oraciones sobre cobertura FONASA, acceso a atención, lista de espera y brechas",
+  "vivienda_nota": "2-3 oraciones sobre déficit habitacional, hacinamiento, acceso a servicios básicos",
+  "seguridad_nota": "3-4 oraciones sobre LeyStop semana actual, variación anual, delitos más frecuentes y contexto ENUSC",
+  "prego_intro": "Párrafo de 2-3 oraciones introduciendo el Plan Regional de Gobierno",
+  "prego_ejes": [
+    {
+      "numero": 1,
+      "nombre": "Nombre del eje estratégico",
+      "items": [
+        { "letra": "a", "texto": "Descripción detallada del sub-item con En [tema en negrita], se [acción concreta]. Incluir cifras, montos, plazos si están en el plan." }
+      ]
+    }
+  ]
+}`
+
+    // Build messages — include Plan Regional PDF if available
+    const userContent: Anthropic.Messages.ContentBlockParam[] = [{
+      type: 'text',
+      text: `Genera el contenido narrativo para la MINUTA REGIONAL PARA LA AUTORIDAD de la Región de ${regionNombre} (${fecha}).
+
+${dataContext}
+
+Responde ÚNICAMENTE con un JSON válido (sin markdown, sin \`\`\`):
+${fichaSchema}`,
+    }]
+
+    if (planPdfBase64) {
+      userContent.unshift({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: planPdfBase64 },
+        cache_control: { type: 'ephemeral' },
+      } as unknown as Anthropic.Messages.ContentBlockParam)
+    }
 
     try {
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 512,
-        system: `Eres redactor técnico de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Tono formal, directo, español de Chile. Usa ÚNICAMENTE los datos proporcionados. NO inventes características, cifras ni detalles que no estén explícitamente en los datos. NO uses adjetivos valorativos. Si un dato no está disponible, omítelo. Cada cifra con fuente entre paréntesis.`,
-        messages: [{
-          role: 'user',
-          content: `Redacta un párrafo introductorio de 3-4 oraciones para una Ficha Regional de la Región de ${regionNombre} (${fecha}). El párrafo debe contextualizar la ubicación geográfica, importancia estratégica y características principales de la región. Datos de referencia: ${metricsSnippet}\n\nResponde ÚNICAMENTE con un JSON válido (sin markdown):\n{"introduccion": "texto del párrafo"}`,
-        }],
+        max_tokens: 8192,
+        system: `Eres redactor técnico senior de la División de Coordinación Interministerial (DCI), Gobierno Interior y División de Estudios del Ministerio del Interior de Chile. Redactas la MINUTA REGIONAL PARA LA AUTORIDAD — documento que acompaña a la máxima autoridad en visitas regionales.
+
+Si se adjunta un Plan Regional de Gobierno (PREGO), extrae los ejes estratégicos con sus sub-items específicos. Si no hay PDF adjunto, genera el PREGO basándote en las prioridades evidentes de los datos regionales (máximo 3 ejes genéricos).
+
+${fichaRules}`,
+        messages: [{ role: 'user', content: userContent }],
       })
       const text = response.content.find(b => b.type === 'text')?.text ?? ''
       const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
       const parsed = JSON.parse(cleaned) as FichaRegionalContent
-      console.log(`[minutaAI] ficha intro generated for ${regionNombre}`)
+      console.log(`[minutaAI] Kit de Viaje generated for ${regionNombre}: ${Object.keys(parsed).length} fields`)
       return parsed
     } catch (err) {
-      console.error(`[minutaAI] Failed to generate ficha intro for ${regionNombre}:`, err)
+      console.error(`[minutaAI] Failed to generate Kit de Viaje for ${regionNombre}:`, err)
       return null
     }
   }
