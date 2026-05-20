@@ -59,7 +59,7 @@ export function useV2Indicadores(
             .eq('region_id', regionId)
             .in('codigo_indicador', seriesCodigos)
             .order('periodo', { ascending: true })
-            .limit(200)]
+            .limit(1000)]
         : []),
     ])
 
