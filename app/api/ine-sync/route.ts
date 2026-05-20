@@ -134,25 +134,25 @@ const SERIES_CONFIG: { seriesId: string; metric: string; regionCod: string | nul
   // Nacional
   { seriesId: 'F035.CVRV.FLU.Z.CLP.Z.Z.Z.Z.T.0.M',  metric: 'ventas_regionales', regionCod: 'NAC' },
 
-  // ── PIB regional TRIMESTRAL NOMINAL (F035.PIB.FLU.N.CLP.2018.Z.Z.Z.{01-16}.0.T) ──
-  // Precios corrientes — coincide con cuadro CCNN2018_PIB_REGIONAL_N de BCCh.
-  // Miles de millones de pesos, precios corrientes.
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.15.0.T', metric: 'pib_regional', regionCod: 'XV'  }, // Arica y Parinacota
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.01.0.T', metric: 'pib_regional', regionCod: 'I'   }, // Tarapacá
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.02.0.T', metric: 'pib_regional', regionCod: 'II'  }, // Antofagasta
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.03.0.T', metric: 'pib_regional', regionCod: 'III' }, // Atacama
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.04.0.T', metric: 'pib_regional', regionCod: 'IV'  }, // Coquimbo
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.05.0.T', metric: 'pib_regional', regionCod: 'V'   }, // Valparaíso
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.06.0.T', metric: 'pib_regional', regionCod: 'VI'  }, // O'Higgins
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.07.0.T', metric: 'pib_regional', regionCod: 'VII' }, // Maule
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.08.0.T', metric: 'pib_regional', regionCod: 'VIII'}, // Biobío
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.16.0.T', metric: 'pib_regional', regionCod: 'XVI' }, // Ñuble
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.09.0.T', metric: 'pib_regional', regionCod: 'IX'  }, // La Araucanía
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.14.0.T', metric: 'pib_regional', regionCod: 'XIV' }, // Los Ríos
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.10.0.T', metric: 'pib_regional', regionCod: 'X'   }, // Los Lagos
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.11.0.T', metric: 'pib_regional', regionCod: 'XI'  }, // Aysén
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.12.0.T', metric: 'pib_regional', regionCod: 'XII' }, // Magallanes
-  { seriesId: 'F035.PIB.FLU.N.CLP.2018.Z.Z.Z.13.0.T', metric: 'pib_regional', regionCod: 'RM'  }, // Metropolitana
+  // ── PIB regional TRIMESTRAL REAL (F035.PIB.FLU.R.CLP.2018.Z.Z.Z.{01-16}.0.T) ──
+  // Volumen encadenado referencia 2018 — BCCh no publica trimestral nominal regional.
+  // Solo para gráfico de tendencia. El KPI principal usa anual nominal.
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.15.0.T', metric: 'pib_regional', regionCod: 'XV'  }, // Arica y Parinacota
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.01.0.T', metric: 'pib_regional', regionCod: 'I'   }, // Tarapacá
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.02.0.T', metric: 'pib_regional', regionCod: 'II'  }, // Antofagasta
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.03.0.T', metric: 'pib_regional', regionCod: 'III' }, // Atacama
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.04.0.T', metric: 'pib_regional', regionCod: 'IV'  }, // Coquimbo
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.05.0.T', metric: 'pib_regional', regionCod: 'V'   }, // Valparaíso
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.06.0.T', metric: 'pib_regional', regionCod: 'VI'  }, // O'Higgins
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.07.0.T', metric: 'pib_regional', regionCod: 'VII' }, // Maule
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.08.0.T', metric: 'pib_regional', regionCod: 'VIII'}, // Biobío
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.16.0.T', metric: 'pib_regional', regionCod: 'XVI' }, // Ñuble
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.09.0.T', metric: 'pib_regional', regionCod: 'IX'  }, // La Araucanía
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.14.0.T', metric: 'pib_regional', regionCod: 'XIV' }, // Los Ríos
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.10.0.T', metric: 'pib_regional', regionCod: 'X'   }, // Los Lagos
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.11.0.T', metric: 'pib_regional', regionCod: 'XI'  }, // Aysén
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.12.0.T', metric: 'pib_regional', regionCod: 'XII' }, // Magallanes
+  { seriesId: 'F035.PIB.FLU.R.CLP.2018.Z.Z.Z.13.0.T', metric: 'pib_regional', regionCod: 'RM'  }, // Metropolitana
 
   // ── PIB regional ANUAL NOMINAL (F035.PIB.FLU.N.CLP.2018.Z.Z.Z.{01-16}.0.A) ──
   // Precios corrientes, anual — para minutas, dashboard KPI y ranking.
