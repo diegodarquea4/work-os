@@ -48,11 +48,55 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  if (id === profile.id) return Response.json({ error: 'Cannot delete your own account' }, { status: 400 })
+  if (id === profile.id) return Response.json({ error: 'No puedes eliminar tu propia cuenta' }, { status: 400 })
 
   const db = getSupabaseAdmin()
-  const { error } = await db.auth.admin.deleteUser(id)
-  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // 1. Limpiar las FKs hacia auth.users que bloquean el delete:
+  //    - storage.objects.owner (archivos subidos por el usuario)
+  //    - public.user_profiles.id
+  //
+  //    storage.objects no se puede tocar vía REST porque el schema 'storage'
+  //    no está expuesto, así que delegamos a la función SECURITY DEFINER
+  //    public.cleanup_user_references (ver supabase/migrations/004).
+  //
+  //    Si la función no existe (migración no corrida), fallback a borrar
+  //    solo el perfil para mantener compatibilidad.
+  const { error: cleanupError } = await db.rpc('cleanup_user_references', {
+    target_user_id: id,
+  })
+
+  if (cleanupError) {
+    const fnNotFound = cleanupError.message?.toLowerCase().includes('function') ||
+                       cleanupError.code === 'PGRST202'
+    if (fnNotFound) {
+      console.warn('[admin/users DELETE] cleanup_user_references no existe, fallback', { id })
+      const { error: profileError } = await db.from('user_profiles').delete().eq('id', id)
+      if (profileError) {
+        console.error('[admin/users DELETE] profile fallback error', { id, error: profileError })
+        return Response.json(
+          { error: `No se pudo eliminar el perfil: ${profileError.message}` },
+          { status: 500 },
+        )
+      }
+    } else {
+      console.error('[admin/users DELETE] cleanup error', { id, error: cleanupError })
+      return Response.json(
+        { error: `Error limpiando referencias: ${cleanupError.message}` },
+        { status: 500 },
+      )
+    }
+  }
+
+  // 2. Borrar la identidad en auth.users
+  const { error: authError } = await db.auth.admin.deleteUser(id)
+  if (authError) {
+    console.error('[admin/users DELETE] auth error', { id, error: authError })
+    return Response.json(
+      { error: `Perfil limpiado pero falló la baja de auth: ${authError.message}` },
+      { status: 500 },
+    )
+  }
 
   return Response.json({ ok: true })
 }

@@ -173,8 +173,9 @@ export default function AdminUsersView() {
     if (res.ok) {
       setUsers(prev => prev.filter(u => u.id !== id))
     } else {
-      const body = await res.json()
-      setError(body.error ?? 'Error al eliminar usuario')
+      const body = await res.json().catch(() => ({}))
+      console.error('[handleDelete] failed', { id, email, status: res.status, body })
+      setError(body.error ?? `Error al eliminar usuario (HTTP ${res.status})`)
     }
     setSaving(null)
   }
