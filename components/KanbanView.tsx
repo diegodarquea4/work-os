@@ -32,6 +32,25 @@ function terminoIcon(val: string | null): 'check' | 'warn' | null {
   return 'warn'
 }
 
+// "Eje 3: Salud y Servicios Básicos" → 3. Sin número → 999 (queda al final).
+function ejeNumber(eje: string): number {
+  const m = eje.match(/^Eje\s+(\d+)/)
+  return m ? parseInt(m[1], 10) : 999
+}
+
+// "Min. del Interior · Carabineros" → ["Min. del Interior", "Carabineros"]
+// "MINVU (Seremi / Serviu IV)" → ["MINVU"]
+// Una iniciativa con multi-ministerio aparece en cada grupo.
+function normalizeMinisterios(raw: string | null | undefined): string[] {
+  if (!raw) return ['Sin ministerio']
+  return raw
+    .split(/\s*[·/]\s*|\s+y\s+/)
+    .map(s => s.trim())
+    .map(s => s.split('(')[0].trim())
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+}
+
 // ── SVG icons (inline, no dep) ────────────────────────────────────────────────
 
 function IconKanban() {
@@ -80,9 +99,6 @@ const COLUMNS = [
   { key: 'verde', label: 'En verde',     bg: 'bg-green-50',  border: 'border-green-200', dot: 'bg-green-500', header: 'bg-green-100 text-green-800' },
   { key: 'gris',  label: 'Sin evaluar',  bg: 'bg-gray-50',   border: 'border-gray-200',  dot: 'bg-gray-300',  header: 'bg-gray-100 text-gray-600'   },
 ] as const
-
-const GOB_ORDER = ['Economía', 'Social', 'Seguridad', 'Sin clasificar'] as const
-type GobKey = typeof GOB_ORDER[number]
 
 function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, val: T) {
   setter(prev => { const next = new Set(prev); next.has(val) ? next.delete(val) : next.add(val); return next })
@@ -136,14 +152,86 @@ function EjeCard({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa) => 
   )
 }
 
+// ── MinistryRow — fila compacta para vista Monday por ministerio ──────────────
+
+function MinistryRow({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa) => void }) {
+  const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+  const pc  = prioridadColor(p.prioridad)
+  const dias = daysUntil(p.fecha_proximo_hito)
+  const hitoUrgent = dias !== null && dias <= 7 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
+  // "Eje 3: Salud y Servicios Básicos" → "Eje 3" (compacto en chip horizontal)
+  const ejeShort = p.eje.match(/^Eje\s+\d+/)?.[0] ?? p.eje
+  // "diego.darquea@gmail.com" → "diego.darquea" (más legible en reunión)
+  const responsableShort = p.responsable?.split('@')[0] ?? null
+
+  return (
+    <button
+      onClick={() => onSelect(p)}
+      className="w-full text-left px-3 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-3"
+    >
+      {/* Semáforo */}
+      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
+
+      {/* Nombre */}
+      <p className="text-sm font-medium text-slate-800 line-clamp-1 flex-1 min-w-0">
+        {p.nombre}
+      </p>
+
+      {/* Eje chip (compacto) */}
+      <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'}`}>
+        {ejeShort}
+      </span>
+
+      {/* Responsable (sin @domain) */}
+      {responsableShort && (
+        <span className="text-xs text-gray-500 truncate max-w-[140px] flex-shrink-0">
+          {responsableShort}
+        </span>
+      )}
+
+      {/* Avance */}
+      <div className="flex items-center gap-1.5 flex-shrink-0 w-28">
+        <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+          <div className={`h-1 rounded-full ${sem.dot}`} style={{ width: `${p.pct_avance ?? 0}%` }} />
+        </div>
+        <span className="text-xs font-semibold text-gray-600 tabular-nums w-8 text-right">
+          {p.pct_avance ?? 0}%
+        </span>
+      </div>
+
+      {/* Próximo hito */}
+      <div className={`text-xs flex-shrink-0 w-20 text-right ${hitoUrgent ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+        {p.fecha_proximo_hito
+          ? (dias !== null && dias < 0
+              ? `Vencido ${Math.abs(dias)}d`
+              : dias === 0
+                ? 'Hoy'
+                : `En ${dias}d`)
+          : '—'}
+      </div>
+
+      {/* Prioridad pill */}
+      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
+        {p.prioridad}
+      </span>
+    </button>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const [selected, setSelected]         = useState<Iniciativa | null>(null)
-  const [filterRegion, setFilterRegion] = useState('todas')
+  // Default: primera región alfabética → arranca en vista "Por eje".
+  // 'todas' sigue disponible en el dropdown si el usuario lo elige (cae en vista por semáforo).
+  const [filterRegion, setFilterRegion] = useState<string>(() => {
+    const sorted = Array.from(new Set(projects.map(p => p.region))).sort()
+    return sorted[0] ?? 'todas'
+  })
   const [filterEjeGob, setFilterEjeGob] = useState<Set<string>>(new Set())
   const [isPending, startTransition]    = useTransition()
   const [viewMode, setViewMode]         = useState<'kanban' | 'mosaico'>('kanban')
+  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio'>('eje')
   const [showSmall, setShowSmall]       = useState(false)
   const [cellSize, setCellSize]         = useState(56)
   const gridRef                         = useRef<HTMLDivElement>(null)
@@ -163,7 +251,10 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     return () => ro.disconnect()
   }, [viewMode])
 
-  const isEjeMode = viewMode === 'kanban' && filterRegion !== 'todas'
+  // Modo "agrupado": kanban con una región filtrada. Sub-modos por `groupBy`:
+  //   - 'eje'        → columnas planas 1→6
+  //   - 'ministerio' → secciones verticales estilo Monday
+  const isGroupedMode = viewMode === 'kanban' && filterRegion !== 'todas'
 
   const regions = useMemo(() => Array.from(new Set(projects.map(p => p.region))).sort(), [projects])
 
@@ -173,38 +264,40 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     return true
   }), [projects, filterRegion, filterEjeGob])
 
-  // ── Eje layout ─────────────────────────────────────────────────────────────
-  const ejeLayout = useMemo(() => {
-    if (!isEjeMode) return null
-    const grupos: Record<GobKey, string[]> = {
-      'Economía': [], 'Social': [], 'Seguridad': [], 'Sin clasificar': []
-    }
-    const allEjes = Array.from(new Set(filtered.map(p => p.eje).filter(Boolean))).sort()
-    for (const eje of allEjes) {
-      const eg = filtered.find(p => p.eje === eje)?.eje_gobierno
-      const bucket: GobKey =
-        eg === 'Economía' || eg === 'Social' || eg === 'Seguridad' ? eg : 'Sin clasificar'
-      grupos[bucket].push(eje)
-    }
-    const activeGobs = GOB_ORDER.filter(g => grupos[g].length > 0)
-    const columns = activeGobs.flatMap(gob =>
-      grupos[gob].map(eje => ({
-        eje, gob,
-        cards: filtered.filter(p => p.eje === eje),
-        semCounts: {
-          rojo:  filtered.filter(p => p.eje === eje && p.estado_semaforo === 'rojo').length,
-          ambar: filtered.filter(p => p.eje === eje && p.estado_semaforo === 'ambar').length,
-          verde: filtered.filter(p => p.eje === eje && p.estado_semaforo === 'verde').length,
-        },
-      }))
+  // ── Modo "por eje": columnas planas ordenadas 1→6 ──────────────────────────
+  const ejeColumns = useMemo(() => {
+    if (!isGroupedMode || groupBy !== 'eje') return null
+    const allEjes = Array.from(new Set(filtered.map(p => p.eje).filter(Boolean)))
+      .sort((a, b) => ejeNumber(a) - ejeNumber(b))
+    return allEjes.map(eje => ({
+      eje,
+      cards: filtered.filter(p => p.eje === eje),
+      semCounts: {
+        rojo:  filtered.filter(p => p.eje === eje && p.estado_semaforo === 'rojo').length,
+        ambar: filtered.filter(p => p.eje === eje && p.estado_semaforo === 'ambar').length,
+        verde: filtered.filter(p => p.eje === eje && p.estado_semaforo === 'verde').length,
+      },
+    }))
+  }, [filtered, isGroupedMode, groupBy])
+
+  // ── Modo "por ministerio": secciones verticales (Monday) ──────────────────
+  // Una iniciativa con multi-ministerio aparece en cada grupo (decisión del usuario).
+  // Por eso no mostramos contadores en los headers.
+  const ministerioGroups = useMemo(() => {
+    if (!isGroupedMode || groupBy !== 'ministerio') return null
+    const expanded = filtered.flatMap(p =>
+      normalizeMinisterios(p.ministerio).map(min => ({ p, min }))
     )
-    const spans = activeGobs.map(g => ({ gob: g, count: grupos[g].length }))
-    return { columns, spans, totalCols: columns.length }
-  }, [filtered, isEjeMode])
+    const allMin = Array.from(new Set(expanded.map(e => e.min))).sort()
+    return allMin.map(min => ({
+      nombre: min,
+      iniciativas: expanded.filter(e => e.min === min).map(e => e.p),
+    }))
+  }, [filtered, isGroupedMode, groupBy])
 
   // ── Estado mode byCol ──────────────────────────────────────────────────────
   const byCol: Record<string, Iniciativa[]> = { rojo: [], ambar: [], verde: [], gris: [] }
-  if (!isEjeMode && viewMode === 'kanban') {
+  if (!isGroupedMode && viewMode === 'kanban') {
     for (const p of filtered) byCol[p.estado_semaforo]?.push(p)
   }
 
@@ -281,8 +374,8 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           {regions.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
 
-        {/* [A] Eje gobierno toggles — visible in both kanban and mosaico (but not eje mode) */}
-        {(viewMode === 'mosaico' || !isEjeMode) && (
+        {/* [A] Eje gobierno toggles — visible cuando no hay agrupación (mosaico o "todas las regiones") */}
+        {(viewMode === 'mosaico' || !isGroupedMode) && (
           <div className="flex items-center gap-1">
             {(['Economía', 'Social', 'Seguridad'] as const).map(eg => {
               const active = filterEjeGob.has(eg)
@@ -298,9 +391,31 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         )}
 
-        {isEjeMode && (
+        {/* Toggle "Por eje / Por ministerio" — solo visible con región filtrada en Kanban */}
+        {isGroupedMode && (
+          <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => setGroupBy('eje')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                groupBy === 'eje' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Por eje
+            </button>
+            <button
+              onClick={() => setGroupBy('ministerio')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                groupBy === 'ministerio' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Por ministerio
+            </button>
+          </div>
+        )}
+
+        {isGroupedMode && (
           <span className="text-xs text-gray-500 font-medium">
-            Vista por ejes · {filtered.length} iniciativas
+            {filtered.length} iniciativas
           </span>
         )}
 
@@ -341,27 +456,17 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         </div>
       )}
-      {isEjeMode && ejeLayout && (
+      {/* ── Modo "por eje": columnas planas 1→6 ─────────────────────────────── */}
+      {isGroupedMode && groupBy === 'eje' && ejeColumns && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           <div
-            className="grid h-full px-6"
+            className="grid h-full px-6 pt-4"
             style={{
-              gridTemplateRows: 'auto 1fr',
-              gridTemplateColumns: `repeat(${ejeLayout.totalCols}, 18rem)`,
+              gridTemplateColumns: `repeat(${ejeColumns.length}, 18rem)`,
               columnGap: '1rem',
             }}
           >
-            {ejeLayout.spans.map(({ gob, count }) => (
-              <div
-                key={gob}
-                style={{ gridColumn: `span ${count}` }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl mt-4 mb-1 ${ejeGobHeaderColor(gob)}`}
-              >
-                <span className="text-xs font-bold">{gob}</span>
-                <span className="text-xs opacity-60">{count} eje{count !== 1 ? 's' : ''}</span>
-              </div>
-            ))}
-            {ejeLayout.columns.map(({ eje, cards, semCounts }) => (
+            {ejeColumns.map(({ eje, cards, semCounts }) => (
               <div key={eje} className="flex flex-col overflow-hidden pb-4">
                 <div className={`px-3 py-2.5 rounded-xl mb-3 ${EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-600'}`}>
                   <p className="text-xs font-semibold line-clamp-2 mb-1.5">{eje}</p>
@@ -404,8 +509,43 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         </div>
       )}
 
+      {/* ── Modo "por ministerio": secciones verticales tipo Monday ─────────── */}
+      {isGroupedMode && groupBy === 'ministerio' && ministerioGroups && (
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          {ministerioGroups.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">
+              Sin iniciativas para mostrar
+            </div>
+          ) : (
+            ministerioGroups.map(group => (
+              <details
+                key={group.nombre}
+                open
+                className="border border-gray-200 rounded-xl overflow-hidden group"
+              >
+                <summary className="cursor-pointer px-4 py-3 bg-slate-100 hover:bg-slate-200/60 transition-colors flex items-center gap-3 list-none">
+                  <svg
+                    width="10" height="10" viewBox="0 0 10 10"
+                    className="text-slate-500 transition-transform group-open:rotate-90"
+                    fill="none" stroke="currentColor" strokeWidth="2"
+                  >
+                    <path d="M3 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span className="text-sm font-bold text-slate-800">{group.nombre}</span>
+                </summary>
+                <div className="bg-slate-50 p-3 space-y-2">
+                  {group.iniciativas.map(p => (
+                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} />
+                  ))}
+                </div>
+              </details>
+            ))
+          )}
+        </div>
+      )}
+
       {/* ── Estado mode: 4 semáforo columns ──────────────────────────────────── */}
-      {viewMode === 'kanban' && !isEjeMode && (
+      {viewMode === 'kanban' && !isGroupedMode && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           <div className="flex h-full gap-4 px-6 py-4 min-w-max">
             {COLUMNS.map(col => {
