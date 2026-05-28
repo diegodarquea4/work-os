@@ -83,7 +83,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Ministerio del Interior y Seguridad Pública
+          Ministerio del Interior
         </p>
       </div>
     </div>

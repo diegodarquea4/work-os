@@ -35,12 +35,7 @@ export function getIniciativas(): Iniciativa[] {
   return parseCSV(content)
 }
 
-/** @deprecated Use getIniciativas() */
-export const getProjects = getIniciativas
-/** @deprecated Use Iniciativa */
-export type Project = Iniciativa
-
-function parseCSV(content: string): Project[] {
+function parseCSV(content: string): Iniciativa[] {
   // Split into records respecting quoted fields that may contain newlines
   const records: string[] = []
   let current = ''

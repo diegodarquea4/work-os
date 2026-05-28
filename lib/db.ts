@@ -62,9 +62,6 @@ export async function getAllIniciativas(): Promise<Iniciativa[]> {
   return all.map(mapRow)
 }
 
-/** @deprecated Use getAllIniciativas() */
-export const getAllPrioridades = getAllIniciativas
-
 /** Iniciativas for one region — used by the PDF minuta route. */
 export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
   const { data, error } = await getSupabase()
@@ -77,9 +74,6 @@ export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
 
   return (data as Prioridad[]).map(mapRow)
 }
-
-/** @deprecated Use getIniciativasByCod() */
-export const getPrioridadesByCod = getIniciativasByCod
 
 // ---------------------------------------------------------------------------
 // Region Metrics

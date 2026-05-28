@@ -482,8 +482,8 @@ export async function POST(request: Request) {
       }
     }
   } else {
-    const { getProjects } = await import('@/lib/projects')
-    const all = getProjects()
+    const { getIniciativas } = await import('@/lib/projects')
+    const all = getIniciativas()
     projects = all.filter(p => p.cod === body.region.cod)
   }
 

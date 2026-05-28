@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Lint + Build
+    runs-on: ubuntu-latest
+
+    env:
+      # Stub values — solo necesarios para que el build pase el chequeo de env.
+      # No tocan ninguna BD real.
+      NEXT_PUBLIC_SUPABASE_URL: https://stub.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON: stub-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
+      NEXT_PUBLIC_SUPABASE_COLEGA_URL: https://stub.supabase.co
+      NEXT_PUBLIC_SUPABASE_COLEGA_ANON: stub-anon-key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint corre como informativo — no bloquea para no frenar deploys
+      # mientras existen warnings/errores preexistentes que aún no se han limpiado.
+      # Cuando se llegue a 0 errores se puede quitar continue-on-error.
+      - name: Lint (informativo)
+        run: npm run lint
+        continue-on-error: true
+
+      # Build es el gate real — type-check + Next.js build.
+      # Si falla, no se mergea: es lo que protege contra los 500 en producción.
+      - name: Build
+        run: npm run build

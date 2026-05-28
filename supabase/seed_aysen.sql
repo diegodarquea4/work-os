@@ -282,7 +282,7 @@ VALUES
 (41,'Aysén','XI','Coyhaique','Austral','Eje 4: Seguridad y Soberanía',
  'Plan Escudo Fronterizo: control costero e insular',
  'Implementación del Plan Escudo Fronterizo con foco en control de puertos, islas y aeródromos para contener el narcotráfico. Coordinación Armada-PDI-Carabineros.',
- 'Ministerio del Interior y Seguridad Pública','Alta','Ejecución','Inaugurado/Terminado/Presentado','Término Obras/Programa','2030-12-31',
+ 'Ministerio del Interior','Alta','Ejecución','Inaugurado/Terminado/Presentado','Término Obras/Programa','2030-12-31',
  'Sectorial',NULL,NULL,'Regional','No Requiere','AY-04-001','gris',0),
 
 (42,'Aysén','XI','Coyhaique','Austral','Eje 4: Seguridad y Soberanía',
@@ -410,19 +410,19 @@ VALUES
 (62,'Aysén','XI','Coyhaique','Austral','Eje 6: Familia, Educación y Equidad Territorial',
  'Plan integral Tortel: energía, salud, conectividad y alcantarillado',
  'Plan integral para Tortel abordando racionamiento eléctrico activo, salud rural, conectividad marítima y alcantarillado. Financiamiento PDZE/FNDR. Coordinación DCI-GORE.',
- 'Ministerio del Interior y Seguridad Pública','Alta','Ejecución','Inaugurado/Terminado/Presentado','Término Obras/Programa','2028-12-31',
+ 'Ministerio del Interior','Alta','Ejecución','Inaugurado/Terminado/Presentado','Término Obras/Programa','2028-12-31',
  'PEDZE',NULL,NULL,'Tortel','No Requiere','AY-06-006','gris',0),
 
 (63,'Aysén','XI','Coyhaique','Austral','Eje 6: Familia, Educación y Equidad Territorial',
  'Plan integral Villa O''Higgins: servicios básicos, conectividad y salud rural',
  'Plan integral para Villa O''Higgins (acceso solo por 560 km de Ruta X-91 o por Argentina) abordando servicios básicos, conectividad y salud rural. Financiamiento PDZE/FNDR.',
- 'Ministerio del Interior y Seguridad Pública','Alta','Preinversión','Inicio Obras/Programa','Inicio Obras/Programa','2028-12-31',
+ 'Ministerio del Interior','Alta','Preinversión','Inicio Obras/Programa','Inicio Obras/Programa','2028-12-31',
  'PEDZE',NULL,NULL,'O''Higgins','No Requiere','AY-06-007','gris',0),
 
 (64,'Aysén','XI','Coyhaique','Austral','Eje 6: Familia, Educación y Equidad Territorial',
  'Plan integral Melinka (Guaitecas): alumbrado, energía y conectividad marítima',
  'Plan integral para Melinka (Guaitecas) abordando fallas de alumbrado público, energía y conectividad marítima deficiente. Financiamiento PDZE/FNDR.',
- 'Ministerio del Interior y Seguridad Pública','Alta','Preinversión','Inicio Obras/Programa','Inicio Obras/Programa','2028-12-31',
+ 'Ministerio del Interior','Alta','Preinversión','Inicio Obras/Programa','Inicio Obras/Programa','2028-12-31',
  'PEDZE',NULL,NULL,'Guaitecas','No Requiere','AY-06-008','gris',0),
 
 (65,'Aysén','XI','Coyhaique','Austral','Eje 6: Familia, Educación y Equidad Territorial',

@@ -1,6 +1,6 @@
 N°,Región,Cód.,Capital,Zona,Eje Estratégico,Meta / Acción Territorial,Ministerios Involucrados,Prioridad,Plazo
 1,Arica y Parinacota,XV,Arica,Norte Grande,Seguridad y Orden Público,Reforzar contingente FF.AA. en frontera norte y paso Chacalluta · Plan Fronterizo Macrozona Norte con presencia permanente y capacidades de disuasión frente al crimen organizado transnacional,"Min. Defensa Nacional
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Min. de Relaciones Exteriores (MINREL)",Alta,2026–2027
 2,Arica y Parinacota,XV,Arica,Norte Grande,Infraestructura y Conectividad,"Modernizar el paso fronterizo Chacalluta como infraestructura crítica nacional: habilitación tecnológica, control biométrico y mejora de flujos migratorios regulares","Min. de Relaciones Exteriores
 Min. de Obras Públicas (MOP)
@@ -12,7 +12,7 @@ Gobierno Regional",Alta,2026–2027
 Min. de Bienes Nacionales
 Gobierno Regional",Alta,2026–2027
 5,Tarapacá,I,Iquique,Norte Grande,Seguridad y Orden Público,Implementar Plan Fronterizo con FF.AA. en Colchane y pasos no habilitados de la precordillera · Despliegue coordinado con PDI y Carabineros para control de ingreso clandestino,"Min. Defensa Nacional
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Min. de Seguridad Pública",Alta,2026–2027
 6,Tarapacá,I,Iquique,Norte Grande,Desarrollo Económico y Empleo,Potenciar Zona Franca de Iquique (ZOFRI) como hub comercial regional y plataforma de exportación hacia el norte de Chile y el Cono Sur,"Min. de Hacienda
 Min. de Economía, Fomento y Turismo
@@ -60,7 +60,7 @@ Gobierno Regional",Media,2027–2028
 Min. de Transportes y Telecomunicaciones
 Gobierno Regional",Alta,2026–2027
 21,Valparaíso,V,Valparaíso,Zona Central,Vivienda y Urbanismo,Finalizar Plan de Reconstrucción post-incendios 2024: entregar el 70% de viviendas pendientes en 15 meses · Relocalizar campamentos en zonas de riesgo forestal con fondos del Proyecto Ley de Reconstrucción Nacional,"MINVU (Seremi / Serviu V)
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Min. de Desarrollo Social y Familia",Alta,2026–2027
 22,Valparaíso,V,Valparaíso,Zona Central,Energía y Transición Energética,"Ampliar infraestructura de electromovilidad en el Gran Valparaíso: cargadores públicos y flotas eléctricas en transporte público, en el marco del Acuerdo Público-Privado de Electromovilidad 2026","Min. de Energía
 Min. de Transportes y Telecomunicaciones
@@ -68,7 +68,7 @@ Gobierno Regional",Media,2027–2028
 23,Metropolitana,RM,Santiago,Zona Central,Infraestructura y Conectividad,Puesta en servicio de Américo Vespucio Oriente y avanzar en extensión L7 del Metro · Plan de retarificación de autopistas urbanas y reducción del déficit de la Red Metropolitana,"Min. de Transportes y Telecomunicaciones (Subtrans)
 Min. de Obras Públicas
 Min. de Hacienda",Alta,2026–2027
-24,Metropolitana,RM,Santiago,Zona Central,Seguridad y Orden Público,Intervención en los 152 barrios críticos del país priorizando la RM · Programa Nacional de Recuperación de Barrios: erradicación de tomas irregulares tomadas por el narco y recuperación del espacio público,"Min. del Interior y Seguridad Pública
+24,Metropolitana,RM,Santiago,Zona Central,Seguridad y Orden Público,Intervención en los 152 barrios críticos del país priorizando la RM · Programa Nacional de Recuperación de Barrios: erradicación de tomas irregulares tomadas por el narco y recuperación del espacio público,"Min. del Interior
 Min. de Seguridad Pública
 Gobierno Regional",Alta,2026–2027
 25,Metropolitana,RM,Santiago,Zona Central,Vivienda y Urbanismo,Lanzar Operación Sitio 3.0 · Impulsar Ley de eliminación gradual de contribuciones para 1ª vivienda comenzando por adultos mayores · Modificar OGUC para reducir precio de viviendas nuevas,"MINVU
@@ -99,7 +99,7 @@ Gobierno Regional",Alta,2026–2027
 Min. de Agricultura
 Gobierno Regional",Alta,2026–2027
 34,'uble,XVI,Chillán,Zona Central,Vivienda y Urbanismo,Conducir Plan de Reconstrucción post-incendios en Ninhue y Santa Juana: entrega de soluciones habitacionales definitivas con Fondos Especiales Transitorios del Proyecto Ley de Reconstrucción Nacional,"MINVU (Seremi / Serviu XVI)
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Min. de Desarrollo Social y Familia",Alta,2026–2027
 35,'uble,XVI,Chillán,Zona Central,Energía y Transición Energética,Poner en operación las Subestaciones Punilla y Quinchamalí: fortalecer la infraestructura eléctrica regional para garantizar suministro robusto y habilitar futuras inversiones productivas en la región,"Min. de Energía
 Min. de Obras Públicas
@@ -113,7 +113,7 @@ Gobierno Regional",Media,2027–2028
 Min. de Obras Públicas
 Gobierno Regional",Alta,2026–2027
 39,Biobío,VIII,Concepción,Sur,Seguridad y Orden Público,Combatir el crimen organizado en el Gran Concepción con intervención de barrios críticos · Implementar el Plan Escudo Fronterizo en sectores de mayor vulnerabilidad criminal de la región,"Min. de Seguridad Pública
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Gobierno Regional",Alta,2026–2027
 40,Biobío,VIII,Concepción,Sur,Vivienda y Urbanismo,Conducir Plan de Reconstrucción post-incendios en Penco y Lirquén (enero 2026): acelerar entrega de subsidios habitacionales de emergencia y arriendo para familias damnificadas · Intervenir barrios críticos tomados por el narco en el Gran Concepción,"MINVU (Seremi / Serviu VIII)
 Min. del Interior
@@ -125,7 +125,7 @@ Gobierno Regional",Alta,2026–2027
 Min. Defensa Nacional
 Min. de Economía, Fomento y Turismo",Alta,2026–2027
 43,La Araucanía,IX,Temuco,Sur,Seguridad y Orden Público,Renovar y evaluar el Estado de Excepción en la Macrozona Sur con plan operativo renovado de FF.AA. · Desarrollar programa de intervención focalizada contra el terrorismo en la MZS,"Min. Defensa Nacional
-Min. del Interior y Seguridad Pública
+Min. del Interior
 Min. de Seguridad Pública",Alta,2026–2027
 44,La Araucanía,IX,Temuco,Sur,Desarrollo Social y Familia,Realizar catastro oficial de grupos humanos pertenecientes a pueblos indígenas (GAHPIS) · Implementar consulta indígena con plazos fatales y eliminar instrumentalización política del proceso,"Min. de Desarrollo Social y Familia
 Min. de Minería

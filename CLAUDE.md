@@ -16,7 +16,7 @@ No test suite exists. Validate changes with `npm run build`.
 
 ## Architecture
 
-Work OS is a **Next.js 16.2.1 App Router** application for the División de Coordinación Interregional of Chile's Ministry of Interior. It tracks 63 territorial priorities across 16 regions.
+Work OS is a **Next.js 16.2.1 App Router** application for the División de Coordinación Interministerial (DCI) of Chile's Ministry of Interior. It tracks 63 territorial priorities across 16 regions.
 
 **Entry point:** `app/page.tsx` is a Server Component that loads all priorities from Supabase at startup and passes them to `WorkOSApp` (client), which holds global state and renders 4 views: Mapa, Dashboard, Bandeja de Atención, Kanban.
 
@@ -54,10 +54,6 @@ Syncs regional unemployment and PIB series from BCCh REST API. One series per AP
 BCCh dates arrive as `DD-MM-YYYY` — `parseBcchDate()` converts to ISO.
 
 Trigger manually: `POST /api/ine-sync` with `Authorization: Bearer <CRON_SECRET>`.
-
-## Comparison chart (`components/RegionComparisonModal.tsx`)
-
-Opens from ProjectsPanel. Uses `useAllRegionsMetric` hook which queries `regional_metrics` for all 16 regions at once. Chart data is **wide format** (one row per period, region cods as columns) to align multi-region X axes. Excludes national (region_id > 0 filter).
 
 ## Environment variables
 

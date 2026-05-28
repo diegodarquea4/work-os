@@ -221,7 +221,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
     const instrAoa = [
       ['GUÍA DE LLENADO — Plan Regional de Gobierno · Importación de Iniciativas Territoriales', '', '', ''],
-      ['División de Coordinación Interregional  ·  Ministerio del Interior', '', '', ''],
+      ['División de Coordinación Interministerial  ·  Ministerio del Interior', '', '', ''],
       ['', '', '', ''],
       ['CÓMO USAR ESTE ARCHIVO', '', '', ''],
       ['1. Trabaja SOLO en la hoja "Carga". No mover ni renombrar esa hoja.', '', '', ''],

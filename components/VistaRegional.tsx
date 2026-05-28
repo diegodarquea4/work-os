@@ -16,7 +16,6 @@ import { EJE_COLORS } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
 
-const IndicadoresModal = dynamic(() => import('./IndicadoresModal'))
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -178,7 +177,6 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
   const [selectedCod, setSelectedCod] = useState<string | null>(null)
   const [indicadoresOpen, setIndicadoresOpen] = useState(false)
-  const [useV2, setUseV2] = useState(true) // v2 dashboard by default
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
@@ -397,9 +395,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
 
         {/* IndicadoresModal — self-contained overlay */}
         {indicadoresOpen && region && (
-          useV2
-            ? <IndicadoresModalV2 region={region} onClose={() => setIndicadoresOpen(false)} />
-            : <IndicadoresModal region={region} onClose={() => setIndicadoresOpen(false)} />
+          <IndicadoresModalV2 region={region} onClose={() => setIndicadoresOpen(false)} />
         )}
 
         {/* Region selector */}

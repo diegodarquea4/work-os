@@ -72,7 +72,7 @@ export default function MinutaLoadingModal({ tipo }: { tipo: string }) {
               <p className="text-white font-semibold text-sm leading-tight">
                 {TIPO_LABEL[tipo] ?? 'Minuta'}
               </p>
-              <p className="text-white/50 text-xs mt-0.5">División de Coordinación Interregional</p>
+              <p className="text-white/50 text-xs mt-0.5">División de Coordinación Interministerial</p>
             </div>
           </div>
 

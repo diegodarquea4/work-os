@@ -1,6 +1,6 @@
 # Work OS — Sistema de Seguimiento de Iniciativas Territoriales
 
-Plataforma interna del **Ministerio del Interior y Seguridad Pública de Chile**, desarrollada para la **División de Coordinación Interregional**. Centraliza el seguimiento, gestión y reporte de las iniciativas territoriales del gobierno 2026–2028 para las 16 regiones del país.
+Plataforma interna del **Ministerio del Interior de Chile**, desarrollada para la **División de Coordinación Interministerial (DCI)**. Centraliza el seguimiento, gestión y reporte de las iniciativas territoriales del gobierno 2026–2028 para las 16 regiones del país.
 
 > Acceso exclusivo para funcionarios autorizados. No es un sistema público.
 
@@ -8,7 +8,7 @@ Plataforma interna del **Ministerio del Interior y Seguridad Pública de Chile**
 
 ## ¿Qué problema resuelve?
 
-La División de Coordinación Interregional debe hacer seguimiento simultáneo de cientos de iniciativas distribuidas en 16 regiones, involucrando múltiples ministerios, fuentes de financiamiento y plazos distintos. Antes de esta plataforma, ese seguimiento se hacía en planillas Excel descentralizadas.
+La División de Coordinación Interministerial debe hacer seguimiento simultáneo de cientos de iniciativas distribuidas en 16 regiones, involucrando múltiples ministerios, fuentes de financiamiento y plazos distintos. Antes de esta plataforma, ese seguimiento se hacía en planillas Excel descentralizadas.
 
 Work OS reemplaza ese proceso con una plataforma web que permite:
 
