@@ -23,6 +23,11 @@ import { REGIONS, INE_CODE } from '@/lib/regions'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+// SEIA tarda ~340s en correr completo (16 regiones × paginación 100). Sin esto
+// Vercel hereda el default (~60s) y mata la función antes del upsert — síntoma:
+// synced_at congelado en la fecha del deploy original (vid. memoria
+// project-sync-timeouts).
+export const maxDuration = 300
 
 const SEIA_URL = 'https://seia.sea.gob.cl/busqueda/buscarProyectoResumenAction.php'
 const PAGE_SIZE = 100
