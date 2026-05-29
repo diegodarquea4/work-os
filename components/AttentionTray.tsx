@@ -145,17 +145,25 @@ export default function AttentionTray({
       setSelectedIniciativa(prev => prev ? { ...prev, en_foco: next } : null)
     }
 
-    const { error } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
       .eq('n', n)
+      .select('n, en_foco')
 
-    if (error) {
+    const failed = !!error || !data || data.length === 0
+    if (failed) {
       onUpdatePrioridad(n, { en_foco: !next })
       if (selectedIniciativa?.n === n) {
         setSelectedIniciativa(prev => prev ? { ...prev, en_foco: !next } : null)
       }
-      console.error('[AttentionTray] Error toggling foco:', error)
+      const msg = error
+        ? `Error guardando foco: ${error.message}`
+        : 'No se pudo guardar el foco (0 filas actualizadas — probable RLS / permisos).'
+      console.error('[AttentionTray] handleToggleFoco:', { n, next, error, data })
+      window.alert(msg)
+    } else {
+      console.log('[AttentionTray] Foco guardado:', data)
     }
   }
 

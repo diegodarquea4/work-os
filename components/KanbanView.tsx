@@ -281,13 +281,21 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   // mantiene estado local — cada componente persiste sus propios cambios.
   async function handleToggleFoco(n: number, next: boolean) {
     onUpdatePrioridad(n, { en_foco: next })
-    const { error } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
       .eq('n', n)
-    if (error) {
+      .select('n, en_foco')
+    const failed = !!error || !data || data.length === 0
+    if (failed) {
       onUpdatePrioridad(n, { en_foco: !next })
-      console.error('[KanbanView] Error toggling foco:', error)
+      const msg = error
+        ? `Error guardando foco: ${error.message}`
+        : 'No se pudo guardar el foco (0 filas actualizadas — probable RLS / permisos).'
+      console.error('[KanbanView] handleToggleFoco:', { n, next, error, data })
+      window.alert(msg)
+    } else {
+      console.log('[KanbanView] Foco guardado:', data)
     }
   }
 

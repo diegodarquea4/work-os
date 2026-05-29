@@ -138,14 +138,22 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingFoco(true)
     setEnFoco(next)
     onUpdatePrioridad(prioridad.n, { en_foco: next })
-    const { error } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
       .eq('n', prioridad.n)
-    if (error) {
+      .select('n, en_foco')
+    const failed = !!error || !data || data.length === 0
+    if (failed) {
       setEnFoco(!next)
       onUpdatePrioridad(prioridad.n, { en_foco: !next })
-      console.error('[ProjectTrackerModal] Error toggling foco:', error)
+      const msg = error
+        ? `Error guardando foco: ${error.message}`
+        : 'No se pudo guardar el foco (0 filas actualizadas — probable RLS / permisos).'
+      console.error('[ProjectTrackerModal] handleToggleFoco:', { n: prioridad.n, next, error, data })
+      window.alert(msg)
+    } else {
+      console.log('[ProjectTrackerModal] Foco guardado:', data)
     }
     setSavingFoco(false)
   }
