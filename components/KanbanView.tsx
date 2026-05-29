@@ -2,8 +2,10 @@
 
 import { useMemo, useState, useTransition, useLayoutEffect, useRef } from 'react'
 import type { Iniciativa } from '@/lib/projects'
-import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, ejeGobHeaderColor } from '@/lib/config'
+import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
+import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import { FlagIcon } from './icons/FlagIcon'
 
 // ── Mosaic helpers ────────────────────────────────────────────────────────────
 
@@ -38,17 +40,11 @@ function ejeNumber(eje: string): number {
   return m ? parseInt(m[1], 10) : 999
 }
 
-// "Min. del Interior · Carabineros" → ["Min. del Interior", "Carabineros"]
-// "MINVU (Seremi / Serviu IV)" → ["MINVU"]
-// Una iniciativa con multi-ministerio aparece en cada grupo.
-function normalizeMinisterios(raw: string | null | undefined): string[] {
-  if (!raw) return ['Sin ministerio']
-  return raw
-    .split(/\s*[·/]\s*|\s+y\s+/)
-    .map(s => s.trim())
-    .map(s => s.split('(')[0].trim())
-    .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i)
+// Helper local que envuelve splitMinisterios para dar el fallback 'Sin ministerio'
+// cuando el campo es null. La lógica canónica de split vive en lib/config.ts.
+function ministeriosOrFallback(raw: string | null | undefined): string[] {
+  const list = splitMinisterios(raw)
+  return list.length > 0 ? list : ['Sin ministerio']
 }
 
 // ── SVG icons (inline, no dep) ────────────────────────────────────────────────
@@ -114,14 +110,30 @@ type Props = {
 
 // ── EjeCard — card for eje mode ───────────────────────────────────────────────
 
-function EjeCard({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa) => void }) {
+function EjeCard({ p, onSelect, onToggleFoco }: {
+  p: Iniciativa
+  onSelect: (p: Iniciativa) => void
+  onToggleFoco: (n: number, next: boolean) => void
+}) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
   const pc  = prioridadColor(p.prioridad)
+  const enFoco = p.en_foco === true
   return (
     <button
       onClick={() => onSelect(p)}
-      className="w-full text-left border border-gray-200 bg-white rounded-xl p-3 hover:shadow-md transition-all group"
+      className={`w-full text-left border bg-white rounded-xl p-3 hover:shadow-md transition-all group relative ${
+        enFoco ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'
+      }`}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+        className={`absolute top-2 right-2 p-1 rounded transition-colors ${
+          enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-500'
+        }`}
+        title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+      >
+        <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
+      </button>
       <div className="flex items-center gap-2 mb-2">
         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${sem.dot}`} />
         <span className="text-xs text-gray-600 font-medium">{sem.label}</span>
@@ -154,11 +166,16 @@ function EjeCard({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa) => 
 
 // ── MinistryRow — fila compacta para vista Monday por ministerio ──────────────
 
-function MinistryRow({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa) => void }) {
+function MinistryRow({ p, onSelect, onToggleFoco }: {
+  p: Iniciativa
+  onSelect: (p: Iniciativa) => void
+  onToggleFoco: (n: number, next: boolean) => void
+}) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
   const pc  = prioridadColor(p.prioridad)
   const dias = daysUntil(p.fecha_proximo_hito)
   const hitoUrgent = dias !== null && dias <= 7 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
+  const enFoco = p.en_foco === true
   // "Eje 3: Salud y Servicios Básicos" → "Eje 3" (compacto en chip horizontal)
   const ejeShort = p.eje.match(/^Eje\s+\d+/)?.[0] ?? p.eje
   // "diego.darquea@gmail.com" → "diego.darquea" (más legible en reunión)
@@ -167,8 +184,21 @@ function MinistryRow({ p, onSelect }: { p: Iniciativa; onSelect: (p: Iniciativa)
   return (
     <button
       onClick={() => onSelect(p)}
-      className="w-full text-left px-3 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-3"
+      className={`w-full text-left px-3 py-2.5 bg-white border rounded-xl hover:shadow-sm transition-all flex items-center gap-3 ${
+        enFoco ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200 hover:border-slate-300'
+      }`}
     >
+      {/* Flag */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+        className={`flex-shrink-0 p-1 -m-1 rounded transition-colors ${
+          enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-500'
+        }`}
+        title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+      >
+        <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
+      </button>
+
       {/* Semáforo */}
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
 
@@ -235,6 +265,31 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   const [showSmall, setShowSmall]       = useState(false)
   const [cellSize, setCellSize]         = useState(56)
   const gridRef                         = useRef<HTMLDivElement>(null)
+  const ministerioContainerRef          = useRef<HTMLDivElement>(null)
+
+  // Expandir/colapsar todas las secciones <details> del modo ministerio.
+  // Usamos la API nativa de <details> en vez de estado controlado para no
+  // pelearse con el comportamiento de cada sección individual.
+  function toggleAllMinisterios(open: boolean) {
+    const container = ministerioContainerRef.current
+    if (!container) return
+    container.querySelectorAll('details').forEach(d => { d.open = open })
+  }
+
+  // Toggle del flag "en foco" desde cualquier card del Kanban. Optimistic +
+  // rollback en error. La persistencia se hace acá porque WorkOSApp solo
+  // mantiene estado local — cada componente persiste sus propios cambios.
+  async function handleToggleFoco(n: number, next: boolean) {
+    onUpdatePrioridad(n, { en_foco: next })
+    const { error } = await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ en_foco: next })
+      .eq('n', n)
+    if (error) {
+      onUpdatePrioridad(n, { en_foco: !next })
+      console.error('[KanbanView] Error toggling foco:', error)
+    }
+  }
 
   // Make grid cells square: measure actual px width of 1 column unit
   useLayoutEffect(() => {
@@ -286,7 +341,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   const ministerioGroups = useMemo(() => {
     if (!isGroupedMode || groupBy !== 'ministerio') return null
     const expanded = filtered.flatMap(p =>
-      normalizeMinisterios(p.ministerio).map(min => ({ p, min }))
+      ministeriosOrFallback(p.ministerio).map(min => ({ p, min }))
     )
     const allMin = Array.from(new Set(expanded.map(e => e.min))).sort()
     return allMin.map(min => ({
@@ -413,6 +468,32 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         )}
 
+        {/* Expandir/colapsar todos — solo en vista por ministerio */}
+        {isGroupedMode && groupBy === 'ministerio' && (
+          <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => toggleAllMinisterios(true)}
+              title="Expandir todos"
+              className="p-1.5 rounded-md hover:bg-slate-100 text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3l3 3 3-3"/>
+                <path d="M3 7l3 3 3-3"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => toggleAllMinisterios(false)}
+              title="Colapsar todos"
+              className="p-1.5 rounded-md hover:bg-slate-100 text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5l3-3 3 3"/>
+                <path d="M3 9l3-3 3 3"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         {isGroupedMode && (
           <span className="text-xs text-gray-500 font-medium">
             {filtered.length} iniciativas
@@ -500,7 +581,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       Sin iniciativas
                     </div>
                   ) : (
-                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} />)
+                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />)
                   )}
                 </div>
               </div>
@@ -511,7 +592,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
 
       {/* ── Modo "por ministerio": secciones verticales tipo Monday ─────────── */}
       {isGroupedMode && groupBy === 'ministerio' && ministerioGroups && (
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <div ref={ministerioContainerRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
           {ministerioGroups.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-gray-400">
               Sin iniciativas para mostrar
@@ -535,7 +616,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                 </summary>
                 <div className="bg-slate-50 p-3 space-y-2">
                   {group.iniciativas.map(p => (
-                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} />
+                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />
                   ))}
                 </div>
               </details>

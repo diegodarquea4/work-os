@@ -36,6 +36,7 @@ function mapRow(row: Prioridad): Iniciativa {
     responsable:            row.responsable ?? null,
     codigo_iniciativa:      row.codigo_iniciativa ?? null,
     origen:                 row.origen ?? null,
+    en_foco:                row.en_foco ?? false,
   }
 }
 

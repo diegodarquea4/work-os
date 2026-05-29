@@ -50,3 +50,67 @@ export function ejeGobHeaderColor(eg: string | null): string {
        : eg === 'Seguridad' ? 'bg-red-100 text-red-800'
        :                      'bg-gray-100 text-gray-600'
 }
+
+// ── Ministerios canónicos ─────────────────────────────────────────────────────
+// Lista alineada con el cleanup de datos (migración 006). Es el catálogo desde
+// el que se asignan los ministerios responsables en el panel.
+// Incluye también entidades no-ministeriales que se trackean en el mismo campo
+// (Municipalidad, Gobierno Regional, Poder Judicial, Ministerio Público, Bomberos).
+
+export const MINISTERIOS_CANONICOS = [
+  // Ejecutivo — orden por carga histórica en el panel
+  'Ministerio de Obras Públicas',
+  'Ministerio de Vivienda y Urbanismo',
+  'Ministerio del Interior',
+  'Ministerio de Educación',
+  'Ministerio de Salud',
+  'Ministerio de Transportes y Telecomunicaciones',
+  'Ministerio de Agricultura',
+  'Ministerio de Energía',
+  'Ministerio de Economía, Fomento y Turismo',
+  'Ministerio del Deporte',
+  'Ministerio del Trabajo y Previsión Social',
+  'Ministerio de Justicia y Derechos Humanos',
+  'Ministerio de las Culturas, las Artes y el Patrimonio',
+  'Ministerio del Medio Ambiente',
+  'Ministerio de Desarrollo Social y Familia',
+  'Ministerio de Minería',
+  'Ministerio de Defensa Nacional',
+  'Ministerio de la Mujer y la Equidad de Género',
+  'Ministerio de Seguridad Pública',
+  'Ministerio de Bienes Nacionales',
+  'Ministerio Secretaría General de Gobierno',
+  'Ministerio Secretaría General de la Presidencia',
+  'Ministerio de Ciencia, Tecnología, Conocimiento e Innovación',
+  'Ministerio de Hacienda',
+  'Ministerio de Relaciones Exteriores',
+  'Ministerio de Salud Pública',
+  // Otras entidades trackeadas en el mismo campo
+  'Gobierno Regional',
+  'Municipalidad',
+  'Poder Judicial',
+  'Ministerio Público',
+  'Bomberos de Chile',
+] as const
+
+/** Splittea un valor del campo `ministerio` en una lista de carteras.
+ *  El formato canónico para multi-ministerio es "Min. A · Min. B" (separador "·").
+ *  Si una iniciativa tiene multi-ministerio aparece en cada columna de la vista. */
+export function splitMinisterios(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  // Remover paréntesis y su contenido ("MINVU (Seremi IV)" → "MINVU"), sin
+  // partir nombres compuestos con " y " (ej. "Vivienda y Urbanismo", "Trabajo y
+  // Previsión Social", "Justicia y Derechos Humanos").
+  const cleaned = raw.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+  return cleaned
+    .split(/\s*·\s*/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+}
+
+/** Une una lista de carteras al formato canónico almacenado en la BD. */
+export function joinMinisterios(list: string[]): string | null {
+  const clean = list.map(s => s.trim()).filter(Boolean)
+  return clean.length === 0 ? null : clean.join(' · ')
+}

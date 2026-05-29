@@ -11,7 +11,7 @@ export type Iniciativa = {
   eje_gobierno: string | null
   nombre: string
   descripcion: string | null
-  ministerio: string
+  ministerio: string | null
   prioridad: 'Alta' | 'Media' | 'Baja'
   etapa_actual: string | null
   estado_termino_gobierno: string | null
@@ -27,6 +27,7 @@ export type Iniciativa = {
   responsable: string | null
   codigo_iniciativa: string | null
   origen: string | null
+  en_foco: boolean
 }
 
 export function getIniciativas(): Iniciativa[] {
@@ -88,7 +89,7 @@ function parseCSV(content: string): Iniciativa[] {
     eje_gobierno: null,
     nombre: f[6] || '',
     descripcion: null,
-    ministerio: f[7] || '',
+    ministerio: f[7] || null,
     prioridad: (f[8] || 'Media') as 'Alta' | 'Media' | 'Baja',
     etapa_actual: null,
     estado_termino_gobierno: null,
@@ -104,5 +105,6 @@ function parseCSV(content: string): Iniciativa[] {
     responsable: null,
     codigo_iniciativa: null,
     origen: null,
+    en_foco: false,
   }))
 }

@@ -145,7 +145,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const q = search.toLowerCase()
         if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
-            !p.ministerio.toLowerCase().includes(q)) return false
+            !(p.ministerio ?? '').toLowerCase().includes(q)) return false
       }
       if (filterRegion !== 'todas' && p.region !== filterRegion) return false
       if (filterEje !== 'todos' && p.eje !== filterEje) return false
@@ -569,7 +569,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       'Eje Gobierno': p.eje_gobierno ?? '',
       Iniciativa: p.nombre,
       Descripción: p.descripcion ?? '',
-      Ministerio: p.ministerio,
+      Ministerio: p.ministerio ?? '',
       Prioridad: p.prioridad,
       'Etapa Actual': p.etapa_actual ?? '',
       'Estado Término Gob.': p.estado_termino_gobierno ?? '',
@@ -1305,7 +1305,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         {visibleCols.has('iniciativa') && (
           <td className="px-3 py-3.5 max-w-xs">
             <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
-            <span className="text-xs text-gray-400 mt-0.5 block">{p.ministerio}</span>
+            <span className="text-xs text-gray-400 mt-0.5 block">{p.ministerio ?? 'Sin asignar'}</span>
           </td>
         )}
         {visibleCols.has('region') && (

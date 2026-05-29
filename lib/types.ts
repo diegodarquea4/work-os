@@ -10,7 +10,7 @@ export type Prioridad = {
   eje_gobierno: string | null
   nombre: string
   descripcion: string | null
-  ministerio: string
+  ministerio: string | null
   prioridad: 'Alta' | 'Media' | 'Baja'
   etapa_actual: string | null
   estado_termino_gobierno: string | null
@@ -26,6 +26,9 @@ export type Prioridad = {
   responsable: string | null
   codigo_iniciativa: string | null
   origen: string | null
+  // Columna agregada en migración 007. Opcional para tolerar lecturas
+  // anteriores al ALTER en prod (viene undefined hasta que se aplique).
+  en_foco?: boolean
 }
 
 // ── Semáforo Log ─────────────────────────────────────────────────────────────

@@ -632,7 +632,7 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
                   color="red"
                   items={alertaRojo.map(p => ({
                     label: p.nombre,
-                    sub: `${p.ministerio} · ${p.pct_avance ?? 0}% avance`,
+                    sub: `${p.ministerio ?? 'Sin asignar'} · ${p.pct_avance ?? 0}% avance`,
                   }))}
                 />
               )}

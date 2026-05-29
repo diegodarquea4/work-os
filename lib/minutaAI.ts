@@ -178,7 +178,7 @@ function buildContext(
   }
 
   const rojas = projects.filter(p => p.estado_semaforo === 'rojo').map(p =>
-    `- ${p.nombre} (${p.ministerio}, avance ${p.pct_avance ?? 0}%${p.etapa_actual ? `, etapa: ${p.etapa_actual}` : ''})`
+    `- ${p.nombre} (${p.ministerio ?? 'sin asignar'}, avance ${p.pct_avance ?? 0}%${p.etapa_actual ? `, etapa: ${p.etapa_actual}` : ''})`
   ).join('\n')
 
   const hitos = projects

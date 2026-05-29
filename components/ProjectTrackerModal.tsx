@@ -5,12 +5,13 @@ import type { Iniciativa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { logSemaforoChange } from '@/lib/db'
-import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, type SemaforoKey } from '@/lib/config'
+import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
 import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
 import { useCanEdit, useCanEditAny } from '@/lib/context/UserContext'
+import { FlagIcon } from './icons/FlagIcon'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
@@ -48,6 +49,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [rat, setRat]                               = useState<string>(prioridad.rat ?? '')
   const [inversionMm, setInversionMm]               = useState<string>(prioridad.inversion_mm != null ? String(prioridad.inversion_mm) : '')
   const [codigoBip, setCodigoBip]                   = useState<string>(prioridad.codigo_bip ?? '')
+  const [ministerios, setMinisterios]               = useState<string[]>(splitMinisterios(prioridad.ministerio))
+  const [savingMinisterio, setSavingMinisterio]     = useState(false)
+  const [enFoco, setEnFoco]                         = useState<boolean>(prioridad.en_foco === true)
+  const [savingFoco, setSavingFoco]                 = useState(false)
   const [editingField, setEditingField]             = useState<string | null>(null)
   const [savingField, setSavingField]               = useState(false)
   const [confirmDelete, setConfirmDelete]           = useState(false)
@@ -119,6 +124,32 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingField(false)
   }
 
+  async function saveMinisterios(next: string[]) {
+    setSavingMinisterio(true)
+    setMinisterios(next)
+    const joined = joinMinisterios(next)
+    await getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, { ministerio: joined })
+    setSavingMinisterio(false)
+  }
+
+  async function handleToggleFoco() {
+    const next = !enFoco
+    setSavingFoco(true)
+    setEnFoco(next)
+    onUpdatePrioridad(prioridad.n, { en_foco: next })
+    const { error } = await getSupabase()
+      .from('prioridades_territoriales')
+      .update({ en_foco: next })
+      .eq('n', prioridad.n)
+    if (error) {
+      setEnFoco(!next)
+      onUpdatePrioridad(prioridad.n, { en_foco: !next })
+      console.error('[ProjectTrackerModal] Error toggling foco:', error)
+    }
+    setSavingFoco(false)
+  }
+
   async function handleDelete() {
     setDeleting(true)
     const res = await fetch(`/api/iniciativa/${prioridad.n}`, { method: 'DELETE' })
@@ -186,6 +217,21 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {canEdit && (
+                <button
+                  onClick={handleToggleFoco}
+                  disabled={savingFoco}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    enFoco
+                      ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 ring-1 ring-amber-200'
+                      : 'text-gray-500 hover:bg-gray-100 ring-1 ring-gray-200'
+                  }`}
+                  title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+                >
+                  <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
+                  {enFoco ? 'En foco' : 'Marcar foco'}
+                </button>
+              )}
               {canEditAny && onDeletePrioridad && !confirmDelete && (
                 <button
                   onClick={() => setConfirmDelete(true)}
@@ -223,11 +269,51 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </div>
           </div>
 
-          {/* Ministerio */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <span className="text-xs bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md border border-gray-100">
-              {prioridad.ministerio}
-            </span>
+          {/* Ministerio — multi-select editable */}
+          <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingMinisterio ? 'opacity-50 pointer-events-none' : ''}`}>
+            <span className="text-xs text-gray-400">Ministerio:</span>
+            {ministerios.length === 0 && (
+              <span className="text-xs text-gray-400 italic">Sin asignar</span>
+            )}
+            {ministerios.map(m => (
+              <span
+                key={m}
+                className="text-xs bg-gray-50 text-gray-700 pl-2 pr-1 py-0.5 rounded-md border border-gray-200 flex items-center gap-1"
+              >
+                {m}
+                {canEdit && (
+                  <button
+                    onClick={() => saveMinisterios(ministerios.filter(x => x !== m))}
+                    className="text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-red-50"
+                    title={`Quitar ${m}`}
+                  >
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 1l6 6M7 1L1 7"/>
+                    </svg>
+                  </button>
+                )}
+              </span>
+            ))}
+            {canEdit && (
+              <label className="relative inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-dashed border-gray-300 text-xs text-gray-500 hover:bg-gray-50 hover:border-gray-400 cursor-pointer transition-colors">
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M5 1v8M1 5h8"/>
+                </svg>
+                <span>Agregar</span>
+                <select
+                  value=""
+                  onChange={e => {
+                    if (e.target.value) saveMinisterios([...ministerios, e.target.value])
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                >
+                  <option value="">—</option>
+                  {MINISTERIOS_CANONICOS.filter(m => !ministerios.includes(m)).map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
 
           {/* Semáforo + % avance */}

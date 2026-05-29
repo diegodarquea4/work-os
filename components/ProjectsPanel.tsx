@@ -108,7 +108,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
       if (search) {
         const q = search.toLowerCase()
         const inNombre = p.nombre.toLowerCase().includes(q)
-        const inMin    = p.ministerio.toLowerCase().includes(q)
+        const inMin    = (p.ministerio ?? '').toLowerCase().includes(q)
         if (!inNombre && !inMin) return false
       }
       if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey2)) return false
@@ -571,7 +571,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                   <p className="text-sm text-gray-800 leading-snug mb-3">{p.nombre}</p>
                   <div className="flex items-center gap-1.5 mb-3">
                     <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0"/>
-                    <span className="text-xs text-gray-700">{p.ministerio}</span>
+                    <span className="text-xs text-gray-700">{p.ministerio ?? 'Sin asignar'}</span>
                   </div>
                   <div className="pt-3 border-t border-gray-50">
                     <div className="flex items-center justify-between mb-1.5">
