@@ -394,7 +394,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           {/* Side panel — projects */}
           {selectedRegion && (
             <div
-              className="flex-shrink-0 overflow-hidden shadow-xl z-[999] relative"
+              className="flex-shrink-0 overflow-hidden shadow-xl z-[1100] relative"
               style={{ width: panelWidth }}
             >
               {/* Resize handle */}
