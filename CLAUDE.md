@@ -55,6 +55,24 @@ BCCh dates arrive as `DD-MM-YYYY` — `parseBcchDate()` converts to ISO.
 
 Trigger manually: `POST /api/ine-sync` with `Authorization: Bearer <CRON_SECRET>`.
 
+## SEIA / MOP sync (`app/api/seia-sync`, `app/api/mop-sync`)
+
+Sincronizan proyectos externos del Sistema de Evaluación de Impacto Ambiental (SEIA) y del Ministerio de Obras Públicas (MOP). Pipelines totalmente distintos pero comparten patrón: 16 regiones, dual-write a `{seia,mop}_projects` (v1) + `v2_proyectos_inversion` (v2 unificada), `synced_at` por fila.
+
+**SEIA** — POST a `https://seia.sea.gob.cl/busqueda/buscarProyectoResumenAction.php` (API interna no documentada). Response JSON en ISO-8859-1. Paginación 100/página, tarda ~340s en correr completo. **Requiere `export const maxDuration = 300`** — sin esto Vercel mata el handler a los ~60s y synced_at queda congelado sin avisar. Síntoma observado 2026-05-29: 53 días de silencio.
+
+**MOP** — HTML scraping de `https://proyectos.mop.gob.cl` (sin API). Encoding ISO-8859-1 + entity decoding. Por región: lista + detalle de cada `cod_p` en batches de 5 paralelos. Tarda ~150s. También tiene `maxDuration = 300`.
+
+**Crons:** lunes 08:00 UTC (SEIA) y 09:00 UTC (MOP) — `vercel.json`.
+
+**Observabilidad:** ambos handlers escriben a `sync_status` al terminar (`lib/syncStatus.ts:recordSyncStatus`). Una query revela el estado de todos los syncs:
+```sql
+SELECT name, last_run_at, last_status, last_rows, last_error_count
+FROM sync_status ORDER BY last_run_at DESC;
+```
+
+**Trigger manual:** `POST /api/{seia,mop}-sync` con `Authorization: Bearer <CRON_SECRET>`.
+
 ## Environment variables
 
 | Variable | Required in |

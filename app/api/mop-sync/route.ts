@@ -17,6 +17,7 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
+import { recordSyncStatus } from '@/lib/syncStatus'
 
 export const dynamic = 'force-dynamic'
 export const runtime  = 'nodejs'
@@ -170,6 +171,7 @@ type UpsertRow = {
 
 async function runSync() {
   const supabase      = getSupabaseAdmin()
+  const startedAt     = Date.now()
   let   totalUpserted = 0
   const errors: string[]   = []
   const now    = new Date().toISOString()
@@ -280,9 +282,10 @@ async function runSync() {
             descripcion: r.descripcion,
             synced_at: r.synced_at,
           }))
-          supabase.from('v2_proyectos_inversion')
+          const { error: v2Err } = await supabase
+            .from('v2_proyectos_inversion')
             .upsert(v2Rows, { onConflict: 'id' })
-            .then(({ error }) => { if (error) console.error('[mop-sync] v2:', error.message) })
+          if (v2Err) errors.push(`${region.cod} v2: ${v2Err.message}`)
         }
       }
     } catch (e) {
@@ -290,15 +293,22 @@ async function runSync() {
     }
   }
 
-  if (totalUpserted === 0 && errors.length > 0) {
-    return Response.json({ ok: false, errors })
-  }
+  const durationMs = Date.now() - startedAt
+  const status: 'ok' | 'partial' | 'error' =
+    totalUpserted === 0 && errors.length > 0 ? 'error'
+    : errors.length > 0 ? 'partial'
+    : 'ok'
+
+  await recordSyncStatus('mop', { status, durationMs, rows: totalUpserted, errors })
+
+  if (status === 'error') return Response.json({ ok: false, errors })
 
   return Response.json({
     ok:        true,
     synced_at: now,
     upserted:  totalUpserted,
     regions:   REGIONS.length,
+    duration_ms: durationMs,
     errors:    errors.length > 0 ? errors : undefined,
   })
 }
