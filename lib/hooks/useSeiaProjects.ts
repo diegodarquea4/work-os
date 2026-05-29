@@ -5,9 +5,12 @@ import { getSupabase } from '@/lib/supabase'
 import { INE_CODE } from '@/lib/regions'
 import type { SeiaProject } from '@/lib/types'
 
+// Default limit alto: para la vista de portafolio (filtros + KPIs) necesitamos
+// todo el conjunto en cliente. Payload típico ~250 KB para 1.000 filas; los
+// filtros y agregados corren localmente sin tocar Supabase.
 export function useSeiaProjects(
   regionCod: string,
-  limit = 20,
+  limit = 2000,
 ): { proyectos: SeiaProject[]; total: number; loading: boolean; error: string | null } {
   const [proyectos, setProyectos] = useState<SeiaProject[]>([])
   const [total, setTotal]         = useState(0)

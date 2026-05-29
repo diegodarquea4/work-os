@@ -5,9 +5,12 @@ import { getSupabase } from '@/lib/supabase'
 import { INE_CODE } from '@/lib/regions'
 import type { MopProject } from '@/lib/types'
 
+// Default limit alto: para la vista de portafolio (filtros + KPIs) necesitamos
+// todo el conjunto en cliente. Payload típico ~250 KB para ~800 filas; los
+// filtros y agregados corren localmente sin tocar Supabase.
 export function useMopProjects(
   regionCod: string,
-  limit = 20,
+  limit = 2000,
 ): { proyectos: MopProject[]; total: number; loading: boolean; error: string | null } {
   const [proyectos, setProyectos] = useState<MopProject[]>([])
   const [total, setTotal]         = useState(0)
