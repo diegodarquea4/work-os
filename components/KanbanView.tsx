@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition, useLayoutEffect, useRef } from 'react'
+import { useMemo, useState, useTransition, useLayoutEffect, useRef, useEffect } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
 import { getSupabase } from '@/lib/supabase'
+import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import { FlagIcon } from './icons/FlagIcon'
 
@@ -276,6 +277,58 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     container.querySelectorAll('details').forEach(d => { d.open = open })
   }
 
+  // Descarga de cartera por ministerio en PDF (la vista actual filtrada por
+  // región). soloEnFoco=true filtra a iniciativas con la bandera.
+  const [descargando, setDescargando] = useState(false)
+  const [focoMenuOpen, setFocoMenuOpen] = useState(false)
+  const focoMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!focoMenuOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (focoMenuRef.current && !focoMenuRef.current.contains(e.target as Node)) {
+        setFocoMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [focoMenuOpen])
+  async function handleDescargarCartera(soloEnFoco: boolean) {
+    if (filterRegion === 'todas') return
+    const region = REGIONS.find(r => r.nombre === filterRegion)
+    if (!region) return
+    setDescargando(true)
+    try {
+      const res = await fetch('/api/cartera-pdf', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          region,
+          soloEnFoco,
+          fecha: new Date().toLocaleDateString('es-CL'),
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'No se pudo generar el PDF' }))
+        window.alert(err.error ?? 'No se pudo generar el PDF')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `cartera-${region.cod}-${soloEnFoco ? 'foco' : 'completa'}-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('[KanbanView] descargar cartera:', e)
+      window.alert('Error de red generando el PDF')
+    } finally {
+      setDescargando(false)
+    }
+  }
+
   // Toggle del flag "en foco" desde cualquier card del Kanban. Optimistic +
   // rollback en error. La persistencia se hace acá porque WorkOSApp solo
   // mantiene estado local — cada componente persiste sus propios cambios.
@@ -507,6 +560,67 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
             {filtered.length} iniciativas
           </span>
         )}
+
+        {/* Descargar cartera — split button con dropdown para "solo en foco" */}
+        {isGroupedMode && groupBy === 'ministerio' && (() => {
+          const flaggedCount = filtered.filter(p => p.en_foco === true).length
+          return (
+            <div className="relative flex items-center ml-auto" ref={focoMenuRef}>
+              <button
+                onClick={() => handleDescargarCartera(false)}
+                disabled={descargando || filtered.length === 0}
+                title="Descargar PDF con la cartera completa de cada ministerio"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-l-md bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-slate-700"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
+                </svg>
+                Descargar cartera
+              </button>
+              <button
+                onClick={() => setFocoMenuOpen(prev => !prev)}
+                disabled={descargando}
+                title="Más opciones de descarga"
+                className="flex items-center px-1.5 py-1.5 rounded-r-md bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${focoMenuOpen ? 'rotate-180' : ''}`}>
+                  <path d="M2 4l3 3 3-3"/>
+                </svg>
+              </button>
+
+              {focoMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                  <button
+                    onClick={() => { setFocoMenuOpen(false); handleDescargarCartera(false) }}
+                    disabled={descargando || filtered.length === 0}
+                    className="w-full px-3 py-2.5 text-left hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2 border-b border-gray-100"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-slate-700 flex-shrink-0">
+                      <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800">Cartera completa</p>
+                      <p className="text-[10px] text-gray-500">{filtered.length} iniciativas</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setFocoMenuOpen(false); handleDescargarCartera(true) }}
+                    disabled={descargando || flaggedCount === 0}
+                    className="w-full px-3 py-2.5 text-left hover:bg-amber-50 disabled:opacity-50 disabled:hover:bg-transparent flex items-center gap-2"
+                  >
+                    <FlagIcon filled className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800">Solo iniciativas en foco</p>
+                      <p className="text-[10px] text-gray-500">
+                        {flaggedCount === 0 ? 'No hay iniciativas marcadas' : `${flaggedCount} con bandera`}
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Region chip in mosaico mode */}
         {viewMode === 'mosaico' && filterRegion !== 'todas' && (
@@ -829,6 +943,30 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           onUpdatePrioridad={onUpdatePrioridad}
           onDeletePrioridad={onDeletePrioridad}
         />
+      )}
+
+      {/* Loading modal: aparece mientras el backend renderiza el PDF (5-15s
+          según volumen). Bloquea interacción para evitar dobles disparos. */}
+      {descargando && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm mx-4 overflow-hidden">
+            <div className="bg-slate-900 px-6 py-4 flex items-center gap-3">
+              <svg className="w-5 h-5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+              </svg>
+              <span className="text-white font-semibold text-sm">Generando cartera PDF</span>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-700">
+                Estamos preparando el detalle de cada ministerio con sus iniciativas y seguimientos.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Esto puede tardar unos segundos según la cantidad de iniciativas en la región.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
