@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { REGIONS } from '@/lib/regions'
 
 export type UserRole = 'admin' | 'editor' | 'regional' | 'viewer'
 
@@ -48,14 +47,13 @@ export async function requireAuth(): Promise<UserProfile | null> {
 
 /**
  * Returns true if the profile has write access to the given region.
- * regionNombre can be either a region nombre (e.g. "Biobío") or a cod (e.g. "VIII").
+ * Solo admin/editor pueden mutar datos in-app. Regional y viewer son solo
+ * lectura — los regionales canalizan cualquier cambio vía propuesta
+ * (POST /api/proposals) que un admin revisa y aplica.
+ *
+ * El parámetro `regionNombre` se mantiene por compatibilidad con call sites
+ * y future-proofing (si más adelante volvemos a granular por región).
  */
-export function canWrite(profile: UserProfile, regionNombre?: string): boolean {
-  if (profile.role === 'admin' || profile.role === 'editor') return true
-  if (profile.role === 'regional' && regionNombre) {
-    if (profile.region_cods.includes(regionNombre)) return true
-    const r = REGIONS.find(r => r.nombre === regionNombre)
-    return r ? profile.region_cods.includes(r.cod) : false
-  }
-  return false
+export function canWrite(profile: UserProfile, _regionNombre?: string): boolean {
+  return profile.role === 'admin' || profile.role === 'editor'
 }

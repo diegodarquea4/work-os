@@ -38,15 +38,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
   }, [])
 
-  const canEditRegion = useCallback((regionNombreOrCod: string): boolean => {
+  // Solo admin/editor pueden mutar datos en línea desde el panel. Regional y
+  // viewer son solo lectura — su camino para proponer cambios es el modal
+  // "Proponer actualización" en Mi Región, que pasa por revisión del admin.
+  const canEditRegion = useCallback((_regionNombreOrCod: string): boolean => {
     if (!profile) return false
-    if (profile.role === 'admin' || profile.role === 'editor') return true
-    if (profile.role === 'regional') {
-      if (profile.region_cods.includes(regionNombreOrCod)) return true
-      const r = REGIONS.find(r => r.nombre === regionNombreOrCod)
-      return r ? profile.region_cods.includes(r.cod) : false
-    }
-    return false
+    return profile.role === 'admin' || profile.role === 'editor'
   }, [profile])
 
   // Cods that regional/filtered-viewer users cannot open
@@ -282,7 +279,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
 
   return (
-    <UserProvider canEditRegion={canEditRegion} canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}>
+    <UserProvider
+      canEditRegion={canEditRegion}
+      canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}
+      isAdmin={profile?.role === 'admin'}
+    >
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">

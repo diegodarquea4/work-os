@@ -81,7 +81,7 @@ export default function PlanesRegionalesPanel() {
   }
 
   return (
-    <div className="mt-8">
+    <div>
       <input
         ref={fileInputRef}
         type="file"
@@ -92,7 +92,7 @@ export default function PlanesRegionalesPanel() {
 
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-base font-bold text-gray-900">Planes Regionales de Gobierno</h3>
+          <h3 className="text-base font-bold text-gray-900">Planes Regionales</h3>
           <p className="text-xs text-gray-500 mt-0.5">PDFs usados por el agente IA al generar minutas regionales</p>
         </div>
         <span className="text-xs text-gray-400">

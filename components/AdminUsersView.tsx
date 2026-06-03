@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
 import PlanesRegionalesPanel from './PlanesRegionalesPanel'
+import ImportProposalsPanel from './ImportProposalsPanel'
 
 type UserRow = {
   id: string
@@ -328,7 +329,20 @@ export default function AdminUsersView() {
           </div>
         )}
 
-        <PlanesRegionalesPanel />
+        {/* ── Documentos regionales: Planes (izq) + Propuestas (der) ───── */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">Documentos regionales</h2>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <PlanesRegionalesPanel />
+            </div>
+            <div>
+              <ImportProposalsPanel />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Invite modal */}

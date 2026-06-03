@@ -6,7 +6,9 @@ import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
 import { EJE_COLORS, prioridadColor } from '@/lib/config'
-import { useCanEditAny } from '@/lib/context/UserContext'
+import { useIsAdmin } from '@/lib/context/UserContext'
+import { downloadTemplate as downloadTemplateExcel } from '@/lib/templateExcel'
+import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
@@ -50,15 +52,9 @@ type Props = {
   onDeletePrioridad?: (n: number) => void
 }
 
-type ImportPreviewRow = {
-  n: number
-  nombre: string
-  region: string
-  patch: Record<string, unknown>
-  errors: string[]
-  isNew?: boolean
-  insertData?: Record<string, unknown>
-}
+// ImportPreviewRow ahora vive en lib/importParser como ParsedRow (reusable
+// client/server). El alias mantiene compatibilidad con los usos previos.
+type ImportPreviewRow = ParsedRow
 
 const EJES = [
   'Eje 1: Infraestructura y Conectividad',
@@ -87,7 +83,9 @@ function ratColor(r: string): string {
 }
 
 export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad }: Props) {
-  const canImport = useCanEditAny()
+  // Importar masivo es solo para admin. Editores/regionales/viewers no tienen
+  // este botón — los regionales/viewers usan el flow de propuesta desde "Mi región".
+  const canImport = useIsAdmin()
   const [search, setSearch]                   = useState('')
   const [filterRegion, setFilterRegion]       = useState('todas')
   const [filterEje, setFilterEje]             = useState('todos')
@@ -189,89 +187,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
-
-  const TEMPLATE_COLS = [
-    { key: '#',                     label: '#',                     desc: '⚠ SOLO para actualizar existentes. DEJAR VACÍO para crear nueva iniciativa — NO uses numeración propia',      wch: 6  },
-    { key: 'region',                label: 'Región',                desc: 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos). Obligatorio si # está vacío',                     wch: 22 },
-    { key: 'nombre',                label: 'Nombre Iniciativa',     desc: 'Nombre completo de la iniciativa territorial',                                                                              wch: 52 },
-    { key: 'eje',                   label: 'Eje',                   desc: 'Eje estratégico regional — texto libre, definido por cada región (ej: "Eje 1: Infraestructura y Conectividad")',     wch: 44 },
-    { key: 'eje_gobierno',          label: 'Eje Gobierno',          desc: 'Valores: Economía | Social | Seguridad  (varía por región — definir con la Delegación)',                               wch: 16 },
-    { key: 'ministerio',            label: 'Ministerio',            desc: 'Ministerio responsable de la iniciativa',                                                                                    wch: 28 },
-    { key: 'comuna',                label: 'Comuna',                desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                        wch: 20 },
-    { key: 'etapa_actual',          label: 'Etapa Actual',          desc: 'Valores: Preinversión | Diseño | Ejecución | Terminado',                                                                    wch: 20 },
-    { key: 'estado_termino_gobierno', label: 'Estado Término Gob.', desc: 'Inaugurado/Terminado/Presentado | Término Diseño | Inicio Obras/Programa | Término Obras/Programa | Término Etapa Preinversional | Adjudicación de Licitación | Otro', wch: 40 },
-    { key: 'proximo_hito',          label: 'Próximo Hito',          desc: 'Otro | Obtención RS | Obtención Financiamiento | Presentación Core | Publicación Bases Licitación | Adjudicación Licitación | Término Diseño/Preinversión | Primera Piedra | Inicio Obras/Programa | Inicio Obras | Término Obras/Programa | Término Obras | Inauguración | Finalizado', wch: 42 },
-    { key: 'fecha_proximo_hito',    label: 'Fecha Próximo Hito',    desc: 'Formato DD-MM-AAAA  (ej: 31-12-2027)  — puede estar vacío',                                                                wch: 22 },
-    { key: 'prioridad',             label: 'Prioridad',             desc: 'Valores: Alta | Media | Baja',                                                                                              wch: 14 },
-    { key: 'fuente_financiamiento', label: 'Fuente Financiamiento', desc: 'Valores: FNDR | Mixto | Sectorial | Privado | FONDEMA | PEDZE — puede estar vacío',                                        wch: 24 },
-    { key: 'codigo_bip',            label: 'Código BIP',            desc: 'Código numérico del BIP — puede estar vacío si no aplica',                                                                  wch: 16 },
-    { key: 'rat',                   label: 'RAT',                   desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS | AD',                                      wch: 20 },
-    { key: 'codigo_iniciativa',     label: 'Código Iniciativa',     desc: 'Código interno DCI — puede estar vacío',                                                                                    wch: 22 },
-    { key: 'inversion_mm',          label: 'Inversión ($MM)',       desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                            wch: 18 },
-    { key: 'origen',                label: 'Origen',                desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                 wch: 24 },
-    { key: 'descripcion',           label: 'Descripción',           desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                  wch: 54 },
-  ] as const
+  // El generador del template y el parser del Excel viven ahora en
+  // lib/templateExcel.ts y lib/importParser.ts (ver razones en sus comentarios).
 
   function downloadTemplate() {
-    const headerRow = TEMPLATE_COLS.map(c => c.label)
-    const descRow   = TEMPLATE_COLS.map(c => c.desc)
-    const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow])
-    ws['!cols']   = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
-    ws['!freeze'] = { xSplit: 2, ySplit: 2 }
-
-    const instrAoa = [
-      ['GUÍA DE LLENADO — Plan Regional de Gobierno · Importación de Iniciativas Territoriales', '', '', ''],
-      ['División de Coordinación Interministerial  ·  Ministerio del Interior', '', '', ''],
-      ['', '', '', ''],
-      ['CÓMO USAR ESTE ARCHIVO', '', '', ''],
-      ['1. Trabaja SOLO en la hoja "Carga". No mover ni renombrar esa hoja.', '', '', ''],
-      ['2. La fila 2 (descripción de campos) NO se importa — es solo guía.', '', '', ''],
-      ['3. Agrega los datos a partir de la fila 3.', '', '', ''],
-      ['4. Para dejar un campo vacío, simplemente deja la celda en blanco.', '', '', ''],
-      ['5. El semáforo, el avance % y el responsable se gestionan desde el panel — no van en este archivo.', '', '', ''],
-      ['6. Sube el archivo completado desde el botón "Importar" en el Dashboard.', '', '', ''],
-      ['', '', '', ''],
-      ['NUEVAS INICIATIVAS vs. ACTUALIZACIONES', '', '', ''],
-      ['— Para CREAR una iniciativa nueva: deja la columna # vacía. Llena Región, Nombre Iniciativa, Eje y Ministerio.', '', '', ''],
-      ['— Para ACTUALIZAR una existente: pon su # en la primera columna. Llena solo los campos que quieres cambiar.', '', '', ''],
-      ['— El código de iniciativa (ej: AY-01-001) se genera automáticamente al crear. No es necesario llenarlo.', '', '', ''],
-      ['', '', '', ''],
-      ['CAMPO', 'OBLIGATORIO', 'VALORES PERMITIDOS', 'DESCRIPCIÓN'],
-      ['#', 'Solo para actualizar', 'Número entero', 'Número de la iniciativa existente. DEJAR VACÍO para crear una nueva.'],
-      ['Región', 'Sí (si # está vacío)', 'Texto libre', 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos).'],
-      ['Nombre Iniciativa', 'Sí', 'Texto libre', 'Nombre completo de la iniciativa territorial.'],
-      ['Eje', 'No', 'Texto libre — definido por cada región', 'Eje estratégico regional. Cada región define sus propios ejes.'],
-      ['Eje Gobierno', 'No', 'Economía | Social | Seguridad', 'Eje presidencial. Varía por región — definir con la Delegación. No se auto-deduce del Eje Regional.'],
-      ['Ministerio', 'Sí', 'Texto libre', 'Ministerio responsable de la ejecución.'],
-      ['Comuna', 'No', 'Texto libre', 'Comuna de ejecución. Dejar vacío si abarca toda la región.'],
-      ['Etapa Actual', 'No', 'Preinversión | Diseño | Ejecución | Terminado', 'Etapa en que se encuentra actualmente la iniciativa.'],
-      ['Estado Término Gob.', 'No', 'Inaugurado/Terminado/Presentado · Término Diseño · Inicio Obras/Programa · Término Obras/Programa · Término Etapa Preinversional · Adjudicación de Licitación · Otro', 'Estado esperado al término del gobierno.'],
-      ['Próximo Hito', 'No', 'Otro · Obtención RS · Obtención Financiamiento · Presentación Core · Publicación Bases Licitación · Adjudicación Licitación · Término Diseño/Preinversión · Primera Piedra · Inicio Obras/Programa · Término Obras/Programa · Inauguración · Finalizado', 'Próximo hito concreto esperado.'],
-      ['Fecha Próximo Hito', 'No', 'DD-MM-AAAA  (ej: 31-12-2027)', 'Fecha estimada del próximo hito.'],
-      ['Prioridad', 'No', 'Alta | Media | Baja', 'Nivel de prioridad de la iniciativa.'],
-      ['Fuente Financiamiento', 'No', 'FNDR · Mixto · Sectorial · Privado · FONDEMA · PEDZE', 'Fuente de financiamiento. PEDZE = Plan Especial Zonas Extremas.'],
-      ['Código BIP', 'No', 'Código numérico', 'Código del BIP/MIDESO. Dejar vacío si no aplica.'],
-      ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS', 'RS = Recomendación Satisfactoria; FI = Factibilidad Inicial; IN = Ingresado.'],
-      ['Código Iniciativa', 'No', 'Texto libre', 'Código interno del Plan Regional de Gobierno. Puede estar vacío.'],
-      ['Inversión ($MM)', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
-      ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa.'],
-    ]
-    const wsInstr = XLSX.utils.aoa_to_sheet(instrAoa)
-    wsInstr['!cols'] = [{ wch: 26 }, { wch: 16 }, { wch: 80 }, { wch: 60 }]
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Carga')
-    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones')
-    XLSX.writeFile(wb, 'template-prioridades.xlsx')
+    downloadTemplateExcel()
   }
-
-  const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad']
-  const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja']
-  const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS', 'AD']
-  const VALID_ETAPA          = ['Preinversión', 'Diseño', 'Ejecución', 'Terminado']
-  const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro']
-  const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Inicio Obras', 'Término Obras/Programa', 'Término Obras', 'Inauguración', 'Finalizado']
-  const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE']
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -283,222 +204,19 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setImportResult(null)
     setImportFileName('')
 
-    const parseErrors: string[] = []
-
     try {
       const arrayBuffer = await file.arrayBuffer()
-      const wb = XLSX.read(arrayBuffer, { type: 'array' })
-      const sheetName = wb.SheetNames.find(n => n === 'Carga') ?? wb.SheetNames[0]
-      const ws = wb.Sheets[sheetName]
-
+      const { rows, fileErrors, sheetName } = parseImportWorkbook(arrayBuffer, projects)
       setImportFileName(`${file.name}  ·  Hoja: ${sheetName}`)
-
-      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
-      if (raw.length < 3) {
-        setImportParseErrors(['El archivo no tiene filas de datos. Agrega datos a partir de la fila 3.'])
-        setImportPreview([])
-        setImportModalOpen(true)
-        return
-      }
-
-      const headers = raw[0] as string[]
-      const dataRows = raw.slice(2)
-
-      function col(row: string[], label: string): string | undefined {
-        const idx = headers.indexOf(label)
-        if (idx < 0) return undefined
-        return String(row[idx] ?? '').trim()
-      }
-
-      function normalize(s: string) {
-        return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-      }
-      const normalizedRegions = REGIONS.map(r => ({ ...r, norm: normalize(r.nombre) }))
-      function findRegion(input: string) {
-        return normalizedRegions.find(r => r.norm === normalize(input))
-      }
-
-      const preview: ImportPreviewRow[] = []
-
-      const regionEjeNumMap = new Map<string, Map<string, number>>()
-      for (const p of projects) {
-        if (!p.codigo_iniciativa) continue
-        const m = p.codigo_iniciativa.match(/^[A-Z]+-(\d+)-\d+$/)
-        if (!m) continue
-        if (!regionEjeNumMap.has(p.region)) regionEjeNumMap.set(p.region, new Map())
-        const em = regionEjeNumMap.get(p.region)!
-        if (!em.has(p.eje)) em.set(p.eje, parseInt(m[1], 10))
-      }
-      const batchCodes: string[] = []
-      const maxExistingN = projects.length > 0 ? Math.max(...projects.map(p => p.n)) : 0
-      let newNOffset = 0
-
-      function parseOptionalFields(row: string[], target: Record<string, unknown>, rowErrors: string[]) {
-        const ejeGobierno = col(row, 'Eje Gobierno')
-        if (ejeGobierno) {
-          if (!VALID_EJE_GOBIERNO.includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
-          else target.eje_gobierno = ejeGobierno
-        }
-        const prioridad = col(row, 'Prioridad')
-        if (prioridad) {
-          if (!VALID_PRIORIDAD.includes(prioridad)) rowErrors.push(`prioridad "${prioridad}" inválida`)
-          else target.prioridad = prioridad
-        }
-        const etapa = col(row, 'Etapa Actual')
-        if (etapa) {
-          if (!VALID_ETAPA.includes(etapa)) rowErrors.push(`etapa "${etapa}" inválida`)
-          else target.etapa_actual = etapa
-        }
-        const estadoTermino = col(row, 'Estado Término Gob.')
-        if (estadoTermino) {
-          if (!VALID_ESTADO_TERMINO.includes(estadoTermino)) rowErrors.push(`estado término "${estadoTermino}" inválido`)
-          else target.estado_termino_gobierno = estadoTermino
-        }
-        const proximoHito = col(row, 'Próximo Hito')
-        if (proximoHito) {
-          if (!VALID_PROXIMO_HITO.includes(proximoHito)) rowErrors.push(`próximo hito "${proximoHito}" inválido`)
-          else target.proximo_hito = proximoHito
-        }
-        const fuente = col(row, 'Fuente Financiamiento')
-        if (fuente) {
-          if (!VALID_FUENTE.includes(fuente)) rowErrors.push(`fuente "${fuente}" inválida`)
-          else target.fuente_financiamiento = fuente
-        }
-        const rat = col(row, 'RAT')
-        if (rat) {
-          if (!VALID_RAT.includes(rat)) rowErrors.push(`RAT "${rat}" inválido`)
-          else target.rat = rat
-        }
-        const inversionStr = col(row, 'Inversión ($MM)')
-        if (inversionStr !== undefined && inversionStr !== '') {
-          const num = Number(String(inversionStr).replace(',', '.'))
-          if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
-          else target.inversion_mm = num
-        }
-        const fechaRaw = col(row, 'Fecha Próximo Hito')
-        if (fechaRaw !== undefined && fechaRaw !== '') {
-          const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
-          if (!dm) rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA`)
-          else target.fecha_proximo_hito = `${dm[3]}-${dm[2]}-${dm[1]}`
-        }
-        for (const [label, dbCol] of [
-          ['Nombre Iniciativa', 'nombre'],
-          ['Eje', 'eje'],
-          ['Ministerio', 'ministerio'],
-          ['Código BIP', 'codigo_bip'],
-          ['Código Iniciativa', 'codigo_iniciativa'],
-          ['Origen', 'origen'],
-          ['Descripción', 'descripcion'],
-          ['Comuna', 'comuna'],
-        ] as [string, string][]) {
-          const val = col(row, label)
-          if (val !== undefined) target[dbCol] = val === '' ? null : val
-        }
-      }
-
-      for (const row of dataRows) {
-        // Skip completely empty rows (common at end of Excel files)
-        if (row.every(cell => String(cell ?? '').trim() === '')) continue
-
-        const nStr = col(row, '#')
-
-        if (!nStr) {
-          const regionNombre = col(row, 'Región') ?? ''
-          const eje          = col(row, 'Eje') ?? ''
-          const nombre       = col(row, 'Nombre Iniciativa') ?? ''
-          const ministerio   = col(row, 'Ministerio') ?? ''
-          const rowErrors: string[] = []
-
-          if (!regionNombre)                             rowErrors.push('Región requerida')
-          const regionObj = findRegion(regionNombre)
-          if (regionNombre && !regionObj)                rowErrors.push(`Región "${regionNombre}" no reconocida`)
-          if (!nombre)                                   rowErrors.push('Nombre requerido')
-          if (!eje)                                      rowErrors.push('Eje requerido')
-          if (!ministerio)                               rowErrors.push('Ministerio requerido')
-
-          let codigoIniciativa: string | null = null
-          if (regionObj && eje) {
-            if (!regionEjeNumMap.has(regionNombre)) regionEjeNumMap.set(regionNombre, new Map())
-            const ejeMap = regionEjeNumMap.get(regionNombre)!
-            let ejeNum: number
-            if (ejeMap.has(eje)) {
-              ejeNum = ejeMap.get(eje)!
-            } else {
-              const used = new Set(ejeMap.values())
-              ejeNum = 1; while (used.has(ejeNum)) ejeNum++
-              ejeMap.set(eje, ejeNum)
-            }
-            const ejePfx = `${regionObj.shortCod}-${String(ejeNum).padStart(2, '0')}`
-            const seqs = [
-              ...projects
-                .filter(p => p.region === regionNombre && p.codigo_iniciativa?.startsWith(ejePfx + '-'))
-                .map(p => parseInt(p.codigo_iniciativa!.split('-')[2] ?? '0', 10)),
-              ...batchCodes
-                .filter(c => c.startsWith(ejePfx + '-'))
-                .map(c => parseInt(c.split('-')[2] ?? '0', 10)),
-            ].filter(v => !isNaN(v))
-            const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1
-            codigoIniciativa = `${ejePfx}-${String(seq).padStart(3, '0')}`
-            batchCodes.push(codigoIniciativa)
-          }
-
-          newNOffset++
-          const newN = maxExistingN + newNOffset
-
-          const insertData: Record<string, unknown> = {
-            n:                  newN,
-            region:             regionNombre,
-            cod:                regionObj?.cod    ?? '',
-            capital:            regionObj?.capital ?? '',
-            zona:               regionObj?.zona    ?? '',
-            eje,
-            nombre,
-            ministerio,
-            prioridad:          'Media',
-            estado_semaforo:    'gris',
-            pct_avance:         0,
-            codigo_iniciativa:  codigoIniciativa,
-          }
-          parseOptionalFields(row, insertData, rowErrors)
-          preview.push({ n: newN, nombre, region: regionNombre, patch: {}, errors: rowErrors, isNew: true, insertData })
-          continue
-        }
-
-        const n = Number(nStr)
-        if (isNaN(n) || n <= 0) { parseErrors.push(`Fila con # inválido "${nStr}" — omitida`); continue }
-
-        const project = projects.find(p => p.n === n)
-        if (!project) {
-          parseErrors.push(`#${nStr}: no existe en el sistema — si es nueva, deja la columna # vacía`)
-          continue
-        }
-
-        const rowErrors: string[] = []
-        function normalize2(s: string) {
-          return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-        }
-        const regionInput = col(row, 'Región')
-        if (regionInput && normalize2(regionInput) !== normalize2(project.region)) {
-          rowErrors.push(
-            `El # ${nStr} corresponde a la región ${project.region}, no a "${regionInput}". ` +
-            `Para crear nuevas iniciativas de ${regionInput}, deja la columna # vacía.`
-          )
-        }
-
-        const patch: Record<string, unknown> = {}
-        parseOptionalFields(row, patch, rowErrors)
-        preview.push({ n, nombre: project.nombre, region: project.region, patch, errors: rowErrors })
-      }
-
-      setImportParseErrors(parseErrors)
-      setImportPreview(preview)
-      setImportModalOpen(true)
+      setImportParseErrors(fileErrors)
+      setImportPreview(rows)
     } catch (err) {
       setImportParseErrors([`Error al leer el archivo: ${String(err)}`])
       setImportPreview([])
-      setImportModalOpen(true)
     }
+    setImportModalOpen(true)
   }
+
 
   async function applyImport() {
     if (!importPreview) return

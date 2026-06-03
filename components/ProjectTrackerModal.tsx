@@ -389,7 +389,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Etapa actual */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Etapa actual</span>
-              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full ${canEdit ? 'cursor-pointer hover:brightness-95' : 'cursor-default'} transition-all group w-44 ${
                 etapaActual === 'Terminado'    ? 'bg-green-100' :
                 etapaActual === 'Ejecución'    ? 'bg-blue-100'  :
                 etapaActual === 'Diseño'       ? 'bg-violet-100':
@@ -401,13 +401,19 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   etapaActual === 'Diseño'       ? 'text-violet-700':
                   etapaActual === 'Preinversión' ? 'text-orange-700': 'text-gray-500'
                 }`}>{etapaActual || '—'}</span>
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-gray-500">
-                  <path d="M1.5 3L4 5.5L6.5 3"/>
-                </svg>
+                {canEdit && (
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-gray-500">
+                    <path d="M1.5 3L4 5.5L6.5 3"/>
+                  </svg>
+                )}
                 <select
                   value={etapaActual}
-                  onChange={async e => { setEtapaActual(e.target.value); await saveMetaField('etapa_actual', e.target.value) }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  disabled={!canEdit}
+                  onChange={async e => {
+                    if (!canEdit) return
+                    setEtapaActual(e.target.value); await saveMetaField('etapa_actual', e.target.value)
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">—</option>
                   <option>Preinversión</option>
@@ -421,15 +427,21 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Fuente de financiamiento */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Fuente de financiamiento</span>
-              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:bg-slate-200 transition-colors group bg-slate-100 w-44 ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full ${canEdit ? 'cursor-pointer hover:bg-slate-200' : 'cursor-default'} transition-colors group bg-slate-100 w-44 ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
                 <span className="text-xs font-medium text-slate-700 truncate flex-1">{fuenteFinanciamiento || '—'}</span>
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
-                  <path d="M1.5 3L4 5.5L6.5 3"/>
-                </svg>
+                {canEdit && (
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-slate-500">
+                    <path d="M1.5 3L4 5.5L6.5 3"/>
+                  </svg>
+                )}
                 <select
                   value={fuenteFinanciamiento}
-                  onChange={async e => { setFuenteFinanciamiento(e.target.value); await saveMetaField('fuente_financiamiento', e.target.value) }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  disabled={!canEdit}
+                  onChange={async e => {
+                    if (!canEdit) return
+                    setFuenteFinanciamiento(e.target.value); await saveMetaField('fuente_financiamiento', e.target.value)
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">—</option>
                   <option>Sectorial</option>
@@ -504,8 +516,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </button>
                   {fechaProximoHito && (
                     <button
-                      onClick={() => setEditingField('proximo_hito')}
-                      className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                      onClick={() => canEdit && setEditingField('proximo_hito')}
+                      className={`inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full bg-gray-100 transition-colors ${canEdit ? 'hover:bg-gray-200 cursor-pointer' : 'cursor-default'}`}
                     >
                       <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.3" className="text-gray-400">
                         <rect x="0.5" y="1" width="8" height="7.5" rx="1.5"/>
@@ -545,11 +557,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </svg>
                 <select
                   value={estadoTerminoGob}
+                  disabled={!canEdit}
                   onChange={async e => {
+                    if (!canEdit) return
                     setEstadoTerminoGob(e.target.value)
                     await saveMetaField('estado_termino_gobierno', e.target.value)
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">—</option>
                   <option>Sin iniciar</option>
@@ -662,11 +676,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </svg>
                 <select
                   value={rat}
+                  disabled={!canEdit}
                   onChange={async e => {
+                    if (!canEdit) return
                     setRat(e.target.value)
                     await saveMetaField('rat', e.target.value)
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">—</option>
                   <option>No Requiere</option>

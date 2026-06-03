@@ -15,6 +15,8 @@ import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
 import { EJE_COLORS } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
+import ProposeImportModal from './ProposeImportModal'
+import MyProposalsList from './MyProposalsList'
 
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
 
@@ -199,6 +201,9 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   }, [selectedCod, activeRegionName, onActiveRegionChange])
 
   const [indicadoresOpen, setIndicadoresOpen] = useState(false)
+  const [proposeModalOpen, setProposeModalOpen] = useState(false)
+  // Bump al recibir confirmación de upload exitoso para que MyProposalsList recargue.
+  const [proposalsRefreshKey, setProposalsRefreshKey] = useState(0)
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
@@ -351,10 +356,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
   const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, pobCtx?.valor)
 
-  const showRegionSelector =
-    profile?.role === 'admin' ||
-    profile?.role === 'editor' ||
-    (profile?.region_cods?.length ?? 0) > 1
+  // Mostramos el selector cada vez que el usuario tiene acceso a más de una
+  // región. Vale para admin/editor (todas), viewer sin asignaciones (todas),
+  // regional con varias regiones, y viewer con varias asignadas.
+  const showRegionSelector = allowedCods.length > 1
 
   // ── Minuta handler ───────────────────────────────────────────────────────────
 
@@ -416,6 +421,18 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
         {/* IndicadoresModal — self-contained overlay */}
         {indicadoresOpen && region && (
           <IndicadoresModalV2 region={region} onClose={() => setIndicadoresOpen(false)} />
+        )}
+
+        {/* ProposeImportModal — para mandar propuesta de actualización a DCI.
+            Solo se monta si hay región activa: el botón que lo abre también
+            está gateado por `region`, así que en la práctica siempre estará. */}
+        {region && (
+          <ProposeImportModal
+            open={proposeModalOpen}
+            onClose={() => setProposeModalOpen(false)}
+            regionName={region.nombre}
+            onSubmitted={() => setProposalsRefreshKey(k => k + 1)}
+          />
         )}
 
         {/* Region selector */}
@@ -512,6 +529,18 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
               {/* Buttons */}
               <div className="flex items-center gap-2">
+                {region && (
+                  <button
+                    onClick={() => setProposeModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Subir un Excel con cambios para que DCI los revise y apruebe"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9V2M3 5l3-3 3 3M2 10h8"/>
+                    </svg>
+                    Proponer actualización
+                  </button>
+                )}
                 {region && (
                   <button
                     onClick={() => setIndicadoresOpen(true)}
@@ -635,6 +664,13 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             </div>
           </div>
         </div>
+
+        {/* ── Mis propuestas: estado de cargas enviadas a DCI ────────────────── */}
+        <MyProposalsList
+          refreshKey={proposalsRefreshKey}
+          regionName={region?.nombre}
+          onRetry={() => setProposeModalOpen(true)}
+        />
 
         {/* ── Sección 2: Alertas ───────────────────────────────────────────────── */}
         <div className="mb-4">
