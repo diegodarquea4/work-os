@@ -265,9 +265,12 @@ const s = StyleSheet.create({
   segVacio: { fontSize: 7.5, color: C.textLight, fontStyle: 'italic' },
 
   // ── Recuadro acuerdos ──
+  // 90pt da ≈5-6 líneas para anotar a mano (label ocupa ~12pt + paddings 8pt
+  // → ~70pt efectivos). Tres fichas siguen cabiendo en página A4 portrait
+  // (incluyendo primera página con header de ministerio + resumen).
   acuerdosBox: {
     marginTop: 4, borderWidth: 1, borderColor: C.divider, borderRadius: 2,
-    paddingHorizontal: 5, paddingVertical: 4, minHeight: 62,
+    paddingHorizontal: 5, paddingVertical: 4, minHeight: 90,
   },
   acuerdosLabel: {
     fontSize: 7, color: C.accent, fontFamily: 'Carlito', fontWeight: 'bold',

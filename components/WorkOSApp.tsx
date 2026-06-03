@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
@@ -61,6 +61,75 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const viewDropRef                            = useRef<HTMLDivElement>(null)
   const viewDropBtnRef                         = useRef<HTMLButtonElement>(null)
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
+
+  // Región activa global compartida entre Kanban/Atención/Mi Región. Persiste
+  // entre cambios de pestaña y entre recargas (localStorage). El default es la
+  // primera región alfabética disponible; se sobreescribe en el primer effect
+  // si localStorage tiene un valor válido.
+  const [activeRegionName, setActiveRegionName] = useState<string>(() => {
+    const sorted = Array.from(new Set(projects.map(p => p.region))).sort()
+    return sorted[0] ?? ''
+  })
+
+  // Restaurar view + activeRegion desde localStorage al primer render del
+  // cliente. Hacemos esto en useEffect (no en el initializer) porque
+  // localStorage no existe en SSR y el initial paint sale del servidor.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => {
+    try {
+      const storedView   = localStorage.getItem('workos:view')
+      const storedRegion = localStorage.getItem('workos:activeRegion')
+      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional']
+      if (storedView && (validViews as string[]).includes(storedView)) {
+        setView(storedView as View)
+      }
+      if (storedRegion) {
+        const exists = projects.some(p => p.region === storedRegion)
+        if (exists) setActiveRegionName(storedRegion)
+      }
+    } catch {
+      // localStorage puede estar bloqueado (privacidad / cookies). Sin fallback —
+      // simplemente arrancamos con los defaults de useState.
+    } finally {
+      setHydrated(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persistir cambios de view después de la hidratación. Saltamos el primer
+  // render para no sobreescribir lo que acabamos de leer.
+  useEffect(() => {
+    if (!hydrated) return
+    try { localStorage.setItem('workos:view', view) } catch { /* noop */ }
+  }, [view, hydrated])
+
+  useEffect(() => {
+    if (!hydrated || !activeRegionName) return
+    try { localStorage.setItem('workos:activeRegion', activeRegionName) } catch { /* noop */ }
+  }, [activeRegionName, hydrated])
+
+  // Al transicionar a la vista Mapa desde otra vista, abrir el panel de la
+  // región activa global. Solo en la transición — clicks toggling el panel
+  // mientras se está EN mapa siguen respetando la lógica de handleSelectRegion.
+  const prevViewRef = useRef<View>(view)
+  useEffect(() => {
+    const prev = prevViewRef.current
+    prevViewRef.current = view
+    if (prev !== view && view === 'mapa' && activeRegionName) {
+      const r = REGIONS.find(R => R.nombre === activeRegionName)
+      if (r && r.cod !== selectedRegion?.cod) setSelectedRegion(r)
+    }
+  }, [view, activeRegionName, selectedRegion?.cod])
+
+  // Regiones que el usuario puede ver. null = sin restricción (admin/editor/viewer
+  // sin region_cods); array = lista exacta de nombres permitidos. Se pasa a los
+  // selectores de Kanban/Atención para que muestren TODAS las regiones aunque
+  // estén vacías, respetando la restricción de visibilidad.
+  const allowedRegionNames: string[] | null = useMemo(() => {
+    if (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0)) {
+      return REGIONS.filter(r => profile!.region_cods.includes(r.cod)).map(r => r.nombre)
+    }
+    return null
+  }, [profile])
 
   const GROUPED_VIEWS: { key: View; label: string }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
@@ -178,7 +247,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   function handleSelectRegion(regionName: string, cod: string) {
     const found = REGIONS.find(r => r.cod === cod)
     if (!found) return
+    // Toggle del panel del mapa, pero NO toggle del filtro global: al clickear
+    // siempre actualizamos activeRegionName (para que las otras vistas hereden).
     setSelectedRegion(prev => prev?.cod === cod ? null : found)
+    setActiveRegionName(found.nombre)
   }
 
   // RAG counts per region (for sidebar)
@@ -329,6 +401,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             projects={visibleIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            activeRegionName={activeRegionName}
+            onActiveRegionChange={setActiveRegionName}
+            allowedRegionNames={allowedRegionNames}
           />
         </div>
       )}
@@ -356,6 +431,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            activeRegionName={activeRegionName}
+            onActiveRegionChange={setActiveRegionName}
+            allowedRegionNames={allowedRegionNames}
           />
         </div>
       )}
@@ -367,6 +445,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             iniciativas={visibleIniciativas}
             actividad={actividad}
             profile={profile}
+            activeRegionName={activeRegionName}
+            onActiveRegionChange={setActiveRegionName}
           />
         </div>
       )}

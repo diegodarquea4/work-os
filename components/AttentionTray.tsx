@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { Iniciativa } from '@/lib/projects'
+import { REGIONS } from '@/lib/regions'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor, EJE_COLORS } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
@@ -14,6 +15,13 @@ type Props = {
   actividadLoading: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
+  // Región activa (state global) — el select solo lo ve admin/editor; el filtro
+  // se aplica siempre. 'todas' significa sin filtrar.
+  activeRegionName: string
+  onActiveRegionChange: (regionName: string) => void
+  // Lista de nombres de regiones que el usuario puede ver. null = sin restricción
+  // (mostrar las 16). Permite que aparezcan regiones sin iniciativas en el selector.
+  allowedRegionNames: string[] | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,12 +60,15 @@ function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, val:
 export default function AttentionTray({
   projects, actividad, actividadLoading: loading,
   onUpdatePrioridad, onDeletePrioridad,
+  activeRegionName, onActiveRegionChange,
+  allowedRegionNames,
 }: Props) {
   const canEditAny = useCanEditAny()
 
   // Filters
   const [search, setSearch]                     = useState('')
-  const [filterRegion, setFilterRegion]         = useState('todas')
+  const filterRegion = activeRegionName || 'todas'
+  const setFilterRegion = onActiveRegionChange
   const [filterEjeGob, setFilterEjeGob]         = useState<Set<string>>(new Set())
   const [filterPrioridad, setFilterPrioridad]   = useState<Set<string>>(new Set())
 
@@ -66,7 +77,14 @@ export default function AttentionTray({
   const [collapsed, setCollapsed]               = useState<Record<string, boolean>>({})
   const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
 
-  const regions = useMemo(() => Array.from(new Set(projects.map(p => p.region))).sort(), [projects])
+  // Selector: TODAS las regiones visibles para el usuario (no solo las que tienen
+  // iniciativas). Si el usuario es regional/viewer con region_cods, se restringe
+  // a lo permitido.
+  const regions = useMemo(() => {
+    const all = REGIONS.map(r => r.nombre)
+    const filtered = allowedRegionNames ? all.filter(n => allowedRegionNames.includes(n)) : all
+    return filtered.sort()
+  }, [allowedRegionNames])
 
   const filtersActive = search !== '' || filterRegion !== 'todas' || filterEjeGob.size > 0 || filterPrioridad.size > 0
 

@@ -164,9 +164,12 @@ type Props = {
   iniciativas: Iniciativa[]
   actividad: Record<number, string | null>
   profile: UserProfile | null
+  // Región activa (state global) — sincronizada con Kanban/Atención/Mapa.
+  activeRegionName: string
+  onActiveRegionChange: (regionName: string) => void
 }
 
-export default function VistaRegional({ iniciativas, actividad, profile }: Props) {
+export default function VistaRegional({ iniciativas, actividad, profile, activeRegionName, onActiveRegionChange }: Props) {
   // Determine accessible region codes for this user
   const allowedCods: string[] = useMemo(() => {
     if (!profile) return []
@@ -175,7 +178,26 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
     return REGIONS.map(r => r.cod)
   }, [profile])
 
-  const [selectedCod, setSelectedCod] = useState<string | null>(null)
+  // selectedCod deriva del state global. Si activeRegionName no está en las
+  // allowedCods del usuario (ej. user regional con permisos acotados), caemos
+  // a la primera permitida.
+  const selectedCod = useMemo<string | null>(() => {
+    if (!profile) return null
+    const fromActive = REGIONS.find(r => r.nombre === activeRegionName)?.cod ?? null
+    if (fromActive && allowedCods.includes(fromActive)) return fromActive
+    return allowedCods[0] ?? null
+  }, [activeRegionName, allowedCods, profile])
+
+  // Sincronizar arriba si caímos a un fallback (ej. activeRegion no permitida).
+  // Esto evita que el global quede desincronizado con lo que el user está viendo.
+  useEffect(() => {
+    if (!selectedCod) return
+    const r = REGIONS.find(R => R.cod === selectedCod)
+    if (r && r.nombre !== activeRegionName) {
+      onActiveRegionChange(r.nombre)
+    }
+  }, [selectedCod, activeRegionName, onActiveRegionChange])
+
   const [indicadoresOpen, setIndicadoresOpen] = useState(false)
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
@@ -188,12 +210,10 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
 
-  // Set default region when profile loads
-  useEffect(() => {
-    if (allowedCods.length > 0 && !selectedCod) {
-      setSelectedCod(allowedCods[0])
-    }
-  }, [allowedCods]) // eslint-disable-line react-hooks/exhaustive-deps
+  // (El default de región ahora viene del state global activeRegionName,
+  // sincronizado en WorkOSApp y persistido en localStorage. El useMemo de
+  // selectedCod arriba ya hace el fallback a allowedCods[0] si activeRegion
+  // no está permitida para este usuario.)
 
   // Fetch PREGO for selected region
   useEffect(() => {
@@ -404,7 +424,11 @@ export default function VistaRegional({ iniciativas, actividad, profile }: Props
             <label className="text-xs text-gray-500 font-medium shrink-0">Región:</label>
             <select
               value={selectedCod ?? ''}
-              onChange={e => setSelectedCod(e.target.value)}
+              onChange={e => {
+                const cod = e.target.value
+                const r = REGIONS.find(R => R.cod === cod)
+                if (r) onActiveRegionChange(r.nombre)
+              }}
               className="text-sm text-slate-900 border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {allowedCods.map(cod => {

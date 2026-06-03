@@ -107,6 +107,13 @@ type Props = {
   projects: Iniciativa[]
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
+  // Región activa (state global del panel — persiste entre vistas y recargas).
+  // Si está vacía el componente cae a la primera región alfabética de projects.
+  activeRegionName: string
+  onActiveRegionChange: (regionName: string) => void
+  // Nombres de regiones que el usuario puede ver. null = sin restricción.
+  // Permite mostrar TODAS las regiones en el selector aunque estén vacías.
+  allowedRegionNames: string[] | null
 }
 
 // ── EjeCard — card for eje mode ───────────────────────────────────────────────
@@ -251,18 +258,22 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad }: Props) {
+export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames }: Props) {
   const [selected, setSelected]         = useState<Iniciativa | null>(null)
-  // Default: primera región alfabética → arranca en vista "Por eje".
-  // 'todas' sigue disponible en el dropdown si el usuario lo elige (cae en vista por semáforo).
-  const [filterRegion, setFilterRegion] = useState<string>(() => {
+  // Región filtrada controlada por el state global (WorkOSApp). Fallback a la
+  // primera región alfabética si llega vacío (ej. arranque antes de hidratar).
+  const filterRegion = useMemo(() => {
+    if (activeRegionName) return activeRegionName
     const sorted = Array.from(new Set(projects.map(p => p.region))).sort()
     return sorted[0] ?? 'todas'
-  })
+  }, [activeRegionName, projects])
+  const setFilterRegion = onActiveRegionChange
   const [filterEjeGob, setFilterEjeGob] = useState<Set<string>>(new Set())
   const [isPending, startTransition]    = useTransition()
   const [viewMode, setViewMode]         = useState<'kanban' | 'mosaico'>('kanban')
-  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio'>('eje')
+  // Default 'ministerio': es la vista que se usa más en reuniones (cartera por
+  // SEREMI). 'eje' queda disponible vía el toggle de la filter bar.
+  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio'>('ministerio')
   const [showSmall, setShowSmall]       = useState(false)
   const [cellSize, setCellSize]         = useState(56)
   const gridRef                         = useRef<HTMLDivElement>(null)
@@ -372,7 +383,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   //   - 'ministerio' → secciones verticales estilo Monday
   const isGroupedMode = viewMode === 'kanban' && filterRegion !== 'todas'
 
-  const regions = useMemo(() => Array.from(new Set(projects.map(p => p.region))).sort(), [projects])
+  // Selector: TODAS las regiones visibles para el usuario (no solo las que tienen
+  // iniciativas). Si llega allowedRegionNames, se restringe a esas; si es null
+  // mostramos las 16 — coherente con que ahora "Todas las regiones" no existe.
+  const regions = useMemo(() => {
+    const all = REGIONS.map(r => r.nombre)
+    const filtered = allowedRegionNames ? all.filter(n => allowedRegionNames.includes(n)) : all
+    return filtered.sort()
+  }, [allowedRegionNames])
 
   const filtered = useMemo(() => projects.filter(p => {
     if (filterRegion !== 'todas' && p.region !== filterRegion) return false
@@ -486,7 +504,6 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v); setFilterEjeGob(new Set()) }) }}
           className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
         >
-          <option value="todas">Todas las regiones</option>
           {regions.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
 
@@ -565,14 +582,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         {isGroupedMode && groupBy === 'ministerio' && (() => {
           const flaggedCount = filtered.filter(p => p.en_foco === true).length
           return (
-            <div className="relative flex items-center ml-auto" ref={focoMenuRef}>
+            <div className="relative flex items-stretch ml-auto group/dl" ref={focoMenuRef}>
               <button
                 onClick={() => handleDescargarCartera(false)}
                 disabled={descargando || filtered.length === 0}
                 title="Descargar PDF con la cartera completa de cada ministerio"
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-l-md bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-slate-700"
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-l-md bg-white border border-gray-200 text-slate-700 hover:border-slate-400 hover:bg-slate-50 hover:shadow-sm active:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:shadow-none transition-all"
               >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-slate-700 transition-transform group-hover/dl:translate-y-0.5">
                   <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
                 </svg>
                 Descargar cartera
@@ -581,7 +598,8 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                 onClick={() => setFocoMenuOpen(prev => !prev)}
                 disabled={descargando}
                 title="Más opciones de descarga"
-                className="flex items-center px-1.5 py-1.5 rounded-r-md bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Más opciones de descarga"
+                className="flex items-center px-1.5 py-1.5 rounded-r-md bg-white border border-l-0 border-gray-200 text-slate-500 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-700 active:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 transition-all"
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${focoMenuOpen ? 'rotate-180' : ''}`}>
                   <path d="M2 4l3 3 3-3"/>
@@ -660,12 +678,17 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         </div>
       )}
       {/* ── Modo "por eje": columnas planas 1→6 ─────────────────────────────── */}
+      {/*
+        Wrapper externo: flex + justify-center → centra el grid en pantalla
+        cuando cabe entero. overflow-x-auto + grid con flex-shrink-0 → si las
+        columnas no entran (ej. 6 ejes en pantalla angosta), permite scroll.
+      */}
       {isGroupedMode && groupBy === 'eje' && ejeColumns && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden flex justify-center">
           <div
-            className="grid h-full px-6 pt-4"
+            className="grid h-full px-6 pt-4 flex-shrink-0"
             style={{
-              gridTemplateColumns: `repeat(${ejeColumns.length}, 18rem)`,
+              gridTemplateColumns: `repeat(${ejeColumns.length}, 22rem)`,
               columnGap: '1rem',
             }}
           >
