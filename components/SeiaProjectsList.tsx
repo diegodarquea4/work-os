@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import type { SeiaProject } from '@/lib/types'
+import { SEIA_PIPELINE, matchSeiaMeta, pipelineOrder } from '@/lib/portfolioMeta'
+import ProcessDrawer, { ColumnHeaderTooltip } from './PortfolioProcessSidebar'
+
+const SEIA_INTRO =
+  'Todo proyecto que pueda generar impacto ambiental relevante debe ingresar al Sistema de Evaluación de Impacto Ambiental mediante una Declaración (DIA) o un Estudio (EIA). El SEA revisa la admisibilidad, los servicios públicos analizan y emiten observaciones a través de adendas, y la Comisión de Evaluación califica el proyecto con una Resolución de Calificación Ambiental (RCA) favorable o desfavorable.'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -17,13 +22,25 @@ function estadoBadge(estado: string | null): { bg: string; text: string } {
 
 function fmtInversion(mm: number | null): string {
   if (mm === null) return '—'
-  if (mm >= 1000) return `$ ${(mm / 1000).toFixed(1)} MM MM$`
-  return `$ ${mm.toFixed(1)} MM$`
+  const { value, unit } = fmtInversionTotal(mm)
+  return `${value} ${unit}`
 }
 
-function fmtInversionCompact(mm: number): string {
-  if (mm >= 1000) return `$${(mm / 1000).toFixed(1)}B`
-  return `$${mm.toFixed(0)}MM`
+// KPI: mm = millones de USD (SEIA registra inversiones en USD MM). Escala
+// chilena explícita: millones (10^6) → mil millones (10^9) → billones (10^12).
+function fmtInversionTotal(mm: number): { value: string; unit: string } {
+  if (mm >= 1_000_000) return {
+    value: `US$ ${(mm / 1_000_000).toLocaleString('es-CL', { maximumFractionDigits: 2 })}`,
+    unit:  'billones',
+  }
+  if (mm >= 1_000) return {
+    value: `US$ ${(mm / 1_000).toLocaleString('es-CL', { maximumFractionDigits: 1 })}`,
+    unit:  'mil millones',
+  }
+  return {
+    value: `US$ ${mm.toLocaleString('es-CL', { maximumFractionDigits: 0 })}`,
+    unit:  'millones',
+  }
 }
 
 function fmtFecha(iso: string | null): string {
@@ -54,17 +71,22 @@ function daysUntil(iso: string | null): number | null {
 function SeiaProjectDetail({ proyecto, onClose }: { proyecto: SeiaProject; onClose: () => void }) {
   const badge = estadoBadge(proyecto.estado)
   return (
-    <div className="absolute inset-0 z-20 bg-white overflow-y-auto" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
-      <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between z-10">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ficha SEIA</p>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Cerrar">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 3l12 12M15 3L3 15" strokeLinecap="round"/>
-          </svg>
-        </button>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex-shrink-0 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ficha SEIA</p>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Cerrar">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 3l12 12M15 3L3 15" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
 
-      <div className="px-5 py-4 space-y-4">
+        <div className="overflow-y-auto px-5 py-4 space-y-4">
         <div>
           <h3 className="text-sm font-bold text-gray-900 leading-snug mb-2">{proyecto.nombre}</h3>
           <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${badge.bg} ${badge.text}`}>
@@ -95,6 +117,7 @@ function SeiaProjectDetail({ proyecto, onClose }: { proyecto: SeiaProject; onClo
             </svg>
           </a>
         )}
+        </div>
       </div>
     </div>
   )
@@ -111,7 +134,7 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 
 // ── KPI tile ──────────────────────────────────────────────────────────────────
 
-function KpiTile({ label, value, accent }: { label: string; value: string; accent?: 'amber' | 'red' }) {
+function KpiTile({ label, value, unit, accent }: { label: string; value: string; unit?: string; accent?: 'amber' | 'red' }) {
   const accentClass = accent === 'amber' ? 'text-amber-700'
     : accent === 'red' ? 'text-red-700'
     : 'text-gray-800'
@@ -119,6 +142,105 @@ function KpiTile({ label, value, accent }: { label: string; value: string; accen
     <div className="bg-white border border-gray-100 rounded-lg px-3 py-2">
       <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold leading-tight">{label}</p>
       <p className={`text-base font-bold tabular-nums leading-tight mt-1 ${accentClass}`}>{value}</p>
+      {unit && <p className="text-xs text-gray-500 font-medium leading-tight mt-0.5">{unit}</p>}
+    </div>
+  )
+}
+
+// ── Kanban por estado ─────────────────────────────────────────────────────────
+
+// Card amplia para columna kanban (sin chip de estado — vive en el header de la
+// columna). Muestra nombre, titular, tipo, fecha presentación, plazo e inversión.
+function SeiaKanbanCard({ proyecto, onSelect }: { proyecto: SeiaProject; onSelect: (p: SeiaProject) => void }) {
+  const dias = daysUntil(proyecto.fecha_plazo)
+  const plazoUrgente = dias !== null && dias >= 0 && dias <= 30
+  return (
+    <button
+      onClick={() => onSelect(proyecto)}
+      className="w-full text-left bg-white rounded-lg border border-gray-100 px-3 py-2.5 hover:border-gray-300 hover:shadow-sm transition-all"
+    >
+      <p className="text-xs font-semibold text-gray-800 leading-snug line-clamp-3" title={proyecto.nombre}>
+        {proyecto.nombre}
+      </p>
+      {proyecto.titular && (
+        <p className="text-[10px] text-gray-500 mt-1 line-clamp-1" title={proyecto.titular}>
+          {proyecto.titular}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-1 mt-2">
+        {proyecto.tipo && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
+            {truncate(proyecto.tipo, 20)}
+          </span>
+        )}
+        {proyecto.fecha_presentacion && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 font-medium">
+            {fmtFecha(proyecto.fecha_presentacion)}
+          </span>
+        )}
+        {plazoUrgente && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-semibold">
+            Plazo {dias}d
+          </span>
+        )}
+      </div>
+      {proyecto.inversion_mm !== null && (
+        <div className="mt-1.5 pt-1.5 border-t border-gray-100 text-[10px] text-gray-500 font-medium">
+          {fmtInversion(proyecto.inversion_mm)}
+        </div>
+      )}
+    </button>
+  )
+}
+
+// Vista tipo "Por eje" de Kanban: una columna por estado, ordenadas según el
+// pipeline canónico del SEIA (admisión → calificación → terminales). A la
+// derecha, sidebar con el proceso completo y tooltips sobre cada header.
+function SeiaKanban({ proyectos, onSelect }: { proyectos: SeiaProject[]; onSelect: (p: SeiaProject) => void }) {
+  const columns = useMemo(() => {
+    const groups: Record<string, { items: SeiaProject[]; meta: ReturnType<typeof matchSeiaMeta> }> = {}
+    for (const p of proyectos) {
+      const key = p.estado ?? 'Sin estado'
+      if (!groups[key]) groups[key] = { items: [], meta: matchSeiaMeta(p.estado) }
+      groups[key].items.push(p)
+    }
+    return Object.entries(groups)
+      .map(([estado, { items, meta }]) => ({ estado, items, meta }))
+      .sort((a, b) => pipelineOrder(a.meta) - pipelineOrder(b.meta))
+  }, [proyectos])
+
+  return (
+    <div className="flex gap-3 h-[calc(100vh-340px)] min-h-[480px] -mx-1 px-1">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div
+          className="grid h-full flex-shrink-0"
+          style={{ gridTemplateColumns: `repeat(${columns.length}, 21rem)`, columnGap: '0.625rem' }}
+        >
+          {columns.map(({ estado, items, meta }) => {
+            const c = estadoBadge(estado)
+            const displayName = meta?.canonical ?? estado
+            return (
+              <div key={estado} className="flex flex-col overflow-hidden">
+                <div className={`relative group flex items-center gap-2 px-2.5 py-2 rounded-lg mb-2 ${c.bg} ${meta ? 'cursor-help' : ''}`}>
+                  <span className={`text-[11px] font-semibold leading-tight ${c.text} flex-1 truncate`} title={estado}>
+                    {displayName}
+                  </span>
+                  <span className={`text-[10px] font-bold bg-white/70 px-1.5 py-0.5 rounded-full ${c.text}`}>
+                    {items.length}
+                  </span>
+                  {meta && <ColumnHeaderTooltip meta={meta} />}
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                  {items.map(p => (
+                    <SeiaKanbanCard key={p.id} proyecto={p} onSelect={onSelect} />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <ProcessDrawer title="Proceso SEIA" intro={SEIA_INTRO} pipeline={SEIA_PIPELINE} />
     </div>
   )
 }
@@ -138,13 +260,10 @@ type SortBy = 'inversion' | 'fecha' | 'nombre'
 export default function SeiaProjectsList({ proyectos, total, loading, error }: Props) {
   const [selected, setSelected]           = useState<SeiaProject | null>(null)
   const [search, setSearch]               = useState('')
-  const [filterEstado, setFilterEstado]   = useState<Set<string>>(new Set())
   const [filterTipo, setFilterTipo]       = useState<Set<string>>(new Set())
   const [minInversion, setMinInversion]   = useState<number>(0)
   const [soloPlazoCorto, setSoloPlazoCorto] = useState(false)
   const [sortBy, setSortBy]               = useState<SortBy>('inversion')
-
-  const seiaSearchUrl = `https://seia.sea.gob.cl/busqueda/buscarProyectoResumen.php`
 
   // KPIs — operan sobre el conjunto completo (no afectados por filtros)
   const kpis = useMemo(() => {
@@ -157,18 +276,14 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
     return { totalInv, totalCount: proyectos.length, enCalif, plazoCorto }
   }, [proyectos])
 
-  // Catálogos para filtros (top 8 por frecuencia para no inundar)
-  const { estadosDisponibles, tiposDisponibles } = useMemo(() => {
-    const eCount: Record<string, number> = {}
+  // Catálogo para filtros (top 8 por frecuencia para no inundar).
+  // El filtro por estado se removió: ahora "estado" es la columna del kanban.
+  const tiposDisponibles = useMemo(() => {
     const tCount: Record<string, number> = {}
     for (const p of proyectos) {
-      if (p.estado) eCount[p.estado] = (eCount[p.estado] ?? 0) + 1
-      if (p.tipo)   tCount[p.tipo]   = (tCount[p.tipo]   ?? 0) + 1
+      if (p.tipo) tCount[p.tipo] = (tCount[p.tipo] ?? 0) + 1
     }
-    return {
-      estadosDisponibles: Object.entries(eCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]),
-      tiposDisponibles:   Object.entries(tCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]),
-    }
+    return Object.entries(tCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0])
   }, [proyectos])
 
   // Filtrado + orden
@@ -176,7 +291,6 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
     const q = search.toLowerCase()
     const pool = proyectos.filter(p => {
       if (q && !p.nombre.toLowerCase().includes(q) && !(p.titular ?? '').toLowerCase().includes(q)) return false
-      if (filterEstado.size > 0 && (!p.estado || !filterEstado.has(p.estado))) return false
       if (filterTipo.size > 0   && (!p.tipo   || !filterTipo.has(p.tipo)))     return false
       if (minInversion > 0 && (p.inversion_mm ?? 0) < minInversion) return false
       if (soloPlazoCorto) {
@@ -190,7 +304,7 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
       if (sortBy === 'fecha')     return (b.fecha_presentacion ?? '').localeCompare(a.fecha_presentacion ?? '')
       return a.nombre.localeCompare(b.nombre)
     })
-  }, [proyectos, search, filterEstado, filterTipo, minInversion, soloPlazoCorto, sortBy])
+  }, [proyectos, search, filterTipo, minInversion, soloPlazoCorto, sortBy])
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, val: string) {
     setter(prev => {
@@ -200,10 +314,10 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
     })
   }
 
-  const filtersActive = search !== '' || filterEstado.size > 0 || filterTipo.size > 0 || minInversion > 0 || soloPlazoCorto
+  const filtersActive = search !== '' || filterTipo.size > 0 || minInversion > 0 || soloPlazoCorto
 
   function clearFilters() {
-    setSearch(''); setFilterEstado(new Set()); setFilterTipo(new Set()); setMinInversion(0); setSoloPlazoCorto(false)
+    setSearch(''); setFilterTipo(new Set()); setMinInversion(0); setSoloPlazoCorto(false)
   }
 
   if (loading) {
@@ -231,7 +345,7 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
 
       {/* ── KPIs ───────────────────────────────────────────────────────────── */}
       <div className="px-5 pb-3 grid grid-cols-4 gap-2">
-        <KpiTile label="Inversión total" value={fmtInversionCompact(kpis.totalInv)} />
+        <KpiTile label="Inversión total" {...fmtInversionTotal(kpis.totalInv)} />
         <KpiTile label="Proyectos" value={kpis.totalCount.toLocaleString('es-CL')} />
         <KpiTile label="En calificación" value={kpis.enCalif.toLocaleString('es-CL')} accent={kpis.enCalif > 0 ? 'amber' : undefined} />
         <KpiTile label="Plazo ≤ 30d" value={kpis.plazoCorto.toLocaleString('es-CL')} accent={kpis.plazoCorto > 0 ? 'red' : undefined} />
@@ -248,7 +362,7 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
             <input
               type="text" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar..."
-              className="w-full pl-7 pr-2 py-1 text-[11px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+              className="w-full pl-7 pr-2 py-1 text-[11px] text-gray-900 placeholder:text-gray-500 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
             />
           </div>
 
@@ -278,22 +392,6 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
           )}
         </div>
 
-        {estadosDisponibles.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] text-gray-400 mr-0.5">Estado:</span>
-            {estadosDisponibles.map(e => {
-              const active = filterEstado.has(e)
-              const c = estadoBadge(e)
-              return (
-                <button key={e} onClick={() => toggleSet(setFilterEstado, e)}
-                  className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${active ? `${c.bg} ${c.text} ring-1 ring-current` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                  {truncate(e, 22)}
-                </button>
-              )
-            })}
-          </div>
-        )}
-
         {tiposDisponibles.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
             <span className="text-[10px] text-gray-400 mr-0.5">Tipo:</span>
@@ -302,7 +400,7 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
               return (
                 <button key={t} onClick={() => toggleSet(setFilterTipo, t)}
                   className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${active ? 'bg-slate-200 text-slate-800 ring-1 ring-slate-400' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                  {truncate(t, 24)}
+                  {t}
                 </button>
               )
             })}
@@ -310,63 +408,19 @@ export default function SeiaProjectsList({ proyectos, total, loading, error }: P
         )}
       </div>
 
-      {/* ── Conteo + lista ─────────────────────────────────────────────────── */}
+      {/* ── Conteo + kanban por estado ─────────────────────────────────────── */}
       <div className="px-5 pb-1">
         <p className="text-[10px] text-gray-400 mb-1.5">
           {filtered.length.toLocaleString('es-CL')} de {proyectos.length.toLocaleString('es-CL')}
           {total > proyectos.length && <span className="text-gray-300"> · de {total.toLocaleString('es-CL')} en BD</span>}
         </p>
-        <div className="space-y-1.5">
-          {filtered.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">Sin proyectos que coincidan con los filtros</p>
-          ) : (
-            filtered.map(p => {
-              const badge = estadoBadge(p.estado)
-              const dias = daysUntil(p.fecha_plazo)
-              const plazoUrgente = dias !== null && dias >= 0 && dias <= 30
-              return (
-                <button key={p.id} onClick={() => setSelected(p)}
-                  className="w-full text-left bg-white rounded-lg border border-gray-100 px-3 py-2.5 hover:border-gray-200 hover:shadow-sm transition-all">
-                  <p className="text-xs font-medium text-gray-800 leading-snug" title={p.nombre}>
-                    {truncate(p.nombre, 65)}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    {p.tipo && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
-                        {truncate(p.tipo, 30)}
-                      </span>
-                    )}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${badge.bg} ${badge.text}`}>
-                      {p.estado ?? 'Sin estado'}
-                    </span>
-                    {plazoUrgente && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-semibold">
-                        Plazo {dias}d
-                      </span>
-                    )}
-                    {p.inversion_mm !== null && (
-                      <span className="text-[10px] text-gray-400 ml-auto">
-                        {fmtInversion(p.inversion_mm)}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
+        {filtered.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">Sin proyectos que coincidan con los filtros</p>
+        ) : (
+          <SeiaKanban proyectos={filtered} onSelect={setSelected} />
+        )}
       </div>
-
-      {/* Footer */}
-      <div className="px-5 pt-2 pb-3">
-        <a href={seiaSearchUrl} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 font-medium transition-colors">
-          Ver los {total.toLocaleString('es-CL')} proyectos de esta región en SEIA
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M2 8L8 2M5 2h3v3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </a>
-      </div>
+      <div className="pb-3" />
     </div>
   )
 }

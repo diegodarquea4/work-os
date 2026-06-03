@@ -148,7 +148,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setViewDropOpen(prev => !prev)
   }
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
-  const [panelWidth, setPanelWidth]           = useState(420)
+  // Default 680px: por encima del umbral de 640px que activa el grid de 2 columnas
+  // en ProjectsPanel — así el panel arranca mostrando más iniciativas al toque.
+  // El usuario puede achicarlo manualmente hasta 320 si lo prefiere a 1 columna.
+  const [panelWidth, setPanelWidth]           = useState(680)
   const [actividad, setActividad]             = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(true)
 
