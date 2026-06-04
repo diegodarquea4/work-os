@@ -225,21 +225,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {canEdit && (
-                <button
-                  onClick={handleToggleFoco}
-                  disabled={savingFoco}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-50 ${
-                    enFoco
-                      ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 ring-1 ring-amber-200'
-                      : 'text-gray-500 hover:bg-gray-100 ring-1 ring-gray-200'
-                  }`}
-                  title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
-                >
-                  <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
-                  {enFoco ? 'En foco' : 'Marcar foco'}
-                </button>
-              )}
+              {/* Marcar/quitar foco es transversal: cualquier usuario autenticado
+                  (incluyendo regional/viewer) puede priorizar iniciativas para
+                  su seguimiento. Va directo a BD via cliente — RLS authenticated_write
+                  permite el UPDATE. Mantener consistencia con Kanban y Bandeja. */}
+              <button
+                onClick={handleToggleFoco}
+                disabled={savingFoco}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-50 ${
+                  enFoco
+                    ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 ring-1 ring-amber-200'
+                    : 'text-gray-500 hover:bg-gray-100 ring-1 ring-gray-200'
+                }`}
+                title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+              >
+                <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
+                {enFoco ? 'En foco' : 'Marcar foco'}
+              </button>
               {canEditAny && onDeletePrioridad && !confirmDelete && (
                 <button
                   onClick={() => setConfirmDelete(true)}
