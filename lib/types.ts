@@ -168,6 +168,25 @@ export type Documento = {
   created_at: string
 }
 
+// ── Métricas por eje (planificación cuantitativa por región) ─────────────────
+// Admin/editor crea la métrica con su objetivo. Cualquier autenticado puede
+// actualizar valor_actual (modelo "compromiso": DCI fija, regional reporta).
+export type Metrica = {
+  id: number
+  region_cod: string
+  eje: string
+  titulo: string
+  descripcion: string | null
+  objetivo: number
+  valor_actual: number | null
+  unidad: string | null
+  created_at: string
+  updated_at: string
+  created_by_email: string | null
+  valor_updated_by_email: string | null
+  valor_updated_at: string | null
+}
+
 // ── Regional Metrics (time-series) ────────────────────────────────────────────
 export type RegionalMetric = {
   id: string

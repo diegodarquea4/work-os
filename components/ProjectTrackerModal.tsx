@@ -256,14 +256,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               <button
                 onClick={handleToggleFoco}
                 disabled={savingFoco}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-50 ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-500 ease-out disabled:opacity-50 ring-1 ${
                   enFoco
-                    ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 ring-1 ring-amber-200'
-                    : 'text-gray-500 hover:bg-gray-100 ring-1 ring-gray-200'
+                    ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 ring-amber-200'
+                    : 'text-gray-500 hover:bg-gray-100 ring-gray-200'
                 }`}
                 title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
               >
-                <FlagIcon filled={enFoco} className="w-3.5 h-3.5" />
+                <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
                 {enFoco ? 'En foco' : 'Marcar foco'}
               </button>
               {canEditAny && onDeletePrioridad && !confirmDelete && (

@@ -202,10 +202,10 @@ export default function AttentionTray({
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
         <button
           onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, false) }}
-          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-colors p-1 -m-1 rounded"
+          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
           title="Quitar del foco"
         >
-          <FlagIcon filled className="w-4 h-4" />
+          <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
         </button>
 
         <button
@@ -299,10 +299,10 @@ export default function AttentionTray({
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 transition-colors">
         <button
           onClick={() => handleToggleFoco(p.n, true)}
-          className="flex-shrink-0 text-gray-300 hover:text-amber-500 transition-colors p-1 -m-1 rounded"
+          className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
           title="Marcar en foco"
         >
-          <FlagIcon className="w-4 h-4" />
+          <FlagIcon className="w-4 h-4 transition-all duration-500" />
         </button>
         <button onClick={() => setSelectedIniciativa(p)} className="flex-1 text-left min-w-0 flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sem.dot}`} />
