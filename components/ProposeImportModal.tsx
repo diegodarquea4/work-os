@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { downloadTemplate } from '@/lib/templateExcel'
+import { downloadPrefilled } from '@/lib/templateExcel'
+import type { Iniciativa } from '@/lib/projects'
 
 /**
  * Modal para que un usuario (típicamente regional) suba una propuesta de
@@ -21,11 +22,15 @@ type Props = {
   // actualización"). Se envía a `regions_claim` y permite que "Mis propuestas"
   // muestre solo las propuestas relevantes a esta región.
   regionName: string
+  // Iniciativas vigentes de la región (para pre-llenar el Excel de descarga).
+  // Si no hay, el archivo sale con headers solamente (equivalente al template
+  // vacío) — apto para regiones nuevas que solo cargan altas.
+  iniciativas?: Iniciativa[]
   // Callback al submit exitoso (para refrescar "Mis propuestas").
   onSubmitted?: () => void
 }
 
-export default function ProposeImportModal({ open, onClose, regionName, onSubmitted }: Props) {
+export default function ProposeImportModal({ open, onClose, regionName, iniciativas, onSubmitted }: Props) {
   const [file, setFile]       = useState<File | null>(null)
   const [note, setNote]       = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -116,16 +121,16 @@ export default function ProposeImportModal({ open, onClose, regionName, onSubmit
               Sube un Excel con los cambios que quieres proponer.{' '}
               <button
                 type="button"
-                onClick={() => downloadTemplate()}
+                onClick={() => downloadPrefilled(regionName, iniciativas ?? [])}
                 className="text-blue-600 hover:text-blue-800 font-medium underline"
               >
-                Descarga el template
+                Descarga las iniciativas actuales de {regionName}
               </button>{' '}
-              si no lo tienes.
+              para trabajar sobre la situación real.
               <br />
               <span className="text-slate-500">
-                Recuerda: en una <strong>actualización</strong>, las celdas que dejes en blanco quedan sin tocar
-                (no borran el valor previo).
+                Modifica solo las celdas que cambiaron — las que dejes intactas se mantienen igual.
+                Para crear iniciativas nuevas, agrégalas al final con la columna <strong>#</strong> vacía.
               </span>
             </div>
 

@@ -8,7 +8,13 @@ type Props = {
   prioridadId: number
   documentos: Documento[]
   onRefresh: () => Promise<void>
-  canEdit?: boolean
+  // Cualquier autenticado puede subir y eliminar lo propio.
+  canCreate?: boolean
+  // Solo admin/editor puede eliminar lo ajeno.
+  canDeleteAny?: boolean
+  // Email del usuario actual — se auto-pobla en `subido_por` al subir.
+  // Base para distinguir lo propio vs ajeno.
+  currentUserEmail?: string
 }
 
 function fmtDate(iso: string) {
@@ -32,10 +38,21 @@ function fileIcon(tipo: string | null) {
   return '📎'
 }
 
-export default function DocumentosTab({ prioridadId, documentos, onRefresh, canEdit = true }: Props) {
+export default function DocumentosTab({
+  prioridadId,
+  documentos,
+  onRefresh,
+  canCreate = true,
+  canDeleteAny = true,
+  currentUserEmail = '',
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+
+  // "Mío vs ajeno" — los documentos viejos sin email se consideran ajenos.
+  const isOwn = (d: Documento) => !!currentUserEmail && d.subido_por === currentUserEmail
+  const canManage = (d: Documento) => canDeleteAny || isOwn(d)
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -51,12 +68,14 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh, canE
       return
     }
     const { data: { publicUrl } } = sb.storage.from('project-docs').getPublicUrl(path)
+    // subido_por se auto-pobla con el email del usuario (no editable).
     await sb.from('documentos_prioridad').insert({
       prioridad_id: prioridadId,
       nombre:       file.name,
       url:          publicUrl,
       tipo_archivo: file.type || null,
       tamano_bytes: file.size,
+      subido_por:   currentUserEmail || null,
     })
     await onRefresh()
     setUploading(false)
@@ -78,7 +97,7 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh, canE
           <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
-      {canEdit && <button
+      {canCreate && <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
         className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors disabled:opacity-50 mb-4"
@@ -135,11 +154,11 @@ export default function DocumentosTab({ prioridadId, documentos, onRefresh, canE
                     <path d="M8 1h5v5M5.5 8.5L13 1"/>
                   </svg>
                 </a>
-                {canEdit && (
+                {canManage(doc) && (
                 <button
                   onClick={() => handleDelete(doc)}
                   className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
-                  title="Eliminar"
+                  title={isOwn(doc) ? 'Eliminar' : 'Eliminar (eres admin/editor)'}
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>

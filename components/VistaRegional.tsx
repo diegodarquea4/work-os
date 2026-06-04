@@ -431,6 +431,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             open={proposeModalOpen}
             onClose={() => setProposeModalOpen(false)}
             regionName={region.nombre}
+            iniciativas={regionIniciativas}
             onSubmitted={() => setProposalsRefreshKey(k => k + 1)}
           />
         )}

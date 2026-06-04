@@ -28,6 +28,7 @@ export const VALID_ETAPA          = ['Preinversión', 'Diseño', 'Ejecución', '
 export const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro'] as const
 export const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Inicio Obras', 'Término Obras/Programa', 'Término Obras', 'Inauguración', 'Finalizado'] as const
 export const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE'] as const
+export const VALID_SEMAFORO       = ['verde', 'ambar', 'rojo', 'gris'] as const
 
 // ── Tipos de salida ──────────────────────────────────────────────────────────
 
@@ -180,6 +181,36 @@ export function parseImportWorkbook(
       if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
       else target.inversion_mm = num
     }
+    // ── Campos operativos (semáforo, % avance, en foco) ─────────────────────
+    const semaforo = col(row, 'Semáforo')
+    if (semaforo) {
+      const norm = semaforo.toLowerCase()
+      if (!(VALID_SEMAFORO as readonly string[]).includes(norm)) {
+        rowErrors.push(`semáforo "${semaforo}" inválido (esperado: verde, ambar, rojo, gris)`)
+      } else {
+        target.estado_semaforo = norm
+      }
+    }
+    const pctStr = col(row, '% Avance')
+    if (pctStr !== undefined && pctStr !== '') {
+      const n = parseInt(String(pctStr).replace(',', '.'), 10)
+      if (isNaN(n) || n < 0 || n > 100) {
+        rowErrors.push(`% avance "${pctStr}" inválido (esperado entero 0–100)`)
+      } else {
+        target.pct_avance = n
+      }
+    }
+    const focoStr = col(row, 'En Foco')
+    if (focoStr) {
+      const norm = focoStr.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      if (['si', 's', 'true', '1', 'yes', 'y'].includes(norm)) {
+        target.en_foco = true
+      } else if (['no', 'n', 'false', '0'].includes(norm)) {
+        target.en_foco = false
+      } else {
+        rowErrors.push(`en foco "${focoStr}" inválido (esperado: Sí / No)`)
+      }
+    }
     const fechaRaw = col(row, 'Fecha Próximo Hito')
     if (fechaRaw !== undefined && fechaRaw !== '') {
       const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
@@ -188,12 +219,14 @@ export function parseImportWorkbook(
     }
 
     // Campos libres (texto). Acá vivía el bug original.
+    // Nota: `codigo_iniciativa` se omite a propósito — es generado por el
+    // sistema en INSERT y no es editable por Excel. Archivos viejos que
+    // traigan esa columna son ignorados silenciosamente.
     for (const [label, dbCol] of [
       ['Nombre Iniciativa', 'nombre'],
       ['Eje', 'eje'],
       ['Ministerio', 'ministerio'],
       ['Código BIP', 'codigo_bip'],
-      ['Código Iniciativa', 'codigo_iniciativa'],
       ['Origen', 'origen'],
       ['Descripción', 'descripcion'],
       ['Comuna', 'comuna'],

@@ -282,7 +282,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     <UserProvider
       canEditRegion={canEditRegion}
       canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}
+      canEditOperational={!!profile}
       isAdmin={profile?.role === 'admin'}
+      userEmail={profile?.email ?? ''}
     >
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}

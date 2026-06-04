@@ -96,6 +96,46 @@ export async function GET(request: Request) {
   const statusFilter = url.searchParams.get('status')
 
   const db = getSupabaseAdmin()
+
+  // ── Reconciliación pasiva ────────────────────────────────────────────────
+  // Si una propuesta quedó en 'pending' pero existe una entrada en
+  // import_log con su proposal_id, es señal de que applyImport terminó pero
+  // el UPDATE de la propuesta falló (timeout, network, etc). Auto-corregimos
+  // su estado antes de devolverla.
+  //
+  // Solo lo hace admin/editor; los regionales nunca disparan reconciliación.
+  if (profile.role === 'admin' || profile.role === 'editor') {
+    const { data: pendings } = await db
+      .from('import_proposals')
+      .select('id')
+      .eq('status', 'pending')
+    const pendingIds = (pendings ?? []).map(p => p.id)
+    if (pendingIds.length > 0) {
+      const { data: logs } = await db
+        .from('import_log')
+        .select('proposal_id, inserted_count, updated_count, error_count, errors, applied_by_id, applied_by_email')
+        .in('proposal_id', pendingIds)
+      for (const log of (logs ?? [])) {
+        if (log.proposal_id == null) continue
+        const had_errors = (log.error_count ?? 0) > 0
+        await db
+          .from('import_proposals')
+          .update({
+            status:           had_errors ? 'applied_with_errors' : 'approved',
+            reviewer_id:      log.applied_by_id ?? profile.id,
+            reviewer_email:   log.applied_by_email ?? profile.email,
+            reviewed_at:      new Date().toISOString(),
+            applied_inserted: log.inserted_count ?? 0,
+            applied_updated:  log.updated_count ?? 0,
+            applied_errors:   had_errors ? log.errors : null,
+            reviewer_note:    'Reconciliado automáticamente desde import_log',
+          })
+          .eq('id', log.proposal_id)
+          .eq('status', 'pending')   // protección concurrencia
+      }
+    }
+  }
+
   let query = db
     .from('import_proposals')
     .select('id, created_at, proposer_id, proposer_email, file_name, regions_claim, proposer_note, status, reviewer_email, reviewer_note, reviewed_at, applied_inserted, applied_updated, applied_errors')

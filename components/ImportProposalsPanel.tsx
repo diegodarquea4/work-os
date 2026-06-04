@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 /**
  * Panel para que admin/editor revise propuestas de actualización.
@@ -41,6 +42,7 @@ type ActionResult = {
 }
 
 export default function ImportProposalsPanel() {
+  const router = useRouter()
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [loading, setLoading]     = useState(true)
   const [busy, setBusy]           = useState<number | null>(null)
@@ -48,6 +50,7 @@ export default function ImportProposalsPanel() {
   const [lastResult, setLastResult] = useState<{ id: number; result: ActionResult } | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [rejectModalFor, setRejectModalFor] = useState<Proposal | null>(null)
+  const [detailFor, setDetailFor] = useState<Proposal | null>(null)
 
   useEffect(() => { loadProposals() }, [])
 
@@ -74,19 +77,36 @@ export default function ImportProposalsPanel() {
     if (!confirm(`Confirmar carga de la propuesta #${p.id} de ${p.proposer_email}?\n\nSe aplicará al sistema y el archivo se borrará del Storage.`)) return
     setBusy(p.id)
     setError(null)
-    const res = await fetch(`/api/proposals/${p.id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    })
+    let res: Response
+    try {
+      res = await fetch(`/api/proposals/${p.id}/approve`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({}),
+      })
+    } catch (err) {
+      // Network/timeout: el server pudo haber terminado igual. Re-cargamos la
+      // lista — la reconciliación pasiva del GET corrige el estado si aplicó.
+      console.warn('[approve] fetch failed, recargando para reconciliar', err)
+      setBusy(null)
+      await loadProposals()
+      router.refresh()
+      setError('La conexión se interrumpió. Verifica el estado en la lista — si la propuesta sigue pendiente, reintenta.')
+      return
+    }
     const body = await res.json().catch(() => ({}))
     setBusy(null)
     if (!res.ok) {
       setError(body.error ?? 'No se pudo aplicar la propuesta.')
+      // Igual recargamos: si la BD ya tiene log, la reconciliación corrige.
+      await loadProposals()
       return
     }
     setLastResult({ id: p.id, result: body as ActionResult })
     await loadProposals()
+    // Refresca el Server Component raíz para que el panel global (Mapa,
+    // Dashboard, Mi Región) vea los datos aprobados sin reload manual.
+    router.refresh()
   }
 
   async function handleRejectSubmit(p: Proposal, note: string) {
@@ -112,7 +132,7 @@ export default function ImportProposalsPanel() {
   }
 
   const pending  = proposals.filter(p => p.status === 'pending')
-  const resolved = proposals.filter(p => p.status !== 'pending').slice(0, 20)
+  const resolved = proposals.filter(p => p.status !== 'pending')
 
   return (
     <div>
@@ -165,7 +185,10 @@ export default function ImportProposalsPanel() {
                     Cargada
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm text-gray-900 truncate">{p.file_name}</div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-mono font-semibold text-slate-500 flex-shrink-0">#{p.id}</span>
+                      <div className="font-medium text-sm text-gray-900 truncate">{p.file_name}</div>
+                    </div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {p.proposer_email} · {fmtRelative(p.created_at)}
                       {p.regions_claim && p.regions_claim.length > 0 && (
@@ -173,7 +196,7 @@ export default function ImportProposalsPanel() {
                       )}
                     </div>
                     {p.proposer_note && (
-                      <p className="text-xs text-gray-600 italic mt-1 line-clamp-2">"{p.proposer_note}"</p>
+                      <p className="text-xs text-gray-600 italic mt-1 line-clamp-2">&ldquo;{p.proposer_note}&rdquo;</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -220,15 +243,23 @@ export default function ImportProposalsPanel() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-2 font-semibold text-gray-500 uppercase tracking-wider w-16">Sol.</th>
                   <th className="text-left px-4 py-2 font-semibold text-gray-500 uppercase tracking-wider">Proponente</th>
                   <th className="text-left px-4 py-2 font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
                   <th className="text-left px-4 py-2 font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                   <th className="text-left px-4 py-2 font-semibold text-gray-500 uppercase tracking-wider">Resultado</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {resolved.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50">
+                  <tr
+                    key={p.id}
+                    className="hover:bg-slate-50 cursor-pointer group"
+                    onClick={() => setDetailFor(p)}
+                    title="Ver flujo de vida de la solicitud"
+                  >
+                    <td className="px-4 py-2 text-slate-700 font-mono font-semibold">#{p.id}</td>
                     <td className="px-4 py-2 text-gray-700">{p.proposer_email}</td>
                     <td className="px-4 py-2 text-gray-500">{fmtRelative(p.reviewed_at ?? p.created_at)}</td>
                     <td className="px-4 py-2">
@@ -236,7 +267,7 @@ export default function ImportProposalsPanel() {
                     </td>
                     <td className="px-4 py-2 text-gray-600">
                       {p.status === 'rejected' ? (
-                        p.reviewer_note ? <span className="italic">"{p.reviewer_note}"</span> : '—'
+                        p.reviewer_note ? <span className="italic line-clamp-1">&ldquo;{p.reviewer_note}&rdquo;</span> : '—'
                       ) : (
                         <>
                           {p.applied_inserted ?? 0} ins · {p.applied_updated ?? 0} act
@@ -246,12 +277,25 @@ export default function ImportProposalsPanel() {
                         </>
                       )}
                     </td>
+                    <td className="px-2 py-2 text-gray-300 group-hover:text-slate-500">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </details>
+      )}
+
+      {/* ── Toast discreto mientras se aplica una propuesta ────────────────── */}
+      {busy !== null && <ApplyingToast proposalId={busy} />}
+
+      {/* ── Modal: flujo de vida de la solicitud ──────────────────────────── */}
+      {detailFor && (
+        <SolicitudDetailModal proposal={detailFor} onClose={() => setDetailFor(null)} />
       )}
 
       {/* ── Modal Rechazar ─────────────────────────────────────────────────── */}
@@ -327,6 +371,178 @@ function RejectModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Modal con el flujo de vida completo de una solicitud de actualización.
+ * Pensado para histórico: muestra cómo nació, qué traía, quién la revisó,
+ * con qué nota, qué resultado tuvo. Vista no-editable — solo lectura.
+ */
+function SolicitudDetailModal({
+  proposal: p,
+  onClose,
+}: {
+  proposal: Proposal
+  onClose: () => void
+}) {
+  const fmtFull = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' }) : '—'
+
+  // Eventos del ciclo de vida en orden cronológico.
+  const events: { icon: string; title: string; when: string; body?: React.ReactNode }[] = []
+
+  events.push({
+    icon: '📨',
+    title: 'Solicitud enviada',
+    when:  fmtFull(p.created_at),
+    body: (
+      <div className="space-y-1.5">
+        <p className="text-xs text-gray-600">
+          Por <span className="font-medium text-gray-800">{p.proposer_email}</span>
+          {p.regions_claim && p.regions_claim.length > 0 && (
+            <> · Región: <span className="font-medium text-gray-800">{p.regions_claim.join(', ')}</span></>
+          )}
+        </p>
+        <p className="text-xs text-gray-500">Archivo: <span className="font-mono">{p.file_name}</span></p>
+        {p.proposer_note && (
+          <div className="mt-2 px-3 py-2 bg-gray-50 border-l-2 border-gray-300 rounded text-xs text-gray-700 italic">
+            &ldquo;{p.proposer_note}&rdquo;
+          </div>
+        )}
+      </div>
+    ),
+  })
+
+  if (p.status === 'pending') {
+    events.push({
+      icon: '⏳',
+      title: 'En espera de revisión',
+      when:  'Pendiente',
+      body: <p className="text-xs text-gray-500">Aún no ha sido revisada por un administrador del DCI.</p>,
+    })
+  } else {
+    const statusLabel = p.status === 'approved'             ? 'Aprobada y aplicada'
+                      : p.status === 'rejected'             ? 'Rechazada'
+                      : p.status === 'applied_with_errors'  ? 'Aplicada con errores parciales'
+                      : p.status
+    const statusIcon  = p.status === 'approved'             ? '✅'
+                      : p.status === 'rejected'             ? '❌'
+                      : p.status === 'applied_with_errors'  ? '⚠️'
+                      : '•'
+
+    events.push({
+      icon: statusIcon,
+      title: statusLabel,
+      when:  fmtFull(p.reviewed_at),
+      body: (
+        <div className="space-y-1.5">
+          {p.reviewer_email && (
+            <p className="text-xs text-gray-600">
+              Revisada por <span className="font-medium text-gray-800">{p.reviewer_email}</span>
+            </p>
+          )}
+          {p.reviewer_note && (
+            <div className="mt-2 px-3 py-2 bg-gray-50 border-l-2 border-gray-300 rounded text-xs text-gray-700 italic">
+              &ldquo;{p.reviewer_note}&rdquo;
+            </div>
+          )}
+          {(p.status === 'approved' || p.status === 'applied_with_errors') && (
+            <p className="text-xs text-gray-600 mt-2">
+              Resultado: <strong>{p.applied_inserted ?? 0}</strong> insertadas ·{' '}
+              <strong>{p.applied_updated ?? 0}</strong> actualizadas
+            </p>
+          )}
+          {p.applied_errors && p.applied_errors.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-xs font-medium text-amber-700 cursor-pointer">
+                Ver {p.applied_errors.length} error{p.applied_errors.length === 1 ? '' : 'es'}
+              </summary>
+              <ul className="mt-1.5 text-xs text-amber-700 list-disc list-inside space-y-0.5">
+                {p.applied_errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </details>
+          )}
+        </div>
+      ),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <header className="bg-slate-900 px-5 py-3 flex items-center justify-between flex-shrink-0">
+          <div>
+            <span className="text-white font-semibold text-sm">Solicitud #{p.id}</span>
+            <span className="text-slate-400 text-xs ml-2"><StatusBadgeInverse status={p.status} /></span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-lg leading-none">✕</button>
+        </header>
+        <div className="px-6 py-5 overflow-y-auto flex-1">
+          <div className="space-y-5">
+            {events.map((ev, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-base">
+                    {ev.icon}
+                  </div>
+                  {i < events.length - 1 && <div className="flex-1 w-px bg-slate-200 my-1" />}
+                </div>
+                <div className="flex-1 min-w-0 pb-3">
+                  <div className="flex items-baseline justify-between gap-2 mb-1">
+                    <h4 className="text-sm font-semibold text-slate-900">{ev.title}</h4>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{ev.when}</span>
+                  </div>
+                  {ev.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Versión clara del badge para mostrarse sobre header oscuro. */
+function StatusBadgeInverse({ status }: { status: Proposal['status'] }) {
+  const label = status === 'pending'             ? 'Pendiente'
+              : status === 'approved'            ? 'Aprobada'
+              : status === 'rejected'            ? 'Rechazada'
+              : status === 'applied_with_errors' ? 'Con errores'
+              : status
+  return <span className="text-[10px] text-slate-300">{label}</span>
+}
+
+/**
+ * Toast discreto bottom-right que indica que hay una propuesta aplicándose.
+ * No bloquea la UI — el admin puede seguir navegando. Si el proceso tarda
+ * mucho el mensaje escala suavemente. Desaparece solo cuando termina.
+ */
+function ApplyingToast({ proposalId }: { proposalId: number }) {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setSeconds(s => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const hint = seconds < 15
+    ? 'Aplicando…'
+    : seconds < 60
+      ? 'Tomando un poco más…'
+      : 'Tardando más de lo normal — si falla, se reconcilia al recargar.'
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-2.5 flex items-center gap-3 max-w-xs animate-in fade-in slide-in-from-bottom-2">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin text-slate-700 flex-shrink-0">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round"/>
+      </svg>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-slate-800 leading-tight">
+          Propuesta #{proposalId} · {seconds}s
+        </p>
+        <p className="text-xs text-slate-500 leading-tight mt-0.5 truncate">{hint}</p>
       </div>
     </div>
   )

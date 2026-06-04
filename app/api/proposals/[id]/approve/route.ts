@@ -22,8 +22,9 @@ import type { Iniciativa } from '@/lib/projects'
 const BUCKET = 'import-proposals'
 
 // Tiempo extra: parseo del Excel + loops de update/insert + dual write a log.
-// El default ~60s puede no alcanzar para propuestas grandes.
-export const maxDuration = 120
+// Para propuestas grandes (>50 filas con muchos updates), 120s no alcanza.
+// 300s es el techo razonable en plan Pro de Vercel.
+export const maxDuration = 300
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
@@ -103,29 +104,41 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const allErrors = [...allParseErrors, ...result.errors]
   const finalStatus = allErrors.length > 0 ? 'applied_with_errors' : 'approved'
 
-  // 7. Escribir log + actualizar propuesta + borrar archivo (en paralelo donde es seguro).
-  await recordImportLog(
-    db,
-    profile,
-    'proposal',
-    { ...result, errors: allErrors },
-    Date.now() - startedAt,
-    proposalId,
-  )
+  // 7. Escribir log + actualizar propuesta + borrar archivo.
+  // Cada paso post-applyImport es best-effort: si falla, los datos ya se
+  // aplicaron y queremos retornar éxito al cliente. La reconciliación pasiva
+  // en GET /api/proposals corrige el estado de la propuesta si quedó pending.
+  try {
+    await recordImportLog(
+      db,
+      profile,
+      'proposal',
+      { ...result, errors: allErrors },
+      Date.now() - startedAt,
+      proposalId,
+    )
+  } catch (err) {
+    console.error('[proposals/approve] recordImportLog failed', err)
+  }
 
-  await db
-    .from('import_proposals')
-    .update({
-      status:           finalStatus,
-      reviewer_id:      profile.id,
-      reviewer_email:   profile.email,
-      reviewer_note:    reviewerNote,
-      reviewed_at:      new Date().toISOString(),
-      applied_inserted: result.inserted,
-      applied_updated:  result.updated,
-      applied_errors:   allErrors.length > 0 ? allErrors : null,
-    })
-    .eq('id', proposalId)
+  try {
+    const { error: upErr } = await db
+      .from('import_proposals')
+      .update({
+        status:           finalStatus,
+        reviewer_id:      profile.id,
+        reviewer_email:   profile.email,
+        reviewer_note:    reviewerNote,
+        reviewed_at:      new Date().toISOString(),
+        applied_inserted: result.inserted,
+        applied_updated:  result.updated,
+        applied_errors:   allErrors.length > 0 ? allErrors : null,
+      })
+      .eq('id', proposalId)
+    if (upErr) console.error('[proposals/approve] proposal update failed', upErr)
+  } catch (err) {
+    console.error('[proposals/approve] proposal update threw', err)
+  }
 
   // Borrar archivo (best-effort: no rompe el response si falla).
   await db.storage.from(BUCKET).remove([prop.file_path as string]).catch(err =>

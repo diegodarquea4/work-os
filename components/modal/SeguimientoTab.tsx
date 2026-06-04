@@ -22,19 +22,31 @@ type Props = {
   prioridadId: number
   seguimientos: Seguimiento[]
   onRefresh: () => Promise<void>
-  canEdit?: boolean
+  // Cualquier usuario autenticado puede crear y editar/borrar lo propio.
+  canCreate?: boolean
+  // Solo admin/editor pueden borrar/editar lo ajeno.
+  canDeleteAny?: boolean
+  // Email del usuario actual — se auto-pobla en `autor` al insertar.
+  // Base para decidir "lo propio vs ajeno".
+  currentUserEmail?: string
 }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, canEdit = true }: Props) {
+export default function SeguimientoTab({
+  prioridadId,
+  seguimientos,
+  onRefresh,
+  canCreate = true,
+  canDeleteAny = true,
+  currentUserEmail = '',
+}: Props) {
   const [showForm, setShowForm]   = useState(false)
   const [formDesc, setFormDesc]   = useState('')
   const [formTipo, setFormTipo]   = useState<keyof typeof TIPO_CONFIG>('avance')
   const [formEstado, setFormEstado] = useState('')
-  const [formAutor, setFormAutor] = useState('')
   const [formFecha, setFormFecha] = useState(() => new Date().toISOString().split('T')[0])
   const [saving, setSaving]       = useState(false)
 
@@ -42,23 +54,28 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
   const [editDesc, setEditDesc]     = useState('')
   const [editTipo, setEditTipo]     = useState<keyof typeof TIPO_CONFIG>('avance')
   const [editEstado, setEditEstado] = useState('')
-  const [editAutor, setEditAutor]   = useState('')
   const [editFecha, setEditFecha]   = useState('')
   const [editSaving, setEditSaving] = useState(false)
+
+  // "Mío vs ajeno": el seguimiento es mío si su autor coincide con mi email.
+  // Los registros viejos con autor no-email se consideran ajenos.
+  const isOwn = (s: Seguimiento) => !!currentUserEmail && s.autor === currentUserEmail
+  const canManage = (s: Seguimiento) => canDeleteAny || isOwn(s)
 
   async function handleSave() {
     if (!formDesc.trim()) return
     setSaving(true)
+    // autor se auto-pobla con el email del usuario (no editable en el form).
     const { error } = await getSupabase().from('seguimientos').insert({
       prioridad_id: prioridadId,
       tipo:         formTipo,
       descripcion:  formDesc.trim(),
-      autor:        formAutor.trim() || null,
+      autor:        currentUserEmail || null,
       estado:       formEstado || null,
       fecha:        formFecha,
     })
     if (!error) {
-      setFormDesc(''); setFormEstado(''); setFormAutor('')
+      setFormDesc(''); setFormEstado('')
       setFormFecha(new Date().toISOString().split('T')[0]); setShowForm(false)
       await onRefresh()
     }
@@ -70,17 +87,16 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
     setEditDesc(s.descripcion)
     setEditTipo(s.tipo)
     setEditEstado(s.estado ?? '')
-    setEditAutor(s.autor ?? '')
     setEditFecha(s.fecha ? s.fecha.split('T')[0] : new Date().toISOString().split('T')[0])
   }
 
   async function handleUpdate() {
     if (!editDesc.trim() || editingId === null) return
     setEditSaving(true)
+    // No tocamos `autor` en update — queda quien lo creó originalmente.
     const { error } = await getSupabase().from('seguimientos').update({
       tipo:        editTipo,
       descripcion: editDesc.trim(),
-      autor:       editAutor.trim() || null,
       estado:      editEstado || null,
       fecha:       editFecha,
     }).eq('id', editingId)
@@ -96,7 +112,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
 
   return (
     <div className="px-6 py-4">
-      {!showForm && canEdit && (
+      {!showForm && canCreate && (
         <button
           onClick={() => setShowForm(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mb-5"
@@ -131,13 +147,6 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
             className="w-full text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
           />
           <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Autor (opcional)"
-              value={formAutor}
-              onChange={e => setFormAutor(e.target.value)}
-              className="flex-1 text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
-            />
             <select
               value={formEstado}
               onChange={e => setFormEstado(e.target.value)}
@@ -149,6 +158,11 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
               ))}
             </select>
           </div>
+          {currentUserEmail && (
+            <p className="text-xs text-gray-400">
+              Se registrará a tu nombre: <span className="font-mono">{currentUserEmail}</span>
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <label className="text-xs text-gray-500 flex-shrink-0">Fecha</label>
             <input
@@ -215,13 +229,6 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
                           className="w-full text-sm text-gray-800 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
                         />
                         <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Autor (opcional)"
-                            value={editAutor}
-                            onChange={e => setEditAutor(e.target.value)}
-                            className="flex-1 text-sm text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
-                          />
                           <select
                             value={editEstado}
                             onChange={e => setEditEstado(e.target.value)}
@@ -261,12 +268,12 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
                           {est && <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>{est.label}</span>}
                           <span className="text-xs text-gray-500 ml-auto">{fmtDate(s.created_at)}</span>
-                          {canEdit && (
+                          {canManage(s) && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => startEdit(s)}
                               className="p-1 text-gray-400 hover:text-slate-700 rounded hover:bg-gray-100 transition-colors"
-                              title="Editar"
+                              title={isOwn(s) ? 'Editar' : 'Editar (eres admin/editor)'}
                             >
                               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" strokeLinejoin="round"/>
@@ -275,7 +282,7 @@ export default function SeguimientoTab({ prioridadId, seguimientos, onRefresh, c
                             <button
                               onClick={() => handleDelete(s.id)}
                               className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
-                              title="Eliminar"
+                              title={isOwn(s) ? 'Eliminar' : 'Eliminar (eres admin/editor)'}
                             >
                               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>

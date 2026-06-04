@@ -10,7 +10,7 @@ import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
-import { useCanEdit, useCanEditAny } from '@/lib/context/UserContext'
+import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
@@ -25,6 +25,10 @@ type Props = {
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const canEditRegion = useCanEdit()
   const canEditAny = useCanEditAny()
+  const canEditOperational = useCanEditOperational()
+  const currentUserEmail   = useCurrentUserEmail()
+  // canEdit = estructural (admin/editor). Operativo (semáforo, %avance,
+  // responsable, seguimientos, docs) usa canEditOperational en su lugar.
   const canEdit = canEditRegion(prioridad.region)
 
   const [tab, setTab]               = useState<Tab>('seguimiento')
@@ -36,6 +40,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
   const [pctAvance, setPctAvance]     = useState<number>(prioridad.pct_avance ?? 0)
   const [savingSem, setSavingSem]     = useState(false)
+  const [savingPct, setSavingPct]     = useState(false)
 
   const [prioridadLocal, setPrioridadLocal] = useState<'Alta' | 'Media' | 'Baja'>(prioridad.prioridad)
   const [responsable, setResponsable]       = useState<string>(prioridad.responsable ?? '')
@@ -97,6 +102,25 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       onUpdatePrioridad(prioridad.n, { pct_avance: newPct })
     }
     setLoading(false)
+  }
+
+  /** Persiste el % avance que el usuario ajustó manualmente.
+   *  Nota: si después se modifican hitos de seguimiento, `calcPctFromHitos`
+   *  puede sobrescribirlo al reabrir el modal (auto-cálculo). Eso es por
+   *  diseño: hitos completados son la fuente "oficial" del avance. El
+   *  ajuste manual sirve como override puntual entre cambios de hitos. */
+  async function commitPctAvance(newPct: number) {
+    const clamped = Math.max(0, Math.min(100, Math.round(newPct)))
+    if (clamped === (prioridad.pct_avance ?? 0)) return
+    setSavingPct(true)
+    const sb = getSupabase()
+    const { data: { session } } = await sb.auth.getSession()
+    await Promise.all([
+      sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
+      logSemaforoChange(prioridad.n, 'pct_avance', prioridad.pct_avance ?? 0, clamped, session?.user?.email ?? null),
+    ])
+    onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
+    setSavingPct(false)
   }
 
   async function handleSaveSemaforo(newSem: SemaforoKey) {
@@ -327,14 +351,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </div>
 
           {/* Semáforo + % avance */}
-          <div className="flex items-center gap-3 mb-3 py-2.5 px-3 bg-gray-50 rounded-xl">
+          <div className="flex items-center gap-6 mb-3 py-2.5 px-3 bg-gray-50 rounded-xl">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-600 mr-0.5">Estado</span>
               {(Object.keys(SEMAFORO_CONFIG) as SemaforoKey[]).map(s => (
                 <button
                   key={s}
                   onClick={() => handleSaveSemaforo(s)}
-                  disabled={savingSem || !canEdit}
+                  disabled={savingSem || !canEditOperational}
                   title={SEMAFORO_CONFIG[s].label}
                   className={`w-5 h-5 rounded-full transition-all disabled:opacity-50 ${SEMAFORO_CONFIG[s].dot} ${
                     semaforo === s
@@ -345,6 +369,39 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               ))}
               <span className="text-xs text-gray-700 ml-1">{SEMAFORO_CONFIG[semaforo].label}</span>
             </div>
+
+            {/* % avance — editable arrastrando o tipeando. Auto-calcula desde
+                hitos al abrir el modal; el ajuste manual queda hasta el
+                próximo recálculo. */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-xs text-gray-600 flex-shrink-0">Avance</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={pctAvance}
+                disabled={savingPct || !canEditOperational}
+                onChange={e => setPctAvance(Number(e.target.value))}
+                onMouseUp={e => commitPctAvance(Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={e => commitPctAvance(Number((e.target as HTMLInputElement).value))}
+                onKeyUp={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') commitPctAvance(Number((e.target as HTMLInputElement).value)) }}
+                title={canEditOperational ? 'Arrastra para ajustar' : 'No tienes permiso para editar'}
+                className="flex-1 h-1.5 rounded-full accent-slate-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={pctAvance}
+                disabled={savingPct || !canEditOperational}
+                onChange={e => setPctAvance(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                onBlur={e => commitPctAvance(Number(e.target.value))}
+                className="w-12 text-xs text-right text-slate-800 border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <span className="text-xs text-gray-500 flex-shrink-0">%</span>
+              {savingPct && <span className="text-xs text-gray-400 ml-1">…</span>}
+            </div>
           </div>
 
           {/* Metadata */}
@@ -354,7 +411,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {/* Responsable */}
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Responsable</span>
-              <label className="relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-white border border-gray-200 cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors group w-44">
+              <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-white border border-gray-200 transition-colors group w-44 ${canEditOperational ? 'cursor-pointer hover:bg-gray-50 hover:border-gray-300' : 'cursor-default'}`}>
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400 flex-shrink-0">
                   <circle cx="5" cy="3.5" r="2"/>
                   <path d="M1 9c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5"/>
@@ -369,7 +426,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 </svg>
                 <select
                   value={responsable}
-                  disabled={!canEdit}
+                  disabled={!canEditOperational}
                   onChange={async e => {
                     const val = e.target.value
                     setResponsable(val)
@@ -731,13 +788,27 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
           ) : tab === 'seguimiento' ? (
-            <SeguimientoTab prioridadId={prioridad.n} seguimientos={seguimientos} onRefresh={loadData} canEdit={canEdit} />
+            <SeguimientoTab
+              prioridadId={prioridad.n}
+              seguimientos={seguimientos}
+              onRefresh={loadData}
+              canCreate={canEditOperational}
+              canDeleteAny={canEditAny}
+              currentUserEmail={currentUserEmail}
+            />
           ) : tab === 'historial' ? (
             <HistorialTab seguimientos={seguimientos} semaforoLog={semaforoLog} semaforo={semaforo} pctAvance={pctAvance} />
           ) : tab === 'calendario' ? (
             <CalendarioTab seguimientos={seguimientos} />
           ) : (
-            <DocumentosTab prioridadId={prioridad.n} documentos={documentos} onRefresh={loadData} canEdit={canEdit} />
+            <DocumentosTab
+              prioridadId={prioridad.n}
+              documentos={documentos}
+              onRefresh={loadData}
+              canCreate={canEditOperational}
+              canDeleteAny={canEditAny}
+              currentUserEmail={currentUserEmail}
+            />
           )}
         </div>
       </div>

@@ -11,6 +11,7 @@
  */
 
 import * as XLSX from 'xlsx'
+import type { Iniciativa } from './projects'
 
 export const TEMPLATE_COLS = [
   { key: '#',                       label: '#',                       desc: '⚠ SOLO para actualizar existentes. DEJAR VACÍO para crear nueva iniciativa — NO uses numeración propia',                                                                                                                  wch: 6  },
@@ -28,7 +29,9 @@ export const TEMPLATE_COLS = [
   { key: 'fuente_financiamiento',   label: 'Fuente Financiamiento',   desc: 'Valores: FNDR | Mixto | Sectorial | Privado | FONDEMA | PEDZE — puede estar vacío',                                                                                                                                    wch: 24 },
   { key: 'codigo_bip',              label: 'Código BIP',              desc: 'Código numérico del BIP — puede estar vacío si no aplica',                                                                                                                                                              wch: 16 },
   { key: 'rat',                     label: 'RAT',                     desc: 'Valores: No Requiere | No Ingresado | En Tramitación | FI | IN | OT | RE | RS | AD',                                                                                                                                  wch: 20 },
-  { key: 'codigo_iniciativa',       label: 'Código Iniciativa',       desc: 'Código interno DCI — puede estar vacío',                                                                                                                                                                                wch: 22 },
+  { key: 'estado_semaforo',         label: 'Semáforo',                desc: 'Valores: verde | ambar | rojo | gris  — puede estar vacío',                                                                                                                                                            wch: 12 },
+  { key: 'pct_avance',              label: '% Avance',                desc: 'Número entero 0–100 — puede estar vacío',                                                                                                                                                                              wch: 12 },
+  { key: 'en_foco',                 label: 'En Foco',                 desc: 'Valores: Sí | No  — puede estar vacío',                                                                                                                                                                                wch: 10 },
   { key: 'inversion_mm',            label: 'Inversión ($MM)',         desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                                                                                                                        wch: 18 },
   { key: 'origen',                  label: 'Origen',                  desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                                                                                                              wch: 24 },
   { key: 'descripcion',             label: 'Descripción',             desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                                                                                                              wch: 54 },
@@ -43,8 +46,8 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['2. La fila 2 (descripción de campos) NO se importa — es solo guía.', '', '', ''],
   ['3. Agrega los datos a partir de la fila 3.', '', '', ''],
   ['4. Para ACTUALIZAR una iniciativa existente: deja la celda en blanco si NO quieres tocar ese campo. (no se borra el valor previo).', '', '', ''],
-  ['5. El semáforo, el avance % y el responsable se gestionan desde el panel — no van en este archivo.', '', '', ''],
-  ['6. Sube el archivo completado desde el botón "Importar" en el Dashboard. Si sos delegación regional, usá "Proponer actualización" en Mi Región.', '', '', ''],
+  ['5. El responsable, los seguimientos y los documentos se gestionan desde el panel — no van en este archivo.', '', '', ''],
+  ['6. Sube el archivo completado desde el botón "Importar" en el Dashboard. Si eres delegación regional, usa "Proponer actualización" en Mi Región.', '', '', ''],
   ['', '', '', ''],
   ['NUEVAS INICIATIVAS vs. ACTUALIZACIONES', '', '', ''],
   ['— Para CREAR una iniciativa nueva: deja la columna # vacía. Llena Región, Nombre Iniciativa, Eje y Ministerio.', '', '', ''],
@@ -67,7 +70,9 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['Fuente Financiamiento', 'No', 'FNDR · Mixto · Sectorial · Privado · FONDEMA · PEDZE', 'Fuente de financiamiento. PEDZE = Plan Especial Zonas Extremas.'],
   ['Código BIP', 'No', 'Código numérico', 'Código del BIP/MIDESO. Dejar vacío si no aplica.'],
   ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS', 'RS = Recomendación Satisfactoria; FI = Factibilidad Inicial; IN = Ingresado.'],
-  ['Código Iniciativa', 'No', 'Texto libre', 'Código interno del Plan Regional de Gobierno. Puede estar vacío.'],
+  ['Semáforo', 'No', 'verde · ambar · rojo · gris', 'Estado actual de la iniciativa (operativo). Por defecto "gris" = sin evaluar.'],
+  ['% Avance', 'No', 'Número entero 0–100', 'Porcentaje de avance de la iniciativa.'],
+  ['En Foco', 'No', 'Sí · No', 'Marca de seguimiento prioritario.'],
   ['Inversión ($MM)', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
   ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa.'],
 ]
@@ -93,4 +98,93 @@ export function buildTemplateWorkbook(): XLSX.WorkBook {
 export function downloadTemplate(filename = 'template-prioridades.xlsx') {
   const wb = buildTemplateWorkbook()
   XLSX.writeFile(wb, filename)
+}
+
+// ── Pre-llenado: Excel con iniciativas actuales ─────────────────────────────
+
+/**
+ * Convierte una fecha BD `YYYY-MM-DD` al formato `DD-MM-AAAA` que espera el
+ * parser (importParser.ts valida ese patrón estricto). Si la BD trae
+ * timestamp con hora, igual hace match porque el regex es ancla al inicio.
+ */
+function formatDateForExcel(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : ''
+}
+
+/**
+ * Mapeo Iniciativa → fila Excel ordenada según TEMPLATE_COLS. Devuelve
+ * strings y números crudos — sin formato `$` ni `MM` — para que el parser
+ * los lea sin transformación adicional.
+ */
+function rowFromIniciativa(p: Iniciativa): (string | number)[] {
+  return TEMPLATE_COLS.map(c => {
+    switch (c.key) {
+      case '#':                       return p.n
+      case 'region':                  return p.region ?? ''
+      case 'nombre':                  return p.nombre ?? ''
+      case 'eje':                     return p.eje ?? ''
+      case 'eje_gobierno':            return p.eje_gobierno ?? ''
+      case 'ministerio':              return p.ministerio ?? ''
+      case 'comuna':                  return p.comuna ?? ''
+      case 'etapa_actual':            return p.etapa_actual ?? ''
+      case 'estado_termino_gobierno': return p.estado_termino_gobierno ?? ''
+      case 'proximo_hito':            return p.proximo_hito ?? ''
+      case 'fecha_proximo_hito':      return formatDateForExcel(p.fecha_proximo_hito)
+      case 'prioridad':               return p.prioridad ?? ''
+      case 'fuente_financiamiento':   return p.fuente_financiamiento ?? ''
+      case 'codigo_bip':              return p.codigo_bip ?? ''
+      case 'rat':                     return p.rat ?? ''
+      case 'estado_semaforo':         return p.estado_semaforo ?? ''
+      case 'pct_avance':              return typeof p.pct_avance === 'number' ? p.pct_avance : ''
+      case 'en_foco':                 return p.en_foco ? 'Sí' : 'No'
+      case 'inversion_mm':            return p.inversion_mm ?? ''
+      case 'origen':                  return p.origen ?? ''
+      case 'descripcion':             return p.descripcion ?? ''
+    }
+  })
+}
+
+/**
+ * Arma el workbook pre-llenado con la situación actual de las iniciativas
+ * de una región. Mismo formato que el template (hoja "Carga" con header en
+ * fila 1, descripciones en fila 2, datos desde la fila 3) — el parser no
+ * requiere cambios.
+ *
+ * El delegado modifica las celdas que quiera; las que deje intactas se
+ * envían igual y se aplican como "set value = current value" (operación
+ * idempotente). Para crear iniciativas nuevas, agrega filas al final con
+ * la columna `#` vacía — el parser ya distingue UPDATE vs INSERT.
+ */
+export function buildPrefilledWorkbook(iniciativas: Iniciativa[]): XLSX.WorkBook {
+  const headerRow = TEMPLATE_COLS.map(c => c.label)
+  const descRow   = TEMPLATE_COLS.map(c => c.desc)
+  const dataRows  = iniciativas.map(rowFromIniciativa)
+
+  const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow, ...dataRows])
+  ws['!cols']   = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
+  ws['!freeze'] = { xSplit: 2, ySplit: 2 }
+
+  const wsInstr = XLSX.utils.aoa_to_sheet(INSTRUCTIONS_AOA)
+  wsInstr['!cols'] = [{ wch: 26 }, { wch: 16 }, { wch: 80 }, { wch: 60 }]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Carga')
+  XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones')
+  return wb
+}
+
+/** Slugify para filename: quita acentos, lower, reemplaza no-alfanumérico por `-`. */
+function slugify(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+/** Browser: descarga el Excel pre-llenado con las iniciativas de la región. */
+export function downloadPrefilled(regionName: string, iniciativas: Iniciativa[]) {
+  const wb = buildPrefilledWorkbook(iniciativas)
+  const slug = slugify(regionName) || 'region'
+  const fecha = new Date().toISOString().slice(0, 10)
+  XLSX.writeFile(wb, `iniciativas-${slug}-${fecha}.xlsx`)
 }
