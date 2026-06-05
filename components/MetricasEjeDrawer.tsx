@@ -71,8 +71,8 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
   return (
     <>
       <aside
-        className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden transition-all duration-500 ease-out ${
-          entered ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'
+        className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden transition-all duration-200 ease-out ${
+          entered ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-1'
         }`}
       >
         {/* Header chico: ✕ en su propia fila para no colisionar con

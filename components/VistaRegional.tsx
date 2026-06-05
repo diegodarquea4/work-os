@@ -756,7 +756,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             <div className="flex gap-3">
               {/* Grid de ejes: a full width sin selección, se comprime a una col al abrir el panel */}
               <div
-                className={`transition-all duration-700 ease-out ${
+                className={`transition-all duration-300 ease-out ${
                   selectedEjeForMetrics
                     ? 'w-2/5 grid grid-cols-1 gap-2'
                     : 'w-full grid grid-cols-2 lg:grid-cols-3 gap-3'
@@ -777,7 +777,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                       tabIndex={0}
                       onClick={() => setSelectedEjeForMetrics(isSelected ? null : eje)}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedEjeForMetrics(isSelected ? null : eje) } }}
-                      className={`group bg-white rounded-xl shadow-sm text-left cursor-pointer hover:shadow-md transition-all duration-500 ease-out relative ${
+                      className={`group bg-white rounded-xl shadow-sm text-left cursor-pointer hover:shadow-md transition-all duration-300 ease-out relative ${
                         compact ? 'p-3' : 'p-4'
                       } ${isSelected
                           ? 'border-2 border-dashed border-green-400 bg-green-50/30'
