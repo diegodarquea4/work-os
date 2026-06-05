@@ -808,31 +808,35 @@ export default function IndicadoresModalV2({ region, onClose }: Props) {
       <div className="bg-white rounded-2xl shadow-2xl w-[95vw] h-[96vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="flex-shrink-0 bg-[#1a1a2e] rounded-t-2xl">
-          <div className="flex items-center justify-between px-5 pt-4 pb-0">
+        <div className="flex-shrink-0 bg-white border-b border-gray-100">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: zoneColor }} />
               <select value={activeRegionCod} onChange={e => setActiveRegionCod(e.target.value)}
-                className="text-sm font-semibold text-white bg-white/10 border border-white/20 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-white/40 max-w-[280px]">
+                className="text-sm font-semibold text-gray-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-400 max-w-[280px]">
                 {REGIONS.map(r => (
-                  <option key={r.cod} value={r.cod} className="text-gray-900 bg-white">{r.nombre}</option>
+                  <option key={r.cod} value={r.cod}>{r.nombre}</option>
                 ))}
               </select>
-              <span className="text-gray-400 text-xs flex-shrink-0">· Dashboard Regional</span>
+              <span className="text-gray-500 text-xs flex-shrink-0">· Dashboard Regional</span>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-200 transition-colors p-1 rounded" aria-label="Cerrar">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 2l12 12M14 2L2 14" /></svg>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Cerrar">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l12 12M16 4L4 16" strokeLinecap="round"/></svg>
             </button>
           </div>
 
-          <nav className="flex mt-3 px-2 overflow-x-auto">
+          <nav className="flex px-3 overflow-x-auto">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={`flex items-center gap-1.5 text-xs px-3 py-2.5 font-medium transition-colors whitespace-nowrap border-b-2 rounded-t-md ${
-                  activeTab === t.id ? 'text-white border-white bg-white/10' : 'text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/5'
+                className={`flex items-center gap-1.5 text-sm px-3 py-2.5 font-medium transition-colors whitespace-nowrap border-b-2 -mb-px ${
+                  activeTab === t.id
+                    ? 'text-slate-900 border-slate-900'
+                    : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}>
                 <span>{t.label}</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-gray-400 font-normal">{t.badge}</span>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-normal ${
+                  activeTab === t.id ? 'bg-slate-100 text-slate-600' : 'bg-gray-100 text-gray-500'
+                }`}>{t.badge}</span>
               </button>
             ))}
           </nav>

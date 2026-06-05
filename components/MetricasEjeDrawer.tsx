@@ -93,12 +93,12 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
 
         {/* Acción crear (solo admin/editor) */}
         {canEditAny && (
-          <div className="flex-shrink-0 px-4 pt-1 pb-2.5">
+          <div className="flex-shrink-0 px-4 pt-1 pb-3">
             <button
               onClick={() => setCreateOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-1.5 border-2 border-dashed border-slate-200 text-slate-500 text-xs font-medium rounded-lg hover:border-slate-400 hover:text-slate-700 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:border-slate-400 hover:text-slate-800 hover:bg-slate-50/60 transition-colors"
             >
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 2v8M2 6h8" strokeLinecap="round"/>
               </svg>
               Nueva métrica
@@ -247,7 +247,7 @@ function MetricaCard({
     Number.isInteger(n) ? n.toLocaleString('es-CL') : n.toLocaleString('es-CL', { maximumFractionDigits: 2 })
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors">
+    <div className="bg-slate-50/70 border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors">
       {/* Título + acciones definición */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <h3 className="text-sm font-semibold text-slate-900 flex-1 min-w-0">{m.titulo}</h3>

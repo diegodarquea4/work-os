@@ -88,12 +88,23 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <header className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-          <div>
-            <span className="text-white font-semibold block leading-tight">Proponer actualización</span>
-            <span className="text-slate-400 text-xs">Región: {regionName}</span>
+        <header className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-semibold text-gray-900 leading-snug">Proponer actualización</p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">Región: {regionName}</p>
+            </div>
+            <button
+              onClick={handleClose}
+              disabled={submitting}
+              className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0 disabled:opacity-50"
+              title="Cerrar"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4l12 12M16 4L4 16"/>
+              </svg>
+            </button>
           </div>
-          <button onClick={handleClose} className="text-slate-400 hover:text-white" disabled={submitting}>✕</button>
         </header>
 
         {success ? (

@@ -61,18 +61,18 @@ export default function MinutaLoadingModal({ tipo }: { tipo: string }) {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
 
           {/* ── Header ── */}
-          <div className="bg-slate-900 px-6 py-5 flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="white" strokeWidth="1.5">
+          <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="rgb(15 23 42)" strokeWidth="1.5">
                 <path d="M4 3h8l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" strokeLinejoin="round"/>
                 <path d="M12 3v4h4M7 10h6M7 13h4" strokeLinecap="round"/>
               </svg>
             </div>
             <div>
-              <p className="text-white font-semibold text-sm leading-tight">
+              <p className="text-base font-semibold text-gray-900 leading-tight">
                 {TIPO_LABEL[tipo] ?? 'Minuta'}
               </p>
-              <p className="text-white/50 text-xs mt-0.5">División de Coordinación Interministerial</p>
+              <p className="text-xs text-gray-500 mt-0.5">División de Coordinación Interministerial</p>
             </div>
           </div>
 

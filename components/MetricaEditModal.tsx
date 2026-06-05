@@ -101,14 +101,25 @@ export default function MetricaEditModal({
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <header className="bg-slate-900 px-5 py-3 flex items-center justify-between">
-          <div>
-            <span className="text-white font-semibold text-sm block leading-tight">
-              {isEdit ? 'Editar métrica' : 'Nueva métrica'}
-            </span>
-            <span className="text-slate-400 text-xs">{eje}</span>
+        <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-semibold text-gray-900 leading-snug">
+                {isEdit ? 'Editar métrica' : 'Nueva métrica'}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{eje}</p>
+            </div>
+            <button
+              onClick={handleClose}
+              disabled={saving}
+              className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0 disabled:opacity-50"
+              title="Cerrar"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4l12 12M16 4L4 16"/>
+              </svg>
+            </button>
           </div>
-          <button onClick={handleClose} disabled={saving} className="text-slate-400 hover:text-white text-lg leading-none">✕</button>
         </header>
 
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">

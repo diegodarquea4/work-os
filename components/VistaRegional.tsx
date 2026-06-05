@@ -133,7 +133,7 @@ function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, tren
   const compCls   = comparisonGood == null ? 'text-gray-500' : comparisonGood ? 'text-green-600' : 'text-red-600'
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div className="bg-slate-50/70 rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="flex items-start justify-between mb-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-gray-700 truncate">{title}</p>
