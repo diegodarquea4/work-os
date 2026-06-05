@@ -5,7 +5,9 @@ import type { Iniciativa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { logSemaforoChange } from '@/lib/db'
-import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
+import { SEMAFORO_CONFIG, prioridadColor, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
+import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { composeEjeLabel } from '@/lib/ejes'
 import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
@@ -63,8 +65,22 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [confirmDelete, setConfirmDelete]           = useState(false)
   const [deleting, setDeleting]                     = useState(false)
 
-  const ejeColor = EJE_COLORS[prioridad.eje] ?? 'bg-gray-100 text-gray-600'
+  // Color uniforme gris para todos los ejes — confirmado con Diego. La
+  // antigua paleta `EJE_COLORS` no matcheaba la data real y todos caían
+  // al fallback igual, así que se eliminó.
+  const ejeColor = 'bg-gray-100 text-gray-600'
   const pc = prioridadColor(prioridadLocal)
+
+  // Catálogo de ejes para componer label uniforme "Eje N: Nombre" desde el
+  // dato estructural. Si la iniciativa todavía no tiene eje_id (legacy),
+  // cae al string original sin lookup.
+  const { ejes: regionEjes } = useRegionEjes(prioridad.cod)
+  const ejeFromCatalog = prioridad.eje_id
+    ? regionEjes.find(e => e.id === prioridad.eje_id)
+    : undefined
+  const ejeDisplay = ejeFromCatalog
+    ? composeEjeLabel(ejeFromCatalog.numero, ejeFromCatalog.nombre)
+    : prioridad.eje
 
   useEffect(() => {
     loadData()
@@ -208,7 +224,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ejeColor}`}>
-                  {prioridad.eje}
+                  {ejeDisplay}
                 </span>
                 {/* Prioridad chip */}
                 <label className={`relative inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${pc.bg}`}>

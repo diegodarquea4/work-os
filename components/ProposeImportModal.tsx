@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { downloadPrefilled } from '@/lib/templateExcel'
 import type { Iniciativa } from '@/lib/projects'
+import type { RegionEje } from '@/lib/types'
 
 /**
  * Modal para que un usuario (típicamente regional) suba una propuesta de
@@ -26,15 +27,22 @@ type Props = {
   // Si no hay, el archivo sale con headers solamente (equivalente al template
   // vacío) — apto para regiones nuevas que solo cargan altas.
   iniciativas?: Iniciativa[]
+  // Catálogo formal de ejes de la región — alimenta la hoja "Ejes válidos"
+  // del Excel descargado y queda como referencia para el delegado regional.
+  regionEjes?: RegionEje[]
   // Callback al submit exitoso (para refrescar "Mis propuestas").
   onSubmitted?: () => void
 }
 
-export default function ProposeImportModal({ open, onClose, regionName, iniciativas, onSubmitted }: Props) {
+export default function ProposeImportModal({ open, onClose, regionName, iniciativas, regionEjes, onSubmitted }: Props) {
   const [file, setFile]       = useState<File | null>(null)
   const [note, setNote]       = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  // Si el POST devuelve ejeErrors estructurados (validación temprana del
+  // catálogo), los mostramos como lista. Distinto de `error` que es una
+  // sola línea.
+  const [ejeErrors, setEjeErrors] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
   const fileInputRef          = useRef<HTMLInputElement>(null)
 
@@ -45,6 +53,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     setFile(null)
     setNote('')
     setError(null)
+    setEjeErrors([])
     setSuccess(false)
     onClose()
   }
@@ -58,6 +67,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     }
     setFile(f)
     setError(null)
+    setEjeErrors([])
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -65,6 +75,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     if (!file) return
     setSubmitting(true)
     setError(null)
+    setEjeErrors([])
 
     const fd = new FormData()
     fd.append('file', file)
@@ -77,8 +88,11 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
       setSuccess(true)
       onSubmitted?.()
     } else {
-      const body = await res.json().catch(() => ({}))
+      const body = await res.json().catch(() => ({})) as { error?: string; ejeErrors?: string[] }
       setError(body.error ?? 'No se pudo subir la propuesta.')
+      if (Array.isArray(body.ejeErrors) && body.ejeErrors.length > 0) {
+        setEjeErrors(body.ejeErrors)
+      }
     }
   }
 
@@ -132,7 +146,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
               Sube un Excel con los cambios que quieres proponer.{' '}
               <button
                 type="button"
-                onClick={() => downloadPrefilled(regionName, iniciativas ?? [])}
+                onClick={() => downloadPrefilled(regionName, iniciativas ?? [], regionEjes)}
                 className="text-blue-600 hover:text-blue-800 font-medium underline"
               >
                 Descarga las iniciativas actuales de {regionName}
@@ -178,7 +192,19 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
             </div>
 
             {error && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</p>
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded-lg leading-relaxed">
+                <p className={ejeErrors.length > 0 ? 'font-semibold mb-1.5' : ''}>{error}</p>
+                {ejeErrors.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-0.5 text-red-600">
+                    {ejeErrors.slice(0, 10).map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                    {ejeErrors.length > 10 && (
+                      <li className="italic">… y {ejeErrors.length - 10} error{ejeErrors.length - 10 === 1 ? '' : 'es'} más</li>
+                    )}
+                  </ul>
+                )}
+              </div>
             )}
 
             <div className="flex gap-2 pt-1">

@@ -18,6 +18,8 @@
 import * as XLSX from 'xlsx'
 import { REGIONS } from './regions'
 import type { Iniciativa } from './projects'
+import type { RegionEje } from './types'
+import { parseEjeString, composeEjeLabel } from './ejes'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 
@@ -68,13 +70,18 @@ function makeColReader(headers: string[]) {
  * Parsea un buffer .xlsx y devuelve filas estructuradas listas para enviar al
  * endpoint /api/import.
  *
- * @param buffer       ArrayBuffer (browser) o Buffer/Uint8Array (server)
+ * @param buffer            ArrayBuffer (browser) o Buffer/Uint8Array (server)
  * @param existingProjects  iniciativas actuales (necesario para validar #
- *                          existentes y generar codigos secuenciales)
+ *                          existentes y validar región del UPDATE).
+ * @param regionEjesByCod   catálogo formal de ejes por región (migración 015).
+ *                          Cada string `Eje` del Excel se valida contra esto:
+ *                          si el número no existe en el catálogo de su región,
+ *                          la fila falla con error claro.
  */
 export function parseImportWorkbook(
   buffer: ArrayBuffer | Buffer | Uint8Array,
   existingProjects: Iniciativa[],
+  regionEjesByCod: Map<string, RegionEje[]>,
 ): ParseResult {
   const fileErrors: string[] = []
 
@@ -106,16 +113,51 @@ export function parseImportWorkbook(
     return normalizedRegions.find(r => r.norm === normalize(input))
   }
 
-  // Map: region → eje → número de eje usado para codigo_iniciativa.
-  // Lo armamos del catálogo existente para no romper la secuencia.
-  const regionEjeNumMap = new Map<string, Map<string, number>>()
-  for (const p of existingProjects) {
-    if (!p.codigo_iniciativa) continue
-    const m = p.codigo_iniciativa.match(/^[A-Z]+-(\d+)-\d+$/)
-    if (!m) continue
-    if (!regionEjeNumMap.has(p.region)) regionEjeNumMap.set(p.region, new Map())
-    const em = regionEjeNumMap.get(p.region)!
-    if (!em.has(p.eje)) em.set(p.eje, parseInt(m[1], 10))
+  // Catálogo formal de ejes por región (migración 015). Lookup directo por
+  // (region_cod, numero) — reemplaza la lógica anterior de reverse-engineer
+  // a partir del prefijo del `codigo_iniciativa`. Ahora el número canónico
+  // vive en `region_ejes.numero` y no se infiere de strings.
+  const ejeByNumPerRegion = new Map<string, Map<number, RegionEje>>()
+  for (const [cod, ejes] of regionEjesByCod) {
+    const m = new Map<number, RegionEje>()
+    for (const e of ejes) m.set(e.numero, e)
+    ejeByNumPerRegion.set(cod, m)
+  }
+
+  /**
+   * Resuelve el string "Eje N: Nombre" contra el catálogo de su región.
+   * Retorna `{ ejeId, numero, label }` si match, o `null` con error
+   * agregado a `rowErrors`.
+   *
+   * `label` es el composeEjeLabel canónico del catálogo — el delegado puede
+   * haber typeado el nombre con un typo, pero lo que se persiste es el
+   * canónico que define DCI.
+   */
+  function resolveEje(
+    raw: string,
+    regionCod: string,
+    regionNombre: string,
+    rowErrors: string[],
+  ): { ejeId: number; numero: number; label: string } | null {
+    const parsed = parseEjeString(raw)
+    if (!parsed) {
+      rowErrors.push(`Eje "${raw}" inválido — formato esperado: "Eje N: Nombre"`)
+      return null
+    }
+    const map = ejeByNumPerRegion.get(regionCod)
+    const found = map?.get(parsed.numero)
+    if (!found) {
+      rowErrors.push(
+        `Eje ${parsed.numero} no existe en el catálogo de ${regionNombre}. ` +
+        `Pídele a admin agregarlo desde "Gestionar ejes" antes de re-subir.`
+      )
+      return null
+    }
+    return {
+      ejeId: found.id,
+      numero: found.numero,
+      label: composeEjeLabel(found.numero, found.nombre),
+    }
   }
   const batchCodes: string[] = []
   const maxExistingN = existingProjects.length > 0 ? Math.max(...existingProjects.map(p => p.n)) : 0
@@ -219,12 +261,14 @@ export function parseImportWorkbook(
     }
 
     // Campos libres (texto). Acá vivía el bug original.
-    // Nota: `codigo_iniciativa` se omite a propósito — es generado por el
+    // Nota 1: `codigo_iniciativa` se omite a propósito — es generado por el
     // sistema en INSERT y no es editable por Excel. Archivos viejos que
     // traigan esa columna son ignorados silenciosamente.
+    // Nota 2: `Eje` también se trata aparte — requiere validación contra el
+    // catálogo `region_ejes` y se setea junto con `eje_id`. Se hace fuera
+    // de este loop para las dos ramas (INSERT y UPDATE).
     for (const [label, dbCol] of [
       ['Nombre Iniciativa', 'nombre'],
-      ['Eje', 'eje'],
       ['Ministerio', 'ministerio'],
       ['Código BIP', 'codigo_bip'],
       ['Origen', 'origen'],
@@ -266,30 +310,30 @@ export function parseImportWorkbook(
       if (!eje)                     rowErrors.push('Eje requerido')
       if (!ministerio)              rowErrors.push('Ministerio requerido')
 
+      // Validación + resolución del eje contra el catálogo.
       let codigoIniciativa: string | null = null
+      let ejeId: number | null = null
+      let canonicalEje = eje
       if (regionObj && eje) {
-        if (!regionEjeNumMap.has(regionNombre)) regionEjeNumMap.set(regionNombre, new Map())
-        const ejeMap = regionEjeNumMap.get(regionNombre)!
-        let ejeNum: number
-        if (ejeMap.has(eje)) {
-          ejeNum = ejeMap.get(eje)!
-        } else {
-          const used = new Set(ejeMap.values())
-          ejeNum = 1; while (used.has(ejeNum)) ejeNum++
-          ejeMap.set(eje, ejeNum)
+        const resolved = resolveEje(eje, regionObj.cod, regionObj.nombre, rowErrors)
+        if (resolved) {
+          ejeId = resolved.ejeId
+          canonicalEje = resolved.label
+          // codigo_iniciativa: prefijo derivado directo del catálogo (numero
+          // canónico) — no más reverse-engineer del string.
+          const ejePfx = `${regionObj.shortCod}-${String(resolved.numero).padStart(2, '0')}`
+          const seqs = [
+            ...existingProjects
+              .filter(p => p.region === regionNombre && p.codigo_iniciativa?.startsWith(ejePfx + '-'))
+              .map(p => parseInt(p.codigo_iniciativa!.split('-')[2] ?? '0', 10)),
+            ...batchCodes
+              .filter(c => c.startsWith(ejePfx + '-'))
+              .map(c => parseInt(c.split('-')[2] ?? '0', 10)),
+          ].filter(v => !isNaN(v))
+          const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1
+          codigoIniciativa = `${ejePfx}-${String(seq).padStart(3, '0')}`
+          batchCodes.push(codigoIniciativa)
         }
-        const ejePfx = `${regionObj.shortCod}-${String(ejeNum).padStart(2, '0')}`
-        const seqs = [
-          ...existingProjects
-            .filter(p => p.region === regionNombre && p.codigo_iniciativa?.startsWith(ejePfx + '-'))
-            .map(p => parseInt(p.codigo_iniciativa!.split('-')[2] ?? '0', 10)),
-          ...batchCodes
-            .filter(c => c.startsWith(ejePfx + '-'))
-            .map(c => parseInt(c.split('-')[2] ?? '0', 10)),
-        ].filter(v => !isNaN(v))
-        const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1
-        codigoIniciativa = `${ejePfx}-${String(seq).padStart(3, '0')}`
-        batchCodes.push(codigoIniciativa)
       }
 
       newNOffset++
@@ -301,7 +345,8 @@ export function parseImportWorkbook(
         cod:               regionObj?.cod     ?? '',
         capital:           regionObj?.capital ?? '',
         zona:              regionObj?.zona    ?? '',
-        eje,
+        eje:               canonicalEje,
+        eje_id:            ejeId,
         nombre,
         ministerio,
         prioridad:         'Media',
@@ -346,6 +391,18 @@ export function parseImportWorkbook(
 
     const patch: Record<string, unknown> = {}
     parseOptionalFields(row, patch, rowErrors, /* isUpdate */ true)
+
+    // Eje en UPDATE: skip-si-vacío. Si viene relleno, validar contra catálogo
+    // de la región de la iniciativa (no la del Excel — la real en BD).
+    const ejeUpdate = col(row, 'Eje')
+    if (ejeUpdate !== undefined && ejeUpdate !== '') {
+      const resolved = resolveEje(ejeUpdate, project.cod, project.region, rowErrors)
+      if (resolved) {
+        patch.eje    = resolved.label
+        patch.eje_id = resolved.ejeId
+      }
+    }
+
     rows.push({
       n,
       nombre: project.nombre,

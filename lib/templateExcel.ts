@@ -12,12 +12,14 @@
 
 import * as XLSX from 'xlsx'
 import type { Iniciativa } from './projects'
+import type { RegionEje } from './types'
+import { composeEjeLabel } from './ejes'
 
 export const TEMPLATE_COLS = [
   { key: '#',                       label: '#',                       desc: '⚠ SOLO para actualizar existentes. DEJAR VACÍO para crear nueva iniciativa — NO uses numeración propia',                                                                                                                  wch: 6  },
   { key: 'region',                  label: 'Región',                  desc: 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos). Obligatorio si # está vacío',                                                                                                                  wch: 22 },
   { key: 'nombre',                  label: 'Nombre Iniciativa',       desc: 'Nombre completo de la iniciativa territorial',                                                                                                                                                                          wch: 52 },
-  { key: 'eje',                     label: 'Eje',                     desc: 'Eje estratégico regional — texto libre, definido por cada región (ej: "Eje 1: Infraestructura y Conectividad")',                                                                                                       wch: 44 },
+  { key: 'eje',                     label: 'Eje',                     desc: 'Eje estratégico regional — formato "Eje N: Nombre" (ej: "Eje 1: Infraestructura"). Debe coincidir con el catálogo de la región — ver hoja "Ejes válidos". Si necesitas un eje nuevo, pídele a admin DCI agregarlo desde "Gestionar ejes".', wch: 44 },
   { key: 'eje_gobierno',            label: 'Eje Gobierno',            desc: 'Valores: Economía | Social | Seguridad  (varía por región — definir con la Delegación)',                                                                                                                              wch: 16 },
   { key: 'ministerio',              label: 'Ministerio',              desc: 'Ministerio responsable de la iniciativa',                                                                                                                                                                                wch: 28 },
   { key: 'comuna',                  label: 'Comuna',                  desc: 'Texto libre — dejar vacío si abarca toda la región',                                                                                                                                                                    wch: 20 },
@@ -58,7 +60,7 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['#', 'Solo para actualizar', 'Número entero', 'Número de la iniciativa existente. DEJAR VACÍO para crear una nueva.'],
   ['Región', 'Sí (si # está vacío)', 'Texto libre', 'Nombre de la región (ej: Arica y Parinacota, Metropolitana, Los Ríos).'],
   ['Nombre Iniciativa', 'Sí', 'Texto libre', 'Nombre completo de la iniciativa territorial.'],
-  ['Eje', 'No', 'Texto libre — definido por cada región', 'Eje estratégico regional. Cada región define sus propios ejes.'],
+  ['Eje', 'Sí (si # está vacío)', 'Formato: "Eje N: Nombre" (ver hoja "Ejes válidos")', 'Eje estratégico de la región. Cada región tiene su catálogo formal. Si el eje que necesitas no existe ahí, pídele a admin DCI agregarlo desde "Gestionar ejes".'],
   ['Eje Gobierno', 'No', 'Economía | Social | Seguridad', 'Eje presidencial. Varía por región — definir con la Delegación. No se auto-deduce del Eje Regional.'],
   ['Ministerio', 'Sí', 'Texto libre', 'Ministerio responsable de la ejecución.'],
   ['Comuna', 'No', 'Texto libre', 'Comuna de ejecución. Dejar vacío si abarca toda la región.'],
@@ -117,14 +119,25 @@ function formatDateForExcel(iso: string | null | undefined): string {
  * Mapeo Iniciativa → fila Excel ordenada según TEMPLATE_COLS. Devuelve
  * strings y números crudos — sin formato `$` ni `MM` — para que el parser
  * los lea sin transformación adicional.
+ *
+ * Si `ejeByIdMap` está disponible, la columna Eje se rellena con el label
+ * canónico compuesto desde el catálogo (Eje N: Nombre). Si no, se cae al
+ * string crudo de `p.eje`.
  */
-function rowFromIniciativa(p: Iniciativa): (string | number)[] {
+function rowFromIniciativa(p: Iniciativa, ejeByIdMap?: Map<number, RegionEje>): (string | number)[] {
   return TEMPLATE_COLS.map(c => {
     switch (c.key) {
       case '#':                       return p.n
       case 'region':                  return p.region ?? ''
       case 'nombre':                  return p.nombre ?? ''
-      case 'eje':                     return p.eje ?? ''
+      case 'eje': {
+        // Preferir el label canónico del catálogo (estable, sin typos).
+        if (p.eje_id != null && ejeByIdMap) {
+          const re = ejeByIdMap.get(p.eje_id)
+          if (re) return composeEjeLabel(re.numero, re.nombre)
+        }
+        return p.eje ?? ''
+      }
       case 'eje_gobierno':            return p.eje_gobierno ?? ''
       case 'ministerio':              return p.ministerio ?? ''
       case 'comuna':                  return p.comuna ?? ''
@@ -156,11 +169,21 @@ function rowFromIniciativa(p: Iniciativa): (string | number)[] {
  * envían igual y se aplican como "set value = current value" (operación
  * idempotente). Para crear iniciativas nuevas, agrega filas al final con
  * la columna `#` vacía — el parser ya distingue UPDATE vs INSERT.
+ *
+ * Si `regionEjes` se provee, agregamos una hoja "Ejes válidos" con el
+ * catálogo de la región — el delegado sabe qué strings copiar literalmente
+ * en la columna Eje. Sin esa hoja, queda solo la descripción guía.
  */
-export function buildPrefilledWorkbook(iniciativas: Iniciativa[]): XLSX.WorkBook {
+export function buildPrefilledWorkbook(
+  iniciativas: Iniciativa[],
+  regionEjes?: RegionEje[],
+): XLSX.WorkBook {
   const headerRow = TEMPLATE_COLS.map(c => c.label)
   const descRow   = TEMPLATE_COLS.map(c => c.desc)
-  const dataRows  = iniciativas.map(rowFromIniciativa)
+  // Mapa eje_id → RegionEje para canonical label en la columna Eje.
+  const ejeByIdMap = new Map<number, RegionEje>()
+  for (const re of (regionEjes ?? [])) ejeByIdMap.set(re.id, re)
+  const dataRows  = iniciativas.map(p => rowFromIniciativa(p, ejeByIdMap))
 
   const ws = XLSX.utils.aoa_to_sheet([headerRow, descRow, ...dataRows])
   ws['!cols']   = TEMPLATE_COLS.map(c => ({ wch: c.wch }))
@@ -172,6 +195,24 @@ export function buildPrefilledWorkbook(iniciativas: Iniciativa[]): XLSX.WorkBook
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Carga')
   XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones')
+
+  // Hoja "Ejes válidos" — referencia visible para el delegado regional.
+  // Listamos cada eje con su label canónico para copy-paste exacto. Si el
+  // catálogo viene vacío, omitimos la hoja para no confundir.
+  if (regionEjes && regionEjes.length > 0) {
+    const sorted = [...regionEjes].sort((a, b) => a.numero - b.numero)
+    const ejesAoA: (string | number)[][] = [
+      ['EJES VÁLIDOS DE LA REGIÓN', '', ''],
+      ['Copia el "Etiqueta" tal cual en la columna "Eje" de la hoja Carga.', '', ''],
+      ['Si necesitas un eje nuevo, pídele a admin DCI agregarlo desde "Gestionar ejes" — no inventes uno acá.', '', ''],
+      ['', '', ''],
+      ['Número', 'Nombre', 'Etiqueta'],
+      ...sorted.map(re => [re.numero, re.nombre, composeEjeLabel(re.numero, re.nombre)]),
+    ]
+    const wsEjes = XLSX.utils.aoa_to_sheet(ejesAoA)
+    wsEjes['!cols'] = [{ wch: 10 }, { wch: 44 }, { wch: 56 }]
+    XLSX.utils.book_append_sheet(wb, wsEjes, 'Ejes válidos')
+  }
   return wb
 }
 
@@ -182,8 +223,12 @@ function slugify(s: string): string {
 }
 
 /** Browser: descarga el Excel pre-llenado con las iniciativas de la región. */
-export function downloadPrefilled(regionName: string, iniciativas: Iniciativa[]) {
-  const wb = buildPrefilledWorkbook(iniciativas)
+export function downloadPrefilled(
+  regionName: string,
+  iniciativas: Iniciativa[],
+  regionEjes?: RegionEje[],
+) {
+  const wb = buildPrefilledWorkbook(iniciativas, regionEjes)
   const slug = slugify(regionName) || 'region'
   const fecha = new Date().toISOString().slice(0, 10)
   XLSX.writeFile(wb, `iniciativas-${slug}-${fecha}.xlsx`)

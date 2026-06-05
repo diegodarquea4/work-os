@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
-import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor, EJE_COLORS } from '@/lib/config'
+import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -219,7 +219,7 @@ export default function AttentionTray({
             </p>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 flex-wrap">
               <span className="truncate max-w-[200px]">{p.ministerio ?? 'Sin asignar'}</span>
-              <span className={`text-xs px-1.5 py-0 rounded-full font-medium ${EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'}`}>
+              <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
                 {p.eje}
               </span>
               {p.responsable && <span className="truncate max-w-[140px]">· {p.responsable}</span>}

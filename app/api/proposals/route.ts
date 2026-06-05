@@ -1,5 +1,8 @@
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { parseImportWorkbook } from '@/lib/importParser'
+import type { Iniciativa } from '@/lib/projects'
+import type { RegionEje } from '@/lib/types'
 
 /**
  * POST /api/proposals
@@ -50,10 +53,73 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin()
 
+  // ── Validación temprana de ejes ─────────────────────────────────────────
+  // Parseamos el archivo ANTES de subirlo para detectar ejes desconocidos
+  // y dar feedback inmediato al delegado regional. Si todas las filas son
+  // válidas en ejes, sube; si no, devolvemos 400 con detalle estructurado
+  // y la propuesta nunca entra al sistema. Decisión confirmada con Diego.
+  const arrayBuffer = await file.arrayBuffer()
+
+  const { data: ejesData, error: ejesErr } = await db
+    .from('region_ejes')
+    .select('*')
+  if (ejesErr) {
+    return Response.json({ error: `BD ejes: ${ejesErr.message}` }, { status: 500 })
+  }
+  const regionEjesByCod = new Map<string, RegionEje[]>()
+  for (const e of (ejesData ?? []) as RegionEje[]) {
+    const arr = regionEjesByCod.get(e.region_cod) ?? []
+    arr.push(e)
+    regionEjesByCod.set(e.region_cod, arr)
+  }
+
+  // Cargamos las iniciativas existentes — el parser las necesita para
+  // distinguir UPDATE de INSERT. Es la misma carga que hace el approve.
+  const existingProjects: Iniciativa[] = []
+  const PAGE = 1000
+  let offset = 0
+  while (true) {
+    const { data: page, error: pageErr } = await db
+      .from('prioridades_territoriales')
+      .select('*')
+      .range(offset, offset + PAGE - 1)
+    if (pageErr) {
+      return Response.json({ error: `BD iniciativas: ${pageErr.message}` }, { status: 500 })
+    }
+    if (!page || page.length === 0) break
+    existingProjects.push(...(page as unknown as Iniciativa[]))
+    if (page.length < PAGE) break
+    offset += PAGE
+  }
+
+  let validationErrors: string[] = []
+  try {
+    const parsed = parseImportWorkbook(arrayBuffer, existingProjects, regionEjesByCod)
+    // Solo bloqueamos por errores que mencionan ejes desconocidos. Los demás
+    // errores (semáforo inválido, etc.) los descubre el admin al aprobar y
+    // ahí se muestran en applied_with_errors — no son razón para bloquear.
+    const ejeRowErrors = parsed.rows
+      .flatMap(r => r.errors.map(e => ({ n: r.n, nombre: r.nombre, region: r.region, msg: e })))
+      .filter(e => e.msg.toLowerCase().includes('eje'))
+    if (ejeRowErrors.length > 0) {
+      validationErrors = ejeRowErrors.map(e =>
+        e.n ? `Fila #${e.n} (${e.nombre || 'sin nombre'}): ${e.msg}` : `Fila nueva (${e.nombre || 'sin nombre'}): ${e.msg}`
+      )
+    }
+  } catch (err) {
+    return Response.json({ error: `No se pudo parsear el archivo: ${String(err)}` }, { status: 400 })
+  }
+
+  if (validationErrors.length > 0) {
+    return Response.json({
+      error:      'La propuesta contiene ejes que no están en el catálogo de su región. Pídele a admin DCI que los agregue desde "Gestionar ejes" antes de re-subir.',
+      ejeErrors:  validationErrors,
+    }, { status: 400 })
+  }
+
   // Path: {userId}/{timestamp}-{filename-saneado}
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80)
   const path = `${profile.id}/${Date.now()}-${safeName}`
-  const arrayBuffer = await file.arrayBuffer()
 
   const { error: uploadErr } = await db.storage
     .from(BUCKET)

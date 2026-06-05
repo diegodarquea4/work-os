@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, useLayoutEffect, useRef, useEffect } from 'react'
 import type { Iniciativa } from '@/lib/projects'
-import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
+import { SEMAFORO_CONFIG, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
 import { getSupabase } from '@/lib/supabase'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -35,9 +35,12 @@ function terminoIcon(val: string | null): 'check' | 'warn' | null {
   return 'warn'
 }
 
-// "Eje 3: Salud y Servicios Básicos" → 3. Sin número → 999 (queda al final).
+// "Eje 3: Salud y Servicios Básicos" → 3. Acepta "Eje", "EJE", "eje" — la data
+// real en producción usa varios casings. Sin número → 999 (queda al final).
+// Nota: este parser convive con el del catálogo formal de ejes (migración 015)
+// mientras KanbanView no consume `eje_id` directamente. Fase 5 lo deprecia.
 function ejeNumber(eje: string): number {
-  const m = eje.match(/^Eje\s+(\d+)/)
+  const m = eje.match(/^\s*eje\s+(\d+)/i)
   return m ? parseInt(m[1], 10) : 999
 }
 
@@ -184,8 +187,12 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
   const dias = daysUntil(p.fecha_proximo_hito)
   const hitoUrgent = dias !== null && dias <= 7 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
   const enFoco = p.en_foco === true
-  // "Eje 3: Salud y Servicios Básicos" → "Eje 3" (compacto en chip horizontal)
-  const ejeShort = p.eje.match(/^Eje\s+\d+/)?.[0] ?? p.eje
+  // "Eje 3: Salud y Servicios Básicos" / "EJE 3 — ..." → "Eje 3" (compacto).
+  // Normalizamos casing para que el chip siempre se vea uniforme.
+  const ejeShort = (() => {
+    const m = p.eje.match(/^\s*eje\s+(\d+)/i)
+    return m ? `Eje ${m[1]}` : p.eje
+  })()
   // "diego.darquea@gmail.com" → "diego.darquea" (más legible en reunión)
   const responsableShort = p.responsable?.split('@')[0] ?? null
 
@@ -216,7 +223,7 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
       </p>
 
       {/* Eje chip (compacto) */}
-      <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'}`}>
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-gray-100 text-gray-600">
         {ejeShort}
       </span>
 
@@ -694,7 +701,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           >
             {ejeColumns.map(({ eje, cards, semCounts }) => (
               <div key={eje} className="flex flex-col overflow-hidden pb-4">
-                <div className={`px-3 py-2.5 rounded-xl mb-3 ${EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-600'}`}>
+                <div className="px-3 py-2.5 rounded-xl mb-3 bg-gray-100 text-gray-600">
                   <p className="text-xs font-semibold line-clamp-2 mb-1.5">{eje}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -796,7 +803,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                         className={`w-full text-left border ${col.border} ${col.bg} rounded-xl p-3 hover:shadow-md transition-all group`}
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full truncate max-w-[160px] ${EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'}`}>
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full truncate max-w-[160px] bg-gray-100 text-gray-600">
                             {p.eje}
                           </span>
                           <span className={`text-xs font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>

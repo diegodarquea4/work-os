@@ -7,6 +7,10 @@ export type Prioridad = {
   capital: string
   zona: string
   eje: string
+  // FK al catálogo formal `region_ejes`. Nullable durante la transición
+  // (migración 015). El string `eje` se mantiene como dato denormalizado
+  // hasta la limpieza final.
+  eje_id?: number | null
   eje_gobierno: string | null
   nombre: string
   descripcion: string | null
@@ -175,6 +179,10 @@ export type Metrica = {
   id: number
   region_cod: string
   eje: string
+  // FK al catálogo formal (migración 015). Nullable mientras se completa
+  // la transición — las filas migradas tienen eje_id, las pre-migración
+  // pueden no tenerlo.
+  eje_id?: number | null
   titulo: string
   descripcion: string | null
   objetivo: number
@@ -185,6 +193,21 @@ export type Metrica = {
   created_by_email: string | null
   valor_updated_by_email: string | null
   valor_updated_at: string | null
+}
+
+// ── Region Ejes (catálogo formal por región) ─────────────────────────────────
+// Migración 015 — cada región del DCI define sus propios ejes con número y
+// nombre. Las iniciativas y métricas referencian al catálogo por FK.
+// El nombre se guarda puro (sin prefijo "Eje N:"); el display se compone con
+// composeEjeLabel() de lib/ejes.ts.
+export type RegionEje = {
+  id: number
+  region_cod: string
+  numero: number
+  nombre: string
+  created_at: string
+  updated_at: string
+  created_by_email: string | null
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────

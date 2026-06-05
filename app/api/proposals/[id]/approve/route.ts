@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { parseImportWorkbook, buildImportPayload } from '@/lib/importParser'
 import { applyImport, recordImportLog } from '@/lib/importApplier'
 import type { Iniciativa } from '@/lib/projects'
+import type { RegionEje } from '@/lib/types'
 
 /**
  * POST /api/proposals/[id]/approve
@@ -84,11 +85,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     offset += PAGE
   }
 
-  // 4. Parsear archivo.
+  // 4. Cargar catálogo de ejes (region_ejes) — el parser valida cada string
+  //    `Eje` del Excel contra el catálogo de su región.
+  const { data: ejesData, error: ejesErr } = await db
+    .from('region_ejes')
+    .select('*')
+    .order('numero', { ascending: true })
+  if (ejesErr) {
+    return Response.json({ error: `BD ejes: ${ejesErr.message}` }, { status: 500 })
+  }
+  const regionEjesByCod = new Map<string, RegionEje[]>()
+  for (const e of (ejesData ?? []) as RegionEje[]) {
+    const arr = regionEjesByCod.get(e.region_cod) ?? []
+    arr.push(e)
+    regionEjesByCod.set(e.region_cod, arr)
+  }
+
+  // 5. Parsear archivo.
   let parsed
   try {
     const buffer = await fileData.arrayBuffer()
-    parsed = parseImportWorkbook(buffer, existingProjects)
+    parsed = parseImportWorkbook(buffer, existingProjects, regionEjesByCod)
   } catch (err) {
     return Response.json({ error: `Parseo: ${String(err)}` }, { status: 500 })
   }

@@ -8,7 +8,8 @@ import {
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
-import type { Metrica } from '@/lib/types'
+import type { Metrica, RegionEje } from '@/lib/types'
+import { composeEjeLabel } from '@/lib/ejes'
 import MetricaEditModal from './MetricaEditModal'
 
 /**
@@ -25,7 +26,10 @@ import MetricaEditModal from './MetricaEditModal'
 
 type Props = {
   region:  Region
-  eje:     string
+  // Eje del catálogo formal (migración 015). El drawer recibe el objeto
+  // completo para componer label y filtrar métricas por `eje_id` directo
+  // (sin lookup adicional).
+  eje:     RegionEje
   onClose: () => void
 }
 
@@ -50,15 +54,17 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
 
   const loadMetricas = useCallback(async () => {
     setLoading(true)
+    // Filtramos por eje_id (FK al catálogo). region_cod redundante con eje.id
+    // pero lo mantenemos por defensa (RLS lo deja pasar igual).
     const { data } = await getSupabase()
       .from('metricas_eje')
       .select('*')
       .eq('region_cod', region.cod)
-      .eq('eje', eje)
+      .eq('eje_id', eje.id)
       .order('created_at', { ascending: true })
     setMetricas((data ?? []) as Metrica[])
     setLoading(false)
-  }, [region.cod, eje])
+  }, [region.cod, eje.id])
 
   useEffect(() => { loadMetricas() }, [loadMetricas])
 
@@ -150,6 +156,7 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
         metrica={editingMetrica}
         regionCod={region.cod}
         eje={eje}
+        ejeLabel={composeEjeLabel(eje.numero, eje.nombre)}
         currentUserEmail={userEmail}
         onSaved={loadMetricas}
       />

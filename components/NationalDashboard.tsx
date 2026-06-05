@@ -5,10 +5,12 @@ import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
-import { EJE_COLORS, prioridadColor } from '@/lib/config'
+import { prioridadColor } from '@/lib/config'
 import { useIsAdmin } from '@/lib/context/UserContext'
 import { downloadTemplate as downloadTemplateExcel } from '@/lib/templateExcel'
 import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
+import { getSupabase } from '@/lib/supabase'
+import type { RegionEje } from '@/lib/types'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
@@ -206,7 +208,18 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
     try {
       const arrayBuffer = await file.arrayBuffer()
-      const { rows, fileErrors, sheetName } = parseImportWorkbook(arrayBuffer, projects)
+      // Cargamos el catálogo completo de ejes — el parser lo necesita para
+      // validar cada string "Eje" del Excel contra (region_cod, numero).
+      const { data: ejesData } = await getSupabase()
+        .from('region_ejes')
+        .select('*')
+      const regionEjesByCod = new Map<string, RegionEje[]>()
+      for (const e of (ejesData ?? []) as RegionEje[]) {
+        const arr = regionEjesByCod.get(e.region_cod) ?? []
+        arr.push(e)
+        regionEjesByCod.set(e.region_cod, arr)
+      }
+      const { rows, fileErrors, sheetName } = parseImportWorkbook(arrayBuffer, projects, regionEjesByCod)
       setImportFileName(`${file.name}  ·  Hoja: ${sheetName}`)
       setImportParseErrors(fileErrors)
       setImportPreview(rows)
@@ -1003,7 +1016,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   function DataRow({ p }: { p: Iniciativa }) {
     const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
-    const ejeColor = EJE_COLORS[p.eje] ?? 'bg-gray-100 text-gray-600'
+    const ejeColor = 'bg-gray-100 text-gray-600'
     return (
       <tr
         onClick={() => setSelected(p)}

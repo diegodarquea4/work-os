@@ -12,12 +12,14 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
-import { EJE_COLORS } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
+import RegionEjesPanel from './RegionEjesPanel'
+import { useCanEditAny } from '@/lib/context/UserContext'
+import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
 
@@ -206,7 +208,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   // Bump al recibir confirmación de upload exitoso para que MyProposalsList recargue.
   const [proposalsRefreshKey, setProposalsRefreshKey] = useState(0)
   // Eje seleccionado en la grid de avance → abre drawer lateral con sus métricas.
-  const [selectedEjeForMetrics, setSelectedEjeForMetrics] = useState<string | null>(null)
+  const [selectedEjeIdForMetrics, setSelectedEjeIdForMetrics] = useState<number | null>(null)
+  // Modal de gestión del catálogo de ejes de la región (solo admin/editor DCI).
+  const [manageEjesOpen, setManageEjesOpen] = useState(false)
+  const canEditAny = useCanEditAny()
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
@@ -263,6 +268,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
   const region: Region | null = REGIONS.find(r => r.cod === selectedCod) ?? null
 
+  // Catálogo de ejes de la región activa (migración 015). `refresh` se llama
+  // desde RegionEjesPanel cuando admin agrega/edita/elimina un eje.
+  const { ejes: regionEjes, refresh: refreshRegionEjes } = useRegionEjes(selectedCod)
+
   // Initiatives for this region
   const regionIniciativas = useMemo(
     () => selectedCod ? iniciativas.filter(p => p.cod === selectedCod) : [],
@@ -317,22 +326,43 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     ? PREGO_FASES.filter(f => prego[f.key] === 'bloqueado')
     : []
 
-  // Eje breakdown
+  // Eje breakdown — iteramos el catálogo `region_ejes` (no los strings libres)
+  // y agregamos las iniciativas que matchean por `eje_id`. Las iniciativas
+  // sin `eje_id` (legacy raro post-migración) quedan fuera del breakdown —
+  // si admin las ve faltar en los totales, las edita y les asigna eje.
+  // Ordenado por `numero` ascendente — el orden estructural del catálogo.
   const ejeData = useMemo(() => {
-    const map: Record<string, { total: number; pctSum: number; verde: number; ambar: number; rojo: number; invSum: number }> = {}
-    for (const p of regionIniciativas) {
-      if (!map[p.eje]) map[p.eje] = { total: 0, pctSum: 0, verde: 0, ambar: 0, rojo: 0, invSum: 0 }
-      map[p.eje].total++
-      map[p.eje].pctSum += p.pct_avance ?? 0
-      if (p.estado_semaforo === 'verde') map[p.eje].verde++
-      if (p.estado_semaforo === 'ambar') map[p.eje].ambar++
-      if (p.estado_semaforo === 'rojo')  map[p.eje].rojo++
-      map[p.eje].invSum += p.inversion_mm ?? 0
-    }
-    return Object.entries(map)
-      .map(([eje, d]) => ({ eje, avgPct: Math.round(d.pctSum / d.total), ...d }))
-      .sort((a, b) => a.eje.localeCompare(b.eje))
-  }, [regionIniciativas])
+    return regionEjes
+      .map(re => {
+        const matching = regionIniciativas.filter(p => p.eje_id === re.id)
+        const total = matching.length
+        if (total === 0) {
+          return {
+            ejeId: re.id,
+            numero: re.numero,
+            nombre: re.nombre,
+            total: 0,
+            avgPct: 0,
+            verde: 0, ambar: 0, rojo: 0,
+            invSum: 0,
+          }
+        }
+        const pctSum = matching.reduce((s, p) => s + (p.pct_avance ?? 0), 0)
+        const verde  = matching.filter(p => p.estado_semaforo === 'verde').length
+        const ambar  = matching.filter(p => p.estado_semaforo === 'ambar').length
+        const rojo   = matching.filter(p => p.estado_semaforo === 'rojo').length
+        const invSum = matching.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
+        return {
+          ejeId: re.id,
+          numero: re.numero,
+          nombre: re.nombre,
+          total,
+          avgPct: Math.round(pctSum / total),
+          verde, ambar, rojo,
+          invSum,
+        }
+      })
+  }, [regionEjes, regionIniciativas])
 
   // Metric series from v2
   const desocCtx = v2Ind.get('EMP_DESOC_TASA')
@@ -435,12 +465,25 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             onClose={() => setProposeModalOpen(false)}
             regionName={region.nombre}
             iniciativas={regionIniciativas}
+            regionEjes={regionEjes}
             onSubmitted={() => setProposalsRefreshKey(k => k + 1)}
           />
         )}
 
         {/* El panel de métricas por eje se renderiza ahora inline dentro de
             la sección "Avance por eje" — split en dos columnas. Ver más abajo. */}
+
+        {/* RegionEjesPanel — modal para gestionar el catálogo de ejes de la
+            región. Solo admin/editor (RLS lo refuerza). Se abre desde el
+            botón "Gestionar ejes" junto al título de "Avance por eje". */}
+        {region && (
+          <RegionEjesPanel
+            open={manageEjesOpen}
+            onClose={() => setManageEjesOpen(false)}
+            region={region}
+            onSaved={refreshRegionEjes}
+          />
+        )}
 
         {/* Region selector */}
         {showRegionSelector && (
@@ -745,109 +788,139 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
           )}
         </div>
 
-        {/* ── Sección 3: Avance por eje (con split lateral cuando se selecciona uno) ── */}
-        {ejeData.length > 0 && (
+        {/* ── Sección 3: Avance por eje (con split lateral cuando se selecciona uno) ──
+            Render incondicional para que el botón "Gestionar ejes" siga visible
+            aunque la región no tenga catálogo todavía (caso región nueva, sin
+            iniciativas todavía cargadas). */}
+        {region && (
           <div className="mb-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Avance por eje estratégico</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Avance por eje estratégico</h3>
+              {canEditAny && (
+                <button
+                  onClick={() => setManageEjesOpen(true)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-slate-700 transition-colors"
+                  title="Gestionar catálogo de ejes de la región"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <circle cx="6" cy="6" r="1.6"/>
+                    <path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.46 2.46l1.06 1.06M8.48 8.48l1.06 1.06M2.46 9.54l1.06-1.06M8.48 3.52l1.06-1.06" strokeLinecap="round"/>
+                  </svg>
+                  Gestionar ejes
+                </button>
+              )}
+            </div>
+
+            {ejeData.length === 0 && (
+              <p className="text-xs text-gray-400 italic">
+                {regionEjes.length === 0
+                  ? 'Esta región aún no tiene ejes en el catálogo.'
+                  : 'El catálogo está definido pero no hay iniciativas asociadas todavía.'}
+                {canEditAny && regionEjes.length === 0 && ' Definí los ejes desde "Gestionar ejes".'}
+              </p>
+            )}
             {/* Container flex — la transición real ocurre en los hijos (ancho,
                 opacidad, layout interno). Duración larga + ease-out para que
                 el paso de "modo general" a "modo detalle" se sienta como un
                 respiro y no como un corte. */}
-            <div className="flex gap-3">
-              {/* Grid de ejes: a full width sin selección, se comprime a una col al abrir el panel */}
-              <div
-                className={`transition-all duration-300 ease-out ${
-                  selectedEjeForMetrics
-                    ? 'w-2/5 grid grid-cols-1 gap-2'
-                    : 'w-full grid grid-cols-2 lg:grid-cols-3 gap-3'
-                }`}
-              >
-                {ejeData.map(({ eje, avgPct: ejePct, total, verde, ambar, rojo, invSum }) => {
-                  const colorCls = EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-700'
-                  const barColor = ejePct >= 70 ? 'bg-green-500' : ejePct >= 40 ? 'bg-amber-400' : 'bg-red-400'
-                  const ejeNum   = eje.match(/^Eje \d+/)?.[0] ?? 'Eje'
-                  const shortName = eje.replace(/^Eje \d+:\s*/, '')
-                  const isSelected = selectedEjeForMetrics === eje
-                  // En modo split usamos cards más compactas (menos padding, layout horizontal).
-                  const compact = !!selectedEjeForMetrics
-                  return (
-                    <div
-                      key={eje}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedEjeForMetrics(isSelected ? null : eje)}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedEjeForMetrics(isSelected ? null : eje) } }}
-                      className={`group bg-white rounded-xl shadow-sm text-left cursor-pointer hover:shadow-md transition-all duration-300 ease-out relative ${
-                        compact ? 'p-3' : 'p-4'
-                      } ${isSelected
-                          ? 'border-2 border-dashed border-green-400 bg-green-50/30'
-                          : 'border border-gray-100 hover:border-slate-300'}`}
-                      title={isSelected ? 'Click para cerrar métricas' : 'Ver métricas de este eje'}
-                    >
-                      <div className={compact ? 'flex items-center gap-3' : ''}>
-                        <div className={compact ? 'flex-shrink-0' : ''}>
-                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${compact ? '' : 'mb-2'} ${colorCls}`}>
-                            {ejeNum}
-                          </span>
-                        </div>
-                        <div className={compact ? 'flex-1 min-w-0' : ''}>
-                          {!compact && (
-                            <p className="text-xs font-semibold text-slate-700 mb-3 leading-tight line-clamp-2">{shortName}</p>
-                          )}
-                          {compact && (
-                            <p className="text-xs font-semibold text-slate-700 leading-tight line-clamp-1 mb-1">{shortName}</p>
-                          )}
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                              <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${ejePct}%` }} />
+            {ejeData.length > 0 && (
+              <div className="flex gap-3">
+                {/* Grid de ejes: a full width sin selección, se comprime a una col al abrir el panel */}
+                <div
+                  className={`transition-all duration-300 ease-out ${
+                    selectedEjeIdForMetrics
+                      ? 'w-2/5 grid grid-cols-1 gap-2'
+                      : 'w-full grid grid-cols-2 lg:grid-cols-3 gap-3'
+                  }`}
+                >
+                  {ejeData.map(({ ejeId, numero, nombre, avgPct: ejePct, total, verde, ambar, rojo, invSum }) => {
+                    const barColor = ejePct >= 70 ? 'bg-green-500' : ejePct >= 40 ? 'bg-amber-400' : 'bg-red-400'
+                    const isSelected = selectedEjeIdForMetrics === ejeId
+                    // En modo split usamos cards más compactas (menos padding, layout horizontal).
+                    const compact = !!selectedEjeIdForMetrics
+                    return (
+                      <div
+                        key={ejeId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedEjeIdForMetrics(isSelected ? null : ejeId)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedEjeIdForMetrics(isSelected ? null : ejeId) } }}
+                        className={`group bg-white rounded-xl shadow-sm text-left cursor-pointer hover:shadow-md transition-all duration-300 ease-out relative ${
+                          compact ? 'p-3' : 'p-4'
+                        } ${isSelected
+                            ? 'border-2 border-dashed border-green-400 bg-green-50/30'
+                            : 'border border-gray-100 hover:border-slate-300'}`}
+                        title={isSelected ? 'Click para cerrar métricas' : 'Ver métricas de este eje'}
+                      >
+                        <div className={compact ? 'flex items-center gap-3' : ''}>
+                          <div className={compact ? 'flex-shrink-0' : ''}>
+                            <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 ${compact ? '' : 'mb-2'}`}>
+                              Eje {numero}
+                            </span>
+                          </div>
+                          <div className={compact ? 'flex-1 min-w-0' : ''}>
+                            {!compact && (
+                              <p className="text-xs font-semibold text-slate-700 mb-3 leading-tight line-clamp-2">{nombre}</p>
+                            )}
+                            {compact && (
+                              <p className="text-xs font-semibold text-slate-700 leading-tight line-clamp-1 mb-1">{nombre}</p>
+                            )}
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                                <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${ejePct}%` }} />
+                              </div>
+                              <span className="text-xs font-bold text-slate-800 tabular-nums">{ejePct}%</span>
                             </div>
-                            <span className="text-xs font-bold text-slate-800 tabular-nums">{ejePct}%</span>
+                            {!compact && (
+                              <>
+                                <div className="flex items-center justify-between text-xs text-gray-400">
+                                  <div className="flex items-center gap-1.5">
+                                    {rojo  > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"/>{rojo}</span>}
+                                    {ambar > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>{ambar}</span>}
+                                    {verde > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500"/>{verde}</span>}
+                                  </div>
+                                  <span>{total} init.</span>
+                                </div>
+                                {invSum > 0 && (
+                                  <p className="text-[10px] text-gray-400 mt-1.5">
+                                    ${Math.round(invSum).toLocaleString('es-CL')} MM inversión
+                                  </p>
+                                )}
+                              </>
+                            )}
+                            {compact && (
+                              <p className="text-[10px] text-gray-400">{total} init.{invSum > 0 ? ` · $${Math.round(invSum).toLocaleString('es-CL')} MM` : ''}</p>
+                            )}
                           </div>
                           {!compact && (
-                            <>
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <div className="flex items-center gap-1.5">
-                                  {rojo  > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"/>{rojo}</span>}
-                                  {ambar > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>{ambar}</span>}
-                                  {verde > 0 && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500"/>{verde}</span>}
-                                </div>
-                                <span>{total} init.</span>
-                              </div>
-                              {invSum > 0 && (
-                                <p className="text-[10px] text-gray-400 mt-1.5">
-                                  ${Math.round(invSum).toLocaleString('es-CL')} MM inversión
-                                </p>
-                              )}
-                            </>
-                          )}
-                          {compact && (
-                            <p className="text-[10px] text-gray-400">{total} init.{invSum > 0 ? ` · $${Math.round(invSum).toLocaleString('es-CL')} MM` : ''}</p>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="absolute top-3 right-3 text-gray-300 group-hover:text-slate-500 transition-colors">
+                              <path d="M4 2l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
                           )}
                         </div>
-                        {!compact && (
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="absolute top-3 right-3 text-gray-300 group-hover:text-slate-500 transition-colors">
-                            <path d="M4 2l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
                       </div>
+                    )
+                  })}
+                </div>
+
+                {/* Panel lateral: se monta solo cuando hay eje seleccionado.
+                    El drawer internamente entra con fade + slide para que el
+                    reflow de la grid de la izquierda no compita con su aparición. */}
+                {selectedEjeIdForMetrics != null && region && (() => {
+                  const selectedEje = regionEjes.find(e => e.id === selectedEjeIdForMetrics)
+                  if (!selectedEje) return null
+                  return (
+                    <div className="w-3/5">
+                      <MetricasEjeDrawer
+                        region={region}
+                        eje={selectedEje}
+                        onClose={() => setSelectedEjeIdForMetrics(null)}
+                      />
                     </div>
                   )
-                })}
+                })()}
               </div>
-
-              {/* Panel lateral: se monta solo cuando hay eje seleccionado.
-                  El drawer internamente entra con fade + slide para que el
-                  reflow de la grid de la izquierda no compita con su aparición. */}
-              {selectedEjeForMetrics && region && (
-                <div className="w-3/5">
-                  <MetricasEjeDrawer
-                    region={region}
-                    eje={selectedEjeForMetrics}
-                    onClose={() => setSelectedEjeForMetrics(null)}
-                  />
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 

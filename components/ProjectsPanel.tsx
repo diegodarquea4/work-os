@@ -13,13 +13,16 @@ import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
 import CollapsibleSection from './CollapsibleSection'
 import MinutaLoadingModal from './MinutaLoadingModal'
-import { SEMAFORO_CONFIG, EJE_COLORS, prioridadColor } from '@/lib/config'
+import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 
-function ejeColor(eje: string) {
-  return EJE_COLORS[eje] ?? 'bg-gray-100 text-gray-600'
+// Color uniforme gris para todos los ejes — confirmado con Diego al
+// migrar al catálogo formal. La función queda igual para minimizar
+// el blast radius en el JSX que la consume.
+function ejeColor(_eje: string) {
+  return 'bg-gray-100 text-gray-600'
 }
 
 function diasSinActividad(lastIso: string | null | undefined): number | null {

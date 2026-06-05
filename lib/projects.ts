@@ -8,6 +8,10 @@ export type Iniciativa = {
   capital: string
   zona: string
   eje: string
+  // FK al catálogo formal `region_ejes` (migración 015). Nullable durante
+  // la transición — las iniciativas pre-migración pueden no tenerlo. El
+  // string `eje` se mantiene como dato denormalizado hasta la limpieza.
+  eje_id?: number | null
   eje_gobierno: string | null
   nombre: string
   descripcion: string | null

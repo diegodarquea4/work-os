@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import type { Metrica } from '@/lib/types'
+import type { Metrica, RegionEje } from '@/lib/types'
+import { composeEjeLabel } from '@/lib/ejes'
 
 /**
  * Modal compacto para crear o editar la DEFINICIÓN de una métrica por eje
@@ -21,7 +22,11 @@ type Props = {
   // Si viene `metrica`, es edición. Si es null/undefined, es creación.
   metrica?: Metrica | null
   regionCod: string
-  eje: string
+  // Eje del catálogo (migración 015) al que pertenece la métrica.
+  eje: RegionEje
+  // Label compuesto opcional para mostrar en el header. Si no viene se
+  // compone internamente.
+  ejeLabel?: string
   currentUserEmail: string
   onSaved: () => void   // dispara reload del drawer padre
 }
@@ -32,9 +37,11 @@ export default function MetricaEditModal({
   metrica,
   regionCod,
   eje,
+  ejeLabel,
   currentUserEmail,
   onSaved,
 }: Props) {
+  const displayLabel = ejeLabel ?? composeEjeLabel(eje.numero, eje.nombre)
   const isEdit = !!metrica
   const [titulo, setTitulo]           = useState('')
   const [descripcion, setDescripcion] = useState('')
@@ -78,12 +85,17 @@ export default function MetricaEditModal({
       unidad:      unidad.trim() || null,
       updated_at:  new Date().toISOString(),
     }
+    // En INSERT: setea eje_id (FK) Y eje string denormalizado (compat).
+    // En UPDATE: la asignación de eje no se cambia desde este modal (la
+    // métrica vive en el contexto de un eje; cambiar de eje sería mover
+    // la métrica → flow distinto, fuera de scope acá).
     const { error: dbErr } = isEdit
       ? await sb.from('metricas_eje').update(payload).eq('id', metrica!.id)
       : await sb.from('metricas_eje').insert({
           ...payload,
           region_cod:       regionCod,
-          eje:              eje,
+          eje:              displayLabel,
+          eje_id:           eje.id,
           created_by_email: currentUserEmail || null,
         })
     setSaving(false)
@@ -107,7 +119,7 @@ export default function MetricaEditModal({
               <p className="text-base font-semibold text-gray-900 leading-snug">
                 {isEdit ? 'Editar métrica' : 'Nueva métrica'}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{eje}</p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{displayLabel}</p>
             </div>
             <button
               onClick={handleClose}

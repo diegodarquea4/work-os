@@ -10,14 +10,11 @@ export const SEMAFORO_CONFIG = {
 
 export type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 
-export const EJE_COLORS: Record<string, string> = {
-  'Eje 1: Infraestructura y Conectividad':           'bg-blue-100 text-blue-700',
-  'Eje 2: Energía y Medio Ambiente':                 'bg-yellow-100 text-yellow-700',
-  'Eje 3: Salud y Servicios Básicos':                'bg-green-100 text-green-700',
-  'Eje 4: Seguridad y Soberanía':                    'bg-red-100 text-red-700',
-  'Eje 5: Desarrollo Productivo e Innovación':       'bg-purple-100 text-purple-700',
-  'Eje 6: Familia, Educación y Equidad Territorial': 'bg-pink-100 text-pink-700',
-}
+// EJE_COLORS eliminado en migración 015: el catálogo formal `region_ejes`
+// reemplazó el modelo hardcoded. Diego confirmó gris uniforme — el código
+// que mostraba colores caía igual al fallback porque la paleta no matcheaba
+// la data real. El estilo `bg-gray-100 text-gray-600` se inline-eó en los
+// pocos componentes que lo usaban.
 
 export type EjeGobierno = 'Economía' | 'Seguridad' | 'Social'
 
