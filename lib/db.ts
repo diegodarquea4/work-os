@@ -38,6 +38,9 @@ function mapRow(row: Prioridad): Iniciativa {
     codigo_iniciativa:      row.codigo_iniciativa ?? null,
     origen:                 row.origen ?? null,
     en_foco:                row.en_foco ?? false,
+    // Defensive: pre-migración 016 las filas pueden venir sin tags. La columna
+    // tiene DEFAULT '{}' así que post-deploy esto siempre será array.
+    tags:                   row.tags ?? [],
   }
 }
 

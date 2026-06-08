@@ -58,6 +58,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [codigoBip, setCodigoBip]                   = useState<string>(prioridad.codigo_bip ?? '')
   const [ministerios, setMinisterios]               = useState<string[]>(splitMinisterios(prioridad.ministerio))
   const [savingMinisterio, setSavingMinisterio]     = useState(false)
+  // Tags multi-valor (migración 016). Estructural: admin/editor edita directo
+  // en la ficha, regional propone vía Excel. Sin catálogo cerrado — el control
+  // queda en la aprobación de la propuesta.
+  const [tagsLocal, setTagsLocal]                   = useState<string[]>(prioridad.tags ?? [])
+  const [tagDraft, setTagDraft]                     = useState<string>('')
+  const [savingTags, setSavingTags]                 = useState(false)
   const [enFoco, setEnFoco]                         = useState<boolean>(prioridad.en_foco === true)
   const [savingFoco, setSavingFoco]                 = useState(false)
   const [editingField, setEditingField]             = useState<string | null>(null)
@@ -171,6 +177,25 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     await getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('n', prioridad.n)
     onUpdatePrioridad(prioridad.n, { ministerio: joined })
     setSavingMinisterio(false)
+  }
+
+  // Tags: dedup case-sensitive + trim antes de persistir. Array vacío es
+  // válido (borra todos los tags) — solo admin/editor llega acá.
+  async function saveTags(next: string[]) {
+    const cleaned = Array.from(new Set(next.map(t => t.trim()).filter(Boolean)))
+    setSavingTags(true)
+    setTagsLocal(cleaned)
+    await getSupabase().from('prioridades_territoriales').update({ tags: cleaned }).eq('n', prioridad.n)
+    onUpdatePrioridad(prioridad.n, { tags: cleaned })
+    setSavingTags(false)
+  }
+
+  function commitTagDraft() {
+    const v = tagDraft.trim()
+    if (!v) { setTagDraft(''); return }
+    if (tagsLocal.includes(v)) { setTagDraft(''); return }
+    saveTags([...tagsLocal, v])
+    setTagDraft('')
   }
 
   async function handleToggleFoco() {
@@ -363,6 +388,59 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   ))}
                 </select>
               </label>
+            )}
+          </div>
+
+          {/* Etiquetas — multi-valor libre. Admin/editor edita en línea (input
+              + Enter / coma). Regional solo lee con nota explicativa. Coma o
+              Enter dispara commit; Backspace en input vacío quita el último. */}
+          <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingTags ? 'opacity-50 pointer-events-none' : ''}`}>
+            <span className="text-xs text-gray-400">Etiquetas:</span>
+            {tagsLocal.length === 0 && (
+              <span className="text-xs text-gray-400 italic">Sin etiquetas</span>
+            )}
+            {tagsLocal.map(t => (
+              <span
+                key={t}
+                className="text-xs bg-gray-50 text-gray-700 pl-2 pr-1 py-0.5 rounded-md border border-gray-200 flex items-center gap-1"
+              >
+                {t}
+                {canEdit && (
+                  <button
+                    onClick={() => saveTags(tagsLocal.filter(x => x !== t))}
+                    className="text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-red-50"
+                    title={`Quitar ${t}`}
+                  >
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 1l6 6M7 1L1 7"/>
+                    </svg>
+                  </button>
+                )}
+              </span>
+            ))}
+            {canEdit ? (
+              <input
+                type="text"
+                value={tagDraft}
+                onChange={e => setTagDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault()
+                    commitTagDraft()
+                  } else if (e.key === 'Backspace' && tagDraft === '' && tagsLocal.length > 0) {
+                    saveTags(tagsLocal.slice(0, -1))
+                  }
+                }}
+                onBlur={commitTagDraft}
+                placeholder="+ etiqueta"
+                className="text-xs px-2 py-0.5 rounded-md border border-dashed border-gray-300 text-gray-700 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-200 min-w-[100px]"
+              />
+            ) : (
+              tagsLocal.length === 0 && (
+                <span className="text-xs text-gray-400 italic">
+                  Para agregar etiquetas, propónlo en tu carga semanal de Excel.
+                </span>
+              )
             )}
           </div>
 

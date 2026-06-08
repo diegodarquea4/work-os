@@ -6,6 +6,7 @@ import { SEMAFORO_CONFIG, prioridadColor, ejeGobHeaderColor, splitMinisterios } 
 import { getSupabase } from '@/lib/supabase'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
 
 // ── Mosaic helpers ────────────────────────────────────────────────────────────
@@ -227,6 +228,9 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
         {ejeShort}
       </span>
 
+      {/* Tags — máximo 1 visible en la card horizontal para no romper layout */}
+      <TagChips tags={p.tags} max={1} className="flex-shrink-0" />
+
       {/* Responsable (sin @domain) */}
       {responsableShort && (
         <span className="text-xs text-gray-500 truncate max-w-[140px] flex-shrink-0">
@@ -279,8 +283,11 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   const [isPending, startTransition]    = useTransition()
   const [viewMode, setViewMode]         = useState<'kanban' | 'mosaico'>('kanban')
   // Default 'ministerio': es la vista que se usa más en reuniones (cartera por
-  // SEREMI). 'eje' queda disponible vía el toggle de la filter bar.
-  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio'>('ministerio')
+  // SEREMI). 'eje' y 'tag' quedan disponibles vía el toggle de la filter bar.
+  // 'tag' (migración 016): una columna por tag único entre las iniciativas
+  // filtradas. Una iniciativa con N tags aparece en N columnas (decisión del
+  // usuario, igual que ya pasaba con multi-ministerio).
+  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio' | 'tag'>('ministerio')
   const [showSmall, setShowSmall]       = useState(false)
   const [cellSize, setCellSize]         = useState(56)
   const gridRef                         = useRef<HTMLDivElement>(null)
@@ -436,6 +443,23 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     }))
   }, [filtered, isGroupedMode, groupBy])
 
+  // ── Modo "por tag": columnas planas, una por tag único ────────────────────
+  // Iniciativa con N tags se renderiza en N columnas — refleja que pertenece
+  // a todos esos grupos. Iniciativas con array vacío van a columna "Sin
+  // etiquetas" al final.
+  const SIN_TAG = '__sin_etiquetas__'
+  const tagColumns = useMemo(() => {
+    if (!isGroupedMode || groupBy !== 'tag') return null
+    const allTags = Array.from(new Set(filtered.flatMap(p => p.tags ?? []))).sort()
+    const cols = allTags.map(tag => ({
+      tag,
+      cards: filtered.filter(p => (p.tags ?? []).includes(tag)),
+    }))
+    const sinTags = filtered.filter(p => (p.tags ?? []).length === 0)
+    if (sinTags.length > 0) cols.push({ tag: SIN_TAG, cards: sinTags })
+    return cols
+  }, [filtered, isGroupedMode, groupBy])
+
   // ── Estado mode byCol ──────────────────────────────────────────────────────
   const byCol: Record<string, Iniciativa[]> = { rojo: [], ambar: [], verde: [], gris: [] }
   if (!isGroupedMode && viewMode === 'kanban') {
@@ -531,7 +555,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         )}
 
-        {/* Toggle "Por eje / Por ministerio" — solo visible con región filtrada en Kanban */}
+        {/* Toggle "Por eje / Por ministerio / Por tag" — solo visible con región filtrada en Kanban */}
         {isGroupedMode && (
           <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
             <button
@@ -549,6 +573,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
               }`}
             >
               Por ministerio
+            </button>
+            <button
+              onClick={() => setGroupBy('tag')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                groupBy === 'tag' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Por tag
             </button>
           </div>
         )}
@@ -739,6 +771,52 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Modo "por tag": columnas planas, una por tag único ──────────────── */}
+      {/* Mismo layout que "por eje". Iniciativa con N tags se renderiza en N
+          columnas (key compuesto con el tag para evitar reconciliación cruzada
+          de React). Columna "Sin etiquetas" al final. */}
+      {isGroupedMode && groupBy === 'tag' && tagColumns && (
+        <div className="flex-1 overflow-x-auto overflow-y-hidden flex justify-center">
+          {tagColumns.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">
+              Esta región todavía no tiene iniciativas con etiquetas.
+            </div>
+          ) : (
+            <div
+              className="grid h-full px-6 pt-4 flex-shrink-0"
+              style={{
+                gridTemplateColumns: `repeat(${tagColumns.length}, 22rem)`,
+                columnGap: '1rem',
+              }}
+            >
+              {tagColumns.map(({ tag, cards }) => (
+                <div key={tag} className="flex flex-col overflow-hidden pb-4">
+                  <div className="px-3 py-2.5 rounded-xl mb-3 bg-gray-100 text-gray-600">
+                    <p className="text-xs font-semibold line-clamp-1 mb-1.5">
+                      {tag === SIN_TAG ? 'Sin etiquetas' : tag}
+                    </p>
+                    <div className="flex items-center justify-end">
+                      <span className="text-xs font-bold bg-white/60 px-2 py-0.5 rounded-full">{cards.length}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    {cards.length === 0 ? (
+                      <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
+                        Sin iniciativas
+                      </div>
+                    ) : (
+                      cards.map(p => (
+                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

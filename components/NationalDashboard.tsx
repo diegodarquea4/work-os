@@ -11,6 +11,7 @@ import { downloadTemplate as downloadTemplateExcel } from '@/lib/templateExcel'
 import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
 import { getSupabase } from '@/lib/supabase'
 import type { RegionEje } from '@/lib/types'
+import TagChips from './TagChips'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
@@ -24,7 +25,7 @@ const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
 type SortDir = 'asc' | 'desc'
-type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'proximoHito' | 'estadoTermino' | 'inversion' | 'rat' | 'fuente' | 'responsable' | 'actividad'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'proximoHito' | 'estadoTermino' | 'inversion' | 'rat' | 'fuente' | 'responsable' | 'actividad' | 'tags'
 
 const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'n',             label: '#',                     defaultVisible: false },
@@ -42,6 +43,7 @@ const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'fuente',        label: 'Fuente Financiamiento', defaultVisible: false },
   { id: 'responsable',   label: 'Responsable',           defaultVisible: false },
   { id: 'actividad',     label: 'Actividad',             defaultVisible: true  },
+  { id: 'tags',          label: 'Etiquetas',             defaultVisible: false },
 ]
 
 const DEFAULT_COLS = new Set<ColId>(ALL_COLS.filter(c => c.defaultVisible).map(c => c.id))
@@ -94,6 +96,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterSemaforo, setFilterSemaforo]   = useState<Set<SemaforoKey>>(new Set())
   const [filterPrioridad, setFilterPrioridad] = useState<Set<'Alta' | 'Media' | 'Baja'>>(new Set())
   const [filterEjeGobierno, setFilterEjeGobierno] = useState('todos')
+  // Multi-tag filter: OR lógico. Source se computa abajo de los tags presentes
+  // en las iniciativas visibles antes de aplicar este filtro.
+  const [filterTags, setFilterTags]               = useState<Set<string>>(new Set())
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -152,6 +157,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterEjeGobierno !== 'todos' && p.eje_gobierno !== filterEjeGobierno) return false
       if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey)) return false
       if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad as 'Alta' | 'Media' | 'Baja')) return false
+      // Filtro multi-tag: OR. Basta con que la iniciativa tenga AL MENOS uno
+      // de los tags seleccionados para que pase.
+      if (filterTags.size > 0 && !(p.tags ?? []).some(t => filterTags.has(t))) return false
       return true
     })
 
@@ -172,7 +180,29 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, sortCol, sortDir, actividad])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterTags, sortCol, sortDir, actividad])
+
+  // Fuente del dropdown de tags: tags presentes en las iniciativas que pasan
+  // los OTROS filtros (todos menos tags). Así el dropdown solo lista lo que
+  // tiene sentido elegir dado el contexto actual. Si no hay tags en uso,
+  // el control de filtro no se renderiza más abajo.
+  const availableTags = useMemo(() => {
+    const base = projects.filter(p => {
+      if (search) {
+        const q = search.toLowerCase()
+        if (!p.nombre.toLowerCase().includes(q) &&
+            !p.region.toLowerCase().includes(q) &&
+            !(p.ministerio ?? '').toLowerCase().includes(q)) return false
+      }
+      if (filterRegion !== 'todas' && p.region !== filterRegion) return false
+      if (filterEje !== 'todos' && p.eje !== filterEje) return false
+      if (filterEjeGobierno !== 'todos' && p.eje_gobierno !== filterEjeGobierno) return false
+      if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey)) return false
+      if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad as 'Alta' | 'Media' | 'Baja')) return false
+      return true
+    })
+    return Array.from(new Set(base.flatMap(p => p.tags ?? []))).sort()
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad])
 
   const rojo   = filtered.filter(p => p.estado_semaforo === 'rojo').length
   const ambar  = filtered.filter(p => p.estado_semaforo === 'ambar').length
@@ -186,6 +216,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   function clearFilters() {
     setSearch(''); setFilterRegion('todas'); setFilterEje('todos')
     setFilterEjeGobierno('todos'); setFilterSemaforo(new Set()); setFilterPrioridad(new Set())
+    setFilterTags(new Set())
+  }
+
+  function toggleTagFilter(t: string) {
+    setFilterTags(prev => {
+      const next = new Set(prev)
+      next.has(t) ? next.delete(t) : next.add(t)
+      return next
+    })
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -326,9 +365,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
-    filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0
+    filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0 || filterTags.size > 0
 
-  const hasSecondaryFilter = filterEje !== 'todos' || filterEjeGobierno !== 'todos' || filterPrioridad.size > 0
+  const hasSecondaryFilter = filterEje !== 'todos' || filterEjeGobierno !== 'todos' || filterPrioridad.size > 0 || filterTags.size > 0
 
   // Dynamic column count for colspan calculation
   const colCount = visibleCols.size
@@ -621,6 +660,31 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )
               })}
             </div>
+
+            {/* Tags multi-select. Solo se renderiza si hay tags en uso entre
+                las iniciativas que pasan los OTROS filtros. Si no, el control
+                es ruido — no aparece. */}
+            {availableTags.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-xs text-gray-400 ml-1 mr-0.5">Etiquetas:</span>
+                {availableTags.map(t => {
+                  const active = filterTags.has(t)
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => toggleTagFilter(t)}
+                      className={`text-xs px-2 py-1 rounded-full transition-colors border ${
+                        active
+                          ? 'bg-slate-700 text-white border-slate-700'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -669,6 +733,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('fuente')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fuente</th>}
               {visibleCols.has('responsable')   && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Responsable</th>}
               {visibleCols.has('actividad')     && <ColHeader col="actividad" label="Actividad" />}
+              {visibleCols.has('tags')          && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etiquetas</th>}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
@@ -1143,6 +1208,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
               return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
             })()}
+          </td>
+        )}
+        {visibleCols.has('tags') && (
+          <td className="px-3 py-3.5 max-w-[220px]">
+            {(p.tags?.length ?? 0) === 0
+              ? <span className="text-xs text-gray-300">—</span>
+              : <TagChips tags={p.tags} max={3} />}
           </td>
         )}
       </tr>

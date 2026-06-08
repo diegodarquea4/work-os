@@ -13,6 +13,7 @@ import SeiaProjectsList from './SeiaProjectsList'
 import MopProjectsList from './MopProjectsList'
 import CollapsibleSection from './CollapsibleSection'
 import MinutaLoadingModal from './MinutaLoadingModal'
+import TagChips from './TagChips'
 import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 
@@ -576,6 +577,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                     <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0"/>
                     <span className="text-xs text-gray-700">{p.ministerio ?? 'Sin asignar'}</span>
                   </div>
+                  <TagChips tags={p.tags} max={2} className="mb-3" />
                   <div className="pt-3 border-t border-gray-50">
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">

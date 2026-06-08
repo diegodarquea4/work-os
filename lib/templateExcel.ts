@@ -37,6 +37,7 @@ export const TEMPLATE_COLS = [
   { key: 'inversion_mm',            label: 'Inversión ($MM)',         desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                                                                                                                        wch: 18 },
   { key: 'origen',                  label: 'Origen',                  desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                                                                                                              wch: 24 },
   { key: 'descripcion',             label: 'Descripción',             desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                                                                                                              wch: 54 },
+  { key: 'tags',                    label: 'Etiquetas',               desc: 'Libres, separadas por coma. Ej: Costa,Urgente,2026. Puede estar vacío. Para BORRAR todas las etiquetas, pídele a admin DCI editar la ficha — celda vacía aquí no borra.',                                                wch: 30 },
 ] as const
 
 const INSTRUCTIONS_AOA: (string | number)[][] = [
@@ -77,6 +78,7 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['En Foco', 'No', 'Sí · No', 'Marca de seguimiento prioritario.'],
   ['Inversión ($MM)', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
   ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa.'],
+  ['Etiquetas', 'No', 'Libres separadas por coma (ej: Costa,Urgente,2026)', 'Tags multi-valor para agrupar iniciativas como te plazca. Una iniciativa puede tener N etiquetas. Sin catálogo cerrado: el control queda en la aprobación de la propuesta. Celda vacía NO borra los tags previos.'],
 ]
 
 /** Arma el workbook del template con las dos hojas (Carga + Instrucciones). */
@@ -155,6 +157,7 @@ function rowFromIniciativa(p: Iniciativa, ejeByIdMap?: Map<number, RegionEje>): 
       case 'inversion_mm':            return p.inversion_mm ?? ''
       case 'origen':                  return p.origen ?? ''
       case 'descripcion':             return p.descripcion ?? ''
+      case 'tags':                    return Array.isArray(p.tags) ? p.tags.join(',') : ''
     }
   })
 }

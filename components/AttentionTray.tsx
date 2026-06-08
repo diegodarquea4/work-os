@@ -7,6 +7,7 @@ import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
 
 type Props = {
@@ -71,6 +72,9 @@ export default function AttentionTray({
   const setFilterRegion = onActiveRegionChange
   const [filterEjeGob, setFilterEjeGob]         = useState<Set<string>>(new Set())
   const [filterPrioridad, setFilterPrioridad]   = useState<Set<string>>(new Set())
+  // Multi-tag filter (migración 016): OR lógico. Source se computa de los
+  // tags presentes en las iniciativas que pasan los OTROS filtros.
+  const [filterTags, setFilterTags]             = useState<Set<string>>(new Set())
 
   // UI
   const [showSugerencias, setShowSugerencias]   = useState(false)
@@ -86,11 +90,24 @@ export default function AttentionTray({
     return filtered.sort()
   }, [allowedRegionNames])
 
-  const filtersActive = search !== '' || filterRegion !== 'todas' || filterEjeGob.size > 0 || filterPrioridad.size > 0
+  const filtersActive = search !== '' || filterRegion !== 'todas' || filterEjeGob.size > 0 || filterPrioridad.size > 0 || filterTags.size > 0
 
   function clearFilters() {
     setSearch(''); setFilterRegion('todas'); setFilterEjeGob(new Set()); setFilterPrioridad(new Set())
+    setFilterTags(new Set())
   }
+
+  // Tags presentes en las iniciativas que pasan los OTROS filtros (todos
+  // menos tags). Si no hay tags en uso, el control no se renderiza más abajo.
+  const availableTags = useMemo(() => {
+    const q = search.toLowerCase()
+    const base = projects
+      .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.ministerio ?? '').toLowerCase().includes(q))
+      .filter(p => filterRegion === 'todas' || p.region === filterRegion)
+      .filter(p => filterEjeGob.size === 0 || filterEjeGob.has(p.eje_gobierno ?? ''))
+      .filter(p => filterPrioridad.size === 0 || filterPrioridad.has(p.prioridad))
+    return Array.from(new Set(base.flatMap(p => p.tags ?? []))).sort()
+  }, [projects, search, filterRegion, filterEjeGob, filterPrioridad])
 
   // ── Groups ────────────────────────────────────────────────────────────────
 
@@ -103,6 +120,7 @@ export default function AttentionTray({
       .filter(p => filterRegion === 'todas' || p.region === filterRegion)
       .filter(p => filterEjeGob.size === 0 || filterEjeGob.has(p.eje_gobierno ?? ''))
       .filter(p => filterPrioridad.size === 0 || filterPrioridad.has(p.prioridad))
+      .filter(p => filterTags.size === 0 || (p.tags ?? []).some(t => filterTags.has(t)))
 
     // Sección principal: iniciativas con flag activo, ordenadas por urgencia de hito
     const enFoco = pool
@@ -152,7 +170,7 @@ export default function AttentionTray({
     ).size
 
     return { enFoco, sugHitoVencido, sugBloqueadas, sugSinActividad, sugHitoProximo, sugAvanceBajo, sugUniqueCount }
-  }, [projects, actividad, search, filterRegion, filterEjeGob, filterPrioridad])
+  }, [projects, actividad, search, filterRegion, filterEjeGob, filterPrioridad, filterTags])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -222,6 +240,7 @@ export default function AttentionTray({
               <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
                 {p.eje}
               </span>
+              <TagChips tags={p.tags} max={2} />
               {p.responsable && <span className="truncate max-w-[140px]">· {p.responsable}</span>}
               {canEditAny && filterRegion === 'todas' && (
                 <span className="text-gray-400">· {p.region}</span>
@@ -407,6 +426,27 @@ export default function AttentionTray({
               )
             })}
           </div>
+
+          {/* Tag multi-select. Solo aparece si hay tags en uso entre las
+              iniciativas que pasan los otros filtros — si no, es ruido. */}
+          {availableTags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-xs text-gray-400 mr-0.5">Etiquetas:</span>
+              {availableTags.map(t => {
+                const active = filterTags.has(t)
+                return (
+                  <button key={t} onClick={() => toggleSet(setFilterTags, t)}
+                    className={`text-xs px-2 py-1 rounded-full transition-colors border ${
+                      active
+                        ? 'bg-slate-700 text-white border-slate-700'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}>
+                    {t}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           {/* Clear */}
           {filtersActive && (

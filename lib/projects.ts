@@ -32,6 +32,7 @@ export type Iniciativa = {
   codigo_iniciativa: string | null
   origen: string | null
   en_foco: boolean
+  tags: string[]
 }
 
 export function getIniciativas(): Iniciativa[] {
@@ -110,5 +111,6 @@ function parseCSV(content: string): Iniciativa[] {
     codigo_iniciativa: null,
     origen: null,
     en_foco: false,
+    tags: [],
   }))
 }

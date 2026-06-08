@@ -33,6 +33,10 @@ export type Prioridad = {
   // Columna agregada en migración 007. Opcional para tolerar lecturas
   // anteriores al ALTER en prod (viene undefined hasta que se aplique).
   en_foco?: boolean
+  // Etiquetas libres multi-valor (migración 016). Default '{}' en BD, viene
+  // como string[] desde Supabase JS. Estructural: regional propone vía Excel,
+  // admin/editor edita directo en la ficha.
+  tags?: string[]
 }
 
 // ── Semáforo Log ─────────────────────────────────────────────────────────────

@@ -318,6 +318,22 @@ export function parseImportWorkbook(
       }
     }
 
+    // Etiquetas (tags) — multi-valor CSV. Split por coma, trim, filtra vacíos,
+    // dedup case-sensitive. Misma política skip-si-vacío en UPDATE: celda en
+    // blanco NO borra los tags previos. Para borrar todos, admin edita la
+    // ficha. Sin validación contra catálogo — el control queda en la
+    // aprobación de la propuesta (migración 016).
+    const tagsRaw = col(row, 'Etiquetas')
+    if (tagsRaw !== undefined && tagsRaw !== '') {
+      const arr = Array.from(new Set(
+        String(tagsRaw).split(',').map(t => t.trim()).filter(Boolean)
+      ))
+      target.tags = arr
+    } else if (!isUpdate) {
+      // INSERT con celda vacía: default explícito al array vacío.
+      target.tags = []
+    }
+
     // Campos libres (texto). Acá vivía el bug original.
     // Nota 1: `codigo_iniciativa` se omite a propósito — es generado por el
     // sistema en INSERT y no es editable por Excel. Archivos viejos que
