@@ -28,14 +28,32 @@ type Props = {
 
 const AdminUsersView  = dynamic(() => import('./AdminUsersView'))
 const VistaRegional   = dynamic(() => import('./VistaRegional'))
+const AyudaModal      = dynamic(() => import('./AyudaModal'))
 
 export default function WorkOSApp({ projects, geoData }: Props) {
   const { warning, secondsLeft, extend } = useInactivityLogout()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [ayudaOpen, setAyudaOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
+  }, [])
+
+  // Atajo global `?` (Shift+/) abre el Centro de Ayuda. Lo ignoramos si el
+  // foco está en un input/textarea/contenteditable para no pisar la tecla
+  // mientras se escribe.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== '?') return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      e.preventDefault()
+      setAyudaOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   // Solo admin/editor pueden mutar datos en línea desde el panel. Regional y
@@ -373,6 +391,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               <div className="w-28 h-7 rounded bg-slate-800 animate-pulse" />
             )}
             <button
+              onClick={() => setAyudaOpen(true)}
+              className="text-slate-400 hover:text-white transition-colors"
+              title="Centro de Ayuda (?)"
+              aria-label="Abrir Centro de Ayuda"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="6.5"/>
+                <path d="M6.3 6a1.8 1.8 0 0 1 3.5 0c0 1.1-1.7 1.4-1.7 2.4"/>
+                <circle cx="8" cy="11.4" r=".4" fill="currentColor"/>
+              </svg>
+            </button>
+            <button
               onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
               className="text-slate-400 hover:text-white transition-colors"
               title="Cerrar sesión"
@@ -646,6 +676,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
     </div>
+    <AyudaModal open={ayudaOpen} onClose={() => setAyudaOpen(false)} />
     </UserProvider>
   )
 }

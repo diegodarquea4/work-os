@@ -2,7 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
 const SECURITY_HEADERS: [string, string][] = [
-  ['X-Frame-Options',        'DENY'],
+  // SAMEORIGIN (no DENY) porque embebemos /tour/explainer.html en iframe
+  // dentro del propio panel (Centro de Ayuda). DENY rompía esa carga.
+  ['X-Frame-Options',        'SAMEORIGIN'],
   ['X-Content-Type-Options', 'nosniff'],
   ['Referrer-Policy',        'strict-origin-when-cross-origin'],
   ['Permissions-Policy',     'camera=(), microphone=(), geolocation=()'],
@@ -72,6 +74,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|geojson)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|geojson|html)$).*)',
   ],
 }

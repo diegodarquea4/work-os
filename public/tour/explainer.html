@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<!--
+  Capacitación PSG — Explainer v5 · "Tour guiado dentro del panel"
+  Barra superior PERSISTENTE (solo cambia el cuerpo, como navegar el producto real).
+  Paleta clara fiel al panel (white/gray/cream), fuente Geist, semáforo y colores de región reales,
+  mapa de Chile desde el geojson del repo, login y modal de Proponer fieles, copy literal.
+  Español latino neutro. Datos de muestra ilustrativos. Sin mosaico.
+  Controles: ▶/⏸ · ‹ › · ↻ · puntos del índice · barra espaciadora / flechas.
+  Cowork · 2026-06-08. Emblema = placeholder; reemplazar por el logo oficial al publicar.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capacitación PSG — Explainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;--slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-100:#f1f5f9;--slate-50:#f8fafc;
+    --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
+    --green-500:#22c55e;--green-600:#16a34a;--green-700:#15803d;--green-50:#f0fdf4;
+    --amber-400:#fbbf24;--amber-500:#f59e0b;--amber-700:#b45309;--amber-50:#fffbeb;--amber-100:#fef3c7;
+    --red-500:#ef4444;--red-600:#dc2626;--red-700:#b91c1c;--red-50:#fef2f2;--red-100:#fee2e2;
+    --blue-400:#60a5fa;--blue-500:#3b82f6;--blue-600:#2563eb;--blue-700:#1d4ed8;--blue-50:#eff6ff;--blue-100:#dbeafe;
+    --purple-50:#faf5ff;--purple-700:#7e22ce;
+    --cream:#fbf9f4;--cream-2:#f4f1e9;
+    --sh-card:0 1px 2px rgba(15,23,42,.04);
+    --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#0c0f16;font-family:var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{display:flex;align-items:center;justify-content:center;padding:16px;min-height:100vh}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  .player{width:100%;max-width:1000px;aspect-ratio:16/9;position:relative;border-radius:16px;overflow:hidden;
+    background:#0c0f16;box-shadow:0 40px 90px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.04);
+    font-size:clamp(10px,2.55vw,17px);display:flex;flex-direction:column}
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--cream-2)}
+
+  .chrome{position:absolute;top:0;left:0;right:0;height:3.1em;background:var(--slate-900);display:flex;align-items:center;justify-content:space-between;padding:0 1.1em;z-index:3;transition:opacity .4s ease}
+  .chrome.hide{opacity:0;pointer-events:none}
+  .abL{display:flex;align-items:center;gap:.6em}
+  .abLogo{width:1.75em;height:1.75em;border-radius:.32em;background:#C5283D;display:flex;align-items:center;justify-content:center}
+  .abLogo svg{width:1.05em;height:1.05em;fill:#fff}
+  .abTitle b{color:#fff;font-weight:700;font-size:.82em;letter-spacing:.04em;display:block;line-height:1.1}
+  .abTitle span{color:var(--slate-400);font-size:.6em;display:block;line-height:1.1}
+  .abNav{display:flex;background:var(--slate-800);border-radius:.45em;padding:.12em;gap:.12em}
+  .abNav b{font-size:.66em;color:var(--slate-300);font-weight:500;padding:.34em .8em;border-radius:.35em;display:flex;align-items:center;gap:.3em;transition:.2s}
+  .abNav b.on{background:#fff;color:var(--slate-900);font-weight:600}
+  .abR{display:flex;align-items:center;gap:.6em}
+  .abAv{width:1.7em;height:1.7em;border-radius:50%;background:#2b6fb8;color:#fff;font-size:.62em;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .abUser{text-align:right}
+  .abUser b{color:#e9eef6;font-size:.6em;font-weight:500;display:block;line-height:1.15}
+  .abUser span{color:var(--slate-400);font-size:.56em;display:block;line-height:1.15;text-transform:capitalize}
+  .abOut{width:1.65em;height:1.65em;border-radius:.35em;background:var(--slate-800);display:flex;align-items:center;justify-content:center;color:var(--slate-400);font-size:.78em}
+
+  .screen.body{position:absolute;top:3.1em;left:0;right:0;bottom:0;background:var(--gray-50);opacity:0;visibility:hidden;transition:opacity .42s ease}
+  .screen.body.on{opacity:1;visibility:visible}
+  .screen.light{position:absolute;inset:0;z-index:4;opacity:0;visibility:hidden;transition:opacity .5s ease}
+  .screen.light.on{opacity:1;visibility:visible}
+  .bd{height:100%;overflow:hidden;padding:.95em 1.2em}
+  .bd.center{display:flex;align-items:center;justify-content:center}
+
+  .lbl{font-size:.6em;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em}
+  .sect{font-size:.6em;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;margin:.8em 0 .45em}
+  .cardw{background:#fff;border:1px solid var(--gray-200);border-radius:.6em;box-shadow:var(--sh-card)}
+  .selct{display:inline-flex;align-items:center;gap:.5em;font-size:.64em;color:var(--slate-900);border:1px solid var(--gray-200);border-radius:.5em;padding:.35em .7em;background:#fff}
+  .btn{font-size:.62em;font-weight:600;padding:.42em .78em;border-radius:.5em;display:inline-flex;align-items:center;gap:.35em;border:1px solid var(--gray-200);background:#fff;color:var(--slate-700);white-space:nowrap}
+  .btn.dark{background:var(--slate-900);color:#fff;border-color:var(--slate-900)}
+  .pri{font-size:.5em;font-weight:700;padding:.2em .5em;border-radius:1em}
+  .pri.alta{background:var(--red-100);color:var(--red-700)}.pri.media{background:var(--amber-100);color:var(--amber-700)}
+  .s{width:.6em;height:.6em;border-radius:50%;flex:none}
+  .s.v{background:var(--green-500)}.s.a{background:var(--amber-400)}.s.r{background:var(--red-500)}.s.g{background:var(--gray-300)}
+  .bar{height:.36em;background:var(--gray-100);border-radius:1em;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--blue-500);width:0}
+  .screen.on .bar.go>i{animation:grow 1.1s .4s both}
+
+  .screen.on .u-rise{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  .screen.on .u-pop{animation:pop .55s cubic-bezier(.2,1.2,.35,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.84)}to{opacity:1;transform:none}}
+  @keyframes grow{from{width:0}to{width:var(--w,60%)}}
+  @keyframes pin{0%,100%{box-shadow:0 0 0 .28em rgba(239,68,68,.28)}50%{box-shadow:0 0 0 .82em rgba(239,68,68,0)}}
+  @keyframes ring{0%{transform:translate(-50%,-50%) scale(.35);opacity:.55}100%{transform:translate(-50%,-50%) scale(2.2);opacity:0}}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
+  .rg{display:flex;justify-content:space-between;gap:1em;padding:.85em 1em}
+  .rg h2{margin:0;font-size:1.12em;font-weight:800;color:var(--slate-900)}
+  .rg .zona{font-size:.6em;color:var(--gray-400);margin-left:.5em;font-weight:500}
+  .rg .meta{font-size:.6em;color:var(--gray-400);margin-top:.15em}
+  .rg .avwrap{display:flex;align-items:baseline;gap:.5em;margin-top:.5em}
+  .rg .av{font-size:1.65em;font-weight:800;color:var(--slate-800);font-variant-numeric:tabular-nums;line-height:1}
+  .rg .avt{font-size:.6em;color:var(--gray-400)}
+  .semrow{display:flex;gap:.85em;margin-top:.55em;flex-wrap:wrap}
+  .semrow .it{display:flex;align-items:center;gap:.3em;font-size:.6em}
+  .semrow .n{font-weight:700}.n.v{color:var(--green-700)}.n.a{color:var(--amber-700)}.n.r{color:var(--red-700)}.n.g{color:var(--gray-500)}
+  .semrow .t{color:var(--gray-400)}
+  .prego{text-align:right}
+  .prego .pl{font-size:.54em;color:var(--gray-400);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35em}
+  .prego .dots{display:inline-flex;gap:.2em;align-items:center}
+  .prego .dots i{width:1.02em;height:1.02em;border-radius:.26em;background:var(--gray-200);display:flex;align-items:center;justify-content:center;font-size:.54em;font-weight:800;color:#fff;font-style:normal}
+  .prego .dots i.ok{background:var(--green-500)}.prego .dots i.warn{background:var(--amber-400)}
+  .prego .dots b{font-size:.6em;color:var(--gray-400);margin-left:.3em;font-weight:500}
+  .btns{display:flex;gap:.45em;justify-content:flex-end;margin-top:.65em}
+
+  .alert{background:var(--amber-50);border:1px solid #fde68a;border-radius:.55em;padding:.6em .75em}
+  .alert .ar{display:flex;align-items:center;gap:.5em;font-size:.66em;color:var(--gray-700);margin-top:.32em}
+  .alert .ar:first-child{margin-top:0}
+  .alert .ic{width:1.05em;text-align:center}
+  .alert .ago{font-size:.56em;color:var(--red-600);margin-left:auto;font-weight:600}
+
+  .ejes{display:grid;grid-template-columns:repeat(3,1fr);gap:.5em}
+  .eje{background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.55em .6em;box-shadow:var(--sh-card)}
+  .eje .nm{font-size:.6em;font-weight:600;color:var(--slate-800);margin-top:.28em;line-height:1.18;min-height:2.1em}
+  .eje .ft{display:flex;justify-content:space-between;align-items:center;margin-top:.32em}
+  .eje .pct{font-size:.62em;font-weight:800;color:var(--slate-700)}
+  .eje .inv{font-size:.48em;color:var(--gray-400)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:.5em}
+  .kpi{background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.55em .6em;box-shadow:var(--sh-card)}
+  .kpi .k{font-size:.55em;font-weight:600;color:var(--gray-700)}
+  .kpi .ks{font-size:.46em;color:var(--gray-400)}
+  .kpi .v{font-size:1.02em;font-weight:800;color:var(--slate-900);margin-top:.18em;font-variant-numeric:tabular-nums}
+  .kpi .vn{font-size:.48em;color:var(--gray-400)}
+
+  .cards{display:flex;flex-direction:column;gap:.4em}
+  .icard{background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.5em .6em;display:flex;align-items:center;gap:.55em;box-shadow:var(--sh-card)}
+  .icard .ct{flex:1;min-width:0}
+  .icard .ct b{font-size:.64em;color:var(--slate-800);display:block;line-height:1.2;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .icard .ct span{font-size:.54em;color:var(--gray-400)}
+  .fl{font-size:.78em;color:var(--gray-300)}.fl.on{color:var(--red-500)}
+
+  .mapwrap{display:flex;gap:1em;height:100%}
+  .mapcol{width:33%;position:relative;display:flex;align-items:center;justify-content:center;background:#e8edf5;border-radius:.6em;border:1px solid var(--gray-200);overflow:hidden}
+  .mapcol svg{height:92%;width:auto;filter:drop-shadow(0 5px 12px rgba(15,23,42,.18))}
+  .mappin{position:absolute;width:1.05em;height:1.05em;border-radius:50%;background:var(--red-500);left:54%;top:21%;transform:translate(-50%,-50%);box-shadow:0 0 0 .26em rgba(239,68,68,.26)}
+  .screen.on .mappin{animation:pin 2s 1s infinite}
+  .popup{position:absolute;left:40%;top:12%;background:rgba(255,255,255,.98);border:1px solid var(--gray-200);border-radius:.7em;box-shadow:0 14px 30px rgba(15,23,42,.16);padding:.6em .7em;width:11.5em}
+  .popup .pn{font-size:.68em;font-weight:800;color:var(--gray-900)}
+  .popup .ps{font-size:.52em;color:var(--gray-400);margin-top:.1em}
+  .popup .chips{display:flex;gap:.3em;margin-top:.45em}
+  .popup .chip{font-size:.52em;font-weight:700;border-radius:.35em;padding:.18em .4em}
+  .chip.tot{background:var(--gray-50);color:var(--gray-900)}.chip.alt{background:var(--red-50);color:var(--red-700)}.chip.med{background:var(--amber-50);color:var(--amber-700)}
+  .popup .dr{margin-top:.45em;font-size:.52em;font-weight:600;color:var(--blue-700)}
+  .panelcol{flex:1;background:#fff;border:1px solid var(--gray-200);border-top:3px solid #E9C46A;border-radius:.6em;padding:.7em;overflow:hidden;box-shadow:var(--sh-card)}
+
+  .modal{background:#fff;border-radius:.7em;box-shadow:0 26px 54px rgba(15,23,42,.28);overflow:hidden;text-align:left;border:1px solid var(--gray-200)}
+  .modal .mh{padding:.75em .9em;border-bottom:1px solid var(--gray-100)}
+  .modal .tags{display:flex;gap:.4em;align-items:center;margin-bottom:.4em}
+  .tg{font-size:.5em;font-weight:700;padding:.18em .45em;border-radius:1em}
+  .tg.eco{background:var(--blue-50);color:var(--blue-700)}.tg.seg{background:var(--red-50);color:var(--red-700)}.tg.soc{background:var(--purple-50);color:var(--purple-700)}
+  .modal .mt{font-size:.78em;font-weight:700;color:var(--slate-900);line-height:1.22}
+  .modal .mfoco{margin-left:auto;font-size:.54em;color:var(--gray-500);border:1px solid var(--gray-200);border-radius:.4em;padding:.2em .5em}
+  .estate{display:flex;align-items:center;gap:1em;padding:.6em .9em;border-bottom:1px solid var(--gray-100)}
+  .estate .es{display:flex;align-items:center;gap:.4em;font-size:.62em;color:var(--gray-500)}
+  .estate .sl{flex:1;height:.4em;background:var(--gray-100);border-radius:1em;position:relative;overflow:hidden}
+  .estate .sl i{position:absolute;left:0;top:0;height:100%;background:var(--blue-500);border-radius:1em}
+  .frow{display:flex;justify-content:space-between;padding:.4em .9em;font-size:.62em;border-bottom:1px dashed var(--gray-100)}
+  .frow .k{color:var(--gray-400)}.frow .vv{font-weight:600;color:var(--slate-800)}
+  .tabs{display:flex;gap:.25em;padding:.55em .9em .7em}
+  .tabs b{font-size:.58em;font-weight:600;padding:.35em .6em;border-radius:.4em;background:var(--gray-100);color:var(--gray-500)}
+  .tabs b.on{background:var(--slate-900);color:#fff}
+
+  .ppm{background:#fff;border-radius:.7em;box-shadow:0 26px 54px rgba(15,23,42,.28);border:1px solid var(--gray-200);overflow:hidden;text-align:left}
+  .pph{padding:.78em .95em;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:.55em}
+  .pph b{font-size:.78em;font-weight:700;color:var(--slate-900)}
+  .pph .rg2{font-size:.55em;color:var(--gray-400);margin-top:.1em}
+  .pph .x{margin-left:auto;color:var(--gray-300);font-size:.82em}
+  .ppb{padding:.85em .95em}
+  .ppnote{font-size:.6em;color:var(--gray-600);line-height:1.55}
+  .ppnote a{color:var(--blue-700);font-weight:600;text-decoration:underline}
+  .ppfield{margin-top:.8em}
+  .ppfield label{display:block;font-size:.6em;font-weight:600;color:var(--gray-700);margin-bottom:.3em}
+  .ppfile{display:flex;align-items:center;gap:.5em}
+  .ppbtn{font-size:.58em;border:1px solid var(--gray-300);border-radius:.4em;padding:.32em .65em;background:var(--gray-50);color:var(--slate-700)}
+  .ppfn{font-size:.58em;color:var(--gray-500)}
+  .pptext{border:1px solid var(--gray-300);border-radius:.5em;padding:.5em .6em;font-size:.58em;color:var(--slate-700);min-height:2.4em}
+  .ppactions{display:flex;justify-content:flex-end;gap:.7em;margin-top:.95em;align-items:center}
+  .ppcancel{font-size:.62em;color:var(--gray-500)}
+
+  .dtop{display:flex;justify-content:space-between;align-items:flex-start}
+  .kbar{display:flex;align-items:center;gap:.55em;margin:.6em 0 .2em;flex-wrap:wrap}
+  .dchip{font-size:.56em;font-weight:600;border:1px solid var(--gray-200);border-radius:1em;padding:.2em .55em;color:var(--gray-600);background:#fff;display:inline-flex;align-items:center;gap:.3em}
+  .dtable{width:100%;border-collapse:collapse;margin-top:.5em;font-size:.54em}
+  .dtable th{text-align:left;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding:.35em .45em;border-bottom:1px solid var(--gray-200)}
+  .dtable td{padding:.4em .45em;border-bottom:1px solid var(--gray-100);vertical-align:top;color:var(--slate-700)}
+  .dst{display:inline-flex;align-items:center;gap:.3em;font-weight:600}
+
+  .kseg{display:inline-flex;background:var(--gray-100);border-radius:.5em;padding:.12em;gap:.1em}
+  .kseg b{font-size:.58em;font-weight:600;color:var(--gray-500);padding:.28em .65em;border-radius:.4em}
+  .kseg b.on{background:#fff;color:var(--slate-900);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .kcols{display:flex;gap:.5em;height:calc(100% - 2.2em)}
+  .kc{flex:1;min-width:0;background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.45em;display:flex;flex-direction:column;box-shadow:var(--sh-card)}
+  .kc .kh{font-size:.46em;font-weight:700;color:var(--slate-700);text-transform:uppercase;letter-spacing:.02em;line-height:1.25;margin-bottom:.45em;display:flex;justify-content:space-between;gap:.3em}
+  .kcard{border:1px solid var(--gray-200);border-radius:.45em;padding:.4em .45em;margin-bottom:.4em}
+  .kcard .et{font-size:.62em;font-weight:600;color:var(--gray-500);background:var(--gray-100);border-radius:.3em;padding:.1em .45em;display:inline-block;margin-bottom:.3em}
+  .kcard b{font-size:.7em;color:var(--slate-800);font-weight:600;display:block;line-height:1.25}
+  .kcard .kf{display:flex;justify-content:space-between;align-items:center;margin-top:.35em}
+  .ksec{border:1px solid var(--gray-200);border-radius:.55em;margin-bottom:.5em;overflow:hidden;box-shadow:var(--sh-card)}
+  .ksec .sh{background:var(--gray-50);padding:.5em .65em;font-size:.62em;font-weight:700;color:var(--slate-800);display:flex;align-items:center;gap:.4em}
+  .ksec .sh .cnt{margin-left:auto;font-size:.85em;color:var(--gray-400);font-weight:500}
+  .ksec .srow{display:flex;align-items:center;gap:.5em;padding:.45em .65em;border-top:1px solid var(--gray-100);font-size:.6em;color:var(--slate-700)}
+  .ksec .srow .ejn{font-size:.82em;color:var(--gray-400)}
+
+  .hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2.4em;background:radial-gradient(120% 85% at 50% -8%,#ffffff 0%,var(--cream) 58%,var(--cream-2) 100%)}
+  .emblem{width:3.4em;height:3.4em;border-radius:.85em;background:#fff;border:1px solid var(--gray-200);box-shadow:0 8px 22px rgba(15,23,42,.08);display:flex;align-items:center;justify-content:center;margin-bottom:1em}
+  .emblem svg{width:2em;height:2em;fill:#0f3d72}
+  .screen.on .emblem{animation:floaty 3.4s ease-in-out infinite}
+  .kicker{font-size:.66em;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--blue-700);margin-bottom:.6em}
+  .htitle{font-size:1.85em;font-weight:800;color:var(--slate-900);letter-spacing:-.018em;line-height:1.06;margin:0;max-width:14em}
+  .htitle .hl{color:var(--blue-700)}
+  .hsub{font-size:.9em;color:var(--gray-600);margin-top:.85em;max-width:25em;line-height:1.5}
+  .badge{display:inline-flex;align-items:center;gap:.4em;margin-top:1.1em;font-size:.66em;font-weight:600;color:var(--slate-600);background:#fff;border:1px solid var(--gray-200);border-radius:2em;padding:.45em .9em;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+  .lgcard{width:min(70%,19em);background:#fff;border:1px solid var(--gray-200);border-radius:1em;box-shadow:0 12px 32px rgba(15,23,42,.09);padding:1.35em 1.45em;text-align:left}
+  .lgcard .ttl{text-align:center;font-size:.96em;font-weight:800;color:var(--slate-900)}
+  .lgcard .sb{text-align:center;font-size:.6em;color:var(--gray-400);margin-top:.2em;margin-bottom:1em}
+  .lgf{font-size:.6em;font-weight:600;color:var(--gray-700);margin-bottom:.3em;display:block}
+  .lgi{width:100%;border:1px solid var(--gray-300);border-radius:.5em;padding:.5em .6em;font-size:.64em;color:var(--slate-900);background:var(--gray-50);margin-bottom:.7em}
+  .lgbtn{width:100%;background:var(--slate-900);color:#fff;border-radius:.5em;padding:.6em;font-size:.64em;font-weight:700;text-align:center}
+  .recap{display:flex;gap:1em;flex-wrap:wrap;justify-content:center;margin-top:1.1em}
+  .rs{width:8.8em;background:#fff;border:1px solid var(--gray-200);border-radius:.7em;padding:.9em .7em;box-shadow:0 6px 16px rgba(15,23,42,.05)}
+  .rs .nn{width:1.95em;height:1.95em;border-radius:50%;margin:0 auto .5em;background:var(--slate-900);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82em}
+  .rs b{font-size:.82em;color:var(--slate-900)}.rs span{display:block;font-size:.6em;color:var(--gray-500);margin-top:.25em;line-height:1.4}
+
+  .spot{position:absolute;border-radius:.6em;box-shadow:0 0 0 9999px rgba(15,23,42,.5);transition:left .5s cubic-bezier(.4,.6,.2,1),top .5s cubic-bezier(.4,.6,.2,1),width .5s,height .5s,opacity .3s;pointer-events:none;z-index:6;outline:2px solid rgba(255,255,255,.92);outline-offset:1px}
+  .spot.hide{opacity:0;box-shadow:0 0 0 9999px rgba(15,23,42,0)}
+  .coach{position:absolute;z-index:8;width:15em;max-width:62%;background:#fff;border:1px solid var(--gray-200);border-radius:.7em;box-shadow:0 16px 40px rgba(15,23,42,.22);padding:.78em .88em;transition:left .5s cubic-bezier(.4,.6,.2,1),top .5s cubic-bezier(.4,.6,.2,1),opacity .35s;text-align:left}
+  .coach::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue-500);border-radius:.7em .7em 0 0}
+  .coach.center{left:50%;top:50%;transform:translate(-50%,-50%);width:19em;text-align:center}
+  .coach .ck{font-size:.5em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue-600)}
+  .coach .ct2{font-size:.8em;font-weight:700;color:var(--slate-900);margin-top:.25em;line-height:1.2}
+  .coach .cx{font-size:.66em;color:var(--gray-600);margin-top:.35em;line-height:1.45}
+  .cursor{position:absolute;width:1.15em;height:1.15em;z-index:9;pointer-events:none;transition:left .65s cubic-bezier(.4,.6,.2,1),top .65s cubic-bezier(.4,.6,.2,1);filter:drop-shadow(0 2px 4px rgba(15,23,42,.4))}
+  .cursor svg{width:100%;height:100%;fill:#fff;stroke:#0f172a;stroke-width:5}
+  .clickr{position:absolute;width:1.45em;height:1.45em;border:.16em solid var(--blue-500);border-radius:50%;z-index:9;pointer-events:none;opacity:0;transform:translate(-50%,-50%)}
+  .clickr.go{animation:ring .65s ease both}
+
+  .cap{padding:.55em 1.2em;background:#070a11;color:#d7e3f4;font-size:.74em;text-align:center;min-height:2.7em;display:flex;align-items:center;justify-content:center;line-height:1.45}
+  .controls{display:flex;align-items:center;gap:.7em;padding:.7em 1em;background:#0c0f16;border-top:1px solid rgba(255,255,255,.07);z-index:10}
+  .ctrl{appearance:none;border:0;background:rgba(255,255,255,.1);color:#fff;width:2.2em;height:2.2em;border-radius:50%;font-size:.95em;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .ctrl:hover{background:rgba(255,255,255,.2)}
+  .ctrl.big{width:2.7em;height:2.7em;background:var(--blue-600)}
+  .ctrl.big:hover{background:#2f7ae6}
+  .counter{font-size:.62em;color:#aebfd6;min-width:3.2em;text-align:center;font-variant-numeric:tabular-nums}
+  .track{flex:1;display:flex;flex-direction:column;gap:.4em}
+  .dots2{display:flex;gap:.3em}
+  .dots2 b{flex:1;height:.32em;border-radius:1em;background:rgba(255,255,255,.16);cursor:pointer;transition:.2s}
+  .dots2 b.done{background:#5b9bd6}.dots2 b.cur{background:#8ed0ff}
+  .pbar{height:.2em;background:rgba(255,255,255,.1);border-radius:1em;overflow:hidden}
+  .pbar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2563eb,#8ed0ff)}
+  @media (max-width:560px){.abTitle span,.abUser{display:none}.ejes{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}.coach{width:12em}}
+
+  .mehead{font-size:.66em;font-weight:700;color:var(--slate-800);margin-bottom:.6em}
+  .mehead span{color:var(--gray-400);font-weight:500}
+  .mecards{display:grid;grid-template-columns:repeat(3,1fr);gap:.5em}
+  .mecard{background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.6em .65em;box-shadow:var(--sh-card)}
+  .mecard .mn{font-size:.56em;font-weight:600;color:var(--slate-700);min-height:2.1em;line-height:1.2}
+  .mecard .mv{font-size:1.1em;font-weight:800;color:var(--slate-900);margin-top:.3em;font-variant-numeric:tabular-nums}
+  .mecard .mu{font-size:.5em;color:var(--gray-400);font-weight:500}
+  .mecard .mo{font-size:.5em;color:var(--gray-400);margin-top:.1em}
+  .mecard .bar{margin-top:.45em}
+  .meact{display:flex;gap:.45em;margin-top:.7em}
+  .prow{display:flex;align-items:center;gap:.6em;padding:.5em .7em;border:1px solid var(--gray-200);border-radius:.5em;margin-bottom:.45em;background:#fff;box-shadow:var(--sh-card);font-size:.6em}
+  .prow .pt{flex:1;min-width:0}
+  .prow .pt b{color:var(--slate-800);font-weight:600;display:block}
+  .prow .pt span{color:var(--gray-400);font-size:.9em}
+  .pst{font-size:.85em;font-weight:700;padding:.2em .55em;border-radius:1em;white-space:nowrap}
+  .pst.pend{background:var(--gray-100);color:var(--gray-600)}
+  .pst.appr{background:var(--green-50);color:var(--green-700)}
+  .pst.rej{background:var(--red-50);color:var(--red-700)}
+  .pst.warn{background:var(--amber-50);color:var(--amber-700)}
+</style>
+
+<div class="player" id="player">
+  <h2 class="sr-only">Recorrido guiado del Panel de Seguimiento Gubernamental (PSG) para equipos regionales.</h2>
+  <div class="stage" id="stage">
+
+    <div class="chrome" id="chrome">
+      <div class="abL"><div class="abLogo"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div><div class="abTitle"><b>PSG</b><span>Panel Seguimiento Gubernamental — Regiones</span></div></div>
+      <div class="abNav"><b id="navMapa"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:.1em"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>Mapa</b><b id="navSeg">Seguimiento ▾</b></div>
+      <div class="abR"><div class="abAv">NA</div><div class="abUser"><b>nombre.apellido@interior.gob.cl</b><span>Regional</span></div><div class="abOut">⏻</div></div>
+    </div>
+
+    <section class="screen body" data-view="map">
+      <div class="bd">
+        <div class="mapwrap">
+          <div class="mapcol" id="mp-map"><svg id="mapsvg" viewBox="0 0 92 470" aria-label="Mapa de Chile"></svg><div class="mappin"></div>
+            <div class="popup u-pop"><div class="pn">Antofagasta</div><div class="ps">Región II · Antofagasta</div><div class="chips"><span class="chip tot">325</span><span class="chip alt">47 alta</span><span class="chip med">277 media</span></div><div class="dr">📄 Dashboard Regional</div></div>
+          </div>
+          <div class="panelcol" id="mp-panel">
+            <div style="font-size:.64em;font-weight:700;color:#b8860b;margin-bottom:.5em">Norte Grande · tu cartera</div>
+            <div class="cards">
+              <div class="icard"><span class="s a"></span><div class="ct"><b>Mejoramiento Ruta 23-CH, Sector Socaire</b><span>Obras Públicas · Eje 2</span></div><span class="pri media">Media</span><span class="fl">🚩</span></div>
+              <div class="icard"><span class="s r"></span><div class="ct"><b>Paso Fronterizo Ollagüe, Ruta 21-Ch</b><span>Interior · Eje 1</span></div><span class="pri alta">Alta</span><span class="fl">🚩</span></div>
+              <div class="icard"><span class="s g"></span><div class="ct"><b>Concesión Ruta 5 Caldera – Antofagasta</b><span>Obras Públicas · Eje 2</span></div><span class="pri alta">Alta</span><span class="fl">🚩</span></div>
+              <div class="icard"><span class="s v"></span><div class="ct"><b>Conservación Biblioteca Regional</b><span>Culturas · Eje 5</span></div><span class="pri media">Media</span><span class="fl">🚩</span></div>
+              <div class="icard"><span class="s a"></span><div class="ct"><b>Reposición Hospital Provincial</b><span>Salud · Eje 3</span></div><span class="pri alta">Alta</span><span class="fl">🚩</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="miregion">
+      <div class="bd" style="padding:.7em 1.2em;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:.6em;margin-bottom:.5em"><span class="lbl" style="text-transform:none;font-weight:500">Región:</span><span class="selct">Antofagasta ▾</span></div>
+        <div class="cardw" id="mr-head">
+          <div class="rg">
+            <div>
+              <h2>Antofagasta<span class="zona">Norte Grande</span></h2>
+              <div class="meta">325 iniciativas · Antofagasta</div>
+              <div class="avwrap"><span class="av countup" data-val="52" data-suf="%">0%</span><span class="avt">avance promedio</span></div>
+              <div class="semrow">
+                <span class="it"><span class="s v"></span><span class="n v">142</span><span class="t">verde</span></span>
+                <span class="it"><span class="s a"></span><span class="n a">98</span><span class="t">revisión</span></span>
+                <span class="it"><span class="s r"></span><span class="n r">41</span><span class="t">bloqueado</span></span>
+                <span class="it"><span class="s g"></span><span class="n g">44</span><span class="t">sin evaluar</span></span>
+              </div>
+            </div>
+            <div>
+              <div class="prego"><div class="pl">PREGO</div><div class="dots"><i class="ok">✓</i><i class="ok">✓</i><i class="ok">✓</i><i class="warn">!</i><i></i><i></i><i></i><i></i><i></i><b>4/9</b></div></div>
+              <div class="btns"><span class="btn">＋ Proponer actualización</span><span class="btn">📊 Indicadores</span><span class="btn dark">📄 Generar ejecutiva ▾</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="sect">Alertas activas</div>
+        <div class="alert" id="mr-alertas">
+          <div class="ar"><span class="ic">📅</span> 13 hitos próximos (≤ 7 días) <span class="ago">empieza por aquí</span></div>
+          <div class="ar"><span class="ic">🕒</span> 44 iniciativas sin actividad hace +15 días</div>
+        </div>
+        <div class="sect">Avance por eje estratégico</div>
+        <div class="ejes" id="mr-ejes">
+          <div class="eje"><span class="lbl" style="font-size:.5em">Eje 1</span><div class="nm">Seguridad Pública, Fronteras y Control del Crimen Organizado</div><div class="bar go" style="--w:34%"><i></i></div><div class="ft"><span class="inv">42 init · $29.864 MM</span><span class="pct">34%</span></div></div>
+          <div class="eje"><span class="lbl" style="font-size:.5em">Eje 2</span><div class="nm">Infraestructura y Conectividad</div><div class="bar go" style="--w:61%"><i></i></div><div class="ft"><span class="inv">114 init · $607.642 MM</span><span class="pct">61%</span></div></div>
+          <div class="eje"><span class="lbl" style="font-size:.5em">Eje 3</span><div class="nm">Desarrollo Económico, Diversificación Productiva y Empleo</div><div class="bar go" style="--w:47%"><i></i></div><div class="ft"><span class="inv">38 init · $3.531 MM</span><span class="pct">47%</span></div></div>
+          <div class="eje"><span class="lbl" style="font-size:.5em">Eje 4</span><div class="nm">Vivienda, Educación y Salud</div><div class="bar go" style="--w:28%"><i></i></div><div class="ft"><span class="inv">63 init · $83.201 MM</span><span class="pct">28%</span></div></div>
+          <div class="eje"><span class="lbl" style="font-size:.5em">Eje 5</span><div class="nm">Desarrollo Social y Cohesión Social</div><div class="bar go" style="--w:52%"><i></i></div><div class="ft"><span class="inv">68 init · $25.938 MM</span><span class="pct">52%</span></div></div>
+        </div>
+        <div class="sect">Métricas clave</div>
+        <div class="kpis">
+          <div class="kpi"><div class="k">Desocupación</div><div class="ks">BCCh · trim. móvil</div><div class="v countup" data-val="7.2" data-dec="1" data-suf="%">0%</div><div class="vn">↑ 0,8 pp</div></div>
+          <div class="kpi"><div class="k">Seguridad</div><div class="ks">LeyStop · sem. 22</div><div class="v countup" data-val="1228" data-thou="1">0</div><div class="vn">casos / 100 mil</div></div>
+          <div class="kpi"><div class="k">PIB regional</div><div class="ks">BCCh · anual</div><div class="v countup" data-val="12.8" data-dec="1" data-suf="%">0%</div><div class="vn">del PIB nacional</div></div>
+          <div class="kpi"><div class="k">Inversión</div><div class="ks">iniciativas región</div><div class="v">$950 MM</div><div class="vn">325 iniciativas</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="dashboard">
+      <div class="bd" style="padding:.7em 1.2em">
+        <div class="dtop">
+          <div><div style="font-size:.74em;font-weight:700;color:var(--slate-900)">325 iniciativas <span style="color:var(--gray-400);font-weight:500">· 142 en verde · 98 en revisión</span></div><div class="bar" style="width:20em;margin-top:.45em"><i style="width:52%"></i></div></div>
+          <div style="text-align:right"><div style="font-size:1.3em;font-weight:800;color:var(--slate-800)">52%</div><div style="font-size:.52em;color:var(--gray-400)">avance</div></div>
+        </div>
+        <div class="kbar">
+          <span class="selct" style="font-size:.56em;color:var(--gray-400)">🔎 Buscar meta, región, ministerio…</span>
+          <span class="dchip"><span class="s r" style="width:.5em;height:.5em"></span>Bloqueadas</span>
+          <span class="dchip"><span class="s a" style="width:.5em;height:.5em"></span>En revisión</span>
+          <span class="dchip"><span class="s v" style="width:.5em;height:.5em"></span>En verde</span>
+          <span class="dchip" style="margin-left:auto">Por región</span><span class="dchip">Columnas</span><span class="btn">⬇️ Excel</span>
+        </div>
+        <table class="dtable" id="db-table">
+          <thead><tr><th>Estado</th><th>Iniciativa</th><th>Región</th><th>Avance</th><th>Próximo hito</th><th>Inversión</th></tr></thead>
+          <tbody>
+            <tr><td><span class="dst" style="color:var(--amber-700)"><span class="s a" style="width:.5em;height:.5em"></span>En revisión</span></td><td><span style="font-weight:600;color:var(--slate-800)">Mejoramiento Paso Fronterizo Ruta 21-Ch: Cebollar - Ollague</span><div style="color:var(--gray-400)">Obras Públicas</div></td><td>Antofagasta</td><td>35%</td><td>Término Obras · 24-12-2027</td><td>—</td></tr>
+            <tr><td><span class="dst" style="color:var(--green-700)"><span class="s v" style="width:.5em;height:.5em"></span>En verde</span></td><td><span style="font-weight:600;color:var(--slate-800)">Concesión Ruta 5 Caldera - Antofagasta</span><div style="color:var(--gray-400)">Obras Públicas</div></td><td>Antofagasta</td><td>60%</td><td>Inicio Obras · 30-06-2026</td><td>804 MM$</td></tr>
+            <tr><td><span class="dst" style="color:var(--red-700)"><span class="s r" style="width:.5em;height:.5em"></span>Bloqueada</span></td><td><span style="font-weight:600;color:var(--slate-800)">Red Aeroportuaria Norte (Andrés Sabella)</span><div style="color:var(--gray-400)">Obras Públicas</div></td><td>Antofagasta</td><td>15%</td><td>Financiamiento</td><td>306 MM$</td></tr>
+            <tr><td><span class="dst" style="color:var(--gray-500)"><span class="s g" style="width:.5em;height:.5em"></span>Sin evaluar</span></td><td><span style="font-weight:600;color:var(--slate-800)">Mejoramiento Paso Fronterizo SICO, Ruta 23-CH</span><div style="color:var(--gray-400)">Obras Públicas</div></td><td>Antofagasta</td><td>0%</td><td>—</td><td>1.580,3 MM$</td></tr>
+            <tr><td><span class="dst" style="color:var(--green-700)"><span class="s v" style="width:.5em;height:.5em"></span>En verde</span></td><td><span style="font-weight:600;color:var(--slate-800)">Reposición Hospital Provincial</span><div style="color:var(--gray-400)">Salud</div></td><td>Antofagasta</td><td>72%</td><td>Recepción · 30-09-2026</td><td>12.400 MM$</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="ficha">
+      <div class="bd center">
+        <div class="modal" id="fi-modal" style="width:min(80%,27em)">
+          <div class="mh"><div class="tags"><span class="tg eco">Eje 2: Infraestructura</span><span class="pri media">Media</span><span class="mfoco">🚩 Marcar foco</span></div><div class="mt">Mejoramiento Ruta 23-CH, Sector Socaire</div></div>
+          <div class="estate"><div class="es"><span class="s a"></span>En revisión</div><div class="sl"><i style="width:45%"></i></div><span style="font-size:.66em;font-weight:700;color:var(--slate-800)">45%</span></div>
+          <div class="frow"><span class="k">Responsable · Etapa</span><span class="vv">DGOP · Ejecución</span></div>
+          <div class="frow"><span class="k">Financiamiento</span><span class="vv">Sectorial</span></div>
+          <div class="frow"><span class="k">Inversión · Cód. BIP</span><span class="vv">$67.427 MM · 30461892-0</span></div>
+          <div class="frow"><span class="k">RAT</span><span class="vv">RS</span></div>
+          <div class="tabs"><b class="on">Seguimiento</b><b>Historial</b><b>Calendario</b><b>Documentos</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="proponer">
+      <div class="bd center">
+        <div class="ppm" id="pp-modal" style="width:min(72%,25em)">
+          <div class="pph"><span style="font-size:.9em">📤</span><div><b>Proponer actualización</b><div class="rg2">Región: Antofagasta</div></div><span class="x">✕</span></div>
+          <div class="ppb">
+            <div class="ppnote">Sube un Excel con los cambios que quieres proponer. <a>Descarga las iniciativas actuales de Antofagasta</a> para trabajar sobre la situación real. Modifica solo las celdas que cambiaron — las que dejes intactas se mantienen igual. Para crear iniciativas nuevas, agrégalas al final con la columna <strong>#</strong> vacía.</div>
+            <div class="ppfield"><label>Archivo (.xlsx) <span style="color:var(--red-500)">*</span></label><div class="ppfile"><span class="ppbtn">Seleccionar archivo</span><span class="ppfn">cartera-antofagasta.xlsx</span></div></div>
+            <div class="ppfield"><label>Comentario para el revisor (opcional)</label><div class="pptext">Carga semanal — actualicé estados de proyectos en ejecución</div></div>
+            <div class="ppactions"><span class="ppcancel">Cancelar</span><span class="btn dark">Enviar propuesta</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="kanbanEje">
+      <div class="bd">
+        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b class="on">Por eje</b><b>Por ministerio</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" style="margin-left:auto">⬇️ Descargar cartera</span></div>
+        <div class="kcols" id="ke-cols">
+          <div class="kc"><div class="kh"><span>Eje 1: Seguridad y Fronteras</span><span>42</span></div>
+            <div class="kcard"><span class="et">Diseño</span><b>Paso Fronterizo Ruta 21-Ch</b><div class="kf"><span class="pri alta">Alta</span><span class="s g"></span></div></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Normalización Fiscalía Regional</b><div class="kf"><span class="pri media">Media</span><span class="s a"></span></div></div>
+          </div>
+          <div class="kc"><div class="kh"><span>Eje 2: Infraestructura</span><span>114</span></div>
+            <div class="kcard"><span class="et">Diseño</span><b>Concesión Ruta 5 Caldera</b><div class="kf"><span class="pri alta">Alta</span><span class="s v"></span></div></div>
+            <div class="kcard"><span class="et">Diseño</span><b>Concesión Ruta 5 Antofagasta-Iquique</b><div class="kf"><span class="pri alta">Alta</span><span class="s a"></span></div></div>
+          </div>
+          <div class="kc"><div class="kh"><span>Eje 3: Desarrollo Económico</span><span>38</span></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Mesa público-privada minería</b><div class="kf"><span class="pri media">Media</span><span class="s v"></span></div></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Atracción de especialistas técnicos</b><div class="kf"><span class="pri media">Media</span><span class="s g"></span></div></div>
+          </div>
+          <div class="kc"><div class="kh"><span>Eje 4: Vivienda, Educación, Salud</span><span>63</span></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Gestión de ocupaciones ilegales</b><div class="kf"><span class="pri alta">Alta</span><span class="s r"></span></div></div>
+            <div class="kcard"><span class="et">Terminado</span><b>Kit educativo Liceo Cesario Aguirre</b><div class="kf"><span class="pri alta">Alta</span><span class="s v"></span></div></div>
+          </div>
+          <div class="kc"><div class="kh"><span>Eje 5: Desarrollo Social</span><span>68</span></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Programa Vínculos</b><div class="kf"><span class="pri media">Media</span><span class="s a"></span></div></div>
+            <div class="kcard"><span class="et">Ejecución</span><b>Programa Calle</b><div class="kf"><span class="pri media">Media</span><span class="s v"></span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="kanbanMin">
+      <div class="bd">
+        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b>Por eje</b><b class="on">Por ministerio</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" id="km-dl" style="margin-left:auto">⬇️ Descargar cartera por ministerio (PDF)</span></div>
+        <div id="km-list">
+          <div class="ksec"><div class="sh">▾ Ministerio de Obras Públicas <span class="cnt">128 iniciativas</span></div>
+            <div class="srow"><span class="fl on">🚩</span><span class="s a"></span><span style="flex:1">Concesión Ruta 5 Caldera - Antofagasta</span><span class="ejn">Eje 2</span><span class="pri alta">Alta</span></div>
+            <div class="srow"><span class="fl">🚩</span><span class="s g"></span><span style="flex:1">Mejoramiento Paso Fronterizo SICO, Ruta 23-CH</span><span class="ejn">Eje 1</span><span class="pri media">Media</span></div>
+          </div>
+          <div class="ksec"><div class="sh">▸ Gobierno Regional <span class="cnt">36 iniciativas</span></div>
+            <div class="srow"><span class="fl">🚩</span><span class="s r"></span><span style="flex:1">Encuentro Regional de la Pesca Artesanal</span><span class="ejn">Eje 3</span><span class="pri alta">Alta</span></div>
+          </div>
+          <div class="ksec"><div class="sh">▸ Ministerio de Salud <span class="cnt">22 iniciativas</span></div>
+            <div class="srow"><span class="fl">🚩</span><span class="s a"></span><span style="flex:1">Reposición Hospital Provincial de Antofagasta</span><span class="ejn">Eje 3</span><span class="pri alta">Alta</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="atencion">
+      <div class="bd">
+        <div style="font-size:.8em;font-weight:700;color:var(--slate-900)">Bandeja de atención</div>
+        <div class="lbl" style="text-transform:none;font-weight:500;color:var(--gray-400);margin-bottom:.6em">Lo prioritario para revisar ahora</div>
+        <div class="cardw" id="at-foco" style="padding:.7em">
+          <div class="lbl" style="color:var(--red-600);margin-bottom:.5em">🚩 En foco</div>
+          <div class="cards">
+            <div class="icard"><span class="s r"></span><div class="ct"><b>Paso Fronterizo Ollagüe, Ruta 21-Ch</b><span>Bloqueada · revisar en gabinete</span></div><span class="pri alta">Alta</span></div>
+            <div class="icard"><span class="s a"></span><div class="ct"><b>Reposición Hospital Provincial</b><span>Hito esta semana</span></div><span class="pri alta">Alta</span></div>
+          </div>
+        </div>
+        <div class="cardw" style="padding:.7em;margin-top:.6em">
+          <div class="lbl" style="text-transform:none;font-weight:500;color:var(--gray-400)">Sugerencias automáticas · 12 — iniciativas que podrías marcar en foco</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen light" data-view="intro">
+      <div class="hero">
+        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="kicker u-rise">Capacitación · Equipos regionales</div>
+        <h1 class="htitle u-rise">Panel de Seguimiento <span class="hl">Gubernamental</span></h1>
+        <p class="hsub u-rise">Tu región, al día, en un solo lugar.</p>
+        <div class="badge u-pop">▶ Reproduciéndose</div>
+      </div>
+    </section>
+
+    <section class="screen light" data-view="login">
+      <div class="hero">
+        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="lgcard u-rise" id="lg-form">
+          <div class="ttl">Panel Seguimiento Gubernamental</div>
+          <div class="sb">Regiones · PSG</div>
+          <span class="lgf">Correo electrónico</span>
+          <div class="lgi">nombre.apellido@interior.gob.cl</div>
+          <span class="lgf">Contraseña</span>
+          <div class="lgi">••••••••••</div>
+          <div class="lgbtn">Ingresar</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen light" data-view="recap">
+      <div class="hero">
+        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="kicker u-rise">Para empezar hoy</div>
+        <h2 class="htitle u-rise" style="font-size:1.5em">Tres pasos para partir</h2>
+        <div class="recap">
+          <div class="rs u-pop"><div class="nn">1</div><b>Ingresa</b><span>El mapa te lleva a tu región</span></div>
+          <div class="rs u-pop" style="animation-delay:.15s"><div class="nn">2</div><b>Lee tu tablero</b><span>Mira tus alertas primero</span></div>
+          <div class="rs u-pop" style="animation-delay:.3s"><div class="nn">3</div><b>Mantén al día</b><span>Un Excel por semana</span></div>
+        </div>
+        <p class="hsub u-rise" style="animation-delay:.4s">Revisa la Bandeja de Atención los lunes. Si algo bloquea tu semana, márcalo en foco y revísalo en gabinete.</p>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="metricas">
+      <div class="bd">
+        <div class="mehead">Eje 2: Infraestructura y Conectividad <span>· métricas de seguimiento</span></div>
+        <div class="mecards" id="me-cards">
+          <div class="mecard"><div class="mn">Kilómetros de ruta mejorados</div><div class="mv">128 <span class="mu">km</span></div><div class="mo">Meta: 200 km</div><div class="bar go" style="--w:64%"><i></i></div></div>
+          <div class="mecard"><div class="mn">Pasos fronterizos habilitados</div><div class="mv">2</div><div class="mo">Meta: 3</div><div class="bar go" style="--w:66%"><i></i></div></div>
+          <div class="mecard"><div class="mn">Cobertura de conectividad rural</div><div class="mv">71 <span class="mu">%</span></div><div class="mo">Meta: 90%</div><div class="bar go" style="--w:79%"><i></i></div></div>
+        </div>
+        <div class="meact"><span class="btn dark">Actualizar valor</span><span class="btn">＋ Nueva métrica</span></div>
+      </div>
+    </section>
+
+    <section class="screen body" data-view="misPropuestas">
+      <div class="bd">
+        <div style="font-size:.8em;font-weight:700;color:var(--slate-900)">Mis propuestas</div>
+        <div class="lbl" style="text-transform:none;font-weight:500;color:var(--gray-400);margin-bottom:.6em">Estado de las cargas que enviaste</div>
+        <div id="mp-list">
+          <div class="prow"><div class="pt"><b>Carga semanal</b><span>12 jun · cartera-antofagasta.xlsx</span></div><span class="pst pend">Pendiente</span></div>
+          <div class="prow"><div class="pt"><b>Carga semanal</b><span>5 jun · Aplicada: 3 insertadas, 14 actualizadas</span></div><span class="pst appr">Aprobada</span></div>
+          <div class="prow"><div class="pt"><b>Carga semanal</b><span>28 may · Nota del revisor: faltan códigos BIP</span></div><span class="pst rej">Rechazada</span></div>
+          <div class="prow"><div class="pt"><b>Carga semanal</b><span>21 may · con errores parciales en 2 filas</span></div><span class="pst warn">Aplicada con avisos</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="spot hide" id="spot"></div>
+    <div class="coach" id="coach"><div class="ck" id="coachKick"></div><div class="ct2" id="coachTitle"></div><div class="cx" id="coachText"></div></div>
+    <div class="cursor" id="cursor"><svg viewBox="0 0 24 24"><path d="M5 3l15 9-6 1 4 7-3 1-4-7-4 4z"/></svg></div>
+    <div class="clickr" id="clickr"></div>
+  </div>
+
+  <div class="cap" id="cap"></div>
+
+  <div class="controls">
+    <button class="ctrl" id="prev" title="Anterior (←)" aria-label="Anterior">‹</button>
+    <button class="ctrl big" id="play" title="Reproducir / Pausar (espacio)" aria-label="Reproducir o pausar">⏸</button>
+    <button class="ctrl" id="next" title="Siguiente (→)" aria-label="Siguiente">›</button>
+    <button class="ctrl" id="restart" title="Reiniciar" aria-label="Reiniciar">↻</button>
+    <span class="counter" id="counter">1 / 16</span>
+    <div class="track"><div class="dots2" id="dots"></div><div class="pbar"><i id="pfill"></i></div></div>
+  </div>
+</div>
+
+<script>
+const CHILE_VB='0 0 92.2 470.0';
+const CHILE=[
+ {n:"Arica y Parinacota",c:'#E76F51',d:'M53.0,10.4 L53.8,11.6 L53.2,15.8 L54.1,20.1 L54.0,21.1 L57.9,18.6 L59.0,18.8 L59.8,17.9 L62.6,18.7 L63.7,19.4 L63.5,20.0 L65.1,19.6 L67.5,17.0 L66.3,13.7 L66.7,12.0 L66.2,11.3 L66.0,9.0 L65.2,8.1 L66.1,6.9 L63.8,5.6 L63.6,3.6 L62.0,1.3 L62.0,0.0 L60.1,2.0 L58.8,1.8 L58.5,3.0 L59.2,6.0 L58.2,8.2 L56.9,9.4 L53.0,10.4Z'},
+ {n:"Tarapacá",c:'#F4A261',d:'M54.0,21.1 L54.8,24.4 L54.4,25.7 L55.1,26.4 L55.6,30.4 L54.7,40.5 L55.4,41.4 L55.0,43.1 L56.0,45.6 L56.2,48.0 L59.1,47.9 L60.1,48.4 L61.2,50.4 L63.6,47.6 L68.0,46.2 L71.3,43.6 L71.8,42.0 L71.2,41.6 L71.1,39.4 L72.2,38.4 L69.3,36.1 L69.2,35.1 L70.0,34.4 L69.5,33.6 L69.6,32.2 L68.9,32.1 L69.0,31.5 L71.1,30.8 L71.3,28.7 L69.7,27.4 L72.6,23.4 L67.9,19.1 L67.2,17.6 L66.5,17.8 L66.5,18.4 L65.1,19.6 L63.5,20.0 L63.7,19.4 L62.6,18.7 L59.8,17.9 L59.0,18.8 L57.9,18.6 L54.0,21.1Z'},
+ {n:"Antofagasta",c:'#E9C46A',d:'M49.5,101.6 L50.6,103.7 L50.3,104.6 L51.0,104.6 L50.9,103.9 L53.9,102.6 L56.0,103.5 L57.7,102.5 L58.2,103.2 L59.2,102.8 L61.5,103.2 L62.3,102.1 L64.1,102.2 L65.7,101.4 L65.9,98.7 L66.7,97.7 L66.3,96.3 L69.4,96.4 L71.3,95.2 L72.0,93.1 L73.2,93.0 L72.3,90.5 L70.9,89.1 L71.7,86.7 L72.3,86.8 L72.7,85.3 L73.5,85.4 L74.0,84.3 L83.3,79.8 L86.5,67.2 L84.7,64.9 L80.8,65.9 L77.7,65.1 L77.7,62.6 L78.2,62.1 L77.1,59.6 L77.2,56.3 L75.8,54.8 L76.0,52.2 L74.8,50.1 L74.8,46.5 L72.5,42.0 L71.8,42.0 L71.3,43.6 L68.0,46.2 L63.6,47.6 L61.2,50.4 L60.1,48.4 L59.1,47.9 L56.2,48.0 L55.3,50.8 L55.3,53.4 L54.9,53.8 L54.1,60.6 L54.4,61.1 L53.7,64.3 L53.9,66.1 L52.8,68.2 L52.0,68.4 L51.7,67.5 L51.1,68.2 L51.2,69.5 L50.8,70.3 L51.0,72.4 L50.6,73.5 L51.4,73.8 L51.9,72.9 L52.9,74.3 L51.6,77.7 L51.8,81.5 L51.1,86.1 L51.4,86.6 L51.0,88.2 L52.2,91.5 L51.8,92.8 L52.5,94.6 L52.3,96.3 L51.7,96.4 L51.5,97.5 L50.4,98.1 L50.5,99.5 L50.0,99.7 L49.5,101.6Z'},
+ {n:"Atacama",c:'#8AB17D',d:'M41.7,140.3 L42.0,140.3 L41.9,141.4 L42.3,141.7 L42.0,142.7 L43.4,142.2 L44.9,142.7 L45.1,143.9 L46.1,144.2 L46.0,144.8 L46.8,144.4 L47.2,142.6 L47.8,142.0 L48.9,142.2 L49.6,141.2 L51.3,141.0 L52.2,143.4 L52.3,145.1 L53.8,145.0 L55.1,146.9 L57.3,146.5 L56.6,144.4 L57.4,143.5 L57.3,142.8 L58.9,142.0 L60.3,133.1 L61.5,132.3 L62.2,130.5 L62.8,131.0 L64.3,127.8 L65.1,127.6 L65.8,124.9 L66.2,124.5 L66.1,123.6 L67.2,122.4 L66.8,121.5 L67.3,121.5 L68.0,119.9 L68.6,119.7 L68.0,119.2 L68.2,117.9 L69.6,117.3 L70.9,118.2 L71.0,117.4 L71.8,117.5 L71.8,116.7 L72.1,117.2 L73.6,116.4 L73.4,115.8 L73.9,115.0 L70.7,109.8 L71.0,107.3 L72.8,106.0 L71.8,100.3 L71.2,99.3 L71.5,98.6 L70.7,97.1 L71.4,96.2 L71.4,95.4 L70.8,95.1 L68.9,96.5 L66.3,96.3 L66.7,97.7 L65.9,98.7 L65.7,101.3 L64.2,102.1 L62.3,102.1 L61.5,103.2 L59.2,102.8 L58.2,103.2 L57.2,102.6 L56.0,103.5 L53.9,102.6 L50.3,104.6 L50.1,107.4 L50.6,108.1 L49.9,108.6 L50.0,110.8 L49.3,112.5 L49.5,113.1 L48.5,114.6 L49.0,116.0 L48.3,117.6 L47.5,117.4 L47.2,118.1 L47.6,119.8 L47.2,120.6 L48.0,122.0 L47.9,123.6 L46.9,124.5 L46.5,124.1 L45.1,129.7 L45.4,131.0 L44.9,131.9 L45.3,132.7 L44.8,133.9 L44.3,133.9 L44.3,134.9 L43.8,135.2 L44.0,136.6 L42.1,138.7 L41.7,140.3Z'},
+ {n:"Coquimbo",c:'#2A9D8F',d:'M39.8,160.6 L40.5,165.0 L40.3,166.9 L41.5,173.9 L41.9,174.3 L41.4,175.2 L41.9,175.5 L41.7,176.5 L42.0,176.7 L41.5,179.3 L42.2,179.0 L43.6,179.6 L44.7,178.7 L45.1,179.2 L45.6,179.0 L46.6,178.0 L46.5,177.5 L47.6,178.1 L49.5,177.3 L50.3,177.8 L50.4,178.8 L52.3,179.2 L52.5,180.4 L53.6,180.4 L53.8,178.8 L52.9,177.6 L53.9,177.7 L54.7,176.6 L54.0,175.7 L52.2,175.2 L52.2,173.4 L51.2,172.2 L51.2,170.7 L51.9,166.4 L52.3,165.9 L52.8,166.9 L53.6,165.4 L54.1,165.4 L53.6,164.0 L54.9,158.7 L55.6,157.9 L55.3,156.9 L57.2,157.4 L57.9,157.0 L57.9,155.3 L58.6,155.0 L58.6,154.3 L57.1,153.7 L57.7,153.0 L58.0,151.0 L57.2,146.5 L55.1,146.9 L53.8,145.0 L52.3,145.1 L52.2,143.4 L51.3,141.0 L49.6,141.2 L48.9,142.2 L47.8,142.0 L46.3,144.8 L45.1,143.9 L44.9,142.7 L43.4,142.2 L42.0,142.7 L43.7,144.7 L43.6,147.2 L44.1,148.0 L43.5,149.7 L44.2,151.5 L42.8,152.7 L43.2,153.6 L43.0,154.9 L42.5,154.7 L41.7,156.2 L40.9,156.3 L40.7,155.6 L40.4,156.0 L39.8,160.6Z'},
+ {n:"Valparaíso",c:'#457B9D',d:'M38.6,200.5 L39.8,201.0 L41.4,200.0 L41.5,198.6 L43.3,198.8 L42.6,197.6 L43.6,196.7 L43.5,194.4 L44.7,193.8 L44.8,192.2 L46.9,191.7 L46.8,189.0 L48.5,188.4 L50.8,188.6 L51.8,190.4 L52.7,189.6 L54.4,191.6 L54.8,190.7 L56.5,189.6 L56.9,188.1 L55.3,186.0 L55.1,184.7 L55.6,183.6 L55.3,182.8 L54.4,182.3 L54.6,181.1 L53.3,180.2 L52.5,180.4 L52.3,179.2 L50.4,178.8 L50.3,177.8 L49.5,177.3 L47.6,178.1 L46.5,177.5 L46.6,178.0 L45.6,179.0 L45.1,179.2 L44.7,178.7 L43.6,179.6 L42.2,179.0 L41.5,179.3 L42.9,181.9 L42.2,183.5 L42.6,184.9 L41.9,185.8 L42.1,186.5 L41.6,186.5 L41.9,188.2 L41.4,188.4 L41.4,189.4 L40.5,189.6 L40.2,190.6 L39.6,190.5 L40.5,193.0 L39.9,194.5 L40.9,196.0 L40.4,197.9 L39.1,198.8 L38.6,200.5Z'},
+ {n:"Metropolitana",c:'#1D3557',d:'M39.8,200.9 L41.1,201.9 L41.3,201.4 L42.5,201.7 L43.0,202.4 L43.9,201.9 L45.1,203.5 L46.2,203.8 L47.7,203.3 L47.5,202.6 L48.8,201.8 L48.9,200.7 L50.3,200.8 L52.5,199.7 L53.1,200.1 L53.4,202.2 L55.0,201.9 L55.2,203.5 L56.1,204.0 L56.3,204.9 L57.1,204.6 L57.7,205.1 L58.8,204.1 L58.0,203.1 L58.5,201.7 L57.7,201.1 L58.2,200.2 L57.7,198.8 L58.1,198.1 L58.1,195.9 L59.0,193.6 L58.8,192.8 L57.6,192.3 L56.8,193.2 L55.9,189.9 L54.4,191.6 L52.7,189.6 L51.8,190.4 L50.8,188.6 L47.8,188.5 L46.6,189.2 L46.9,191.7 L44.8,192.2 L44.7,193.8 L43.5,194.4 L43.6,196.7 L42.6,197.6 L43.3,198.7 L41.5,198.6 L41.4,200.0 L39.8,200.9Z'},
+ {n:"O'Higgins",c:'#6A4C93',d:'M36.5,209.9 L37.9,211.5 L39.0,211.6 L39.9,213.0 L40.4,212.0 L43.3,212.7 L43.2,211.7 L44.1,211.2 L44.8,211.7 L45.6,211.1 L45.9,211.6 L46.4,211.2 L47.3,212.2 L49.2,212.0 L50.6,213.6 L51.4,212.9 L52.1,213.6 L53.2,213.8 L54.3,211.3 L53.8,210.6 L54.7,209.9 L54.6,209.0 L55.5,207.4 L56.7,206.6 L56.6,205.6 L56.3,204.2 L55.2,203.5 L55.1,202.0 L53.4,202.2 L53.6,201.5 L52.6,199.7 L50.3,200.8 L48.9,200.7 L48.8,201.8 L47.5,202.6 L47.7,203.3 L46.2,203.8 L45.1,203.5 L43.9,201.9 L43.0,202.4 L41.3,201.4 L41.1,201.9 L38.6,200.3 L36.9,203.1 L37.3,205.8 L36.5,206.7 L36.5,209.9Z'},
+ {n:"Maule",c:'#9E2A2B',d:'M29.2,225.7 L31.2,226.9 L32.1,226.8 L32.1,227.7 L33.5,227.9 L33.7,228.5 L32.9,228.5 L33.3,229.1 L34.3,229.1 L34.7,228.5 L35.6,228.9 L36.3,227.5 L37.3,229.1 L38.9,229.0 L40.0,230.3 L42.3,231.0 L43.6,232.6 L44.1,231.4 L44.7,231.6 L45.8,230.4 L46.3,230.6 L46.3,231.6 L47.2,232.1 L48.0,231.7 L48.0,230.8 L49.7,231.2 L50.1,230.7 L49.8,229.3 L51.1,228.1 L51.1,227.7 L52.6,227.8 L52.7,226.7 L53.1,226.4 L52.6,225.6 L53.2,225.0 L52.6,224.9 L52.6,224.4 L53.7,223.7 L53.0,223.3 L53.2,222.9 L52.6,221.5 L53.0,221.1 L52.7,220.2 L53.1,220.1 L52.4,219.4 L52.5,217.6 L51.0,217.1 L51.4,216.2 L53.1,215.8 L53.2,213.8 L52.1,213.6 L51.4,212.9 L50.6,213.6 L49.2,212.0 L47.3,212.2 L46.4,211.2 L45.9,211.6 L45.6,211.1 L44.8,211.7 L44.1,211.2 L43.2,211.7 L43.3,212.7 L40.4,212.0 L39.9,213.0 L39.0,211.6 L37.9,211.5 L36.4,209.9 L35.2,212.5 L35.0,215.1 L33.2,216.4 L33.0,217.6 L32.1,218.5 L32.2,219.4 L30.7,221.0 L31.3,223.6 L29.2,225.7Z'},
+ {n:"Ñuble",c:'#C77DFF',d:'M28.3,231.3 L29.0,231.6 L29.1,233.3 L31.2,234.9 L31.2,235.9 L31.7,236.3 L30.6,237.2 L33.2,237.1 L35.1,238.5 L34.4,239.3 L34.3,240.5 L38.0,240.4 L39.0,239.5 L41.3,239.8 L41.4,238.4 L41.9,238.2 L42.8,239.3 L46.0,239.5 L44.7,237.9 L45.9,237.7 L46.0,237.3 L45.4,237.1 L45.7,236.5 L45.1,236.2 L45.6,235.9 L45.8,234.2 L46.3,234.7 L46.8,234.3 L46.3,233.5 L46.6,231.7 L46.1,230.4 L44.7,231.6 L44.1,231.4 L43.6,232.6 L42.3,231.0 L40.0,230.3 L38.9,229.0 L37.3,229.1 L36.3,227.5 L35.6,228.9 L34.7,228.5 L34.3,229.1 L33.3,229.1 L32.9,228.5 L33.7,228.5 L33.5,227.9 L32.3,227.8 L32.1,226.8 L29.5,226.0 L29.0,227.1 L29.0,229.3 L28.3,231.3Z'},
+ {n:"Biobío",c:'#3A86FF',d:'M17.6,254.3 L17.9,255.4 L18.4,255.4 L18.5,254.9 L17.6,254.3Z M20.4,242.6 L20.9,242.7 L21.3,243.8 L21.2,244.6 L20.5,245.5 L20.6,247.0 L21.8,249.0 L22.6,251.4 L22.5,253.0 L22.0,253.6 L22.1,256.3 L23.3,255.2 L24.4,256.3 L23.9,254.6 L26.4,252.5 L26.3,251.5 L25.1,251.0 L25.3,250.2 L25.9,249.9 L25.9,248.9 L26.9,248.0 L26.9,246.9 L25.9,246.6 L26.4,245.7 L29.3,245.3 L30.6,245.7 L30.6,246.3 L32.1,246.0 L32.3,247.3 L33.2,248.5 L34.6,248.9 L36.0,250.3 L37.4,250.3 L38.1,251.3 L39.2,250.7 L40.0,251.2 L39.9,253.5 L40.5,254.2 L40.9,253.3 L42.6,252.5 L43.2,251.4 L47.1,251.6 L45.8,249.8 L45.8,249.0 L45.1,248.6 L45.7,248.2 L44.8,246.6 L45.6,245.3 L45.8,244.1 L44.7,241.5 L45.8,240.7 L45.6,239.9 L46.0,239.5 L42.8,239.3 L41.9,238.2 L41.4,238.4 L41.3,239.8 L39.0,239.5 L38.0,240.4 L34.3,240.5 L34.4,239.3 L35.1,238.5 L33.2,237.1 L30.6,237.2 L31.7,236.3 L31.2,235.9 L30.9,234.4 L29.1,233.3 L28.9,231.5 L28.1,231.4 L27.8,232.6 L27.4,232.4 L27.2,234.9 L26.1,234.8 L26.0,233.4 L25.5,234.6 L25.8,235.1 L25.0,235.4 L25.6,236.3 L25.3,238.2 L25.7,238.8 L25.2,240.2 L23.2,241.1 L21.8,240.7 L21.3,239.9 L20.8,240.6 L20.4,242.6Z M21.6,238.5 L22.0,239.1 L22.6,238.8 L22.0,237.8 L21.6,238.5Z'},
+ {n:"La Araucanía",c:'#06D6A0',d:'M22.0,256.2 L22.3,258.4 L24.9,265.7 L25.1,267.1 L24.7,267.3 L25.1,267.6 L26.2,267.4 L27.0,266.2 L28.5,266.1 L28.8,266.5 L28.2,267.9 L28.5,267.4 L30.5,268.2 L31.8,267.9 L31.9,268.4 L33.4,268.8 L34.8,268.3 L34.3,268.8 L34.9,269.1 L37.7,267.7 L39.8,268.6 L40.9,270.2 L41.9,270.4 L42.3,269.4 L41.6,269.0 L42.2,268.6 L42.4,267.1 L43.2,266.0 L42.6,261.7 L44.6,260.2 L47.6,259.7 L48.6,257.6 L47.1,255.6 L46.6,253.4 L46.9,252.5 L46.1,251.5 L43.2,251.4 L42.6,252.5 L40.9,253.3 L40.5,254.2 L39.9,253.6 L40.0,251.4 L39.6,250.9 L38.2,251.3 L37.3,250.3 L36.0,250.3 L34.6,248.9 L33.1,248.4 L32.3,247.3 L32.1,246.0 L30.6,246.3 L30.6,245.7 L29.3,245.3 L26.4,245.7 L25.9,246.6 L26.9,246.9 L26.9,248.0 L25.9,248.9 L25.9,249.9 L25.3,250.2 L25.1,251.0 L26.3,251.5 L26.4,252.5 L23.9,254.6 L24.4,256.3 L23.3,255.2 L22.0,256.2Z'},
+ {n:"Los Ríos",c:'#118AB2',d:'M20.0,277.2 L21.2,278.5 L22.6,278.1 L23.1,278.9 L27.3,279.5 L28.5,281.3 L31.0,283.1 L36.0,282.9 L38.1,281.9 L38.7,279.9 L39.6,280.1 L40.4,279.2 L40.1,278.4 L39.5,278.5 L38.8,277.6 L38.7,276.1 L40.2,276.1 L40.1,275.2 L41.0,273.6 L40.1,272.9 L39.9,271.4 L40.3,270.9 L39.8,270.4 L40.2,269.5 L39.8,268.6 L37.6,267.7 L34.9,269.1 L34.3,268.8 L34.8,268.3 L33.4,268.8 L31.9,268.4 L31.8,267.9 L30.5,268.2 L28.5,267.4 L28.2,267.9 L28.7,266.2 L27.1,266.1 L26.2,267.4 L24.7,267.3 L24.6,269.2 L23.1,271.1 L23.3,273.1 L22.5,273.0 L22.0,273.8 L20.4,274.4 L20.1,274.9 L20.7,276.6 L20.0,277.2Z'},
+ {n:"Los Lagos",c:'#073B4C',d:'M8.9,318.0 L9.0,321.3 L17.6,318.6 L26.3,320.5 L27.8,319.9 L28.6,320.5 L29.0,319.2 L29.5,320.8 L31.0,320.7 L32.0,321.2 L32.3,320.4 L33.8,319.7 L34.3,320.7 L34.0,321.0 L34.6,321.2 L34.3,321.7 L35.1,321.7 L35.2,322.4 L35.9,322.1 L36.3,322.5 L35.9,322.9 L37.2,323.2 L37.3,322.7 L38.4,322.8 L38.9,323.1 L39.1,324.3 L39.7,324.4 L40.5,322.7 L39.4,321.7 L39.5,321.1 L41.2,319.4 L39.9,319.1 L39.2,318.0 L38.2,318.1 L38.5,317.3 L37.7,317.0 L37.7,316.2 L38.1,316.1 L38.0,315.3 L39.6,315.3 L39.7,313.8 L37.7,312.7 L37.6,312.1 L35.9,310.7 L35.4,309.0 L35.7,308.1 L35.2,307.7 L36.9,305.2 L36.7,304.2 L35.7,303.9 L35.3,300.9 L36.4,301.0 L36.5,300.6 L37.8,301.5 L39.7,300.6 L39.0,298.6 L39.4,296.6 L38.1,294.4 L38.8,294.0 L38.6,292.3 L37.9,291.4 L38.0,290.1 L38.7,290.3 L38.1,289.0 L38.6,288.8 L38.8,287.7 L38.0,286.8 L38.4,286.5 L38.4,285.5 L37.3,283.9 L38.7,281.9 L36.0,282.9 L31.0,283.1 L29.3,282.1 L28.2,281.0 L28.1,280.2 L26.4,279.0 L23.1,278.9 L22.6,278.1 L21.2,278.5 L20.4,277.7 L19.9,278.0 L19.5,280.4 L20.1,281.6 L18.9,282.9 L19.2,283.5 L18.4,285.3 L18.7,286.0 L17.8,286.8 L18.9,292.4 L16.7,296.8 L17.3,297.9 L16.7,298.4 L17.0,300.1 L15.5,302.5 L15.9,303.2 L15.3,305.5 L16.1,307.2 L15.6,308.6 L15.7,309.7 L15.0,310.4 L15.2,311.0 L14.7,311.3 L15.0,311.7 L14.0,312.4 L14.2,313.0 L13.2,314.6 L8.9,318.0Z'},
+ {n:"Aysén",c:'#4CC9F0',d:'M0.4,382.1 L4.8,381.5 L7.6,379.6 L11.7,381.1 L17.6,381.2 L25.7,387.3 L27.7,384.0 L29.1,384.3 L31.7,382.3 L31.2,378.4 L32.7,378.8 L33.3,378.0 L33.0,377.6 L33.6,377.3 L33.3,376.8 L34.3,376.9 L34.8,376.4 L33.9,375.4 L34.1,374.4 L33.5,373.4 L32.6,373.3 L32.8,372.1 L31.8,371.7 L32.4,370.2 L31.8,369.4 L32.6,369.4 L32.9,368.3 L34.0,367.5 L34.1,366.5 L33.6,365.8 L37.0,363.9 L36.8,362.7 L38.4,363.1 L38.1,362.9 L38.4,361.9 L37.5,361.2 L38.2,360.4 L37.4,360.0 L37.4,358.0 L39.3,357.4 L40.5,356.5 L40.5,355.9 L39.4,352.3 L39.7,351.4 L39.1,350.4 L37.9,349.8 L39.8,349.2 L40.9,347.6 L40.4,346.6 L39.3,346.2 L39.6,345.7 L39.0,344.0 L39.7,343.1 L39.5,342.5 L42.3,341.9 L41.7,340.6 L42.6,340.7 L43.7,339.5 L42.8,337.8 L41.7,337.1 L41.4,335.6 L38.9,334.9 L37.7,335.2 L36.4,334.3 L36.7,333.5 L36.3,333.2 L38.5,333.4 L39.2,332.8 L40.3,333.3 L42.1,332.6 L44.3,333.5 L44.9,332.7 L44.6,331.5 L44.9,330.9 L45.9,330.8 L46.0,330.1 L45.3,329.7 L45.6,329.4 L43.1,328.3 L38.9,328.7 L38.6,327.9 L39.1,327.7 L38.7,326.9 L39.2,326.3 L38.5,325.0 L39.6,324.4 L38.8,323.8 L38.9,323.1 L35.9,322.9 L36.3,322.5 L35.9,322.1 L35.2,322.4 L35.1,321.7 L34.3,321.7 L34.6,321.2 L34.0,321.0 L34.3,320.7 L33.8,319.7 L32.3,320.4 L32.0,321.2 L31.0,320.7 L29.5,320.8 L29.0,319.2 L28.6,320.5 L27.8,319.9 L26.3,320.5 L17.6,318.6 L9.0,321.3 L9.3,330.3 L5.3,333.6 L8.0,343.5 L1.2,355.4 L0.9,356.8 L1.0,357.9 L3.0,359.9 L3.8,369.2 L1.0,373.6 L0.4,382.1Z'},
+ {n:"Magallanes y Antártica",c:'#7209B7',d:'M0.0,385.6 L1.0,394.8 L2.3,398.1 L2.3,405.0 L4.6,411.3 L3.9,416.5 L6.3,426.1 L10.8,428.0 L10.4,430.1 L9.6,430.5 L9.8,431.5 L14.3,437.4 L22.2,446.7 L26.4,453.2 L36.4,454.4 L47.3,459.9 L60.4,464.6 L63.2,468.2 L75.9,466.7 L77.5,468.7 L83.1,470.0 L86.3,469.4 L88.6,468.1 L88.7,464.9 L92.2,460.7 L92.2,459.5 L89.7,459.4 L88.2,457.9 L83.8,456.8 L77.0,456.4 L70.5,456.9 L70.6,429.4 L72.4,425.4 L68.3,424.7 L64.8,423.2 L61.9,423.2 L56.8,421.3 L36.9,421.1 L36.7,420.9 L37.7,420.4 L37.5,419.8 L35.8,418.2 L34.1,417.7 L33.8,416.3 L32.7,416.3 L33.8,414.9 L34.0,413.6 L33.3,413.2 L34.5,412.2 L33.0,410.4 L33.3,409.4 L34.4,409.6 L34.6,407.6 L33.6,406.1 L34.2,404.9 L32.1,404.3 L31.2,405.2 L29.8,404.4 L25.2,406.9 L25.7,406.3 L25.2,406.0 L25.7,404.9 L23.8,403.9 L23.5,401.5 L22.8,401.3 L23.6,400.6 L22.7,399.9 L22.9,399.1 L22.0,398.8 L22.4,398.0 L22.2,397.5 L22.8,397.0 L22.7,396.4 L21.6,396.3 L21.7,395.8 L22.7,394.3 L25.3,393.4 L26.9,391.0 L26.8,389.9 L25.8,389.3 L26.2,388.2 L26.7,388.0 L25.8,387.9 L25.7,387.3 L17.6,381.2 L11.7,381.1 L7.6,379.6 L4.8,381.5 L0.4,382.1 L0.0,385.6Z'},
+];
+
+(function(){
+  try{
+    var mv=document.getElementById('mapsvg');
+    if(typeof CHILE!=='undefined'){
+      mv.setAttribute('viewBox',CHILE_VB);
+      CHILE.forEach(function(r){
+        var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+        p.setAttribute('d',r.d); var anto=/Antofagasta/i.test(r.n);
+        p.setAttribute('fill',r.c); p.setAttribute('stroke',anto?'#0f172a':'#ffffff');
+        p.setAttribute('stroke-width',anto?'1.4':'0.7'); p.setAttribute('opacity',anto?'1':'0.82');
+        mv.appendChild(p);
+      });
+    }
+  }catch(e){}
+
+  var steps=[
+    {view:'intro', t:null, kick:'Lo esencial', title:'', text:'', dur:14000,
+     narr:'Te damos la bienvenida al Panel de Seguimiento Gubernamental, el PSG. Es el panel donde tu región hace seguimiento de sus iniciativas prioritarias: cada obra, proyecto o compromiso que sigue de cerca. Existe para que tu Delegación, la División de Coordinación Interministerial del Ministerio del Interior y la autoridad central vean el avance real en un solo lugar, sin pedir reportes por correo. Tu rol: mantener esa información al día. El panel reporta el estado; no ejecuta las obras.'},
+    {view:'login', t:'lg-form', kick:'Acceso', title:'Ingresa con tu correo', text:'El panel reconoce tu región automáticamente.', dur:8000,
+     narr:'Para empezar, ingresas con tu correo institucional y el panel reconoce tu región.'},
+    {view:'map', t:'mp-map', kick:'Tu región', title:'El mapa te ubica en tu región', text:'El globo resume tu cartera: 325 iniciativas, 47 de prioridad alta.', dur:10500,
+     narr:'Al entrar, el mapa te ubica en tu región y la resalta. El globo resume tu cartera, el conjunto de tus iniciativas: 325 en total, 47 de prioridad alta y 277 media.'},
+    {view:'map', t:'mp-panel', kick:'Tu cartera', title:'Cada tarjeta es una iniciativa', text:'Cuando entras a tu propia región, el panel la muestra como tu cartera.', dur:11500,
+     narr:'A la derecha aparece la cartera completa. Cuando entras a tu propia región, el panel la muestra como tu cartera. Cada tarjeta es una iniciativa, una obra, proyecto o compromiso, con su semáforo de color, su eje y su prioridad.'},
+    {view:'miregion', t:'mr-head', kick:'Mi Región', title:'Tu tablero, de un vistazo', text:'Avance, semáforo y fase PREGO. Botones: Proponer, Indicadores y minutas.', dur:17000,
+     narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. El contador PREGO muestra tu Plan Regional de Gobierno: 9 fases que estructuran el compromiso con la región. La división central evalúa cada fase; tú reportas la evidencia de cumplimiento. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y generas la minuta en tres formatos: ejecutiva, reporte completo y kit de viaje.'},
+    {view:'miregion', t:'mr-alertas', kick:'Lo urgente', title:'Empieza por las alertas', text:'Lo bloqueado o sin actividad es tu prioridad del día.', dur:10500,
+     narr:'Lo más importante son las alertas activas: los hitos próximos a vencer y lo que lleva días sin movimiento. Comienza tu día por aquí; lo bloqueado o sin actividad es tu prioridad.'},
+    {view:'miregion', t:'mr-ejes', kick:'Tu cartera', title:'Avance por eje estratégico', text:'Los ejes los define tu región en su catálogo formal.', dur:11500,
+     narr:'Más abajo, tu cartera agrupada por los ejes estratégicos definidos por tu región. Cada región define los suyos en su catálogo formal: pueden ser cuatro, cinco o más. Si necesitas un eje nuevo, pídelo a tu contraparte de la división. Cada tarjeta muestra el avance y la inversión del eje.'},
+    {view:'metricas', t:'me-cards', kick:'Métricas por eje', title:'La meta y el valor actual', text:'La división define qué medir y la meta; tú reportas el valor actual.', dur:13000,
+     narr:'Al hacer clic en un eje se abren sus métricas de seguimiento. Aquí está el modelo de compromiso del plan: la división central define qué medir y la meta, y tú reportas el valor actual cada semana. Así se mide el cumplimiento de los compromisos de tu región.'},
+    {view:'dashboard', t:'db-table', kick:'Dashboard', title:'La tabla maestra', text:'Todas tus iniciativas en una lista: filtra, ordena y exporta a Excel.', dur:11500,
+     narr:'El Dashboard es la tabla maestra: todas tus iniciativas en una lista, con su estado, avance, próximo hito e inversión. Filtras por estado o región, ordenas la columna que quieras y exportas todo a Excel con un clic.'},
+    {view:'ficha', t:'fi-modal', kick:'El detalle', title:'Haz clic en una iniciativa', text:'Actualiza semáforo y avance aquí. Marcar foco la envía a Atención.', dur:14000,
+     narr:'Si haces clic en una iniciativa, por ejemplo desde el Dashboard, se abre su ficha en detalle. Desde aquí puedes actualizar el semáforo, el avance, el responsable y los seguimientos. Los campos estructurales, como el ministerio, el eje o el código BIP, los gestiona la división central. Y el botón Marcar foco, arriba a la derecha, es lo que envía la iniciativa a tu Bandeja de Atención.'},
+    {view:'proponer', t:'pp-modal', kick:'Cada semana', title:'Mantén tu cartera al día', text:'Descarga, modifica lo que cambió, sube y envía. Hazlo cada lunes.', dur:17500,
+     narr:'La tarea clave de cada semana: mantener tu cartera al día con un solo Excel. Descarga tus iniciativas, modifica solo lo que cambió, súbelo y envía tu propuesta. El Excel incluye una hoja Ejes válidos con los ejes de tu región; úsala como referencia. Si subes un eje que no existe en tu región, el panel te avisa antes y te indica cuál pedir a la división que cree. Hazlo cada lunes: un editor de la división revisa tu propuesta antes de que quede firme.'},
+    {view:'misPropuestas', t:'mp-list', kick:'Mis propuestas', title:'El estado de tus cargas', text:'Pendiente, aprobada, rechazada con motivo, o aplicada con avisos.', dur:12500,
+     narr:'Después de enviar, sigues el estado de cada carga en Mis propuestas: pendiente, aprobada, rechazada con el motivo del revisor, o aplicada con avisos si alguna fila tuvo errores. Así cierras el ciclo de tu carga semanal.'},
+    {view:'kanbanEje', t:'ke-cols', kick:'Kanban · por eje', title:'Una columna por eje', text:'Filtra por estado, ministerio o prioridad; el filtro de región se mantiene.', dur:11500,
+     narr:'El Kanban ordena tu cartera en columnas, una por cada eje estratégico. De un vistazo ves cuántas iniciativas tiene cada área y en qué estado están. El filtro por región de la barra superior se mantiene en todas las vistas, y puedes acotar por estado, ministerio o prioridad.'},
+    {view:'kanbanMin', t:'km-dl', kick:'Kanban · por ministerio', title:'Descarga la cartera de cada ministerio', text:'Cada SEREMI llega al gabinete semanal con el detalle de su cartera en PDF.', dur:15000,
+     narr:'Y el formato por ministerio agrupa tu cartera por SEREMI. Aquí está el gran apoyo para tus reuniones: descargas la cartera de cada ministerio en un PDF, y así cada SEREMI llega al gabinete semanal con el detalle de su cartera. La reunión se vuelve mucho más eficiente.'},
+    {view:'atencion', t:'at-foco', kick:'Prioriza', title:'Revisa solo lo que importa ahora', text:'Marca en foco lo prioritario y míralo junto antes de una reunión.', dur:12000,
+     narr:'No todo necesita tu atención hoy. Marca con la bandera lo que importa ahora y se reúne en tu Bandeja de Atención: tu lista corta para revisar lo prioritario, antes de una reunión o cuando algo urge. Más abajo, la lista de sugerencias automáticas se expande al hacer clic y te propone qué más conviene vigilar.'},
+    {view:'recap', t:null, kick:'Para empezar hoy', title:'', text:'', dur:11500,
+     narr:'Para empezar hoy: revisa la Bandeja de Atención los lunes, marca en foco lo que bloquea tu semana y revísalo en gabinete. Mantén tu cartera al día con tu carga de los lunes. Bienvenido al PSG.'}
+  ];
+
+  var NAVMAP={ map:['mapa','Seguimiento ▾',false], miregion:['seg','Mi Región ▾',true], metricas:['seg','Mi Región ▾',true], proponer:['seg','Mi Región ▾',true], misPropuestas:['seg','Mi Región ▾',true],
+    dashboard:['seg','Dashboard ▾',true], ficha:['seg','Dashboard ▾',true], kanbanEje:['seg','Kanban ▾',true], kanbanMin:['seg','Kanban ▾',true], atencion:['seg','Atención ▾',true] };
+
+  var stage=document.getElementById('stage');
+  var screens={}; stage.querySelectorAll('.screen').forEach(function(s){ screens[s.getAttribute('data-view')]=s; });
+  var chrome=document.getElementById('chrome'), navMapa=document.getElementById('navMapa'), navSeg=document.getElementById('navSeg');
+  var spot=document.getElementById('spot'), coach=document.getElementById('coach');
+  var coachKick=document.getElementById('coachKick'), coachTitle=document.getElementById('coachTitle'), coachText=document.getElementById('coachText');
+  var cursor=document.getElementById('cursor'), clickr=document.getElementById('clickr');
+  var capEl=document.getElementById('cap'), pfill=document.getElementById('pfill');
+  var dotsWrap=document.getElementById('dots'), counter=document.getElementById('counter');
+  var playBtn=document.getElementById('play');
+  var idx=0,playing=false,raf=null,sceneStart=0,pausedElapsed=0,ended=false,countTimers=[];
+
+  steps.forEach(function(s,i){ var b=document.createElement('b'); b.title=s.title||s.kick; b.addEventListener('click',function(){ goTo(i); }); dotsWrap.appendChild(b); });
+  var dotEls=dotsWrap.querySelectorAll('b');
+  function updateDots(){ dotEls.forEach(function(d,i){ d.className=''; if(i<idx)d.classList.add('done'); if(i===idx)d.classList.add('cur'); }); }
+  function updatePlayBtn(){ playBtn.textContent=ended?'↻':(playing?'⏸':'▶'); }
+
+  function fmt(n,dec,thou,suf){ var v; if(dec){v=n.toFixed(dec).replace('.',',');} else if(thou){v=Math.round(n).toLocaleString('es-CL');} else {v=String(Math.round(n));} return v+(suf||''); }
+  function runCountups(scr){ countTimers.forEach(clearInterval); countTimers=[];
+    scr.querySelectorAll('.countup').forEach(function(el){ var target=parseFloat(el.getAttribute('data-val')),dec=parseInt(el.getAttribute('data-dec')||'0',10),thou=el.getAttribute('data-thou')?1:0,suf=el.getAttribute('data-suf')||''; var t0=performance.now(),dur=1100;
+      var id=setInterval(function(){ var p=Math.min(1,(performance.now()-t0)/dur); var e=1-Math.pow(1-p,3); el.textContent=fmt(target*e,dec,thou,suf); if(p>=1)clearInterval(id); },30); countTimers.push(id); }); }
+
+  function setChrome(view){ var m=NAVMAP[view]; if(!m){ chrome.classList.add('hide'); return; } chrome.classList.remove('hide'); navSeg.textContent=m[1]; navMapa.classList.toggle('on',view==='map'); navSeg.classList.toggle('on',m[2]); }
+
+  function place(){
+    var st=steps[idx], sr=stage.getBoundingClientRect();
+    var scr=screens[st.view], target=st.t?scr.querySelector('#'+st.t):null;
+    if(!target){ spot.classList.add('hide'); cursor.style.opacity='0';
+      if(!st.title && !st.text){ coach.style.display='none'; return; }
+      coach.style.display='block'; coach.classList.add('center');
+      coachKick.textContent=st.kick; coachTitle.textContent=st.title||''; coachText.textContent=st.text||'';
+      coachTitle.style.display=st.title?'block':'none'; coachText.style.display=st.text?'block':'none'; return; }
+    coach.style.display='block'; coach.classList.remove('center');
+    var tr=target.getBoundingClientRect(), pad=6;
+    var x=tr.left-sr.left, y=tr.top-sr.top, w=tr.width, h=tr.height;
+    spot.classList.remove('hide');
+    spot.style.left=(x-pad)+'px'; spot.style.top=(y-pad)+'px'; spot.style.width=(w+pad*2)+'px'; spot.style.height=(h+pad*2)+'px';
+    cursor.style.opacity='1';
+    var cx=x+Math.min(w*0.5,w-8), cy=y+Math.min(h*0.5,h-8);
+    cursor.style.left=cx+'px'; cursor.style.top=cy+'px';
+    clickr.style.left=cx+'px'; clickr.style.top=cy+'px'; clickr.classList.remove('go'); void clickr.offsetWidth; clickr.classList.add('go');
+    coachKick.textContent='Paso '+(idx+1)+' · '+st.kick;
+    coachTitle.textContent=st.title||''; coachText.textContent=st.text||'';
+    coachTitle.style.display='block'; coachText.style.display='block';
+    var cw=coach.offsetWidth||220, ch=coach.offsetHeight||110, gap=12, sw=sr.width, sh=sr.height, ctop, cleft;
+    if(y+h+gap+ch<=sh-6){ ctop=y+h+gap; } else if(y-gap-ch>=6){ ctop=y-gap-ch; } else { ctop=Math.max(6,Math.min(sh-ch-6,y)); }
+    cleft=x+w/2-cw/2; cleft=Math.max(8,Math.min(sw-cw-8,cleft));
+    coach.style.left=cleft+'px'; coach.style.top=ctop+'px';
+  }
+
+  function show(i){
+    idx=Math.max(0,Math.min(steps.length-1,i));
+    ended=false; pausedElapsed=0; sceneStart=performance.now();
+    var st=steps[idx];
+    Object.keys(screens).forEach(function(k){ screens[k].classList.toggle('on', k===st.view); });
+    setChrome(st.view);
+    runCountups(screens[st.view]);
+    capEl.textContent=st.narr; counter.textContent=(idx+1)+' / '+steps.length;
+    updateDots(); updatePlayBtn(); pfill.style.width='0%'; coach.style.opacity='0';
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ place(); coach.style.opacity='1'; }); });
+  }
+  function tick(now){ if(!playing)return; var dur=steps[idx].dur, ratio=(now-sceneStart)/dur;
+    if(ratio>=1){ if(idx<steps.length-1){ show(idx+1); raf=requestAnimationFrame(tick); return; } pfill.style.width='100%'; playing=false; ended=true; updatePlayBtn(); return; }
+    pfill.style.width=(ratio*100)+'%'; raf=requestAnimationFrame(tick); }
+  function play(){ if(ended)show(0); playing=true; updatePlayBtn(); sceneStart=performance.now()-(pausedElapsed||0); pausedElapsed=0;
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(tick); }
+  function pause(){ playing=false; updatePlayBtn(); cancelAnimationFrame(raf); pausedElapsed=performance.now()-sceneStart; }
+  function toggle(){ playing?pause():play(); }
+  function goTo(i){ var w=playing; show(i); if(w)play(); }
+  function next(){ if(idx<steps.length-1) goTo(idx+1); }
+  function prev(){ if(idx>0) goTo(idx-1); }
+
+  playBtn.addEventListener('click',toggle);
+  document.getElementById('next').addEventListener('click',next);
+  document.getElementById('prev').addEventListener('click',prev);
+  document.getElementById('restart').addEventListener('click',function(){ show(0); play(); });
+  document.addEventListener('keydown',function(e){ if(e.code==='Space'){e.preventDefault();toggle();} else if(e.code==='ArrowRight'){next();} else if(e.code==='ArrowLeft'){prev();} });
+  window.addEventListener('resize',function(){ place(); });
+
+  show(0); setTimeout(play,1000);
+})();
+</script>
