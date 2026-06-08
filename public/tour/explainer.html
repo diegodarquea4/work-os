@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!--
-  Capacitación PSG — Explainer v6 · "Tour guiado dentro del panel"
-  Barra superior PERSISTENTE (solo cambia el cuerpo, como navegar el producto real).
-  Paleta clara fiel al panel (white/gray/cream), fuente Geist, semáforo y colores de región reales,
-  mapa de Chile desde el geojson del repo, login y modal de Proponer fieles, copy literal.
-  Español latino neutro. Datos de muestra ilustrativos. Sin mosaico.
+  Capacitación PSG — Explainer v7 · "Tour guiado dentro del panel"
+  Rediseño editorial: meta-frame del tour con acento wine institucional + neutral
+  off-white; las scenes internas conservan paleta del panel (cream/slate/blue)
+  porque están simulando el producto real. Tipografía Geist Sans + Geist Mono
+  para metadata. Español latino neutro. Datos de muestra ilustrativos.
   Controles: ▶/⏸ · ‹ › · ↻ · puntos del índice · barra espaciadora / flechas.
   Cowork · 2026-06-08. Emblema = placeholder; reemplazar por el logo oficial al publicar.
 -->
@@ -13,9 +13,10 @@
 <title>Capacitación PSG — Explainer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
+    /* ── Tokens del panel (preservados para fidelidad de scenes) ─────────── */
     --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;--slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-100:#f1f5f9;--slate-50:#f8fafc;
     --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
     --green-500:#22c55e;--green-600:#16a34a;--green-700:#15803d;--green-50:#f0fdf4;
@@ -25,28 +26,65 @@
     --purple-50:#faf5ff;--purple-700:#7e22ce;
     --cream:#fbf9f4;--cream-2:#f4f1e9;
     --sh-card:0 1px 2px rgba(15,23,42,.04);
+
+    /* ── Tokens editoriales del tour (meta-frame) ────────────────────────────
+       Diferencian el tour del panel sin pelearse: el acento wine se conecta
+       al rojo institucional del Min. del Interior (#C5283D del logo box)
+       sin gritar como ese rojo. El bg neutral evita la trampa cream/sand. */
+    --tour-ink:        #0f172a;
+    --tour-ink-2:      #1f2937;
+    --tour-meta:       #57534e;
+    --tour-meta-soft:  #78716c;
+    --tour-rule:       #e7e5e0;
+    --tour-bg:         #f7f5f2;
+    --tour-bg-2:       #efece7;
+    --tour-surface:    #ffffff;
+    --tour-accent:     #6b1d2c;
+    --tour-accent-2:   #862535;
+    --tour-accent-50:  #faf0f1;
+    --tour-accent-100: #f1d8dc;
+
+    /* Easing canónico (ease-out-quart) y duraciones tipográficas */
+    --ease:        cubic-bezier(.2,.7,.2,1);
+    --dur-fast:    180ms;
+    --dur-mid:     320ms;
+    --dur-slow:    520ms;
+
     --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;background:#0c0f16;font-family:var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  html,body{height:100%;background:#1a1612;font-family:var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
   body{display:flex;align-items:center;justify-content:center;padding:16px;min-height:100vh}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-  .player{width:100%;max-width:1000px;aspect-ratio:16/9;position:relative;border-radius:16px;overflow:hidden;
-    background:#0c0f16;box-shadow:0 40px 90px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.04);
-    font-size:clamp(10px,2.55vw,17px);display:flex;flex-direction:column}
-  .stage{position:relative;flex:1;overflow:hidden;background:var(--cream-2)}
+  /* Player frame: más arquitectural, menos "video con bezel". Sombra larga
+     y sutil, borde fino, sin glow interno. */
+  .player{width:100%;max-width:1040px;aspect-ratio:16/9;position:relative;border-radius:14px;overflow:hidden;
+    background:var(--tour-bg);box-shadow:0 1px 0 rgba(255,255,255,.04),0 30px 80px -20px rgba(0,0,0,.55),0 8px 32px -8px rgba(0,0,0,.35);
+    font-size:clamp(10px,2.55vw,17px);display:flex;flex-direction:column;outline:1px solid rgba(255,255,255,.06);outline-offset:0}
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--tour-bg)}
 
-  .chrome{position:absolute;top:0;left:0;right:0;height:3.1em;background:var(--slate-900);display:flex;align-items:center;justify-content:space-between;padding:0 1.1em;z-index:3;transition:opacity .4s cubic-bezier(.2,.7,.2,1)}
+  /* z-index 7: por encima del .spot (6) para que el spotlight oscuro no
+     apague el chrome — la idea es justo lo contrario, que el botón activo
+     siga brillando con su halo wine mientras todo lo demás se oscurece.
+     Sigue por debajo del .coach (8) para que la nota explicativa pueda
+     cubrir el chrome si necesita el espacio. */
+  .chrome{position:absolute;top:0;left:0;right:0;height:3.1em;background:var(--slate-900);display:flex;align-items:center;justify-content:space-between;padding:0 1.1em;z-index:7;transition:opacity .4s cubic-bezier(.2,.7,.2,1)}
   .chrome.hide{opacity:0;pointer-events:none}
   .abL{display:flex;align-items:center;gap:.6em}
   .abLogo{width:1.75em;height:1.75em;border-radius:.32em;background:#C5283D;display:flex;align-items:center;justify-content:center}
   .abLogo svg{width:1.05em;height:1.05em;fill:#fff}
   .abTitle b{color:#fff;font-weight:700;font-size:.82em;letter-spacing:.04em;display:block;line-height:1.1}
   .abTitle span{color:var(--slate-400);font-size:.6em;display:block;line-height:1.1}
-  .abNav{display:flex;background:var(--slate-800);border-radius:.45em;padding:.12em;gap:.12em}
-  .abNav b{font-size:.66em;color:var(--slate-300);font-weight:500;padding:.34em .8em;border-radius:.35em;display:flex;align-items:center;gap:.3em;transition:.2s}
-  .abNav b.on{background:#fff;color:var(--slate-900);font-weight:600}
+  .abNav{display:flex;background:var(--slate-800);border-radius:.45em;padding:.12em;gap:.12em;position:relative}
+  .abNav b{font-size:.66em;color:var(--slate-300);font-weight:500;padding:.34em .8em;border-radius:.35em;display:flex;align-items:center;gap:.3em;transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease);position:relative}
+  /* Botón activo del chrome — anillo wine + glow continuo. La idea: que
+     el usuario ubique sin esfuerzo "esta es la vista que estoy viendo
+     y este es el botón al que tengo que llegar". Pulso infinito, no
+     una sola vez, porque la atención del usuario llega cuando llega. */
+  .abNav b.on{background:#fff;color:var(--slate-900);font-weight:600;box-shadow:0 0 0 2px var(--tour-accent),0 0 0 5px rgba(107,29,44,.45),0 4px 14px rgba(107,29,44,.35);animation:nav-glow 2.2s var(--ease) infinite}
+  @keyframes nav-glow{0%,100%{box-shadow:0 0 0 2px var(--tour-accent),0 0 0 5px rgba(107,29,44,.45),0 4px 14px rgba(107,29,44,.35)}50%{box-shadow:0 0 0 2px var(--tour-accent),0 0 0 8px rgba(107,29,44,.18),0 6px 22px rgba(107,29,44,.55)}}
   .abR{display:flex;align-items:center;gap:.6em}
   .abAv{width:1.7em;height:1.7em;border-radius:50%;background:#2b6fb8;color:#fff;font-size:.62em;font-weight:700;display:flex;align-items:center;justify-content:center}
   .abUser{text-align:right}
@@ -82,7 +120,6 @@
   @keyframes grow{from{width:0}to{width:var(--w,60%)}}
   @keyframes pin{0%,100%{box-shadow:0 0 0 .28em rgba(239,68,68,.28)}50%{box-shadow:0 0 0 .82em rgba(239,68,68,0)}}
   @keyframes ring{0%{transform:translate(-50%,-50%) scale(.35);opacity:.55}100%{transform:translate(-50%,-50%) scale(2.2);opacity:0}}
-  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
   .rg{display:flex;justify-content:space-between;gap:1em;padding:.85em 1em}
   .rg h2{margin:0;font-size:1.12em;font-weight:800;color:var(--slate-900)}
@@ -202,56 +239,91 @@
   .ksec .srow{display:flex;align-items:center;gap:.5em;padding:.45em .65em;border-top:1px solid var(--gray-100);font-size:.6em;color:var(--slate-700)}
   .ksec .srow .ejn{font-size:.82em;color:var(--gray-400)}
 
-  .hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2.4em;background:radial-gradient(120% 85% at 50% -8%,#ffffff 0%,var(--cream) 58%,var(--cream-2) 100%)}
-  .emblem{width:3.4em;height:3.4em;border-radius:.85em;background:#fff;border:1px solid var(--gray-200);box-shadow:0 8px 22px rgba(15,23,42,.08);display:flex;align-items:center;justify-content:center;margin-bottom:1em}
-  .emblem svg{width:2em;height:2em;fill:#0f3d72}
-  .screen.on .emblem{animation:floaty 3.4s ease-in-out infinite}
-  .kicker{font-size:.66em;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--blue-700);margin-bottom:.6em}
-  .htitle{font-size:1.85em;font-weight:800;color:var(--slate-900);letter-spacing:-.018em;line-height:1.06;margin:0;max-width:14em;text-wrap:balance}
+  /* Heros: alineados al lenguaje visual del panel (cream + slate + blue) para
+     que conecten con las scenes interiores. Mantenemos las mejoras de
+     jerarquía tipográfica (balance, scale, weight contrast) del v7. */
+  .hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2.6em 2.4em;background:radial-gradient(120% 85% at 50% -8%,#ffffff 0%,var(--cream) 58%,var(--cream-2) 100%);color:var(--slate-900)}
+  .emblem{width:3.4em;height:3.4em;border-radius:.85em;background:#fff;border:1px solid var(--gray-200);box-shadow:0 8px 22px rgba(15,23,42,.08);display:flex;align-items:center;justify-content:center;margin-bottom:1.1em}
+  .emblem svg{width:2em;height:2em;fill:var(--blue-700)}
+  .kicker{font-size:.62em;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-700);margin-bottom:.85em}
+  .htitle{font-size:1.95em;font-weight:800;color:var(--slate-900);letter-spacing:-.022em;line-height:1.04;margin:0;max-width:14em;text-wrap:balance}
   .htitle .hl{color:var(--blue-700)}
-  .hsub{font-size:.9em;color:var(--gray-600);margin-top:.85em;max-width:25em;line-height:1.55;text-wrap:pretty}
-  .badge{display:inline-flex;align-items:center;gap:.4em;margin-top:1.1em;font-size:.66em;font-weight:600;color:var(--slate-600);background:#fff;border:1px solid var(--gray-200);border-radius:2em;padding:.45em .9em;box-shadow:0 4px 12px rgba(15,23,42,.06)}
-  .lgcard{width:min(70%,19em);background:#fff;border:1px solid var(--gray-200);border-radius:1em;box-shadow:0 12px 32px rgba(15,23,42,.09);padding:1.35em 1.45em;text-align:left}
-  .lgcard .ttl{text-align:center;font-size:.96em;font-weight:800;color:var(--slate-900)}
-  .lgcard .sb{text-align:center;font-size:.6em;color:var(--gray-400);margin-top:.2em;margin-bottom:1em}
-  .lgf{font-size:.6em;font-weight:600;color:var(--gray-700);margin-bottom:.3em;display:block}
-  .lgi{width:100%;border:1px solid var(--gray-300);border-radius:.5em;padding:.5em .6em;font-size:.64em;color:var(--slate-900);background:var(--gray-50);margin-bottom:.7em}
-  .lgbtn{width:100%;background:var(--slate-900);color:#fff;border-radius:.5em;padding:.6em;font-size:.64em;font-weight:700;text-align:center}
-  .recap{display:flex;gap:1em;flex-wrap:wrap;justify-content:center;margin-top:1.1em}
-  .rs{width:8.8em;background:#fff;border:1px solid var(--gray-200);border-radius:.7em;padding:.9em .7em;box-shadow:0 6px 16px rgba(15,23,42,.05)}
-  .rs .nn{width:1.95em;height:1.95em;border-radius:50%;margin:0 auto .5em;background:var(--slate-900);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82em}
-  .rs b{font-size:.82em;color:var(--slate-900)}.rs span{display:block;font-size:.6em;color:var(--gray-500);margin-top:.25em;line-height:1.4}
+  .hsub{font-size:.92em;color:var(--gray-700);margin-top:1em;max-width:26em;line-height:1.55;text-wrap:pretty}
 
-  .spot{position:absolute;border-radius:.6em;box-shadow:0 0 0 9999px rgba(15,23,42,.5);transition:left .5s cubic-bezier(.2,.7,.2,1),top .5s cubic-bezier(.2,.7,.2,1),width .5s cubic-bezier(.2,.7,.2,1),height .5s cubic-bezier(.2,.7,.2,1),opacity .3s;pointer-events:none;z-index:6;outline:2px solid rgba(255,255,255,.92);outline-offset:1px}
+  /* Login: misma factura que las cards del panel (blanco + gray-200 + sombra
+     sobria). */
+  .lgcard{width:min(72%,20em);background:#fff;border:1px solid var(--gray-200);border-radius:.7em;box-shadow:0 12px 32px rgba(15,23,42,.09);padding:1.4em 1.5em;text-align:left}
+  .lgcard .ttl{text-align:center;font-size:.98em;font-weight:800;color:var(--slate-900);letter-spacing:-.012em}
+  .lgcard .sb{text-align:center;font-size:.58em;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);margin-top:.35em;margin-bottom:1.1em}
+  .lgf{font-size:.6em;font-weight:600;color:var(--gray-700);margin-bottom:.3em;display:block}
+  .lgi{width:100%;border:1px solid var(--gray-300);border-radius:.5em;padding:.55em .65em;font-size:.64em;color:var(--slate-900);background:var(--gray-50);margin-bottom:.75em}
+  .lgbtn{width:100%;background:var(--slate-900);color:#fff;border-radius:.5em;padding:.65em;font-size:.64em;font-weight:700;text-align:center;letter-spacing:.005em}
+
+  /* Recap: cards sobrias con número numérico al inicio (no la "01" en mono
+     editorial) — más cercano al lenguaje del panel. */
+  .recap{display:flex;gap:1em;flex-wrap:wrap;justify-content:center;margin-top:1.3em}
+  .rs{width:9em;background:#fff;border:1px solid var(--gray-200);border-radius:.6em;padding:.95em .8em .9em;text-align:center;box-shadow:0 6px 16px rgba(15,23,42,.05)}
+  .rs .nn{width:1.9em;height:1.9em;border-radius:50%;margin:0 auto .55em;background:var(--blue-700);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78em;font-variant-numeric:tabular-nums}
+  .rs b{font-size:.8em;color:var(--slate-900);font-weight:700;letter-spacing:-.005em}
+  .rs span{display:block;font-size:.6em;color:var(--gray-600);margin-top:.3em;line-height:1.45}
+
+  /* Spotlight: borde más sutil, sombra más sobria. El outline blanco se reduce
+     y aparece un anillo accent fino que conecta visualmente con el coach. */
+  .spot{position:absolute;border-radius:.5em;box-shadow:0 0 0 9999px rgba(15,23,42,.52);transition:left var(--dur-slow) var(--ease),top var(--dur-slow) var(--ease),width var(--dur-slow) var(--ease),height var(--dur-slow) var(--ease),opacity var(--dur-mid);pointer-events:none;z-index:6;outline:1.5px solid rgba(255,255,255,.85);outline-offset:2px}
   .spot.hide{opacity:0;box-shadow:0 0 0 9999px rgba(15,23,42,0)}
-  .coach{position:absolute;z-index:8;width:15em;max-width:62%;background:#fff;border:1px solid var(--gray-200);border-radius:.7em;box-shadow:0 16px 40px rgba(15,23,42,.22);padding:.85em .95em;transition:left .5s cubic-bezier(.2,.7,.2,1),top .5s cubic-bezier(.2,.7,.2,1),opacity .3s;text-align:left}
-  .coach::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue-500);border-radius:.7em .7em 0 0}
-  .coach.center{left:50%;top:50%;transform:translate(-50%,-50%);width:19em;text-align:center}
-  .coach .ck{font-size:.5em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue-600)}
-  .coach .ct2{font-size:.82em;font-weight:700;color:var(--slate-900);margin-top:.3em;line-height:1.22;letter-spacing:-.005em;text-wrap:balance}
-  .coach .cx{font-size:.66em;color:var(--gray-700);margin-top:.4em;line-height:1.5;text-wrap:pretty}
-  .cursor{position:absolute;width:1.15em;height:1.15em;z-index:9;pointer-events:none;transition:left .65s cubic-bezier(.2,.7,.2,1),top .65s cubic-bezier(.2,.7,.2,1);filter:drop-shadow(0 2px 4px rgba(15,23,42,.4))}
-  .cursor svg{width:100%;height:100%;fill:#fff;stroke:#0f172a;stroke-width:5}
+
+  /* Coach editorial: sin línea azul superior, eyebrow en mono con divider sutil,
+     tipografía con más respiración. Sombra cálida (no neutra), borde casi
+     imperceptible. */
+  .coach{position:absolute;z-index:8;width:16em;max-width:64%;background:var(--tour-surface);border:1px solid rgba(15,23,42,.06);border-radius:.55em;
+    box-shadow:0 14px 36px -8px rgba(40,15,15,.18),0 2px 8px -2px rgba(40,15,15,.10);
+    padding:.95em 1em 1em;transition:left var(--dur-slow) var(--ease),top var(--dur-slow) var(--ease),opacity var(--dur-mid);text-align:left}
+  .coach.center{left:50%;top:50%;transform:translate(-50%,-50%);width:20em;text-align:center;padding:1.1em 1.2em 1.15em}
+  .coach .ck{font-family:var(--font-mono);font-size:.5em;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--tour-accent);display:flex;align-items:center;gap:.55em}
+  .coach .ck::after{content:'';flex:1;height:1px;background:var(--tour-rule);min-width:1.2em}
+  .coach.center .ck{justify-content:center}
+  .coach.center .ck::after{display:none}
+  .coach .ct2{font-size:.86em;font-weight:700;color:var(--tour-ink);margin-top:.55em;line-height:1.2;letter-spacing:-.012em;text-wrap:balance}
+  .coach .cx{font-size:.66em;color:var(--tour-ink-2);margin-top:.45em;line-height:1.55;text-wrap:pretty}
+  /* Cursor estilo macOS estándar: punta superior izquierda, cola corta hacia
+     abajo-derecha. Fill blanco con stroke negro fino. */
+  .cursor{position:absolute;width:1.15em;height:1.15em;z-index:9;pointer-events:none;transition:left .65s cubic-bezier(.2,.7,.2,1),top .65s cubic-bezier(.2,.7,.2,1);filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+  .cursor svg{width:100%;height:100%;display:block}
+  .cursor path{fill:#ffffff;stroke:#000000;stroke-width:1.2;stroke-linejoin:round;stroke-linecap:round;paint-order:stroke fill}
   .clickr{position:absolute;width:1.45em;height:1.45em;border:.16em solid var(--blue-500);border-radius:50%;z-index:9;pointer-events:none;opacity:0;transform:translate(-50%,-50%)}
   .clickr.go{animation:ring .65s ease both}
 
-  .cap{padding:.7em 1.6em;background:#070a11;color:#d7e3f4;font-size:.74em;text-align:center;min-height:2.7em;display:flex;align-items:center;justify-content:center;line-height:1.55;text-wrap:pretty}
-  .controls{display:flex;align-items:center;gap:.7em;padding:.7em 1em;background:#0c0f16;border-top:1px solid rgba(255,255,255,.07);z-index:10}
-  .ctrl{appearance:none;border:0;background:rgba(255,255,255,.1);color:#fff;width:2.2em;height:2.2em;border-radius:50%;font-size:.95em;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .15s}
-  .ctrl:hover{background:rgba(255,255,255,.2)}
+  /* Caption — banda inferior con narración del paso. Fondo semi-transparente
+     con blur para que no se sienta como un mural opaco encima del panel:
+     el contenido del PSG respira por debajo, y aún así el texto queda
+     legible sobre el blur. Tamaño de letra al nivel original — la solución
+     a "invasivo" no era achicar, era dejar ver lo que está debajo. */
+  .cap{padding:.6em 1.6em .65em;background:rgba(7,10,17,.78);backdrop-filter:blur(10px) saturate(120%);-webkit-backdrop-filter:blur(10px) saturate(120%);color:#d7e3f4;display:flex;align-items:center;justify-content:center;gap:1.1em;line-height:1.55;text-wrap:pretty;min-height:2.7em;max-height:6em;overflow:hidden}
+  .cap .step{font-family:var(--font-mono);font-size:.58em;font-weight:500;letter-spacing:.04em;color:#9bb4d6;text-transform:uppercase;white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+  .cap .step b{color:#e9f0fb;font-weight:600}
+  .cap .narr{font-size:.72em;color:#e9f0fb;text-wrap:pretty;line-height:1.5;overflow-y:auto;max-height:5em;scrollbar-width:thin;scrollbar-color:rgba(233,240,251,.22) transparent}
+  .cap .narr::-webkit-scrollbar{width:.2em}
+  .cap .narr::-webkit-scrollbar-thumb{background:rgba(233,240,251,.22);border-radius:1em}
+
+  /* Controls: fondo más cálido (alineado al caption), sombra inferior sutil,
+     dots con tratamiento wine-on-dark. */
+  .controls{display:flex;align-items:center;gap:.8em;padding:.85em 1.1em;background:#120f0c;border-top:1px solid rgba(255,255,255,.05);z-index:10}
+  .ctrl{appearance:none;border:0;background:rgba(255,255,255,.06);color:#f0e9df;width:2.2em;height:2.2em;border-radius:50%;font-size:.95em;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)}
+  .ctrl:hover{background:rgba(255,255,255,.14)}
   .ctrl:active{transform:scale(.94)}
-  .ctrl:focus-visible{outline:2px solid #8ed0ff;outline-offset:2px}
-  .ctrl.big{width:2.7em;height:2.7em;background:var(--blue-600)}
-  .ctrl.big:hover{background:#2f7ae6}
-  .counter{font-size:.62em;color:#aebfd6;min-width:3.2em;text-align:center;font-variant-numeric:tabular-nums}
+  .ctrl:focus-visible{outline:1.5px solid var(--tour-accent-100);outline-offset:3px}
+  .ctrl.big{width:2.7em;height:2.7em;background:var(--tour-accent);color:#fff}
+  .ctrl.big:hover{background:var(--tour-accent-2)}
+  .counter{font-family:var(--font-mono);font-size:.6em;font-weight:500;color:rgba(240,233,223,.65);min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.04em}
   .track{flex:1;display:flex;flex-direction:column;gap:.4em}
-  .dots2{display:flex;gap:.3em}
-  .dots2 b{flex:1;height:.32em;border-radius:1em;background:rgba(255,255,255,.16);cursor:pointer;transition:background .2s,height .15s}
-  .dots2 b:hover{background:rgba(255,255,255,.32);height:.42em}
-  .dots2 b:focus-visible{outline:2px solid #8ed0ff;outline-offset:3px}
-  .dots2 b.done{background:#5b9bd6}.dots2 b.cur{background:#8ed0ff}
-  .pbar{height:.2em;background:rgba(255,255,255,.1);border-radius:1em;overflow:hidden}
-  .pbar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2563eb,#8ed0ff)}
+  .dots2{display:flex;gap:.25em}
+  .dots2 b{flex:1;height:.28em;border-radius:1em;background:rgba(240,233,223,.14);cursor:pointer;transition:background var(--dur-fast) var(--ease),height var(--dur-fast) var(--ease)}
+  .dots2 b:hover{background:rgba(240,233,223,.28);height:.38em}
+  .dots2 b:focus-visible{outline:1.5px solid var(--tour-accent-100);outline-offset:3px}
+  .dots2 b.done{background:rgba(193,127,135,.55)}
+  .dots2 b.cur{background:var(--tour-accent);height:.38em}
+  .pbar{height:.16em;background:rgba(240,233,223,.08);border-radius:1em;overflow:hidden}
+  .pbar>i{display:block;height:100%;width:0;background:var(--tour-accent)}
   @media (max-width:560px){.abTitle span,.abUser{display:none}.ejes{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}.coach{width:13em;padding:.7em .8em}.coach .cx{font-size:.62em;line-height:1.45}}
 
   /* prefers-reduced-motion: respetar la preferencia del usuario. Mantenemos
@@ -261,7 +333,7 @@
     *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
     .screen.body,.screen.light{transition:opacity .15s linear}
     .coach,.spot,.cursor{transition:opacity .15s linear}
-    .screen.on .mappin,.screen.on .emblem,.clickr.go,.screen.on .bar.go>i{animation:none}
+    .screen.on .mappin,.clickr.go,.screen.on .bar.go>i{animation:none}
   }
 
   .mehead{font-size:.66em;font-weight:700;color:var(--slate-800);margin-bottom:.6em}
@@ -479,17 +551,16 @@
 
     <section class="screen light" data-view="intro">
       <div class="hero">
-        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="emblem"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
         <div class="kicker u-rise">Capacitación · Equipos regionales</div>
         <h1 class="htitle u-rise">Panel de Seguimiento <span class="hl">Gubernamental</span></h1>
         <p class="hsub u-rise">Tu región, al día, en un solo lugar.</p>
-        <div class="badge u-pop">▶ Reproduciéndose</div>
       </div>
     </section>
 
     <section class="screen light" data-view="login">
       <div class="hero">
-        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="emblem"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
         <div class="lgcard u-rise" id="lg-form">
           <div class="ttl">Panel Seguimiento Gubernamental</div>
           <div class="sb">Regiones · PSG</div>
@@ -504,15 +575,15 @@
 
     <section class="screen light" data-view="recap">
       <div class="hero">
-        <div class="emblem u-pop"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
+        <div class="emblem"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div>
         <div class="kicker u-rise">Para empezar hoy</div>
-        <h2 class="htitle u-rise" style="font-size:1.5em">Tres pasos para partir</h2>
+        <h2 class="htitle u-rise" style="font-size:1.55em">Tres pasos para partir</h2>
         <div class="recap">
-          <div class="rs u-pop"><div class="nn">1</div><b>Ingresa</b><span>El mapa te lleva a tu región</span></div>
-          <div class="rs u-pop" style="animation-delay:.15s"><div class="nn">2</div><b>Lee tu tablero</b><span>Mira tus alertas primero</span></div>
-          <div class="rs u-pop" style="animation-delay:.3s"><div class="nn">3</div><b>Mantén al día</b><span>Un Excel por semana</span></div>
+          <div class="rs u-rise"><div class="nn">1</div><b>Ingresa</b><span>El mapa te lleva a tu región</span></div>
+          <div class="rs u-rise" style="animation-delay:.12s"><div class="nn">2</div><b>Lee tu tablero</b><span>Mira tus alertas primero</span></div>
+          <div class="rs u-rise" style="animation-delay:.24s"><div class="nn">3</div><b>Mantén al día</b><span>Un Excel por semana</span></div>
         </div>
-        <p class="hsub u-rise" style="animation-delay:.4s">Revisa la Bandeja de Atención los lunes. Si algo bloquea tu semana, márcalo en foco y revísalo en gabinete.</p>
+        <p class="hsub u-rise" style="animation-delay:.36s;margin-top:1.2em">Si te falta contexto en algún paso, el Centro de Ayuda — el botón ? arriba a la derecha del panel — tiene este mismo tour y un FAQ por rol.</p>
       </div>
     </section>
 
@@ -543,11 +614,14 @@
 
     <div class="spot hide" id="spot"></div>
     <div class="coach" id="coach"><div class="ck" id="coachKick"></div><div class="ct2" id="coachTitle"></div><div class="cx" id="coachText"></div></div>
-    <div class="cursor" id="cursor"><svg viewBox="0 0 24 24"><path d="M5 3l15 9-6 1 4 7-3 1-4-7-4 4z"/></svg></div>
+    <div class="cursor" id="cursor"><svg viewBox="0 0 24 24"><path d="M4.5 3 L4.5 18.3 L8.5 15 L11 21 L13.5 20 L11 14 L16.5 14 Z"/></svg></div>
     <div class="clickr" id="clickr"></div>
   </div>
 
-  <div class="cap" id="cap"></div>
+  <div class="cap" id="cap">
+    <div class="step" id="capStep"></div>
+    <div class="narr" id="capNarr"></div>
+  </div>
 
   <div class="controls">
     <button class="ctrl" id="prev" title="Anterior (←)" aria-label="Anterior">‹</button>
@@ -556,6 +630,7 @@
     <button class="ctrl" id="restart" title="Reiniciar" aria-label="Reiniciar">↻</button>
     <span class="counter" id="counter">1 / 16</span>
     <div class="track"><div class="dots2" id="dots"></div><div class="pbar"><i id="pfill"></i></div></div>
+    <button class="ctrl" id="fs" title="Pantalla completa (F)" aria-label="Pantalla completa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg></button>
   </div>
 </div>
 
@@ -597,7 +672,7 @@ const CHILE=[
 
   var steps=[
     {view:'intro', t:null, kick:'Lo esencial', title:'', text:'', dur:14000,
-     narr:'Te damos la bienvenida al Panel de Seguimiento Gubernamental, el PSG. Es el panel donde tu región hace seguimiento de sus iniciativas prioritarias: cada obra, proyecto o compromiso que sigue de cerca. Existe para que tu Delegación, la División de Coordinación Interministerial del Ministerio del Interior y la autoridad central vean el avance real en un solo lugar, sin pedir reportes por correo. Tu rol: mantener esa información al día. El panel reporta el estado; no ejecuta las obras.'},
+     narr:'Te damos la bienvenida al Panel de Seguimiento Gubernamental, el PSG. Es el panel donde tu región hace seguimiento de sus iniciativas prioritarias: cada obra, proyecto o compromiso que sigue de cerca. Existe para que tu Delegación y la División de Coordinación Interministerial del Ministerio del Interior vean el avance real en un solo lugar, sin pedir reportes por correo. Tu rol: mantener esa información al día. El panel reporta el estado; no ejecuta las obras.'},
     {view:'login', t:'lg-form', kick:'Acceso', title:'Ingresa con tu correo', text:'El panel reconoce tu región automáticamente.', dur:8000,
      narr:'Para empezar, ingresas con tu correo institucional y el panel reconoce tu región.'},
     {view:'map', t:'mp-map', kick:'Tu región', title:'El mapa te ubica en tu región', text:'El globo resume tu cartera: 325 iniciativas, 47 de prioridad alta.', dur:10500,
@@ -609,13 +684,13 @@ const CHILE=[
     {view:'miregion', t:'mr-alertas', kick:'Lo urgente', title:'Empieza por las alertas', text:'Lo bloqueado o sin actividad es tu prioridad del día.', dur:10500,
      narr:'Lo más importante son las alertas activas: los hitos próximos a vencer y lo que lleva días sin movimiento. Comienza tu día por aquí; lo bloqueado o sin actividad es tu prioridad.'},
     {view:'miregion', t:'mr-ejes', kick:'Tu cartera', title:'Avance por eje estratégico', text:'Los ejes los define tu región en su catálogo formal.', dur:11500,
-     narr:'Más abajo, tu cartera agrupada por los ejes estratégicos definidos por tu región. Cada región define los suyos en su catálogo formal: pueden ser cuatro, cinco o más. Si necesitas un eje nuevo, pídelo a tu contraparte de la división. Cada tarjeta muestra el avance y la inversión del eje.'},
+     narr:'Más abajo, tu cartera agrupada por los ejes estratégicos de tu región. Cada región tiene su propio catálogo formal, acordado entre la Delegación y la división. Pueden ser cuatro, cinco o más, según el plan regional. Si necesitas un eje nuevo, pídelo a tu contraparte de la división. Cada tarjeta muestra el avance y la inversión del eje.'},
     {view:'metricas', t:'me-cards', kick:'Métricas por eje', title:'La meta y el valor actual', text:'La división define qué medir y la meta; tú reportas el valor actual.', dur:13000,
      narr:'Al hacer clic en un eje se abren sus métricas de seguimiento. Aquí está el modelo de compromiso del plan: la división central define qué medir y la meta, y tú reportas el valor actual cada semana. Así se mide el cumplimiento de los compromisos de tu región.'},
     {view:'dashboard', t:'db-table', kick:'Dashboard', title:'La tabla maestra', text:'Todas tus iniciativas en una lista: filtra, ordena y exporta a Excel.', dur:11500,
      narr:'El Dashboard es la tabla maestra: todas tus iniciativas en una lista, con su estado, avance, próximo hito e inversión. Filtras por estado o región, ordenas la columna que quieras y exportas todo a Excel con un clic.'},
     {view:'ficha', t:'fi-modal', kick:'El detalle', title:'Haz clic en una iniciativa', text:'Actualiza semáforo y avance aquí. Marcar foco la envía a Atención.', dur:14000,
-     narr:'Si haces clic en una iniciativa, por ejemplo desde el Dashboard, se abre su ficha en detalle. Desde aquí puedes actualizar el semáforo, el avance, el responsable y los seguimientos. Los campos estructurales, como el ministerio, el eje o el código BIP, los gestiona la división central. Y el botón Marcar foco, arriba a la derecha, es lo que envía la iniciativa a tu Bandeja de Atención.'},
+     narr:'Si haces clic en una iniciativa, por ejemplo desde el Dashboard, se abre su ficha en detalle. Desde aquí puedes actualizar el semáforo, el avance, el responsable y los seguimientos. Los campos estructurales, como el ministerio, el eje o el código BIP, los propones vía Excel y la división los aprueba — así queda registro del cambio. Y el botón Marcar foco, arriba a la derecha, es lo que envía la iniciativa a tu Bandeja de Atención.'},
     {view:'proponer', t:'pp-modal', kick:'Cada semana', title:'Mantén tu cartera al día', text:'Descarga, modifica lo que cambió, sube y envía. Hazlo cada lunes.', dur:17500,
      narr:'La tarea clave de cada semana: mantener tu cartera al día con un solo Excel. Descarga tus iniciativas, modifica solo lo que cambió, súbelo y envía tu propuesta. El Excel incluye una hoja Ejes válidos con los ejes de tu región; úsala como referencia. Si subes un eje que no existe en tu región, el panel te avisa antes y te indica cuál pedir a la división que cree. Hazlo cada lunes: un editor de la división revisa tu propuesta antes de que quede firme.'},
     {view:'misPropuestas', t:'mp-list', kick:'Mis propuestas', title:'El estado de tus cargas', text:'Pendiente, aprobada, rechazada con motivo, o aplicada con avisos.', dur:12500,
@@ -626,8 +701,8 @@ const CHILE=[
      narr:'Y el formato por ministerio agrupa tu cartera por SEREMI. Aquí está el gran apoyo para tus reuniones: descargas la cartera de cada ministerio en un PDF, y así cada SEREMI llega al gabinete semanal con el detalle de su cartera. La reunión se vuelve mucho más eficiente.'},
     {view:'atencion', t:'at-foco', kick:'Prioriza', title:'Revisa solo lo que importa ahora', text:'Marca en foco lo prioritario y míralo junto antes de una reunión.', dur:12000,
      narr:'No todo necesita tu atención hoy. Marca con la bandera lo que importa ahora y se reúne en tu Bandeja de Atención: tu lista corta para revisar lo prioritario, antes de una reunión o cuando algo urge. Más abajo, la lista de sugerencias automáticas se expande al hacer clic y te propone qué más conviene vigilar.'},
-    {view:'recap', t:null, kick:'Para empezar hoy', title:'', text:'', dur:11500,
-     narr:'Para empezar hoy: revisa la Bandeja de Atención los lunes, marca en foco lo que bloquea tu semana y revísalo en gabinete. Mantén tu cartera al día con tu carga de los lunes. Bienvenido al PSG.'}
+    {view:'recap', t:null, kick:'Para empezar hoy', title:'', text:'', dur:12500,
+     narr:'Para empezar, recuerda lo esencial: ingresa al panel, lee tu tablero comenzando por las alertas, y mantén tu cartera al día con tu carga semanal. Si en algún paso te falta contexto, abre el Centro de Ayuda con el botón signo de pregunta de la cabecera: tiene este mismo tour y un FAQ por rol. Bienvenido al PSG.'}
   ];
 
   var NAVMAP={ map:['mapa','Seguimiento ▾',false], miregion:['seg','Mi Región ▾',true], metricas:['seg','Mi Región ▾',true], proponer:['seg','Mi Región ▾',true], misPropuestas:['seg','Mi Región ▾',true],
@@ -639,7 +714,7 @@ const CHILE=[
   var spot=document.getElementById('spot'), coach=document.getElementById('coach');
   var coachKick=document.getElementById('coachKick'), coachTitle=document.getElementById('coachTitle'), coachText=document.getElementById('coachText');
   var cursor=document.getElementById('cursor'), clickr=document.getElementById('clickr');
-  var capEl=document.getElementById('cap'), pfill=document.getElementById('pfill');
+  var capStepEl=document.getElementById('capStep'), capNarrEl=document.getElementById('capNarr'), pfill=document.getElementById('pfill');
   var dotsWrap=document.getElementById('dots'), counter=document.getElementById('counter');
   var playBtn=document.getElementById('play');
   var idx=0,playing=false,raf=null,sceneStart=0,pausedElapsed=0,ended=false,countTimers=[];
@@ -663,7 +738,19 @@ const CHILE=[
     scr.querySelectorAll('.countup').forEach(function(el){ var target=parseFloat(el.getAttribute('data-val')),dec=parseInt(el.getAttribute('data-dec')||'0',10),thou=el.getAttribute('data-thou')?1:0,suf=el.getAttribute('data-suf')||''; var t0=performance.now(),dur=1100;
       var id=setInterval(function(){ var p=Math.min(1,(performance.now()-t0)/dur); var e=1-Math.pow(1-p,3); el.textContent=fmt(target*e,dec,thou,suf); if(p>=1)clearInterval(id); },30); countTimers.push(id); }); }
 
-  function setChrome(view){ var m=NAVMAP[view]; if(!m){ chrome.classList.add('hide'); return; } chrome.classList.remove('hide'); navSeg.textContent=m[1]; navMapa.classList.toggle('on',view==='map'); navSeg.classList.toggle('on',m[2]); }
+  function setChrome(view){
+    var m=NAVMAP[view];
+    if(!m){ chrome.classList.add('hide'); return; }
+    chrome.classList.remove('hide');
+    navSeg.textContent=m[1];
+    // Reset + re-apply para forzar re-animación del pulso wine que indica
+    // qué botón del chrome corresponde a la scene actual.
+    navMapa.classList.remove('on');
+    navSeg.classList.remove('on');
+    void navMapa.offsetWidth;
+    navMapa.classList.toggle('on',view==='map');
+    navSeg.classList.toggle('on',m[2]);
+  }
 
   function place(){
     var st=steps[idx], sr=stage.getBoundingClientRect();
@@ -685,9 +772,39 @@ const CHILE=[
     coachKick.textContent='Paso '+(idx+1)+' · '+st.kick;
     coachTitle.textContent=st.title||''; coachText.textContent=st.text||'';
     coachTitle.style.display='block'; coachText.style.display='block';
-    var cw=coach.offsetWidth||220, ch=coach.offsetHeight||110, gap=12, sw=sr.width, sh=sr.height, ctop, cleft;
-    if(y+h+gap+ch<=sh-6){ ctop=y+h+gap; } else if(y-gap-ch>=6){ ctop=y-gap-ch; } else { ctop=Math.max(6,Math.min(sh-ch-6,y)); }
-    cleft=x+w/2-cw/2; cleft=Math.max(8,Math.min(sw-cw-8,cleft));
+    var cw=coach.offsetWidth||220, ch=coach.offsetHeight||110, gap=14, sw=sr.width, sh=sr.height, ctop, cleft;
+    // Piso para el coach: nunca debe pisar el chrome (la barra superior con
+    // el botón de navegación que estamos resaltando). El alto real lo lee
+    // de offsetHeight para sobrevivir ajustes futuros al alto del chrome.
+    var chromeBlock=document.querySelector('.chrome');
+    var chromeFloor=(chromeBlock && chromeBlock.offsetHeight ? chromeBlock.offsetHeight : 50) + gap;
+    // Coach NUNCA debe solapar la zona iluminada (el spot). Por construcción,
+    // cualquier candidato offset por gap respecto al rect del target no se
+    // intersecta con él. Probamos en orden abajo → arriba → derecha →
+    // izquierda; si ninguno cabe, vamos a la esquina opuesta al target.
+    var placed=false;
+    if(y+h+gap+ch<=sh-6){
+      ctop=y+h+gap;
+      cleft=Math.max(8,Math.min(sw-cw-8,x+w/2-cw/2));
+      placed=true;
+    } else if(y-gap-ch>=chromeFloor){
+      ctop=y-gap-ch;
+      cleft=Math.max(8,Math.min(sw-cw-8,x+w/2-cw/2));
+      placed=true;
+    } else if(x+w+gap+cw<=sw-8){
+      cleft=x+w+gap;
+      ctop=Math.max(chromeFloor,Math.min(sh-ch-6,y+h/2-ch/2));
+      placed=true;
+    } else if(x-gap-cw>=8){
+      cleft=x-gap-cw;
+      ctop=Math.max(chromeFloor,Math.min(sh-ch-6,y+h/2-ch/2));
+      placed=true;
+    }
+    if(!placed){
+      var tcx=x+w/2, tcy=y+h/2;
+      cleft=(tcx<sw/2)?(sw-cw-8):8;
+      ctop=(tcy<sh/2)?(sh-ch-8):chromeFloor;
+    }
     coach.style.left=cleft+'px'; coach.style.top=ctop+'px';
   }
 
@@ -698,7 +815,9 @@ const CHILE=[
     Object.keys(screens).forEach(function(k){ screens[k].classList.toggle('on', k===st.view); });
     setChrome(st.view);
     runCountups(screens[st.view]);
-    capEl.textContent=st.narr; counter.textContent=(idx+1)+' / '+steps.length;
+    capStepEl.innerHTML='Paso <b>'+(idx+1)+'</b> / '+steps.length+(st.kick?'  ·  '+st.kick:'');
+    capNarrEl.textContent=st.narr;
+    counter.textContent=(idx+1)+'/'+steps.length;
     updateDots(); updatePlayBtn(); pfill.style.width='0%'; coach.style.opacity='0';
     requestAnimationFrame(function(){ requestAnimationFrame(function(){ place(); coach.style.opacity='1'; }); });
   }
@@ -717,7 +836,38 @@ const CHILE=[
   document.getElementById('next').addEventListener('click',next);
   document.getElementById('prev').addEventListener('click',prev);
   document.getElementById('restart').addEventListener('click',function(){ show(0); play(); });
-  document.addEventListener('keydown',function(e){ if(e.code==='Space'){e.preventDefault();toggle();} else if(e.code==='ArrowRight'){next();} else if(e.code==='ArrowLeft'){prev();} });
+  // Fullscreen toggle. Pedimos fullscreen sobre #player (el contenedor con
+  // el chrome simulado + controls + caption), no sobre documentElement, para
+  // que todo el shell del tour se quede dentro del lienzo en lugar de
+  // quedar con bandas negras. El requestFullscreen devuelve Promise: si
+  // el host (iframe sin permiso, navegador antiguo) rechaza, lo logueamos
+  // a consola sin romper el tour.
+  var fsBtn=document.getElementById('fs');
+  function toggleFs(){
+    var player=document.getElementById('player');
+    var req=player.requestFullscreen||player.webkitRequestFullscreen||player.mozRequestFullScreen||player.msRequestFullscreen;
+    var exit=document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen||document.msExitFullscreen;
+    var inFs=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+    try{
+      if(!inFs && req){
+        var p=req.call(player);
+        if(p && p.catch){ p.catch(function(err){ console.warn('Fullscreen denegado:',err); }); }
+      } else if(inFs && exit){
+        exit.call(document);
+      }
+    }catch(e){ console.warn('Fullscreen error:',e); }
+  }
+  fsBtn.addEventListener('click',toggleFs);
+  document.addEventListener('keydown',function(e){
+    if(e.code==='Space'){e.preventDefault();toggle();}
+    else if(e.code==='ArrowRight'){next();}
+    else if(e.code==='ArrowLeft'){prev();}
+    else if(e.key==='f'||e.key==='F'){toggleFs();}
+  });
+  // Cuando entra o sale de fullscreen, recalcular para que el spot y el coach
+  // queden bien posicionados al nuevo tamaño del frame.
+  document.addEventListener('fullscreenchange',function(){ place(); });
+  document.addEventListener('webkitfullscreenchange',function(){ place(); });
   window.addEventListener('resize',function(){ place(); });
 
   show(0); setTimeout(play,1000);

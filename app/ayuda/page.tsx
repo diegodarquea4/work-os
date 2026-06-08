@@ -83,6 +83,8 @@ export default function AyudaPage() {
             src="/tour/explainer.html"
             title="Tour guiado del PSG"
             className="w-full h-full border-0 block"
+            allow="fullscreen"
+            allowFullScreen
           />
         ) : (
           <FaqList isAdmin={caps.isAdmin} canEditAny={caps.canEditAny} />

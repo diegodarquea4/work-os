@@ -96,6 +96,8 @@ export default function AyudaModal({ open, onClose, initialTab = 'tour' }: Props
               src="/tour/explainer.html"
               title="Tour guiado del PSG"
               className="w-full h-full border-0 block"
+              allow="fullscreen"
+              allowFullScreen
             />
           ) : (
             <FaqList isAdmin={isAdmin} canEditAny={canEditAny} />
