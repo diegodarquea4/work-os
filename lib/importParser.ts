@@ -56,11 +56,51 @@ function normalize(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
+/**
+ * Convierte un Date a "DD-MM-AAAA" — formato canónico del template. Acepta
+ * Date inválido como string vacío (defensa, no debería pasar).
+ */
+function dateToDDMMYYYY(d: Date): string {
+  if (isNaN(d.getTime())) return ''
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}-${mm}-${d.getFullYear()}`
+}
+
+/**
+ * Convierte un número de serie Excel (días desde 1900-01-00) a "DD-MM-AAAA".
+ * Usa el helper de xlsx que maneja el bug histórico de Lotus 1-2-3 (que trata
+ * 1900 como año bisiesto y agrega 1 día de offset bajo el serial 60).
+ */
+function excelSerialToDDMMYYYY(n: number): string {
+  const d = XLSX.SSF.parse_date_code(n)
+  if (!d) return ''
+  return `${String(d.d).padStart(2, '0')}-${String(d.m).padStart(2, '0')}-${d.y}`
+}
+
 function makeColReader(headers: string[]) {
-  return (row: string[], label: string): string | undefined => {
+  return (row: unknown[], label: string): string | undefined => {
     const idx = headers.indexOf(label)
     if (idx < 0) return undefined
-    return String(row[idx] ?? '').trim()
+    const val = row[idx]
+    if (val === null || val === undefined) return ''
+    // Excel devuelve Date cuando la celda tiene tipo fecha y XLSX.read se
+    // invoca con cellDates: true. Convertimos al formato canónico DD-MM-AAAA
+    // para que el parser de fechas (más abajo) lo lea sin saber su origen.
+    if (val instanceof Date) return dateToDDMMYYYY(val)
+    // Si la celda tiene tipo Number pero formato fecha en Excel y no se activó
+    // cellDates (caso edge), llega como serial number. Convertimos también.
+    // Heurística: serial date típica entre 1 (1900-01-01) y 73415 (2099-12-31).
+    if (typeof val === 'number' && val > 0 && val < 100000 && Number.isFinite(val)) {
+      // Solo convertimos si el campo es de fecha; para campos numéricos como
+      // "Inversión ($MM)" devolvemos el número como string. Heurística simple:
+      // si el header contiene "Fecha" lo tratamos como fecha.
+      if (label.toLowerCase().includes('fecha')) {
+        const formatted = excelSerialToDDMMYYYY(val)
+        if (formatted) return formatted
+      }
+    }
+    return String(val).trim()
   }
 }
 
@@ -87,14 +127,17 @@ export function parseImportWorkbook(
 
   // xlsx.read acepta ArrayBuffer (type: 'array') o Buffer (type: 'buffer').
   const isArrayBuffer = typeof ArrayBuffer !== 'undefined' && buffer instanceof ArrayBuffer
+  // cellDates: true → celdas con formato fecha en Excel llegan como Date object,
+  // no como número de serie. El reader las convierte a DD-MM-AAAA para que el
+  // resto del parser no tenga que distinguir el origen.
   const wb = XLSX.read(
     isArrayBuffer ? new Uint8Array(buffer as ArrayBuffer) : (buffer as Uint8Array | Buffer),
-    { type: 'array' },
+    { type: 'array', cellDates: true },
   )
   const sheetName = wb.SheetNames.find(n => n === 'Carga') ?? wb.SheetNames[0]
   const ws = wb.Sheets[sheetName]
 
-  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
   if (raw.length < 3) {
     return {
       rows: [],
@@ -103,8 +146,8 @@ export function parseImportWorkbook(
     }
   }
 
-  const headers = raw[0] as string[]
-  const dataRows = raw.slice(2)
+  const headers = (raw[0] as unknown[]).map(h => String(h ?? '').trim())
+  const dataRows = raw.slice(2) as unknown[][]
   const col = makeColReader(headers)
 
   // Catálogo de regiones normalizado para matching tolerante a acentos.
@@ -177,7 +220,7 @@ export function parseImportWorkbook(
    * loop de campos libres al final.
    */
   function parseOptionalFields(
-    row: string[],
+    row: unknown[],
     target: Record<string, unknown>,
     rowErrors: string[],
     isUpdate: boolean,
@@ -255,9 +298,24 @@ export function parseImportWorkbook(
     }
     const fechaRaw = col(row, 'Fecha Próximo Hito')
     if (fechaRaw !== undefined && fechaRaw !== '') {
-      const dm = fechaRaw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
-      if (!dm) rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA`)
-      else target.fecha_proximo_hito = `${dm[3]}-${dm[2]}-${dm[1]}`
+      // Aceptamos DD-MM-AAAA (canónico), DD/MM/AAAA (formato fecha corta común
+      // en Excel en español) y DD-M-AAAA / DD/M/AAAA (con un solo dígito en mes
+      // o día). El reader ya convierte Date/serial a DD-MM-AAAA río arriba.
+      const dm = fechaRaw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+      if (!dm) {
+        rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA o DD/MM/AAAA (ej: 31-12-2027)`)
+      } else {
+        const dd = dm[1].padStart(2, '0')
+        const mm = dm[2].padStart(2, '0')
+        const yyyy = dm[3]
+        const day = parseInt(dd, 10)
+        const mon = parseInt(mm, 10)
+        if (mon < 1 || mon > 12 || day < 1 || day > 31) {
+          rowErrors.push(`fecha "${fechaRaw}" tiene día o mes fuera de rango`)
+        } else {
+          target.fecha_proximo_hito = `${yyyy}-${mm}-${dd}`
+        }
+      }
     }
 
     // Campos libres (texto). Acá vivía el bug original.
