@@ -17,9 +17,17 @@ const ESTADO_CONFIG = {
   pendiente:  { label: 'Pendiente',  color: 'bg-gray-100 text-gray-600'   },
 } as const
 
-type Props = { seguimientos: Seguimiento[] }
+type Props = {
+  seguimientos: Seguimiento[]
+  // Próximo hito declarado en la ficha de la iniciativa abierta. Si la fecha
+  // cae en el mes mostrado, se marca con un anillo distintivo en el día —
+  // visualmente separado de los dots de seguimientos para distinguir "esto
+  // es lo que se prometió" de "esto es lo que pasó".
+  fechaProximoHito?: string | null
+  proximoHitoTexto?: string | null
+}
 
-export default function CalendarioTab({ seguimientos }: Props) {
+export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoHitoTexto }: Props) {
   const [calMonth, setCalMonth] = useState(() => new Date())
   const [calDay, setCalDay]     = useState<string | null>(null)
 
@@ -46,6 +54,12 @@ export default function CalendarioTab({ seguimientos }: Props) {
   const _mn = calMonth.toLocaleDateString('es-CL', { month: 'long' })
   const monthLabel = `${_mn.charAt(0).toUpperCase() + _mn.slice(1)} ${calMonth.getFullYear()}`
   const selectedEntries = calDay ? (byDate[calDay] ?? []) : []
+
+  // Normaliza fecha_proximo_hito a YYYY-MM-DD para matchear contra dateStr
+  // de las celdas. Soporta tanto el formato puro ISO como timestamp con hora
+  // por si la BD trae la fecha completa.
+  const hitoDate = fechaProximoHito ? fechaProximoHito.split('T')[0] : null
+  const hitoTooltip = proximoHitoTexto ? `Próximo hito: ${proximoHitoTexto}` : 'Próximo hito comprometido'
 
   return (
     <div className="px-6 py-4">
@@ -81,17 +95,24 @@ export default function CalendarioTab({ seguimientos }: Props) {
           const entries    = byDate[dateStr] ?? []
           const isToday    = dateStr === today
           const isSelected = dateStr === calDay
+          const isHito     = dateStr === hitoDate
           const dayNum     = parseInt(dateStr.split('-')[2])
           return (
             <button
               key={i}
               onClick={() => setCalDay(isSelected ? null : dateStr)}
-              className={`bg-white h-16 p-1.5 flex flex-col items-start transition-colors hover:bg-slate-50 ${
+              title={isHito ? hitoTooltip : undefined}
+              className={`bg-white h-16 p-1.5 flex flex-col items-start transition-colors hover:bg-slate-50 relative ${
                 isSelected ? 'bg-slate-50 ring-2 ring-inset ring-slate-900' : ''
               }`}
             >
+              {/* Ring del próximo hito: anillo distintivo (no dot lleno) para
+                  separar "fecha comprometida" de "evento ocurrido". Usa el
+                  número del día como ancla — el ring va alrededor del número. */}
               <span className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full ${
-                isToday ? 'bg-slate-900 text-white' : 'text-gray-600'
+                isHito && !isToday ? 'ring-2 ring-amber-500 text-amber-700 font-semibold' :
+                isToday ? 'bg-slate-900 text-white' :
+                'text-gray-600'
               }`}>{dayNum}</span>
               <div className="flex flex-wrap gap-0.5 mt-0.5">
                 {entries.slice(0, 4).map((s, j) => (
@@ -115,14 +136,29 @@ export default function CalendarioTab({ seguimientos }: Props) {
             <span className="text-xs text-gray-500">{cfg.label}</span>
           </div>
         ))}
+        {hitoDate && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full ring-2 ring-amber-500" />
+            <span className="text-xs text-gray-500">Próximo hito</span>
+          </div>
+        )}
       </div>
 
       {calDay && (
         <div className="mt-4 border-t border-gray-100 pt-4">
           <p className="text-xs font-medium text-gray-500 mb-3">
             {new Date(calDay + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            {selectedEntries.length === 0 && ' — Sin actividad'}
+            {selectedEntries.length === 0 && calDay !== hitoDate && ' — Sin actividad'}
           </p>
+          {calDay === hitoDate && (
+            <div className="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+              <span className="w-2.5 h-2.5 rounded-full ring-2 ring-amber-500 mt-1 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-amber-800">Próximo hito comprometido</p>
+                {proximoHitoTexto && <p className="text-sm text-amber-900 leading-snug mt-0.5">{proximoHitoTexto}</p>}
+              </div>
+            </div>
+          )}
           {selectedEntries.length > 0 && (
             <div className="space-y-2">
               {selectedEntries.map(s => {

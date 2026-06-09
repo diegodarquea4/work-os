@@ -121,6 +121,58 @@ export default function HistorialTab({ seguimientos, semaforoLog, semaforo, pctA
         )}
       </div>
 
+      {/* Trayectoria del avance — timeline visual con bubbles ordenados
+          cronológicamente. El delta vs entrada anterior se muestra como
+          flecha con color (verde subió, rojo bajó, gris sin cambio). Los
+          datos vienen del mismo semaforo_log filtrados por campo='pct_avance'
+          — el log se popula automáticamente en cada cambio desde la ficha. */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trayectoria del avance</h3>
+        {(() => {
+          const avanceLog = semaforoLog
+            .filter(l => l.campo === 'pct_avance')
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          if (avanceLog.length === 0) {
+            return <p className="text-xs text-gray-400">Sin cambios de avance registrados aún</p>
+          }
+          return (
+            <div className="flex items-end gap-1 flex-wrap">
+              {avanceLog.map((l, i) => {
+                const valor = Number(l.valor_nuevo)
+                const prev  = i > 0 ? Number(avanceLog[i - 1].valor_nuevo) : null
+                const delta = prev !== null ? valor - prev : null
+                const arrow = delta === null ? null : delta > 0 ? '↑' : delta < 0 ? '↓' : '→'
+                const arrowCls =
+                  delta === null  ? 'text-gray-400' :
+                  delta > 0       ? 'text-green-600' :
+                  delta < 0       ? 'text-red-600' :
+                                    'text-gray-400'
+                return (
+                  <div key={l.id} className="flex items-end gap-1">
+                    {i > 0 && (
+                      <span className={`text-xs font-semibold ${arrowCls} pb-3`}>
+                        {arrow}{delta !== null && delta !== 0 ? ` ${delta > 0 ? '+' : ''}${delta}` : ''}
+                      </span>
+                    )}
+                    <div
+                      className="flex flex-col items-center gap-0.5 min-w-[44px]"
+                      title={`${new Date(l.created_at).toLocaleDateString('es-CL')}${l.cambiado_por ? ` · ${l.cambiado_por}` : ''}${prev === null ? ' · Avance inicial' : ''}`}
+                    >
+                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 text-slate-800 font-semibold text-xs ring-1 ring-slate-200">
+                        {valor}%
+                      </span>
+                      <span className="text-gray-400" style={{ fontSize: '9px' }}>
+                        {new Date(l.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </div>
+
       {/* Timeline por mes */}
       {seguimientos.length > 0 && (() => {
         const byMonth: Record<string, Seguimiento[]> = {}

@@ -543,16 +543,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Etapa actual</span>
               <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full ${canEdit ? 'cursor-pointer hover:brightness-95' : 'cursor-default'} transition-all group w-44 ${
-                etapaActual === 'Terminado'    ? 'bg-green-100' :
-                etapaActual === 'Ejecución'    ? 'bg-blue-100'  :
-                etapaActual === 'Diseño'       ? 'bg-violet-100':
-                etapaActual === 'Preinversión' ? 'bg-orange-100': 'bg-gray-100'
+                etapaActual === 'Terminado'       ? 'bg-green-100' :
+                etapaActual === 'Ejecución'       ? 'bg-blue-100'  :
+                etapaActual === 'Diseño'          ? 'bg-violet-100':
+                etapaActual === 'Prefactibilidad' ? 'bg-amber-100' :
+                etapaActual === 'Preinversión'    ? 'bg-orange-100': 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
                 <span className={`text-xs font-medium truncate flex-1 ${
-                  etapaActual === 'Terminado'    ? 'text-green-700' :
-                  etapaActual === 'Ejecución'    ? 'text-blue-700'  :
-                  etapaActual === 'Diseño'       ? 'text-violet-700':
-                  etapaActual === 'Preinversión' ? 'text-orange-700': 'text-gray-500'
+                  etapaActual === 'Terminado'       ? 'text-green-700' :
+                  etapaActual === 'Ejecución'       ? 'text-blue-700'  :
+                  etapaActual === 'Diseño'          ? 'text-violet-700':
+                  etapaActual === 'Prefactibilidad' ? 'text-amber-700' :
+                  etapaActual === 'Preinversión'    ? 'text-orange-700': 'text-gray-500'
                 }`}>{etapaActual || '—'}</span>
                 {canEdit && (
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-gray-500">
@@ -570,6 +572,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 >
                   <option value="">—</option>
                   <option>Preinversión</option>
+                  <option>Prefactibilidad</option>
                   <option>Diseño</option>
                   <option>Ejecución</option>
                   <option>Terminado</option>
@@ -893,7 +896,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           ) : tab === 'historial' ? (
             <HistorialTab seguimientos={seguimientos} semaforoLog={semaforoLog} semaforo={semaforo} pctAvance={pctAvance} />
           ) : tab === 'calendario' ? (
-            <CalendarioTab seguimientos={seguimientos} />
+            <CalendarioTab
+              seguimientos={seguimientos}
+              fechaProximoHito={fechaProximoHito || null}
+              proximoHitoTexto={proximoHito || null}
+            />
           ) : (
             <DocumentosTab
               prioridadId={prioridad.n}

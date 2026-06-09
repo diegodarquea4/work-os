@@ -11,6 +11,8 @@ import { downloadTemplate as downloadTemplateExcel, buildPrefilledWorkbook, down
 import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
 import { getSupabase } from '@/lib/supabase'
 import type { RegionEje } from '@/lib/types'
+import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { composeEjeLabel } from '@/lib/ejes'
 import TagChips from './TagChips'
 
 const SEMAFORO_CONFIG = {
@@ -60,15 +62,6 @@ type Props = {
 // client/server). El alias mantiene compatibilidad con los usos previos.
 type ImportPreviewRow = ParsedRow
 
-const EJES = [
-  'Eje 1: Infraestructura y Conectividad',
-  'Eje 2: Energía y Medio Ambiente',
-  'Eje 3: Salud y Servicios Básicos',
-  'Eje 4: Seguridad y Soberanía',
-  'Eje 5: Desarrollo Productivo e Innovación',
-  'Eje 6: Familia, Educación y Equidad Territorial',
-]
-
 function diasSinActividad(lastIso: string | null | undefined): number | null {
   if (!lastIso) return null
   return Math.floor((Date.now() - new Date(lastIso).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,6 +92,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Multi-tag filter: OR lógico. Source se computa abajo de los tags presentes
   // en las iniciativas visibles antes de aplicar este filtro.
   const [filterTags, setFilterTags]               = useState<Set<string>>(new Set())
+  // Multi-responsable filter: OR. Source dinámica como tags. Excluye null/vacío.
+  const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
+  // Toggle "En foco": activo → solo p.en_foco === true; inactivo → todas.
+  const [filterFoco, setFilterFoco]               = useState<boolean>(false)
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -161,6 +158,12 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       // Filtro multi-tag: OR. Basta con que la iniciativa tenga AL MENOS uno
       // de los tags seleccionados para que pase.
       if (filterTags.size > 0 && !(p.tags ?? []).some(t => filterTags.has(t))) return false
+      // Filtro multi-responsable: OR. Si responsable es null/vacío, no matchea
+      // cuando hay un filtro activo (la iniciativa sin responsable no aparece
+      // si el usuario filtra por nombres).
+      if (filterResponsable.size > 0 && !(p.responsable && filterResponsable.has(p.responsable))) return false
+      // Filtro "En foco" — toggle. Activo: solo en_foco === true. Inactivo: todas.
+      if (filterFoco && p.en_foco !== true) return false
       return true
     })
 
@@ -181,16 +184,35 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterTags, sortCol, sortDir, actividad])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterTags, filterResponsable, filterFoco, sortCol, sortDir, actividad])
 
-  // Fuente del dropdown de tags: tags presentes en las iniciativas que pasan
-  // los OTROS filtros (todos menos tags). Así el dropdown solo lista lo que
-  // tiene sentido elegir dado el contexto actual. Si no hay tags en uso,
-  // el control de filtro no se renderiza más abajo.
-  const availableTags = useMemo(() => {
-    const base = projects.filter(p => {
+  // Catálogo formal de ejes per-región (migración 015). Si hay región filtrada,
+  // carga el catálogo de esa región para alimentar el dropdown. Si está en
+  // "todas", el hook recibe null y no hace fetch — usamos la unión derivada
+  // de iniciativas más abajo.
+  const regionCodFiltered = useMemo(() => {
+    if (filterRegion === 'todas') return null
+    return REGIONS.find(r => r.nombre === filterRegion)?.cod ?? null
+  }, [filterRegion])
+  const { ejes: regionEjesCat } = useRegionEjes(regionCodFiltered)
+
+  // availableEjes: con región filtrada y catálogo disponible, lista del catálogo
+  // (composeEjeLabel canónico). Sin región filtrada o catálogo vacío, fallback
+  // a la unión de strings `eje` realmente usados en iniciativas — así nunca
+  // queda dropdown vacío si hay datos. Reemplaza la constante hardcoded EJES.
+  const availableEjes = useMemo(() => {
+    if (regionCodFiltered && regionEjesCat.length > 0) {
+      return regionEjesCat.map(re => composeEjeLabel(re.numero, re.nombre))
+    }
+    return Array.from(new Set(projects.map(p => p.eje).filter(Boolean))).sort()
+  }, [regionCodFiltered, regionEjesCat, projects])
+
+  // Pool base = iniciativas que pasan todos los filtros EXCEPTO el dinámico.
+  // Reusado para availableTags, availableResponsables.
+  function basePool(excluding: 'tags' | 'responsable') {
+    const q = search.toLowerCase()
+    return projects.filter(p => {
       if (search) {
-        const q = search.toLowerCase()
         if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
             !(p.ministerio ?? '').toLowerCase().includes(q)) return false
@@ -200,10 +222,24 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterEjeGobierno !== 'todos' && p.eje_gobierno !== filterEjeGobierno) return false
       if (filterSemaforo.size > 0 && !filterSemaforo.has(p.estado_semaforo as SemaforoKey)) return false
       if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad as 'Alta' | 'Media' | 'Baja')) return false
+      if (excluding !== 'tags' && filterTags.size > 0 && !(p.tags ?? []).some(t => filterTags.has(t))) return false
+      if (excluding !== 'responsable' && filterResponsable.size > 0 && !(p.responsable && filterResponsable.has(p.responsable))) return false
+      if (filterFoco && p.en_foco !== true) return false
       return true
     })
-    return Array.from(new Set(base.flatMap(p => p.tags ?? []))).sort()
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad])
+  }
+
+  const availableTags = useMemo(() => {
+    return Array.from(new Set(basePool('tags').flatMap(p => p.tags ?? []))).sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterResponsable, filterFoco])
+
+  const availableResponsables = useMemo(() => {
+    return Array.from(new Set(
+      basePool('responsable').map(p => p.responsable).filter((r): r is string => !!r && r.trim() !== '')
+    )).sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterTags, filterFoco])
 
   const rojo   = filtered.filter(p => p.estado_semaforo === 'rojo').length
   const ambar  = filtered.filter(p => p.estado_semaforo === 'ambar').length
@@ -218,12 +254,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setSearch(''); setFilterRegion('todas'); setFilterEje('todos')
     setFilterEjeGobierno('todos'); setFilterSemaforo(new Set()); setFilterPrioridad(new Set())
     setFilterTags(new Set())
+    setFilterResponsable(new Set())
+    setFilterFoco(false)
   }
 
   function toggleTagFilter(t: string) {
     setFilterTags(prev => {
       const next = new Set(prev)
       next.has(t) ? next.delete(t) : next.add(t)
+      return next
+    })
+  }
+
+  function toggleResponsableFilter(r: string) {
+    setFilterResponsable(prev => {
+      const next = new Set(prev)
+      next.has(r) ? next.delete(r) : next.add(r)
       return next
     })
   }
@@ -368,9 +414,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const hasFilters = search || filterRegion !== 'todas' || filterEje !== 'todos' ||
-    filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0 || filterTags.size > 0
+    filterEjeGobierno !== 'todos' || filterSemaforo.size > 0 || filterPrioridad.size > 0 ||
+    filterTags.size > 0 || filterResponsable.size > 0 || filterFoco
 
-  const hasSecondaryFilter = filterEje !== 'todos' || filterEjeGobierno !== 'todos' || filterPrioridad.size > 0 || filterTags.size > 0
+  const hasSecondaryFilter = filterEje !== 'todos' || filterEjeGobierno !== 'todos' ||
+    filterPrioridad.size > 0 || filterTags.size > 0 || filterResponsable.size > 0 || filterFoco
 
   // Dynamic column count for colspan calculation
   const colCount = visibleCols.size
@@ -592,14 +640,16 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         {/* Secondary filters (collapsible) */}
         {showSecondaryFilters && (
           <div className="flex items-center gap-2 flex-wrap pt-1">
-            {/* Eje regional */}
+            {/* Eje regional — alimentado por el catálogo per-región cuando
+                hay una región seleccionada. En "todas" usa la unión derivada
+                de iniciativas en uso, así nunca queda dropdown vacío. */}
             <select
               value={filterEje}
               onChange={e => setFilterEje(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[220px]"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[280px]"
             >
               <option value="todos">Todos los ejes</option>
-              {EJES.map(e => <option key={e} value={e}>{e}</option>)}
+              {availableEjes.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
 
             {/* Eje Gobierno */}
@@ -639,6 +689,47 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )
               })}
             </div>
+
+            {/* En Foco — toggle simple. Activo: solo iniciativas con bandera. */}
+            <button
+              onClick={() => setFilterFoco(v => !v)}
+              className={`text-xs px-2 py-1 rounded-full transition-colors font-medium flex items-center gap-1 ${
+                filterFoco
+                  ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-300'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+              title="Filtrar solo iniciativas en foco"
+            >
+              <span className="text-[10px]">⚑</span>
+              En foco
+            </button>
+
+            {/* Responsable multi-select — mismo patrón que tags. Solo aparece
+                si hay responsables asignados entre las iniciativas visibles. */}
+            {availableResponsables.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-xs text-gray-400 ml-1 mr-0.5">Responsable:</span>
+                {availableResponsables.map(r => {
+                  const active = filterResponsable.has(r)
+                  // Display compacto: mostrar nombre antes del @ si es email.
+                  const short = r.includes('@') ? r.split('@')[0] : r
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => toggleResponsableFilter(r)}
+                      title={r}
+                      className={`text-xs px-2 py-1 rounded-full transition-colors border max-w-[160px] truncate ${
+                        active
+                          ? 'bg-slate-700 text-white border-slate-700'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {short}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Tags multi-select. Solo se renderiza si hay tags en uso entre
                 las iniciativas que pasan los OTROS filtros. Si no, el control

@@ -528,12 +528,13 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
 
-      {/* Filter bar */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white flex items-center gap-3 flex-wrap">
+      {/* Filter bar — flex-wrap + min-w-0 en items para que en pantallas
+          chicas el contenido se pliegue sin romper el layout horizontal. */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white flex items-center gap-3 flex-wrap min-w-0">
         <select
           value={filterRegion}
           onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v); setFilterEjeGob(new Set()) }) }}
-          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 min-w-0 max-w-full"
         >
           {regions.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
@@ -723,9 +724,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         columnas no entran (ej. 6 ejes en pantalla angosta), permite scroll.
       */}
       {isGroupedMode && groupBy === 'eje' && ejeColumns && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden flex justify-center">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          {/* mx-auto + w-fit: centra cuando los ejes caben; cuando exceden el
+              viewport el grid mantiene su ancho y el overflow-x-auto del
+              padre permite scroll lateral alcanzando todas las columnas
+              (incluyendo las que quedarían "antes del centro" con el truco
+              flex justify-center anterior). */}
           <div
-            className="grid h-full px-6 pt-4 flex-shrink-0"
+            className="grid h-full px-6 pt-4 mx-auto w-fit"
             style={{
               gridTemplateColumns: `repeat(${ejeColumns.length}, 22rem)`,
               columnGap: '1rem',
@@ -779,14 +785,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           columnas (key compuesto con el tag para evitar reconciliación cruzada
           de React). Columna "Sin etiquetas" al final. */}
       {isGroupedMode && groupBy === 'tag' && tagColumns && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden flex justify-center">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
           {tagColumns.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-gray-400">
               Esta región todavía no tiene iniciativas con etiquetas.
             </div>
           ) : (
             <div
-              className="grid h-full px-6 pt-4 flex-shrink-0"
+              className="grid h-full px-6 pt-4 mx-auto w-fit"
               style={{
                 gridTemplateColumns: `repeat(${tagColumns.length}, 22rem)`,
                 columnGap: '1rem',
@@ -844,7 +850,10 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                   </svg>
                   <span className="text-sm font-bold text-slate-800">{group.nombre}</span>
                 </summary>
-                <div className="bg-slate-50 p-3 space-y-2">
+                {/* overflow-x-auto: si las filas anchas no entran en pantalla
+                    chica (responsable + hito + prioridad + avance + nombre),
+                    se permite scroll lateral interno en vez de cortarse. */}
+                <div className="bg-slate-50 p-3 space-y-2 overflow-x-auto">
                   {group.iniciativas.map(p => (
                     <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />
                   ))}
