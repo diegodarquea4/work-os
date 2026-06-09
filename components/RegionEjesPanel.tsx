@@ -8,6 +8,7 @@ import {
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
+import { parseEjeString } from '@/lib/ejes'
 
 /**
  * Modal de gestión del catálogo de ejes de una región. Solo admin/editor DCI
@@ -73,10 +74,22 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     const numero = parseInt(newNumero, 10)
-    const nombre = newNombre.trim()
     if (!numero || numero < 1 || numero > 99) {
       setError('El número debe estar entre 1 y 99.')
       return
+    }
+    // Normalización: si el delegado escribió "Eje 5: Salud" en el campo Nombre,
+    // extraemos solo "Salud" y validamos que el N° coincida con el campo aparte.
+    // El catálogo guarda nombre PURO (sin "Eje N:") — el label canónico se
+    // compone con composeEjeLabel en UI.
+    let nombre = newNombre.trim()
+    const parsed = parseEjeString(nombre)
+    if (parsed) {
+      if (parsed.numero !== numero) {
+        setError(`El nombre incluye "Eje ${parsed.numero}" pero el N° es ${numero}. Corrige uno de los dos.`)
+        return
+      }
+      nombre = parsed.nombre
     }
     if (!nombre) {
       setError('El nombre es requerido.')
@@ -107,7 +120,17 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
   }
 
   async function handleSaveEdit(eje: RegionEje) {
-    const nombre = editDraft.trim()
+    let nombre = editDraft.trim()
+    // Misma normalización que en handleCreate: si pegó "Eje N: Nombre", extraer
+    // y validar coincidencia del número con el eje editado.
+    const parsed = parseEjeString(nombre)
+    if (parsed) {
+      if (parsed.numero !== eje.numero) {
+        setError(`El nombre incluye "Eje ${parsed.numero}" pero este es el Eje ${eje.numero}. Quita el prefijo o corrige el número.`)
+        return
+      }
+      nombre = parsed.nombre
+    }
     if (!nombre) {
       setEditingId(null)
       return
@@ -324,6 +347,9 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
                   />
                 </div>
               </div>
+              <p className="text-[10px] text-slate-500 leading-snug">
+                Solo el nombre — el prefijo &quot;Eje N:&quot; se agrega automático al mostrar.
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"

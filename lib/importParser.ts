@@ -20,6 +20,7 @@ import { REGIONS } from './regions'
 import type { Iniciativa } from './projects'
 import type { RegionEje } from './types'
 import { parseEjeString, composeEjeLabel } from './ejes'
+import { TEMPLATE_COLS } from './templateExcel'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 
@@ -138,7 +139,7 @@ export function parseImportWorkbook(
   const ws = wb.Sheets[sheetName]
 
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
-  if (raw.length < 3) {
+  if (raw.length < 2) {
     return {
       rows: [],
       fileErrors: ['El archivo no tiene filas de datos. Agrega datos a partir de la fila 3.'],
@@ -147,7 +148,33 @@ export function parseImportWorkbook(
   }
 
   const headers = (raw[0] as unknown[]).map(h => String(h ?? '').trim())
-  const dataRows = raw.slice(2) as unknown[][]
+
+  // Detección de la fila guía (descripciones de campos). El template canónico
+  // tiene headers en fila 1 y descripciones en fila 2 — el delegado debería
+  // agregar data desde fila 3. Pero si borra accidentalmente la fila 2, la
+  // primera iniciativa termina en raw[1] y un `slice(2)` rígido la descarta
+  // sin avisar. Detectamos contra `TEMPLATE_COLS.desc` (autocorrige si cambian
+  // las descripciones) y como sentinel adicional: el `#` canónico arranca con
+  // `⚠`, un caracter que data real nunca va a contener.
+  function isGuideRow(row: unknown[] | undefined): boolean {
+    if (!row) return false
+    const hashIdx = headers.indexOf('#')
+    if (hashIdx >= 0) {
+      const hashCell = String(row[hashIdx] ?? '').trim()
+      if (hashCell.startsWith('⚠')) return true
+    }
+    let matches = 0
+    for (let i = 0; i < headers.length; i++) {
+      const cell = String(row[i] ?? '').trim()
+      if (!cell) continue
+      const colDef = TEMPLATE_COLS.find(c => c.label === headers[i])
+      if (colDef && cell === colDef.desc.trim()) matches++
+      if (matches >= 3) return true
+    }
+    return false
+  }
+  const dataStart = isGuideRow(raw[1] as unknown[] | undefined) ? 2 : 1
+  const dataRows = raw.slice(dataStart) as unknown[][]
   const col = makeColReader(headers)
 
   // Catálogo de regiones normalizado para matching tolerante a acentos.
