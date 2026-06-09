@@ -7,7 +7,7 @@ import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
 import { prioridadColor } from '@/lib/config'
 import { useIsAdmin } from '@/lib/context/UserContext'
-import { downloadTemplate as downloadTemplateExcel } from '@/lib/templateExcel'
+import { downloadTemplate as downloadTemplateExcel, buildPrefilledWorkbook, downloadPrefilled } from '@/lib/templateExcel'
 import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
 import { getSupabase } from '@/lib/supabase'
 import type { RegionEje } from '@/lib/types'
@@ -110,14 +110,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [importFileName, setImportFileName]       = useState<string>('')
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [exportRegions, setExportRegions]     = useState<Set<string>>(() => new Set(REGIONS.map(r => r.nombre)))
-  const [exportEjes, setExportEjes]           = useState<Set<string>>(() => new Set())
+  // Loading state mientras descargamos los ejes del catálogo para construir
+  // la hoja "Ejes válidos" del Excel exportado. Bloquea el botón.
+  const [exporting, setExporting]             = useState(false)
   const fileInputRef                          = useRef<HTMLInputElement>(null)
 
   // New UI state
   const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
   const [visibleCols, setVisibleCols]                   = useState<Set<ColId>>(DEFAULT_COLS)
   const [showColsPanel, setShowColsPanel]               = useState(false)
-  const [groupByRegion, setGroupByRegion]               = useState(false)
 
   const selectedSynced = selected
     ? (projects.find(p => p.n === selected.n) ?? selected)
@@ -313,53 +314,55 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
-
-  const allProjectEjes = useMemo(() => {
-    const s = new Set<string>()
-    for (const p of projects) if (p.eje) s.add(p.eje)
-    return [...s].sort()
-  }, [projects])
+  //
+  // El Excel exportado desde Dashboard usa el MISMO formato que el flow de
+  // propuestas en Mi Región (`buildPrefilledWorkbook` + TEMPLATE_COLS). Las
+  // dos rutas son espejo: misma hoja "Carga", mismas columnas, mismas hojas
+  // "Instrucciones" y "Ejes válidos". El import del Dashboard valida contra
+  // las MISMAS columnas — formato uniforme en ambas direcciones.
+  //
+  // En multi-región la hoja "Ejes válidos" agrega la columna Región para que
+  // se pueda identificar qué eje pertenece a cada una (ver buildPrefilledWorkbook).
 
   function openExportModal() {
-    if (exportEjes.size === 0) setExportEjes(new Set(allProjectEjes))
     setExportModalOpen(true)
   }
 
-  const exportCount = projects.filter(p => exportRegions.has(p.region) && exportEjes.has(p.eje)).length
+  const exportCount = projects.filter(p => exportRegions.has(p.region)).length
 
-  function exportExcelFiltered() {
-    const toExport = projects.filter(p => exportRegions.has(p.region) && exportEjes.has(p.eje))
-    const rows = toExport.map(p => ({
-      '#': p.n,
-      Región: p.region,
-      Capital: p.capital,
-      Zona: p.zona,
-      Comuna: p.comuna ?? '',
-      'Eje Regional': p.eje,
-      'Eje Gobierno': p.eje_gobierno ?? '',
-      Iniciativa: p.nombre,
-      Descripción: p.descripcion ?? '',
-      Ministerio: p.ministerio ?? '',
-      Prioridad: p.prioridad,
-      'Etapa Actual': p.etapa_actual ?? '',
-      'Estado Término Gob.': p.estado_termino_gobierno ?? '',
-      Semáforo: SEMAFORO_CONFIG[p.estado_semaforo]?.label ?? p.estado_semaforo,
-      'Avance (%)': p.pct_avance,
-      Responsable: p.responsable ?? '',
-      'Próximo Hito': p.proximo_hito ?? '',
-      'Fecha Próximo Hito': p.fecha_proximo_hito ? formatDate(p.fecha_proximo_hito) : '',
-      'Inversión MM$': p.inversion_mm ?? '',
-      'Código BIP': p.codigo_bip ?? '',
-      'Código Iniciativa': p.codigo_iniciativa ?? '',
-      RAT: p.rat ?? '',
-      'Fuente Financiamiento': p.fuente_financiamiento ?? '',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Prioridades')
-    const fecha = new Date().toISOString().split('T')[0]
-    XLSX.writeFile(wb, `prioridades-territoriales-${fecha}.xlsx`)
-    setExportModalOpen(false)
+  async function exportExcelFiltered() {
+    if (exportRegions.size === 0 || exporting) return
+    setExporting(true)
+    try {
+      const toExport = projects.filter(p => exportRegions.has(p.region))
+      // Mapeo región → cod para cargar el catálogo de ejes correspondiente
+      // y construir la hoja "Ejes válidos". Si una región seleccionada no
+      // tiene cod conocido (REGIONS no la trae), se omite — defensivo.
+      const codsByRegionName = new Map(REGIONS.map(r => [r.nombre, r.cod]))
+      const selectedCods = Array.from(exportRegions)
+        .map(name => codsByRegionName.get(name))
+        .filter((c): c is string => Boolean(c))
+      const { data: ejesData } = await getSupabase()
+        .from('region_ejes')
+        .select('*')
+        .in('region_cod', selectedCods)
+      const regionEjes = (ejesData ?? []) as RegionEje[]
+
+      // Single región: usamos downloadPrefilled para que el filename + el
+      // slugify queden idénticos a Mi Región (espejo total). Multi-región:
+      // construimos el wb y le ponemos un filename agregado.
+      if (exportRegions.size === 1) {
+        const regionName = Array.from(exportRegions)[0]
+        downloadPrefilled(regionName, toExport, regionEjes)
+      } else {
+        const wb = buildPrefilledWorkbook(toExport, regionEjes)
+        const fecha = new Date().toISOString().split('T')[0]
+        XLSX.writeFile(wb, `iniciativas-${exportRegions.size}-regiones-${fecha}.xlsx`)
+      }
+      setExportModalOpen(false)
+    } finally {
+      setExporting(false)
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -388,18 +391,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       </th>
     )
   }
-
-  // ── Grouped rows ──────────────────────────────────────────────────────────
-
-  const groupedByRegion = useMemo(() => {
-    if (!groupByRegion) return null
-    const map = new Map<string, Iniciativa[]>()
-    for (const p of filtered) {
-      if (!map.has(p.region)) map.set(p.region, [])
-      map.get(p.region)!.push(p)
-    }
-    return map
-  }, [filtered, groupByRegion])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -554,18 +545,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
           {/* Right controls */}
           <div className="ml-auto flex items-center gap-2">
-            {/* Group by region */}
-            <button
-              onClick={() => setGroupByRegion(v => !v)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-                groupByRegion
-                  ? 'bg-slate-800 border-slate-800 text-white'
-                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-              }`}
-            >
-              Por región
-            </button>
-
             {/* Columns toggle */}
             <div className="relative">
               <button
@@ -744,31 +723,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   <button onClick={clearFilters} className="underline text-slate-600">Limpiar filtros</button>
                 </td>
               </tr>
-            ) : groupedByRegion ? (
-              // Grouped by region
-              Array.from(groupedByRegion.entries()).map(([regionNombre, rows]) => {
-                const rAvg   = Math.round(rows.reduce((s, p) => s + p.pct_avance, 0) / rows.length)
-                const rRojo  = rows.filter(p => p.estado_semaforo === 'rojo').length
-                const rAmbar = rows.filter(p => p.estado_semaforo === 'ambar').length
-                const rVerde = rows.filter(p => p.estado_semaforo === 'verde').length
-                return [
-                  <tr key={`group-${regionNombre}`} className="bg-slate-50 border-t-2 border-slate-200">
-                    <td colSpan={colCount} className="px-4 py-2">
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-xs text-slate-700">{regionNombre}</span>
-                        <span className="text-xs text-gray-400">{rows.length} iniciativas</span>
-                        <span className="text-xs font-semibold text-slate-600">{rAvg}% avance</span>
-                        <div className="flex items-center gap-1.5 ml-1">
-                          {rRojo  > 0 && <span className="flex items-center gap-1 text-xs text-red-600"><span className="w-1.5 h-1.5 rounded-full bg-red-500"/>{rRojo}</span>}
-                          {rAmbar > 0 && <span className="flex items-center gap-1 text-xs text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>{rAmbar}</span>}
-                          {rVerde > 0 && <span className="flex items-center gap-1 text-xs text-green-600"><span className="w-1.5 h-1.5 rounded-full bg-green-500"/>{rVerde}</span>}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>,
-                  ...rows.map(p => <DataRow key={p.n} p={p} />),
-                ]
-              })
             ) : (
               filtered.map(p => <DataRow key={p.n} p={p} />)
             )}
@@ -983,7 +937,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Exportar a Excel</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Selecciona las regiones y ejes a incluir</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Mismo formato que el archivo de propuesta de Mi Región — apto
+                  para volver a importarlo aquí o repartirlo a la delegación.
+                </p>
               </div>
               <button onClick={() => setExportModalOpen(false)} className="text-gray-400 hover:text-gray-600 mt-0.5">✕</button>
             </div>
@@ -1015,33 +972,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   ))}
                 </div>
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ejes</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => setExportEjes(new Set(allProjectEjes))} className="text-xs text-blue-600 hover:underline">Todos</button>
-                    <button onClick={() => setExportEjes(new Set())} className="text-xs text-gray-400 hover:underline">Ninguno</button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {allProjectEjes.map(e => (
-                    <label key={e} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:text-gray-900 py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={exportEjes.has(e)}
-                        onChange={ev => {
-                          const next = new Set(exportEjes)
-                          if (ev.target.checked) next.add(e)
-                          else next.delete(e)
-                          setExportEjes(next)
-                        }}
-                        className="rounded"
-                      />
-                      <span>{e}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
               <span className="text-xs text-gray-500 font-medium">{exportCount} iniciativas seleccionadas</span>
@@ -1051,13 +981,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 </button>
                 <button
                   onClick={exportExcelFiltered}
-                  disabled={exportCount === 0}
+                  disabled={exportCount === 0 || exporting}
                   className="text-xs px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-60 font-medium flex items-center gap-1.5"
                 >
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>
                   </svg>
-                  Descargar Excel
+                  {exporting ? 'Generando…' : 'Descargar Excel'}
                 </button>
               </div>
             </div>

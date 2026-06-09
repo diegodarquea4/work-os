@@ -202,18 +202,39 @@ export function buildPrefilledWorkbook(
   // Hoja "Ejes válidos" — referencia visible para el delegado regional.
   // Listamos cada eje con su label canónico para copy-paste exacto. Si el
   // catálogo viene vacío, omitimos la hoja para no confundir.
+  //
+  // Multi-región (export del Dashboard): cuando el array trae ejes de más
+  // de una región, agregamos columna "Región" al frente y ordenamos por
+  // (region_cod, numero) para que sea legible quién es cuál. Single región
+  // (uso histórico de Mi Región) mantiene el formato original sin columna.
   if (regionEjes && regionEjes.length > 0) {
-    const sorted = [...regionEjes].sort((a, b) => a.numero - b.numero)
-    const ejesAoA: (string | number)[][] = [
-      ['EJES VÁLIDOS DE LA REGIÓN', '', ''],
-      ['Copia el "Etiqueta" tal cual en la columna "Eje" de la hoja Carga.', '', ''],
-      ['Si necesitas un eje nuevo, pídele a admin DCI agregarlo desde "Gestionar ejes" — no inventes uno acá.', '', ''],
-      ['', '', ''],
-      ['Número', 'Nombre', 'Etiqueta'],
-      ...sorted.map(re => [re.numero, re.nombre, composeEjeLabel(re.numero, re.nombre)]),
-    ]
+    const uniqueRegions = new Set(regionEjes.map(e => e.region_cod))
+    const isMulti = uniqueRegions.size > 1
+    const sorted = [...regionEjes].sort((a, b) => {
+      if (a.region_cod !== b.region_cod) return a.region_cod.localeCompare(b.region_cod)
+      return a.numero - b.numero
+    })
+    const ejesAoA: (string | number)[][] = isMulti
+      ? [
+          ['EJES VÁLIDOS POR REGIÓN', '', '', ''],
+          ['Copia el "Etiqueta" tal cual en la columna "Eje" de la hoja Carga.', '', '', ''],
+          ['Si necesitas un eje nuevo, pídele a admin DCI agregarlo desde "Gestionar ejes" — no inventes uno acá.', '', '', ''],
+          ['', '', '', ''],
+          ['Región', 'Número', 'Nombre', 'Etiqueta'],
+          ...sorted.map(re => [re.region_cod, re.numero, re.nombre, composeEjeLabel(re.numero, re.nombre)]),
+        ]
+      : [
+          ['EJES VÁLIDOS DE LA REGIÓN', '', ''],
+          ['Copia el "Etiqueta" tal cual en la columna "Eje" de la hoja Carga.', '', ''],
+          ['Si necesitas un eje nuevo, pídele a admin DCI agregarlo desde "Gestionar ejes" — no inventes uno acá.', '', ''],
+          ['', '', ''],
+          ['Número', 'Nombre', 'Etiqueta'],
+          ...sorted.map(re => [re.numero, re.nombre, composeEjeLabel(re.numero, re.nombre)]),
+        ]
     const wsEjes = XLSX.utils.aoa_to_sheet(ejesAoA)
-    wsEjes['!cols'] = [{ wch: 10 }, { wch: 44 }, { wch: 56 }]
+    wsEjes['!cols'] = isMulti
+      ? [{ wch: 10 }, { wch: 10 }, { wch: 44 }, { wch: 56 }]
+      : [{ wch: 10 }, { wch: 44 }, { wch: 56 }]
     XLSX.utils.book_append_sheet(wb, wsEjes, 'Ejes válidos')
   }
   return wb
