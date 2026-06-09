@@ -27,25 +27,33 @@ const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
 type SortDir = 'asc' | 'desc'
-type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'proximoHito' | 'estadoTermino' | 'inversion' | 'rat' | 'fuente' | 'responsable' | 'actividad' | 'tags'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
 
 const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
-  { id: 'n',             label: '#',                     defaultVisible: false },
-  { id: 'estado',        label: 'Estado',                defaultVisible: true  },
-  { id: 'iniciativa',    label: 'Iniciativa',            defaultVisible: true  },
-  { id: 'region',        label: 'Región',                defaultVisible: true  },
-  { id: 'ejeRegional',   label: 'Eje Regional',          defaultVisible: false },
-  { id: 'ejeGobierno',   label: 'Eje Gobierno',          defaultVisible: false },
-  { id: 'avance',        label: 'Avance',                defaultVisible: true  },
-  { id: 'prioridad',     label: 'Prioridad',             defaultVisible: false },
-  { id: 'proximoHito',   label: 'Próximo Hito',          defaultVisible: true  },
-  { id: 'estadoTermino', label: 'Estado Término Gob.',   defaultVisible: false },
-  { id: 'inversion',     label: 'Inversión',             defaultVisible: true  },
-  { id: 'rat',           label: 'RAT',                   defaultVisible: false },
-  { id: 'fuente',        label: 'Fuente Financiamiento', defaultVisible: false },
-  { id: 'responsable',   label: 'Responsable',           defaultVisible: false },
-  { id: 'actividad',     label: 'Actividad',             defaultVisible: true  },
-  { id: 'tags',          label: 'Etiquetas',             defaultVisible: false },
+  { id: 'n',                label: '#',                     defaultVisible: false },
+  { id: 'estado',           label: 'Estado',                defaultVisible: true  },
+  { id: 'iniciativa',       label: 'Iniciativa',            defaultVisible: true  },
+  { id: 'region',           label: 'Región',                defaultVisible: true  },
+  { id: 'comuna',           label: 'Comuna',                defaultVisible: false },
+  { id: 'ministerio',       label: 'Ministerio',            defaultVisible: false },
+  { id: 'ejeRegional',      label: 'Eje Regional',          defaultVisible: false },
+  { id: 'ejeGobierno',      label: 'Eje Gobierno',          defaultVisible: false },
+  { id: 'avance',           label: 'Avance',                defaultVisible: true  },
+  { id: 'prioridad',        label: 'Prioridad',             defaultVisible: false },
+  { id: 'etapaActual',      label: 'Etapa Actual',          defaultVisible: false },
+  { id: 'proximoHito',      label: 'Próximo Hito',          defaultVisible: true  },
+  { id: 'fechaProximoHito', label: 'Fecha Próx. Hito',      defaultVisible: false },
+  { id: 'estadoTermino',    label: 'Estado Término Gob.',   defaultVisible: false },
+  { id: 'inversion',        label: 'Inversión',             defaultVisible: true  },
+  { id: 'codigoBip',        label: 'Código BIP',            defaultVisible: false },
+  { id: 'rat',              label: 'RAT',                   defaultVisible: false },
+  { id: 'fuente',           label: 'Fuente Financiamiento', defaultVisible: false },
+  { id: 'enFoco',           label: 'En Foco',               defaultVisible: false },
+  { id: 'origen',           label: 'Origen',                defaultVisible: false },
+  { id: 'descripcion',      label: 'Descripción',           defaultVisible: false },
+  { id: 'responsable',      label: 'Responsable',           defaultVisible: false },
+  { id: 'actividad',        label: 'Actividad',             defaultVisible: true  },
+  { id: 'tags',             label: 'Etiquetas',             defaultVisible: false },
 ]
 
 const DEFAULT_COLS = new Set<ColId>(ALL_COLS.filter(c => c.defaultVisible).map(c => c.id))
@@ -792,18 +800,26 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('estado')        && <ColHeader col="semaforo" label="Estado" />}
               {visibleCols.has('iniciativa')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Iniciativa</th>}
               {visibleCols.has('region')        && <ColHeader col="region" label="Región" />}
+              {visibleCols.has('comuna')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Comuna</th>}
+              {visibleCols.has('ministerio')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Ministerio</th>}
               {visibleCols.has('ejeRegional')   && <ColHeader col="eje" label="Eje Regional" />}
               {visibleCols.has('ejeGobierno')   && <ColHeader col="ejeGobierno" label="Eje Gobierno" />}
               {visibleCols.has('avance')        && <ColHeader col="avance" label="Avance" />}
-              {visibleCols.has('prioridad')     && <ColHeader col="prioridad" label="Prioridad" />}
-              {visibleCols.has('proximoHito')   && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Próximo Hito</th>}
-              {visibleCols.has('estadoTermino') && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Estado Término Gob.</th>}
-              {visibleCols.has('inversion')     && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Inversión</th>}
-              {visibleCols.has('rat')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">RAT</th>}
-              {visibleCols.has('fuente')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fuente</th>}
-              {visibleCols.has('responsable')   && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Responsable</th>}
-              {visibleCols.has('actividad')     && <ColHeader col="actividad" label="Actividad" />}
-              {visibleCols.has('tags')          && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etiquetas</th>}
+              {visibleCols.has('prioridad')        && <ColHeader col="prioridad" label="Prioridad" />}
+              {visibleCols.has('etapaActual')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etapa Actual</th>}
+              {visibleCols.has('proximoHito')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Próximo Hito</th>}
+              {visibleCols.has('fechaProximoHito') && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fecha Próx. Hito</th>}
+              {visibleCols.has('estadoTermino')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Estado Término Gob.</th>}
+              {visibleCols.has('inversion')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Inversión</th>}
+              {visibleCols.has('codigoBip')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Código BIP</th>}
+              {visibleCols.has('rat')              && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">RAT</th>}
+              {visibleCols.has('fuente')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fuente</th>}
+              {visibleCols.has('enFoco')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">En Foco</th>}
+              {visibleCols.has('origen')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Origen</th>}
+              {visibleCols.has('descripcion')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Descripción</th>}
+              {visibleCols.has('responsable')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Responsable</th>}
+              {visibleCols.has('actividad')        && <ColHeader col="actividad" label="Actividad" />}
+              {visibleCols.has('tags')             && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etiquetas</th>}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
@@ -1122,13 +1138,27 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         {visibleCols.has('iniciativa') && (
           <td className="px-3 py-3.5 max-w-xs">
             <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
-            <span className="text-xs text-gray-400 mt-0.5 block">{p.ministerio ?? 'Sin asignar'}</span>
+            <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
           </td>
         )}
         {visibleCols.has('region') && (
           <td className="px-3 py-3.5 whitespace-nowrap">
             <div className="text-xs font-medium text-gray-700">{p.region}</div>
             <div className="text-xs text-gray-400">{p.capital}</div>
+          </td>
+        )}
+        {visibleCols.has('comuna') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
+            {p.comuna
+              ? <span className="line-clamp-2 block">{p.comuna.replace(/;/g, ' · ')}</span>
+              : <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('ministerio') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[200px]">
+            {p.ministerio
+              ? <span className="line-clamp-2 block">{p.ministerio.replace(/;/g, ' · ')}</span>
+              : <span className="text-gray-300">—</span>}
           </td>
         )}
         {visibleCols.has('ejeRegional') && (
@@ -1173,6 +1203,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             </span>
           </td>
         )}
+        {visibleCols.has('etapaActual') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {p.etapa_actual
+              ? (() => {
+                  const cls =
+                    p.etapa_actual === 'Terminado'       ? 'bg-green-100 text-green-700' :
+                    p.etapa_actual === 'Ejecución'       ? 'bg-blue-100 text-blue-700'   :
+                    p.etapa_actual === 'Diseño'          ? 'bg-violet-100 text-violet-700':
+                    p.etapa_actual === 'Prefactibilidad' ? 'bg-amber-100 text-amber-700' :
+                    p.etapa_actual === 'Preinversión'    ? 'bg-orange-100 text-orange-700':
+                                                           'bg-gray-100 text-gray-600'
+                  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{p.etapa_actual}</span>
+                })()
+              : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
         {visibleCols.has('proximoHito') && (
           <td className="px-3 py-3.5 max-w-[200px]">
             {p.proximo_hito
@@ -1183,6 +1229,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                   )}
                 </>
               : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('fechaProximoHito') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
+            {p.fecha_proximo_hito
+              ? formatDate(p.fecha_proximo_hito)
+              : <span className="text-gray-300">—</span>}
           </td>
         )}
         {visibleCols.has('estadoTermino') && (
@@ -1197,6 +1250,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               : <span className="text-gray-300 text-xs">—</span>}
           </td>
         )}
+        {visibleCols.has('codigoBip') && (
+          <td className="px-3 py-3.5 text-xs font-mono text-gray-600 whitespace-nowrap">
+            {p.codigo_bip ?? <span className="text-gray-300 font-sans">—</span>}
+          </td>
+        )}
         {visibleCols.has('rat') && (
           <td className="px-3 py-3.5 whitespace-nowrap">
             {p.rat
@@ -1208,6 +1266,27 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[140px]">
             {p.fuente_financiamiento
               ? <span className="line-clamp-2 block">{p.fuente_financiamiento}</span>
+              : <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('enFoco') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            {p.en_foco
+              ? <span className="text-xs text-amber-700 font-semibold">⚑ Sí</span>
+              : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('origen') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
+            {p.origen
+              ? <span className="line-clamp-2 block">{p.origen}</span>
+              : <span className="text-gray-300">—</span>}
+          </td>
+        )}
+        {visibleCols.has('descripcion') && (
+          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[260px]">
+            {p.descripcion
+              ? <span className="line-clamp-2 block">{p.descripcion}</span>
               : <span className="text-gray-300">—</span>}
           </td>
         )}

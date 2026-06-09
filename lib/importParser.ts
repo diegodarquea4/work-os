@@ -343,6 +343,17 @@ export function parseImportWorkbook(
     // Nota 2: `Eje` también se trata aparte — requiere validación contra el
     // catálogo `region_ejes` y se setea junto con `eje_id`. Se hace fuera
     // de este loop para las dos ramas (INSERT y UPDATE).
+    // Helper para campos multi-valor (ministerio, comuna): split por punto
+    // y coma (canónico nuevo) o por · (back-compat con ministerios viejos),
+    // trim, filtra vacíos, dedup case-sensitive, y reune con `;`. Si el
+    // usuario escribió un solo valor sin separador, el resultado es ese
+    // mismo valor — la función es idempotente para single-value.
+    function normalizeMultiValueString(raw: string): string {
+      return Array.from(new Set(
+        raw.split(/\s*[;·]\s*/).map(s => s.trim()).filter(Boolean)
+      )).join(';')
+    }
+    const multiValueCols = new Set(['ministerio', 'comuna'])
     for (const [label, dbCol] of [
       ['Nombre Iniciativa', 'nombre'],
       ['Ministerio', 'ministerio'],
@@ -353,12 +364,15 @@ export function parseImportWorkbook(
     ] as [string, string][]) {
       const val = col(row, label)
       if (val === undefined) continue
+      const normalized = multiValueCols.has(dbCol) && val !== ''
+        ? normalizeMultiValueString(val)
+        : val
       if (isUpdate) {
         // skip-si-vacío en UPDATE: no se incluye en el patch.
-        if (val !== '') target[dbCol] = val
+        if (normalized !== '') target[dbCol] = normalized
       } else {
         // INSERT: mantiene comportamiento previo (vacío → null).
-        target[dbCol] = val === '' ? null : val
+        target[dbCol] = normalized === '' ? null : normalized
       }
     }
   }

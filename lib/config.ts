@@ -91,7 +91,9 @@ export const MINISTERIOS_CANONICOS = [
 ] as const
 
 /** Splittea un valor del campo `ministerio` en una lista de carteras.
- *  El formato canónico para multi-ministerio es "Min. A · Min. B" (separador "·").
+ *  Formato canónico nuevo: "Min. A;Min. B" (separador `;`, unificado con tags).
+ *  Por back-compat también acepta `·` (formato anterior) en lectura, para
+ *  filas migradas antes del cambio. La escritura nueva usa siempre `;`.
  *  Si una iniciativa tiene multi-ministerio aparece en cada columna de la vista. */
 export function splitMinisterios(raw: string | null | undefined): string[] {
   if (!raw) return []
@@ -100,7 +102,7 @@ export function splitMinisterios(raw: string | null | undefined): string[] {
   // Previsión Social", "Justicia y Derechos Humanos").
   const cleaned = raw.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
   return cleaned
-    .split(/\s*·\s*/)
+    .split(/\s*[;·]\s*/)
     .map(s => s.trim())
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i)
@@ -109,5 +111,5 @@ export function splitMinisterios(raw: string | null | undefined): string[] {
 /** Une una lista de carteras al formato canónico almacenado en la BD. */
 export function joinMinisterios(list: string[]): string | null {
   const clean = list.map(s => s.trim()).filter(Boolean)
-  return clean.length === 0 ? null : clean.join(' · ')
+  return clean.length === 0 ? null : clean.join(';')
 }
