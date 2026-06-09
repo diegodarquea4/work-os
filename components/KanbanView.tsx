@@ -556,7 +556,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         )}
 
-        {/* Toggle "Por eje / Por ministerio / Por tag" — solo visible con región filtrada en Kanban */}
+        {/* Toggle "Ejes / Ministerios / Tags" — solo visible con región filtrada en Kanban */}
         {isGroupedMode && (
           <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
             <button
@@ -565,7 +565,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                 groupBy === 'eje' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Por eje
+              Ejes
             </button>
             <button
               onClick={() => setGroupBy('ministerio')}
@@ -573,7 +573,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                 groupBy === 'ministerio' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Por ministerio
+              Ministerios
             </button>
             <button
               onClick={() => setGroupBy('tag')}
@@ -581,7 +581,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                 groupBy === 'tag' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Por tag
+              Tags
             </button>
           </div>
         )}

@@ -424,7 +424,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 value={tagDraft}
                 onChange={e => setTagDraft(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ',') {
+                  // Enter o ; comitean el draft. La coma deja de ser separador
+                  // porque tags pueden contener comas dentro (ej: "Salud,
+                  // bienestar"). Backspace en input vacío quita el último chip.
+                  if (e.key === 'Enter' || e.key === ';') {
                     e.preventDefault()
                     commitTagDraft()
                   } else if (e.key === 'Backspace' && tagDraft === '' && tagsLocal.length > 0) {

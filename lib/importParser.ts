@@ -318,15 +318,17 @@ export function parseImportWorkbook(
       }
     }
 
-    // Etiquetas (tags) — multi-valor CSV. Split por coma, trim, filtra vacíos,
-    // dedup case-sensitive. Misma política skip-si-vacío en UPDATE: celda en
-    // blanco NO borra los tags previos. Para borrar todos, admin edita la
-    // ficha. Sin validación contra catálogo — el control queda en la
-    // aprobación de la propuesta (migración 016).
+    // Etiquetas (tags) — multi-valor separados por PUNTO Y COMA. Decisión:
+    // los tags pueden contener comas dentro de su propio texto (ej. "Salud,
+    // bienestar"), así que la coma no sirve como separador. Trim, filtra
+    // vacíos, dedup case-sensitive. Misma política skip-si-vacío en UPDATE:
+    // celda en blanco NO borra los tags previos. Para borrar todos, admin
+    // edita la ficha. Sin validación contra catálogo — el control queda en
+    // la aprobación de la propuesta (migración 016).
     const tagsRaw = col(row, 'Etiquetas')
     if (tagsRaw !== undefined && tagsRaw !== '') {
       const arr = Array.from(new Set(
-        String(tagsRaw).split(',').map(t => t.trim()).filter(Boolean)
+        String(tagsRaw).split(';').map(t => t.trim()).filter(Boolean)
       ))
       target.tags = arr
     } else if (!isUpdate) {
