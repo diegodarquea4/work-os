@@ -9,6 +9,11 @@ import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
+import FilterPopover, { type FilterOption } from './FilterPopover'
+import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './ActiveFiltersBar'
+import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { composeEjeLabel } from '@/lib/ejes'
+import { formatResponsableDisplay } from '@/lib/responsable'
 
 type Props = {
   projects: Iniciativa[]
@@ -56,6 +61,14 @@ function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, val:
   })
 }
 
+/** Comuna multi-valor en BD se separa con `;`. Helper para filtrar por
+ *  intersección — una iniciativa "Antofagasta;Calama" matchea si filtras
+ *  por cualquiera de las dos. */
+function splitComuna(s: string | null | undefined): string[] {
+  if (!s) return []
+  return s.split(';').map(c => c.trim()).filter(Boolean)
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AttentionTray({
@@ -66,17 +79,26 @@ export default function AttentionTray({
 }: Props) {
   const canEditAny = useCanEditAny()
 
-  // Filters
+  // ── Filters state ─────────────────────────────────────────────────────────
+  // Mismo patrón que Dashboard: todos multi-select Set<string>. Región queda
+  // como string (state GLOBAL, viene de props) — single-select via <select>.
   const [search, setSearch]                     = useState('')
-  const filterRegion = activeRegionName || 'todas'
+  const filterRegion    = activeRegionName || 'todas'
   const setFilterRegion = onActiveRegionChange
+  const [filterEje, setFilterEje]               = useState<Set<string>>(new Set())
   const [filterEjeGob, setFilterEjeGob]         = useState<Set<string>>(new Set())
+  const [filterSemaforo, setFilterSemaforo]     = useState<Set<string>>(new Set())
   const [filterPrioridad, setFilterPrioridad]   = useState<Set<string>>(new Set())
-  // Multi-tag filter (migración 016): OR lógico. Source se computa de los
-  // tags presentes en las iniciativas que pasan los OTROS filtros.
+  const [filterEtapa, setFilterEtapa]           = useState<Set<string>>(new Set())
+  const [filterRat, setFilterRat]               = useState<Set<string>>(new Set())
+  const [filterFuente, setFilterFuente]         = useState<Set<string>>(new Set())
+  const [filterComuna, setFilterComuna]         = useState<Set<string>>(new Set())
+  const [filterOrigen, setFilterOrigen]         = useState<Set<string>>(new Set())
   const [filterTags, setFilterTags]             = useState<Set<string>>(new Set())
+  const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
 
   // UI
+  const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
   const [showSugerencias, setShowSugerencias]   = useState(false)
   const [collapsed, setCollapsed]               = useState<Record<string, boolean>>({})
   const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
@@ -90,37 +112,157 @@ export default function AttentionTray({
     return filtered.sort()
   }, [allowedRegionNames])
 
-  const filtersActive = search !== '' || filterRegion !== 'todas' || filterEjeGob.size > 0 || filterPrioridad.size > 0 || filterTags.size > 0
+  // Catálogo de ejes per-región para alimentar el popover de Eje Regional con
+  // los labels canónicos cuando hay una región seleccionada.
+  const regionCodActive = useMemo(() => {
+    if (filterRegion === 'todas') return null
+    return REGIONS.find(r => r.nombre === filterRegion)?.cod ?? null
+  }, [filterRegion])
+  const { ejes: regionEjesCat } = useRegionEjes(regionCodActive)
+  const availableEjesLabels = useMemo(() => {
+    if (regionCodActive && regionEjesCat.length > 0) {
+      return regionEjesCat.map(re => composeEjeLabel(re.numero, re.nombre))
+    }
+    return Array.from(new Set(projects.map(p => p.eje).filter(Boolean))).sort()
+  }, [regionCodActive, regionEjesCat, projects])
+
+  const filtersActive =
+    search !== '' || filterRegion !== 'todas' ||
+    filterEje.size > 0 || filterEjeGob.size > 0 || filterSemaforo.size > 0 ||
+    filterPrioridad.size > 0 || filterEtapa.size > 0 || filterRat.size > 0 ||
+    filterFuente.size > 0 || filterComuna.size > 0 || filterOrigen.size > 0 ||
+    filterTags.size > 0 || filterResponsable.size > 0
+
+  // Contador para el badge "Más filtros (N)". Región y semáforo viven en la
+  // fila primaria; los demás en la secundaria.
+  const secondaryFilterCount =
+    (filterEje.size > 0          ? 1 : 0) +
+    (filterEjeGob.size > 0       ? 1 : 0) +
+    (filterPrioridad.size > 0    ? 1 : 0) +
+    (filterEtapa.size > 0        ? 1 : 0) +
+    (filterRat.size > 0          ? 1 : 0) +
+    (filterFuente.size > 0       ? 1 : 0) +
+    (filterComuna.size > 0       ? 1 : 0) +
+    (filterOrigen.size > 0       ? 1 : 0) +
+    (filterTags.size > 0         ? 1 : 0) +
+    (filterResponsable.size > 0  ? 1 : 0)
 
   function clearFilters() {
-    setSearch(''); setFilterRegion('todas'); setFilterEjeGob(new Set()); setFilterPrioridad(new Set())
+    setSearch('')
+    setFilterRegion('todas')
+    setFilterEje(new Set())
+    setFilterEjeGob(new Set())
+    setFilterSemaforo(new Set())
+    setFilterPrioridad(new Set())
+    setFilterEtapa(new Set())
+    setFilterRat(new Set())
+    setFilterFuente(new Set())
+    setFilterComuna(new Set())
+    setFilterOrigen(new Set())
     setFilterTags(new Set())
+    setFilterResponsable(new Set())
   }
 
-  // Tags presentes en las iniciativas que pasan los OTROS filtros (todos
-  // menos tags). Si no hay tags en uso, el control no se renderiza más abajo.
-  const availableTags = useMemo(() => {
+  // ── Pool base + availables ────────────────────────────────────────────────
+  // Mismo patrón que Dashboard: basePool(excluding) devuelve iniciativas que
+  // pasan todos los filtros EXCEPTO el indicado, para que las opciones de cada
+  // popover se recalculen sin "auto-canibalizarse".
+  type FilterKey =
+    | 'region' | 'eje' | 'ejeGob' | 'semaforo' | 'prioridad'
+    | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
+    | 'tags'   | 'responsable' | null
+
+  function basePool(excluding: FilterKey) {
     const q = search.toLowerCase()
-    const base = projects
-      .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.ministerio ?? '').toLowerCase().includes(q))
-      .filter(p => filterRegion === 'todas' || p.region === filterRegion)
-      .filter(p => filterEjeGob.size === 0 || filterEjeGob.has(p.eje_gobierno ?? ''))
-      .filter(p => filterPrioridad.size === 0 || filterPrioridad.has(p.prioridad))
-    return Array.from(new Set(base.flatMap(p => p.tags ?? []))).sort()
-  }, [projects, search, filterRegion, filterEjeGob, filterPrioridad])
+    return projects.filter(p => {
+      if (q && !p.nombre.toLowerCase().includes(q) && !(p.ministerio ?? '').toLowerCase().includes(q)) return false
+      if (excluding !== 'region'       && filterRegion !== 'todas' && p.region !== filterRegion)                                                   return false
+      if (excluding !== 'eje'          && filterEje.size       > 0 && !filterEje.has(p.eje))                                                       return false
+      if (excluding !== 'ejeGob'       && filterEjeGob.size    > 0 && !(p.eje_gobierno && filterEjeGob.has(p.eje_gobierno)))                       return false
+      if (excluding !== 'semaforo'     && filterSemaforo.size  > 0 && !filterSemaforo.has(p.estado_semaforo))                                      return false
+      if (excluding !== 'prioridad'    && filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad))                                           return false
+      if (excluding !== 'etapa'        && filterEtapa.size     > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))                        return false
+      if (excluding !== 'rat'          && filterRat.size       > 0 && !(p.rat && filterRat.has(p.rat)))                                            return false
+      if (excluding !== 'fuente'       && filterFuente.size    > 0 && !(p.fuente_financiamiento && filterFuente.has(p.fuente_financiamiento)))     return false
+      if (excluding !== 'comuna'       && filterComuna.size    > 0 && !splitComuna(p.comuna).some(c => filterComuna.has(c)))                       return false
+      if (excluding !== 'origen'       && filterOrigen.size    > 0 && !(p.origen && filterOrigen.has(p.origen)))                                   return false
+      if (excluding !== 'tags'         && filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                                return false
+      if (excluding !== 'responsable'  && filterResponsable.size > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                  return false
+      return true
+    })
+  }
+
+  function countByField<T extends string | null | undefined>(
+    pool: Iniciativa[],
+    getValue: (p: Iniciativa) => T | T[],
+  ): FilterOption[] {
+    const counts = new Map<string, number>()
+    for (const p of pool) {
+      const v = getValue(p)
+      const arr = Array.isArray(v) ? v : v ? [v] : []
+      for (const val of arr) {
+        if (!val || (typeof val === 'string' && !val.trim())) continue
+        counts.set(val, (counts.get(val) ?? 0) + 1)
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }
+
+  const baseDeps = [
+    projects, search,
+    filterRegion, filterEje, filterEjeGob, filterSemaforo, filterPrioridad,
+    filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
+    filterTags, filterResponsable,
+  ]
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const availableEjes = useMemo(() => {
+    const pool   = basePool('eje')
+    const counts = new Map<string, number>()
+    for (const p of pool) if (p.eje) counts.set(p.eje, (counts.get(p.eje) ?? 0) + 1)
+    const universe = availableEjesLabels.length > 0
+      ? availableEjesLabels
+      : Array.from(counts.keys())
+    return universe
+      .map(label => ({ value: label, label, count: counts.get(label) ?? 0 }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [...baseDeps, availableEjesLabels])
+  const availableEjesGob      = useMemo(() => countByField(basePool('ejeGob'),     p => p.eje_gobierno),                                             baseDeps)
+  const availableEtapas       = useMemo(() => countByField(basePool('etapa'),      p => p.etapa_actual),                                             baseDeps)
+  const availableRats         = useMemo(() => countByField(basePool('rat'),        p => p.rat),                                                      baseDeps)
+  const availableFuentes      = useMemo(() => countByField(basePool('fuente'),     p => p.fuente_financiamiento),                                    baseDeps)
+  const availableComunas      = useMemo(() => countByField(basePool('comuna'),     p => splitComuna(p.comuna)),                                      baseDeps)
+  const availableOrigenes     = useMemo(() => countByField(basePool('origen'),     p => p.origen),                                                   baseDeps)
+  const availableTags         = useMemo(() => countByField(basePool('tags'),       p => p.tags ?? []),                                               baseDeps)
+  const availableResponsables = useMemo(() => {
+    const pool   = basePool('responsable')
+    const counts = new Map<string, number>()
+    for (const p of pool) {
+      const r = p.responsable
+      if (!r || !r.trim()) continue
+      counts.set(r, (counts.get(r) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({
+        value,
+        label:    formatResponsableDisplay(value),
+        sublabel: value.includes('@') ? value : undefined,
+        count,
+      }))
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
+  }, baseDeps)
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // ── Groups ────────────────────────────────────────────────────────────────
 
   const { enFoco, sugHitoVencido, sugBloqueadas, sugSinActividad, sugHitoProximo, sugAvanceBajo, sugUniqueCount } = useMemo(() => {
-    const q = search.toLowerCase()
     const TODAY = new Date().toLocaleDateString('en-CA')
 
-    const pool = projects
-      .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.ministerio ?? '').toLowerCase().includes(q))
-      .filter(p => filterRegion === 'todas' || p.region === filterRegion)
-      .filter(p => filterEjeGob.size === 0 || filterEjeGob.has(p.eje_gobierno ?? ''))
-      .filter(p => filterPrioridad.size === 0 || filterPrioridad.has(p.prioridad))
-      .filter(p => filterTags.size === 0 || (p.tags ?? []).some(t => filterTags.has(t)))
+    // Pool ya filtrado por TODOS los filtros activos. Reutilizamos basePool
+    // pasando null (no excluir ninguno).
+    const pool = basePool(null)
 
     // Sección principal: iniciativas con flag activo, ordenadas por urgencia de hito
     const enFoco = pool
@@ -170,7 +312,8 @@ export default function AttentionTray({
     ).size
 
     return { enFoco, sugHitoVencido, sugBloqueadas, sugSinActividad, sugHitoProximo, sugAvanceBajo, sugUniqueCount }
-  }, [projects, actividad, search, filterRegion, filterEjeGob, filterPrioridad, filterTags])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...baseDeps, actividad])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -241,7 +384,9 @@ export default function AttentionTray({
                 {p.eje}
               </span>
               <TagChips tags={p.tags} max={2} />
-              {p.responsable && <span className="truncate max-w-[140px]">· {p.responsable}</span>}
+              {p.responsable && (
+                <span className="truncate max-w-[140px]" title={p.responsable}>· {formatResponsableDisplay(p.responsable)}</span>
+              )}
               {canEditAny && filterRegion === 'todas' && (
                 <span className="text-gray-400">· {p.region}</span>
               )}
@@ -343,8 +488,27 @@ export default function AttentionTray({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const EJE_GOB_OPTIONS = ['Economía', 'Social', 'Seguridad'] as const
   const PRIORIDAD_OPTIONS = ['Alta', 'Media', 'Baja'] as const
+  const SEMAFORO_OPTIONS  = ['rojo', 'ambar', 'verde', 'gris'] as const
+
+  // Bar de filtros activos — chips de qué se está filtrando. Misma API que
+  // Dashboard, usando los helpers `setChip` (multi) y `stringChip` (region
+  // global). Cada chip dispara su deselect puntual; "Limpiar todo" resetea.
+  const activeChips: ActiveChip[] = [
+    search ? { key: 'search', label: 'Búsqueda', value: search, onClear: () => setSearch('') } : null,
+    canEditAny ? stringChip('Región', filterRegion, () => setFilterRegion('todas')) : null,
+    setChip('Eje Regional', filterEje,         () => setFilterEje(new Set())),
+    setChip('Eje Gobierno', filterEjeGob,      () => setFilterEjeGob(new Set())),
+    setChip('Semáforo',     filterSemaforo,    () => setFilterSemaforo(new Set())),
+    setChip('Prioridad',    filterPrioridad,   () => setFilterPrioridad(new Set())),
+    setChip('Etapa',        filterEtapa,       () => setFilterEtapa(new Set())),
+    setChip('RAT',          filterRat,         () => setFilterRat(new Set())),
+    setChip('Fuente',       filterFuente,      () => setFilterFuente(new Set())),
+    setChip('Comuna',       filterComuna,      () => setFilterComuna(new Set())),
+    setChip('Origen',       filterOrigen,      () => setFilterOrigen(new Set())),
+    setChip('Etiquetas',    filterTags,        () => setFilterTags(new Set())),
+    setChip('Responsable',  filterResponsable, () => setFilterResponsable(new Set()), formatResponsableDisplay),
+  ].filter((c): c is ActiveChip => c !== null)
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -366,94 +530,115 @@ export default function AttentionTray({
           )}
         </div>
 
-        {/* Filter bar */}
-        <div className="bg-white rounded-xl border border-gray-100 p-3 mb-5 flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[180px]">
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5"
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-              <circle cx="5.5" cy="5.5" r="4"/><path d="M9 9l2.5 2.5" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar iniciativa o ministerio..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-gray-50 focus:bg-white"
-            />
-          </div>
+        {/* Filter block — mismo patrón que Dashboard: chips de filtros activos
+            arriba, fila primaria siempre visible, fila secundaria detrás del
+            toggle "Más filtros (N)". */}
+        <div className="bg-white rounded-xl border border-gray-100 p-3 mb-5 space-y-2">
 
-          {/* Region — admin/editor only */}
-          {canEditAny && (
-            <select
-              value={filterRegion}
-              onChange={e => setFilterRegion(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
-            >
-              <option value="todas">Todas las regiones</option>
-              {regions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+          {filtersActive && (
+            <ActiveFiltersBar chips={activeChips} clearFilters={clearFilters} />
           )}
 
-          {/* Eje gobierno toggles */}
-          <div className="flex items-center gap-1">
-            {EJE_GOB_OPTIONS.map(eg => {
-              const active = filterEjeGob.has(eg)
-              const activeClass = eg === 'Economía' ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
-                                : eg === 'Social'   ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-300'
-                                :                    'bg-red-100 text-red-800 ring-1 ring-red-300'
-              return (
-                <button key={eg} onClick={() => toggleSet(setFilterEjeGob, eg as string)}
-                  className={`text-xs px-2 py-1 rounded-full transition-colors font-medium ${
-                    active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}>
-                  {eg}
-                </button>
-              )
-            })}
-          </div>
+          {/* Primary row: búsqueda + región + 4 chips semáforo + Más filtros */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                <circle cx="5.5" cy="5.5" r="4"/><path d="M9 9l2.5 2.5" strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar iniciativa o ministerio..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-gray-50 focus:bg-white"
+              />
+            </div>
 
-          {/* Prioridad toggles */}
-          <div className="flex items-center gap-1">
-            {PRIORIDAD_OPTIONS.map(p => {
-              const active = filterPrioridad.has(p)
-              const pc = prioridadColor(p as 'Alta' | 'Media' | 'Baja')
-              return (
-                <button key={p} onClick={() => toggleSet(setFilterPrioridad, p as string)}
-                  className={`text-xs px-2 py-1 rounded-full transition-colors font-semibold ${
-                    active ? `${pc.bg} ${pc.text} ring-1` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}>
-                  {p}
-                </button>
-              )
-            })}
-          </div>
+            {/* Región — single-select global (viene de props). Solo admin/editor
+                la ve; regional/viewer tiene su región fija. */}
+            {canEditAny && (
+              <select
+                value={filterRegion}
+                onChange={e => setFilterRegion(e.target.value)}
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              >
+                <option value="todas">Todas las regiones</option>
+                {regions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            )}
 
-          {/* Tag multi-select. Solo aparece si hay tags en uso entre las
-              iniciativas que pasan los otros filtros — si no, es ruido. */}
-          {availableTags.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-xs text-gray-400 mr-0.5">Etiquetas:</span>
-              {availableTags.map(t => {
-                const active = filterTags.has(t)
+            {/* Semáforo chips inline — patrón Dashboard. */}
+            <div className="flex items-center gap-1">
+              {SEMAFORO_OPTIONS.map(s => {
+                const active = filterSemaforo.has(s)
+                const activeClass =
+                  s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
+                  s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' :
+                  s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
+                                  'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
                 return (
-                  <button key={t} onClick={() => toggleSet(setFilterTags, t)}
-                    className={`text-xs px-2 py-1 rounded-full transition-colors border ${
-                      active
-                        ? 'bg-slate-700 text-white border-slate-700'
-                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                    }`}>
-                    {t}
+                  <button
+                    key={s}
+                    onClick={() => toggleSet(setFilterSemaforo, s as string)}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                      active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>
+                    {SEMAFORO_CONFIG[s].label}
                   </button>
                 )
               })}
             </div>
-          )}
 
-          {/* Clear */}
-          {filtersActive && (
-            <button onClick={clearFilters}
-              className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors ml-auto">
-              Limpiar
+            {/* Más filtros toggle — badge numérico de filtros secundarios. */}
+            <button
+              onClick={() => setShowSecondaryFilters(v => !v)}
+              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+                showSecondaryFilters || secondaryFilterCount > 0
+                  ? 'bg-slate-100 border-slate-300 text-slate-700'
+                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <span>Más filtros</span>
+              {secondaryFilterCount > 0 && (
+                <span className="bg-slate-600 text-white text-[10px] font-semibold rounded-full px-1.5 py-px min-w-[18px] text-center leading-none">
+                  {secondaryFilterCount}
+                </span>
+              )}
+              <span className="text-gray-400 text-[10px]">{showSecondaryFilters ? '▴' : '▾'}</span>
             </button>
+          </div>
+
+          {/* Secondary row (collapsible) — popovers multi-select + chips de
+              Prioridad inline. Mismo patrón que Dashboard. */}
+          {showSecondaryFilters && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <FilterPopover label="Eje Regional"  options={availableEjes}        selected={filterEje}         onChange={setFilterEje} />
+              <FilterPopover label="Eje Gobierno"  options={availableEjesGob}     selected={filterEjeGob}      onChange={setFilterEjeGob} />
+
+              <div className="flex items-center gap-1">
+                {PRIORIDAD_OPTIONS.map(p => {
+                  const active = filterPrioridad.has(p)
+                  const pc = prioridadColor(p as 'Alta' | 'Media' | 'Baja')
+                  return (
+                    <button key={p} onClick={() => toggleSet(setFilterPrioridad, p as string)}
+                      className={`text-xs px-2 py-1 rounded-full transition-colors font-semibold ${
+                        active ? `${pc.bg} ${pc.text} ring-1` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}>
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <FilterPopover label="Etapa"        options={availableEtapas}       selected={filterEtapa}       onChange={setFilterEtapa} />
+              <FilterPopover label="RAT"          options={availableRats}         selected={filterRat}         onChange={setFilterRat} />
+              <FilterPopover label="Fuente"       options={availableFuentes}      selected={filterFuente}      onChange={setFilterFuente} />
+              <FilterPopover label="Comuna"       options={availableComunas}      selected={filterComuna}      onChange={setFilterComuna} />
+              <FilterPopover label="Origen"       options={availableOrigenes}     selected={filterOrigen}      onChange={setFilterOrigen} />
+              <FilterPopover label="Etiquetas"    options={availableTags}         selected={filterTags}        onChange={setFilterTags} />
+              <FilterPopover label="Responsable"  options={availableResponsables} selected={filterResponsable} onChange={setFilterResponsable} />
+            </div>
           )}
         </div>
 
