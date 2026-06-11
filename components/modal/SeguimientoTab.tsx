@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Seguimiento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite, safeDelete } from '@/lib/dbWrite'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
@@ -65,21 +66,27 @@ export default function SeguimientoTab({
   async function handleSave() {
     if (!formDesc.trim()) return
     setSaving(true)
-    // autor se auto-pobla con el email del usuario (no editable en el form).
-    const { error } = await getSupabase().from('seguimientos').insert({
-      prioridad_id: prioridadId,
-      tipo:         formTipo,
-      descripcion:  formDesc.trim(),
-      autor:        currentUserEmail || null,
-      estado:       formEstado || null,
-      fecha:        formFecha,
-    })
-    if (!error) {
+    try {
+      // autor se auto-pobla con el email del usuario (no editable en el form).
+      await safeWrite(
+        getSupabase().from('seguimientos').insert({
+          prioridad_id: prioridadId,
+          tipo:         formTipo,
+          descripcion:  formDesc.trim(),
+          autor:        currentUserEmail || null,
+          estado:       formEstado || null,
+          fecha:        formFecha,
+        }),
+        `seguimientos insert prioridad=${prioridadId}`,
+      )
       setFormDesc(''); setFormEstado('')
       setFormFecha(new Date().toISOString().split('T')[0]); setShowForm(false)
       await onRefresh()
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   function startEdit(s: Seguimiento) {
@@ -93,21 +100,37 @@ export default function SeguimientoTab({
   async function handleUpdate() {
     if (!editDesc.trim() || editingId === null) return
     setEditSaving(true)
-    // No tocamos `autor` en update — queda quien lo creó originalmente.
-    const { error } = await getSupabase().from('seguimientos').update({
-      tipo:        editTipo,
-      descripcion: editDesc.trim(),
-      estado:      editEstado || null,
-      fecha:       editFecha,
-    }).eq('id', editingId)
-    if (!error) { setEditingId(null); await onRefresh() }
-    setEditSaving(false)
+    try {
+      // No tocamos `autor` en update — queda quien lo creó originalmente.
+      await safeWrite(
+        getSupabase().from('seguimientos').update({
+          tipo:        editTipo,
+          descripcion: editDesc.trim(),
+          estado:      editEstado || null,
+          fecha:       editFecha,
+        }).eq('id', editingId),
+        `seguimientos update id=${editingId}`,
+      )
+      setEditingId(null)
+      await onRefresh()
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   async function handleDelete(id: number) {
     if (!confirm('¿Eliminar esta actualización?')) return
-    await getSupabase().from('seguimientos').delete().eq('id', id)
-    await onRefresh()
+    try {
+      await safeDelete(
+        getSupabase().from('seguimientos').delete().eq('id', id),
+        `seguimientos delete id=${id}`,
+      )
+      await onRefresh()
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
   }
 
   return (

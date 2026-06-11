@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite, safeDelete, DbWriteError } from '@/lib/dbWrite'
 import {
   useCanEditAny,
   useCurrentUserEmail,
@@ -97,21 +98,27 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
     }
     setSaving(true)
     setError(null)
-    const { error: dbErr } = await getSupabase().from('region_ejes').insert({
-      region_cod: region.cod,
-      numero,
-      nombre,
-      created_by_email: userEmail || null,
-    })
-    setSaving(false)
-    if (dbErr) {
-      if (dbErr.code === '23505') {
+    try {
+      await safeWrite(
+        getSupabase().from('region_ejes').insert({
+          region_cod: region.cod,
+          numero,
+          nombre,
+          created_by_email: userEmail || null,
+        }),
+        `region_ejes insert ${region.cod}/${numero}`,
+      )
+    } catch (err) {
+      setSaving(false)
+      const cause = (err as DbWriteError).cause as { code?: string; message?: string } | undefined
+      if (cause?.code === '23505') {
         setError(`Ya existe un Eje ${numero} en esta región.`)
       } else {
-        setError(dbErr.message)
+        setError((err as Error).message)
       }
       return
     }
+    setSaving(false)
     setNewNumero('')
     setNewNombre('')
     setShowAddForm(false)
@@ -141,16 +148,22 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
     }
     setSaving(true)
     setError(null)
-    const { error: dbErr } = await getSupabase()
-      .from('region_ejes')
-      .update({ nombre, updated_at: new Date().toISOString() })
-      .eq('id', eje.id)
-    setSaving(false)
-    setEditingId(null)
-    if (dbErr) {
-      setError(dbErr.message)
+    try {
+      await safeWrite(
+        getSupabase()
+          .from('region_ejes')
+          .update({ nombre, updated_at: new Date().toISOString() })
+          .eq('id', eje.id),
+        `region_ejes update id=${eje.id}`,
+      )
+    } catch (err) {
+      setSaving(false)
+      setEditingId(null)
+      setError((err as Error).message)
       return
     }
+    setSaving(false)
+    setEditingId(null)
     await loadEjes()
     onSaved()
   }
@@ -158,25 +171,32 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
   async function handleDelete(eje: RegionEje) {
     setSaving(true)
     setError(null)
-    const { error: dbErr } = await getSupabase()
-      .from('region_ejes')
-      .delete()
-      .eq('id', eje.id)
-    setSaving(false)
-    setConfirmDeleteId(null)
-    if (dbErr) {
+    try {
+      await safeDelete(
+        getSupabase()
+          .from('region_ejes')
+          .delete()
+          .eq('id', eje.id),
+        `region_ejes delete id=${eje.id}`,
+      )
+    } catch (err) {
+      setSaving(false)
+      setConfirmDeleteId(null)
       // 23503 = foreign_key_violation — el eje está siendo referenciado
       // por iniciativas o métricas. Mensaje claro al admin.
-      if (dbErr.code === '23503') {
+      const cause = (err as DbWriteError).cause as { code?: string; message?: string } | undefined
+      if (cause?.code === '23503') {
         setError(
           `No se puede eliminar el Eje ${eje.numero}: hay iniciativas o métricas que lo usan. ` +
           `Reasigna o elimina esas referencias primero.`
         )
       } else {
-        setError(dbErr.message)
+        setError((err as Error).message)
       }
       return
     }
+    setSaving(false)
+    setConfirmDeleteId(null)
     await loadEjes()
     onSaved()
   }

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import type { Documento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite, safeDelete } from '@/lib/dbWrite'
 
 type Props = {
   prioridadId: number
@@ -69,23 +70,41 @@ export default function DocumentosTab({
     }
     const { data: { publicUrl } } = sb.storage.from('project-docs').getPublicUrl(path)
     // subido_por se auto-pobla con el email del usuario (no editable).
-    await sb.from('documentos_prioridad').insert({
-      prioridad_id: prioridadId,
-      nombre:       file.name,
-      url:          publicUrl,
-      tipo_archivo: file.type || null,
-      tamano_bytes: file.size,
-      subido_por:   currentUserEmail || null,
-    })
-    await onRefresh()
-    setUploading(false)
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    try {
+      await safeWrite(
+        sb.from('documentos_prioridad').insert({
+          prioridad_id: prioridadId,
+          nombre:       file.name,
+          url:          publicUrl,
+          tipo_archivo: file.type || null,
+          tamano_bytes: file.size,
+          subido_por:   currentUserEmail || null,
+        }),
+        `documentos_prioridad insert prioridad=${prioridadId}`,
+      )
+      await onRefresh()
+    } catch (err) {
+      // El archivo ya está en Storage pero el row no se persistió. Mostrar
+      // el error claro — el usuario puede reintentar o el admin limpiar el
+      // archivo huérfano. No revertimos el upload por simplicidad.
+      setUploadError((err as Error).message)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   async function handleDelete(doc: Documento) {
     if (!confirm(`¿Eliminar "${doc.nombre}"?`)) return
-    await getSupabase().from('documentos_prioridad').delete().eq('id', doc.id)
-    await onRefresh()
+    try {
+      await safeDelete(
+        getSupabase().from('documentos_prioridad').delete().eq('id', doc.id),
+        `documentos_prioridad delete id=${doc.id}`,
+      )
+      await onRefresh()
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
   }
 
   return (

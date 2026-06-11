@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { safeDelete } from '@/lib/dbWrite'
 import {
   useCanEditAny,
   useCanEditOperational,
@@ -69,9 +70,16 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
   useEffect(() => { loadMetricas() }, [loadMetricas])
 
   async function handleDelete(id: number) {
-    await getSupabase().from('metricas_eje').delete().eq('id', id)
-    setConfirmDelete(null)
-    await loadMetricas()
+    try {
+      await safeDelete(
+        getSupabase().from('metricas_eje').delete().eq('id', id),
+        `metricas_eje delete id=${id}`,
+      )
+      setConfirmDelete(null)
+      await loadMetricas()
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
   }
 
   return (

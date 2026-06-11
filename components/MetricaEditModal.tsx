@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite } from '@/lib/dbWrite'
 import type { Metrica, RegionEje } from '@/lib/types'
 import { composeEjeLabel } from '@/lib/ejes'
 
@@ -89,20 +90,30 @@ export default function MetricaEditModal({
     // En UPDATE: la asignación de eje no se cambia desde este modal (la
     // métrica vive en el contexto de un eje; cambiar de eje sería mover
     // la métrica → flow distinto, fuera de scope acá).
-    const { error: dbErr } = isEdit
-      ? await sb.from('metricas_eje').update(payload).eq('id', metrica!.id)
-      : await sb.from('metricas_eje').insert({
-          ...payload,
-          region_cod:       regionCod,
-          eje:              displayLabel,
-          eje_id:           eje.id,
-          created_by_email: currentUserEmail || null,
-        })
-    setSaving(false)
-    if (dbErr) {
-      setError(dbErr.message)
+    try {
+      if (isEdit) {
+        await safeWrite(
+          sb.from('metricas_eje').update(payload).eq('id', metrica!.id),
+          `metricas_eje update id=${metrica!.id}`,
+        )
+      } else {
+        await safeWrite(
+          sb.from('metricas_eje').insert({
+            ...payload,
+            region_cod:       regionCod,
+            eje:              displayLabel,
+            eje_id:           eje.id,
+            created_by_email: currentUserEmail || null,
+          }),
+          `metricas_eje insert ${regionCod}/${eje.id}`,
+        )
+      }
+    } catch (err) {
+      setSaving(false)
+      setError((err as Error).message)
       return
     }
+    setSaving(false)
     onSaved()
     onClose()
   }
