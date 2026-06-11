@@ -17,6 +17,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { isAuthorizedSync, upsertV2WithLog } from '@/lib/syncHelper'
 import { fetchExcel, parseWorkbook, sheetToJson } from '@/lib/parseExcel'
 import { matchRegionName } from '@/lib/regionNameMatcher'
+import { withSyncStatus } from '@/lib/syncRunner'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -26,12 +27,12 @@ const CODIGO = 'ECO_COMPRAS_PUB'
 
 export async function GET(request: NextRequest) {
   if (!isAuthorizedSync(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('mercadopublico', runSync)
 }
 
 export async function POST(request: NextRequest) {
   if (!isAuthorizedSync(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('mercadopublico', runSync)
 }
 
 async function runSync() {
