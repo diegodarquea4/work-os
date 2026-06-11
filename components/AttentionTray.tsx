@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
-import { useCanEditAny } from '@/lib/context/UserContext'
+import { useCanEditAny, useIsAdmin } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
+import DesalojoBadge from './DesalojoBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './ActiveFiltersBar'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
@@ -78,6 +79,7 @@ export default function AttentionTray({
   allowedRegionNames,
 }: Props) {
   const canEditAny = useCanEditAny()
+  const isAdmin    = useIsAdmin()
 
   // ── Filters state ─────────────────────────────────────────────────────────
   // Mismo patrón que Dashboard: todos multi-select Set<string>. Región queda
@@ -96,6 +98,9 @@ export default function AttentionTray({
   const [filterOrigen, setFilterOrigen]         = useState<Set<string>>(new Set())
   const [filterTags, setFilterTags]             = useState<Set<string>>(new Set())
   const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
+  // Toggle "Solo desalojos" — admin only. El chip se oculta para el resto
+  // de roles (no pueden ver la marca). La lógica del filtro queda igual.
+  const [filterDesalojo, setFilterDesalojo]     = useState<boolean>(false)
 
   // UI
   const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
@@ -131,7 +136,7 @@ export default function AttentionTray({
     filterEje.size > 0 || filterEjeGob.size > 0 || filterSemaforo.size > 0 ||
     filterPrioridad.size > 0 || filterEtapa.size > 0 || filterRat.size > 0 ||
     filterFuente.size > 0 || filterComuna.size > 0 || filterOrigen.size > 0 ||
-    filterTags.size > 0 || filterResponsable.size > 0
+    filterTags.size > 0 || filterResponsable.size > 0 || filterDesalojo
 
   // Contador para el badge "Más filtros (N)". Región y semáforo viven en la
   // fila primaria; los demás en la secundaria.
@@ -161,6 +166,7 @@ export default function AttentionTray({
     setFilterOrigen(new Set())
     setFilterTags(new Set())
     setFilterResponsable(new Set())
+    setFilterDesalojo(false)
   }
 
   // ── Pool base + availables ────────────────────────────────────────────────
@@ -170,7 +176,7 @@ export default function AttentionTray({
   type FilterKey =
     | 'region' | 'eje' | 'ejeGob' | 'semaforo' | 'prioridad'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
-    | 'tags'   | 'responsable' | null
+    | 'tags'   | 'responsable' | 'desalojo' | null
 
   function basePool(excluding: FilterKey) {
     const q = search.toLowerCase()
@@ -188,6 +194,7 @@ export default function AttentionTray({
       if (excluding !== 'origen'       && filterOrigen.size    > 0 && !(p.origen && filterOrigen.has(p.origen)))                                   return false
       if (excluding !== 'tags'         && filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                                return false
       if (excluding !== 'responsable'  && filterResponsable.size > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                  return false
+      if (excluding !== 'desalojo'     && filterDesalojo            && p.es_desalojo !== true)                                                     return false
       return true
     })
   }
@@ -214,7 +221,7 @@ export default function AttentionTray({
     projects, search,
     filterRegion, filterEje, filterEjeGob, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
-    filterTags, filterResponsable,
+    filterTags, filterResponsable, filterDesalojo,
   ]
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -375,9 +382,12 @@ export default function AttentionTray({
         >
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
-              {p.nombre}
-            </p>
+            <div className="flex items-center gap-2">
+              {p.es_desalojo && <DesalojoBadge size="sm" />}
+              <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
+                {p.nombre}
+              </p>
+            </div>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 flex-wrap">
               <span className="truncate max-w-[200px]">{p.ministerio ?? 'Sin asignar'}</span>
               <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
@@ -471,7 +481,10 @@ export default function AttentionTray({
         <button onClick={() => setSelectedIniciativa(p)} className="flex-1 text-left min-w-0 flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sem.dot}`} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-700 line-clamp-1">{p.nombre}</p>
+            <div className="flex items-center gap-1.5">
+              {p.es_desalojo && <DesalojoBadge size="sm" />}
+              <p className="text-sm text-gray-700 line-clamp-1">{p.nombre}</p>
+            </div>
             <p className="text-xs text-gray-400 truncate">
               {p.ministerio ?? 'Sin asignar'} · {p.eje}
               {p.eje_gobierno && (
@@ -508,6 +521,9 @@ export default function AttentionTray({
     setChip('Origen',       filterOrigen,      () => setFilterOrigen(new Set())),
     setChip('Etiquetas',    filterTags,        () => setFilterTags(new Set())),
     setChip('Responsable',  filterResponsable, () => setFilterResponsable(new Set()), formatResponsableDisplay),
+    filterDesalojo
+      ? { key: 'desalojo', label: '🏚 Desalojos', onClear: () => setFilterDesalojo(false) }
+      : null,
   ].filter((c): c is ActiveChip => c !== null)
 
   return (
@@ -589,6 +605,23 @@ export default function AttentionTray({
                 )
               })}
             </div>
+
+            {/* Solo desalojos — admin only. Filtra los casos de la Mesa
+                Interministerial. Color slate distinto al amber de foco. */}
+            {isAdmin && (
+              <button
+                onClick={() => setFilterDesalojo(v => !v)}
+                className={`text-xs px-2 py-1 rounded-full transition-colors font-medium flex items-center gap-1 ${
+                  filterDesalojo
+                    ? 'bg-slate-700 text-white ring-1 ring-slate-800'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+                title="Filtrar solo iniciativas marcadas como caso de desalojo"
+              >
+                <span className="text-[10px]">🏚</span>
+                Desalojos
+              </button>
+            )}
 
             {/* Más filtros toggle — badge numérico de filtros secundarios. */}
             <button

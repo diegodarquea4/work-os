@@ -14,6 +14,7 @@ import type { RegionEje } from '@/lib/types'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import TagChips from './TagChips'
+import DesalojoBadge from './DesalojoBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
 import { formatResponsableDisplay } from '@/lib/responsable'
@@ -117,6 +118,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
   // Toggle "En foco": activo → solo p.en_foco === true; inactivo → todas.
   const [filterFoco, setFilterFoco]               = useState<boolean>(false)
+  // Toggle "Solo desalojos" (admin only — el chip se oculta para otros roles
+  // porque la marca es admin-only y filtrar por algo que no podés ver es
+  // confuso). La lógica del filtro funciona aunque el chip esté oculto.
+  const [filterDesalojo, setFilterDesalojo]       = useState<boolean>(false)
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -193,7 +198,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterTags.size         > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))               return false
       // Multi-responsable OR. Sin responsable → no matchea cuando hay filtro.
       if (filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))   return false
-      if (filterFoco && p.en_foco !== true) return false
+      if (filterFoco     && p.en_foco     !== true) return false
+      if (filterDesalojo && p.es_desalojo !== true) return false
       return true
     })
 
@@ -214,7 +220,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, sortCol, sortDir, actividad])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -245,7 +251,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   type FilterKey =
     | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'prioridad'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
-    | 'tags'   | 'responsable' | 'foco' | null
+    | 'tags'   | 'responsable' | 'foco' | 'desalojo' | null
 
   function basePool(excluding: FilterKey) {
     const q = search.toLowerCase()
@@ -267,7 +273,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (excluding !== 'origen'       && filterOrigen.size       > 0 && !(p.origen && filterOrigen.has(p.origen)))                                         return false
       if (excluding !== 'tags'         && filterTags.size         > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                                      return false
       if (excluding !== 'responsable'  && filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                          return false
-      if (excluding !== 'foco'         && filterFoco              && p.en_foco !== true)                                                                   return false
+      if (excluding !== 'foco'         && filterFoco              && p.en_foco     !== true)                                                               return false
+      if (excluding !== 'desalojo'     && filterDesalojo          && p.es_desalojo !== true)                                                               return false
       return true
     })
   }
@@ -299,7 +306,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     projects, search,
     filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
-    filterTags, filterResponsable, filterFoco,
+    filterTags, filterResponsable, filterFoco, filterDesalojo,
   ]
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -368,6 +375,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setFilterTags(new Set())
     setFilterResponsable(new Set())
     setFilterFoco(false)
+    setFilterDesalojo(false)
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -515,7 +523,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     filterSemaforo.size > 0 || filterPrioridad.size > 0 ||
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
     filterComuna.size > 0 || filterOrigen.size > 0 ||
-    filterTags.size > 0 || filterResponsable.size > 0 || filterFoco
+    filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo
 
   // Conteo de filtros del bloque secundario activos. Sirve para mostrar el
   // badge "Más filtros (3)" en lugar de un dot abstracto.
@@ -694,6 +702,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             filterFoco
               ? { key: 'foco', label: '⚑ En foco', onClear: () => setFilterFoco(false), variant: 'amber' as const }
               : null,
+            filterDesalojo
+              ? { key: 'desalojo', label: '🏚 Desalojos', onClear: () => setFilterDesalojo(false) }
+              : null,
           ].filter((c): c is ActiveChip => c !== null)
           return <ActiveFiltersBar chips={chips} clearFilters={clearFilters} />
         })()}
@@ -764,6 +775,23 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <span className="text-[10px]">⚑</span>
             En foco
           </button>
+
+          {/* Solo desalojos — admin only. Filtra casos de la Mesa
+              Interministerial. Color slate para no chocar con foco amber. */}
+          {canImport && (
+            <button
+              onClick={() => setFilterDesalojo(v => !v)}
+              className={`text-xs px-2 py-1 rounded-full transition-colors font-medium flex items-center gap-1 ${
+                filterDesalojo
+                  ? 'bg-slate-700 text-white ring-1 ring-slate-800'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+              title="Filtrar solo iniciativas marcadas como caso de desalojo"
+            >
+              <span className="text-[10px]">🏚</span>
+              Desalojos
+            </button>
+          )}
 
           {/* Más filtros toggle — ahora con número en vez de dot azul.
               Cuenta los filtros del bloque secundario activos. */}
@@ -1254,8 +1282,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         )}
         {visibleCols.has('iniciativa') && (
           <td className="px-3 py-3.5 max-w-xs">
-            <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
-            <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
+            <div className="flex items-start gap-1.5">
+              {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
+                <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
+              </div>
+            </div>
           </td>
         )}
         {visibleCols.has('region') && (

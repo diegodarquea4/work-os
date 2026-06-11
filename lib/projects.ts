@@ -33,6 +33,10 @@ export type Iniciativa = {
   origen: string | null
   en_foco: boolean
   tags: string[]
+  // Diferenciador admin-only (migración 017). Marca casos de la Mesa
+  // Interministerial de Desalojos. El seguimiento estructurado vive aparte
+  // en `desalojo_detalle` / `desalojo_seguimientos` / `desalojo_log`.
+  es_desalojo: boolean
 }
 
 export function getIniciativas(): Iniciativa[] {
@@ -112,5 +116,6 @@ function parseCSV(content: string): Iniciativa[] {
     origen: null,
     en_foco: false,
     tags: [],
+    es_desalojo: false,
   }))
 }

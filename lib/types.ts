@@ -37,6 +37,195 @@ export type Prioridad = {
   // como string[] desde Supabase JS. Estructural: regional propone vía Excel,
   // admin/editor edita directo en la ficha.
   tags?: string[]
+  // Marca de "caso de la Mesa Interministerial de Desalojos" (migración 017).
+  // Diferenciador admin-only — la iniciativa sigue siendo la misma; sumarla a
+  // la sección Desalojos solo requiere flipear este boolean. El seguimiento
+  // estructurado vive en tablas aparte (desalojo_detalle / seguimientos / log).
+  // Opcional para tolerar lecturas pre-ALTER, igual que en_foco.
+  es_desalojo?: boolean
+}
+
+// ── Desalojos (migración 017) ────────────────────────────────────────────────
+// Las 4 dimensiones transversales que sigue la Mesa Interministerial:
+//   Jurídico       — instrumento habilitante
+//   Seguridad      — plan operativo + contingente
+//   Social         — catastro + albergues (protocolo 21.430)
+//   Financiamiento — costo + fuente + validación DIPRES (regla operativa dura)
+export type DesalojoDimension = 'juridico' | 'seguridad' | 'social' | 'financiamiento'
+
+// Vocabulario de semáforo usado en cada dimensión del detalle. Espeja el
+// general `estado_semaforo` de Prioridad pero sin `null` (default es 'gris').
+export type SemaforoDimension = 'verde' | 'ambar' | 'rojo' | 'gris'
+
+// Vocabulario de tipo de seguimiento — mismo que `seguimientos` general para
+// no inventar nuevo mental model.
+export type DesalojoSeguimientoTipo = 'avance' | 'reunion' | 'hito' | 'alerta'
+
+// Tipología del caso (matriz propiedad × estado procesal de la Mesa).
+// Asignada manualmente desde la sección Desalojos — nunca en el toggle.
+//   A — Fiscal SERVIU
+//   B — Fiscal no-SERVIU
+//   C — Privado con fallo firme
+//   D — Privado sin instrumento
+export type DesalojoTipologia = 'A' | 'B' | 'C' | 'D'
+
+// Fase del caso. Vocabulario corto consistente con el tablero oficial de la
+// Mesa (Sección VIII del 038): PR (prerrequisitos jurídicos + financiamiento),
+// F1 (intervención policial), F2 (catastro social), F3 (desalojo),
+// F4 (demolición simultánea), F5 (recuperación), cerrado.
+//
+// Bloqueo duro PR → F1: requiere semáforo PR en verde y todos los items
+// obligatorios del checklist PR completos. Regla de la Mesa sin excepción.
+export type DesalojoFase = 'pr' | 'f1' | 'f2' | 'f3' | 'f4' | 'f5' | 'cerrado'
+
+// Las 6 fases con semáforo (cerrado no tiene fila propia — es estado de capa).
+export type DesalojoFaseConSemaforo = Exclude<DesalojoFase, 'cerrado'>
+
+// Estado del checklist específico de una capa × fase. Persistido como JSONB
+// en desalojo_fase_estado.checklist_estado. Items definidos en lib/desalojos.ts
+// por tipología × fase; el server hace shallow merge. Huérfanos se conservan.
+export type DesalojoChecklistEstado = Record<string, { done: boolean; fecha: string | null }>
+
+// Responsable de un rol específico de una capa. Roles definidos por tipología
+// en lib/desalojos.ts (TIPOLOGIA_CFG[t].roles); el JSONB se llena por key.
+// Server hace shallow merge — huérfanos por cambio de tipología se conservan.
+export type DesalojoResponsable = {
+  nombre:      string
+  institucion: string | null
+  email:       string | null
+  telefono:    string | null
+  notas:       string | null
+}
+
+export type DesalojoResponsables = Record<string, DesalojoResponsable>
+
+// Fila de desalojo_fase_estado: una por capa × fase (6 por capa).
+export type DesalojoFaseEstado = {
+  id:               number
+  prioridad_id:     number
+  capa_id:          number
+  fase:             DesalojoFaseConSemaforo
+  semaforo:         SemaforoDimension
+  checklist_estado: DesalojoChecklistEstado
+  notas:            string | null
+  completed_at:     string | null
+  completed_by:     string | null
+  updated_at:       string
+}
+
+// Detalle 1:1 con la iniciativa marcada `es_desalojo` — v2 lo reduce a CONTEXTO
+// del caso (resumen narrativo + agregados). Toda la operación por dimensión vive
+// en desalojo_capas (1:N). Se crea eager cuando admin toggle a TRUE.
+export type DesalojoDetalle = {
+  prioridad_id:      number
+  resumen_narrativo: string | null
+  updated_at:        string
+}
+
+// Capa = polígono dentro del caso. Un caso simple tiene 1 capa (creada eager
+// al etiquetar). Casos como La Chimba tienen 2+ con tipología, semáforos y
+// ritmo propios. Caso simple = selector oculto en la UI.
+export type DesalojoCapa = {
+  id:                    number
+  prioridad_id:          number
+  nombre:                string
+  orden:                 number
+  activa:                boolean
+
+  // Tipología — NULL hasta asignar. tipologia_asignada_at se usa para el
+  // banner Tipo D >30 días sin vía definida.
+  tipologia:             DesalojoTipologia | null
+  tipologia_nota:        string | null
+  tipologia_asignada_at: string | null
+
+  fase_actual:           DesalojoFase
+
+  // Físicos del polígono.
+  superficie_ha:         number | null
+  propietario:           string | null
+  sitios_total:          number | null    // Tipo C — total a desocupar
+  sitios_desocupados:    number | null    // Tipo C — desocupación gradual
+
+  // Caracterización social detallada (Sección II del 038 — catastro mínimo).
+  viviendas:             number | null
+  hogares:               number | null
+  personas:              number | null
+  nna:                   number | null
+  adultos_mayores:       number | null
+  embarazadas:           number | null
+  personas_discapacidad: number | null
+  migrantes_regular:     number | null
+  migrantes_irregular:   number | null
+
+  // Campos estructurados que llenan los checklists por fase, pero que viven
+  // a nivel de capa (datos persistentes del polígono, no del estado de avance).
+  // PR — instrumento jurídico habilitante.
+  instrumento:               string | null
+  fecha_instrumento:         string | null   // ISO YYYY-MM-DD
+  via_juridica:              string | null
+  notas_juridico:            string | null
+  // F1 — plan operativo y contingente.
+  plan_operativo_listo:      boolean
+  contingente:               string | null
+  fecha_tentativa_operativo: string | null
+  notas_seguridad:           string | null
+  // F2 — catastro social, albergue.
+  albergue_validado:         boolean
+  notas_social:              string | null
+  // F4 — financiamiento, demolición. La regla dura: sin `financiamiento_asegurado`
+  // (validación DIPRES) no se autoriza el operativo. Dispara banner persistente.
+  costo_demolicion_mm:       number | null
+  fuente:                    string | null
+  financiamiento_asegurado:  boolean
+  notas_financiamiento:      string | null
+
+  // Responsables por rol — JSONB { [rol_key]: { nombre, institucion, email, telefono, notas } }.
+  // Roles vigentes definidos por tipología en lib/desalojos.ts. Huérfanos se conservan.
+  responsables:          DesalojoResponsables
+
+  updated_at:            string
+}
+
+// Documento de un caso (capa_id NULL) o de una capa (capa_id NOT NULL).
+// Opcionalmente categorizado por dimensión. Archivos viven en bucket privado
+// `desalojos-docs`; `url` es path relativo, se firma con TTL al servir.
+export type DesalojoDocumento = {
+  id:           number
+  prioridad_id: number
+  capa_id:      number | null              // NULL = documento del caso
+  dimension:    DesalojoDimension | null   // NULL = general de capa o caso
+  nombre:       string
+  url:          string                      // path en bucket (no signed URL)
+  tipo_archivo: string | null
+  tamano_bytes: number | null
+  subido_por:   string | null
+  created_at:   string
+}
+
+export type DesalojoSeguimiento = {
+  id:           number
+  prioridad_id: number
+  capa_id:      number | null              // FK lógico a desalojo_capas.id
+  dimension:    DesalojoDimension
+  tipo:         DesalojoSeguimientoTipo
+  descripcion:  string
+  created_at:   string
+  created_by:   string | null
+}
+
+// Audit log de cambios. v2 suma capa_id para diferenciar cambios de la capa vs
+// del toggle del caso (capa_id NULL para el toggle de es_desalojo). v3 suma
+// fase para trazar cambios por fase (NULL para cambios a nivel capa o caso).
+export type DesalojoLog = {
+  id:             number
+  prioridad_id:   number
+  capa_id:        number | null
+  fase:           DesalojoFaseConSemaforo | null
+  campo:          string
+  valor_anterior: string | null
+  valor_nuevo:    string
+  cambiado_por:   string | null
+  created_at:     string
 }
 
 // ── Semáforo Log ─────────────────────────────────────────────────────────────

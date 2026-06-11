@@ -41,6 +41,8 @@ function mapRow(row: Prioridad): Iniciativa {
     // Defensive: pre-migración 016 las filas pueden venir sin tags. La columna
     // tiene DEFAULT '{}' así que post-deploy esto siempre será array.
     tags:                   row.tags ?? [],
+    // Defensive: pre-migración 017 las filas vienen sin es_desalojo.
+    es_desalojo:            row.es_desalojo ?? false,
   }
 }
 
@@ -163,6 +165,37 @@ export async function logSemaforoChange(
     campo,
     valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
     valor_nuevo:    String(valorNuevo),
+    cambiado_por:   cambiadoPor,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Desalojo log — audit trail para cambios en desalojo_detalle + toggle
+// ---------------------------------------------------------------------------
+// Clon de logSemaforoChange pero apunta a `desalojo_log` y acepta cualquier
+// `campo` string (todas las columnas del detalle + `es_desalojo` mismo).
+// Convierte booleans a 'true'/'false' para almacenarlos como TEXT.
+//
+// IMPORTANTE: este helper usa `getSupabase()` (cliente browser, RLS aplica).
+// Solo va a poder escribir si el usuario es admin (policy admin_all). Si lo
+// invocás desde una API route, usá getSupabaseAdmin() en el llamador.
+
+export async function logDesalojoChange(
+  prioridadId:    number,
+  campo:          string,
+  valorAnterior:  string | number | boolean | null,
+  valorNuevo:     string | number | boolean | null,
+  cambiadoPor:    string | null,
+  capaId:         number | null = null,
+  fase:           string | null = null,
+): Promise<void> {
+  await getSupabase().from('desalojo_log').insert({
+    prioridad_id:   prioridadId,
+    capa_id:        capaId,
+    fase,
+    campo,
+    valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
+    valor_nuevo:    String(valorNuevo ?? ''),
     cambiado_por:   cambiadoPor,
   })
 }

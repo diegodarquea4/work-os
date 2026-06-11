@@ -18,8 +18,9 @@ const NationalDashboard = dynamic(() => import('./NationalDashboard'))
 const AttentionTray    = dynamic(() => import('./AttentionTray'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const PregoView        = dynamic(() => import('./PregoView'))
+const DesalojosView    = dynamic(() => import('./DesalojosView'))
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos'
 
 type Props = {
   projects: Iniciativa[]
@@ -94,7 +95,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     try {
       const storedView   = localStorage.getItem('workos:view')
       const storedRegion = localStorage.getItem('workos:activeRegion')
-      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional']
+      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos']
       if (storedView && (validViews as string[]).includes(storedView)) {
         setView(storedView as View)
       }
@@ -146,14 +147,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return null
   }, [profile])
 
-  const GROUPED_VIEWS: { key: View; label: string }[] = [
+  const GROUPED_VIEWS: { key: View; label: string; adminOnly?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
     { key: 'atencion',       label: 'Atención'  },
     { key: 'kanban',         label: 'Kanban'    },
     { key: 'vista-regional', label: 'Mi Región' },
+    { key: 'desalojos',      label: 'Desalojos', adminOnly: true },
   ]
-  const isGroupedActive  = GROUPED_VIEWS.some(v => v.key === view)
-  const activeGroupLabel = GROUPED_VIEWS.find(v => v.key === view)?.label ?? 'Seguimiento'
+  const visibleGroupedViews = GROUPED_VIEWS.filter(v => !v.adminOnly || profile?.role === 'admin')
+  const isGroupedActive  = visibleGroupedViews.some(v => v.key === view)
+  const activeGroupLabel = visibleGroupedViews.find(v => v.key === view)?.label ?? 'Seguimiento'
 
   function handleViewDropToggle() {
     if (!viewDropOpen && viewDropBtnRef.current) {
@@ -458,6 +461,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
+      {/* Desalojos view — admin only. Doble check (botón + render) para
+          que un user que manualmente cambie `view` via devtools no vea
+          contenido. La protección real es por RLS + check server-side en
+          las API routes. */}
+      {view === 'desalojos' && profile?.role === 'admin' && (
+        <div className="flex-1 overflow-hidden">
+          <DesalojosView
+            projects={visibleIniciativas}
+            onUpdatePrioridad={handleUpdatePrioridad}
+          />
+        </div>
+      )}
+
       {/* Atención view */}
       {view === 'atencion' && (
         <div className="flex-1 overflow-hidden flex">
@@ -660,7 +676,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999, minWidth: 140 }}
           className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
         >
-          {GROUPED_VIEWS.map(v => (
+          {visibleGroupedViews.map(v => (
             <button
               key={v.key}
               onClick={() => { setView(v.key); setViewDropOpen(false) }}

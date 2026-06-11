@@ -12,8 +12,9 @@ import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
-import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
+import { HomeIcon } from './icons/HomeIcon'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
@@ -27,6 +28,7 @@ type Props = {
 export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePrioridad, onDeletePrioridad }: Props) {
   const canEditRegion = useCanEdit()
   const canEditAny = useCanEditAny()
+  const isAdmin    = useIsAdmin()
   const canEditOperational = useCanEditOperational()
   const currentUserEmail   = useCurrentUserEmail()
   // canEdit = estructural (admin/editor). Operativo (semáforo, %avance,
@@ -66,6 +68,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [savingTags, setSavingTags]                 = useState(false)
   const [enFoco, setEnFoco]                         = useState<boolean>(prioridad.en_foco === true)
   const [savingFoco, setSavingFoco]                 = useState(false)
+  // Marca admin-only para casos de la Mesa Interministerial de Desalojos
+  // (migración 017). El toggle pasa por API admin-only — NO via cliente —
+  // porque la columna `es_desalojo` vive en `prioridades_territoriales` cuya
+  // RLS es authenticated_write (cualquier autenticado puede mutar).
+  const [esDesalojo, setEsDesalojo]                 = useState<boolean>(prioridad.es_desalojo === true)
+  const [savingDesalojo, setSavingDesalojo]         = useState(false)
   const [editingField, setEditingField]             = useState<string | null>(null)
   const [savingField, setSavingField]               = useState(false)
   const [confirmDelete, setConfirmDelete]           = useState(false)
@@ -223,6 +231,39 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingFoco(false)
   }
 
+  // Toggle "Marcar/Quitar desalojo" — admin only. A diferencia de en_foco,
+  // este NO va via getSupabase().update() porque la RLS de la tabla principal
+  // permite el UPDATE a cualquier autenticado. La validación admin vive en
+  // la API route, que además mantiene el side-effect de crear la fila de
+  // desalojo_detalle (eager init) y registrar en desalojo_log.
+  async function handleToggleDesalojo() {
+    const next = !esDesalojo
+    setSavingDesalojo(true)
+    setEsDesalojo(next)
+    onUpdatePrioridad(prioridad.n, { es_desalojo: next })
+    try {
+      const res  = await fetch(`/api/desalojos/${prioridad.n}/toggle`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ es_desalojo: next }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setEsDesalojo(!next)
+        onUpdatePrioridad(prioridad.n, { es_desalojo: !next })
+        const msg = json?.error || `Error guardando desalojo (HTTP ${res.status})`
+        console.error('[ProjectTrackerModal] handleToggleDesalojo:', { n: prioridad.n, next, json })
+        window.alert(msg)
+      }
+    } catch (err) {
+      setEsDesalojo(!next)
+      onUpdatePrioridad(prioridad.n, { es_desalojo: !next })
+      console.error('[ProjectTrackerModal] handleToggleDesalojo network:', err)
+      window.alert(`Error de red al guardar: ${String(err)}`)
+    }
+    setSavingDesalojo(false)
+  }
+
   async function handleDelete() {
     setDeleting(true)
     const res = await fetch(`/api/iniciativa/${prioridad.n}`, { method: 'DELETE' })
@@ -307,6 +348,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
                 {enFoco ? 'En foco' : 'Marcar foco'}
               </button>
+              {/* Toggle "Marcar como desalojo" — admin only. Diferenciador
+                  para casos de la Mesa Interministerial. Convive con el
+                  flag amber de foco sin pisarse (color slate distinto). */}
+              {isAdmin && (
+                <button
+                  onClick={handleToggleDesalojo}
+                  disabled={savingDesalojo}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-500 ease-out disabled:opacity-50 ring-1 ${
+                    esDesalojo
+                      ? 'bg-slate-700 text-white hover:bg-slate-800 ring-slate-700'
+                      : 'text-gray-500 hover:bg-gray-100 ring-gray-200'
+                  }`}
+                  title={esDesalojo ? 'Quitar marca de desalojo' : 'Marcar como caso de desalojo'}
+                >
+                  <HomeIcon filled={esDesalojo} className="w-3.5 h-3.5 transition-all duration-500" />
+                  {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
+                </button>
+              )}
               {canEditAny && onDeletePrioridad && !confirmDelete && (
                 <button
                   onClick={() => setConfirmDelete(true)}

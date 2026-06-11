@@ -8,6 +8,7 @@ import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
+import DesalojoBadge from './DesalojoBadge'
 
 // ── Mosaic helpers ────────────────────────────────────────────────────────────
 
@@ -129,7 +130,8 @@ function EjeCard({ p, onSelect, onToggleFoco }: {
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
   const pc  = prioridadColor(p.prioridad)
-  const enFoco = p.en_foco === true
+  const enFoco     = p.en_foco === true
+  const esDesalojo = p.es_desalojo === true
   return (
     <button
       onClick={() => onSelect(p)}
@@ -149,6 +151,7 @@ function EjeCard({ p, onSelect, onToggleFoco }: {
       <div className="flex items-center gap-2 mb-2">
         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${sem.dot}`} />
         <span className="text-xs text-gray-600 font-medium">{sem.label}</span>
+        {esDesalojo && <DesalojoBadge size="sm" />}
       </div>
       <p className="text-xs font-semibold text-gray-800 line-clamp-2 mb-2 group-hover:text-slate-900">
         {p.nombre}
@@ -187,7 +190,8 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
   const pc  = prioridadColor(p.prioridad)
   const dias = daysUntil(p.fecha_proximo_hito)
   const hitoUrgent = dias !== null && dias <= 7 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
-  const enFoco = p.en_foco === true
+  const enFoco     = p.en_foco === true
+  const esDesalojo = p.es_desalojo === true
   // "Eje 3: Salud y Servicios Básicos" / "EJE 3 — ..." → "Eje 3" (compacto).
   // Normalizamos casing para que el chip siempre se vea uniforme.
   const ejeShort = (() => {
@@ -217,6 +221,9 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
 
       {/* Semáforo */}
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
+
+      {/* Badge desalojo — inline, antes del nombre, solo si está marcado */}
+      {esDesalojo && <DesalojoBadge size="sm" className="flex-shrink-0" />}
 
       {/* Nombre */}
       <p className="text-sm font-medium text-slate-800 line-clamp-1 flex-1 min-w-0">
