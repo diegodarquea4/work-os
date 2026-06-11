@@ -7,16 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start dev server (localhost:3000)
-npm run build    # Type-check + production build
-npm run lint     # ESLint (eslint.config.mjs, Next.js ruleset)
+npm run dev        # Start dev server (localhost:3000)
+npm run build      # Type-check + production build
+npm run lint       # ESLint (eslint.config.mjs, Next.js ruleset)
+npm test           # vitest run (suite mínima en __tests__/)
+npm run test:watch # vitest en watch
 ```
 
-No test suite exists. Validate changes with `npm run build`.
+Validate changes with `npm run build` + `npm test`. La suite cubre los puntos frágiles (mapRow defaults, lib/dbWrite.ts helpers defensivos, schemas zod). NO buscar cobertura — buscar dolor.
 
 ## Architecture
 
-Work OS is a **Next.js 16.2.1 App Router** application for the División de Coordinación Interministerial (DCI) of Chile's Ministry of Interior. It tracks 63 territorial priorities across 16 regions.
+Work OS is a **Next.js 16.2.1 App Router** application for the División de Coordinación Interministerial (DCI) of Chile's Ministry of Interior. La tabla `prioridades_territoriales` está pensada para escalar a miles de iniciativas (el seed inicial fue 63).
 
 **Entry point:** `app/page.tsx` is a Server Component that loads all priorities from Supabase at startup and passes them to `WorkOSApp` (client), which holds global state and renders 4 views: Mapa, Dashboard, Bandeja de Atención, Kanban.
 
@@ -33,6 +35,49 @@ Work OS is a **Next.js 16.2.1 App Router** application for the División de Coor
 Two clients — never mix them:
 - `lib/supabase.ts` → `getSupabase()` — browser client, use in components and hooks
 - `lib/supabaseServer.ts` → `getSupabaseAdmin()` — service role, use **only** in `app/api/**`
+
+## Escrituras desde el cliente — patrón defensivo
+
+**Invariante crítico (post bug 29-may-2026)**: Supabase devuelve `HTTP 200` con `data: []` cuando RLS bloquea una mutación. Sin chequear `data.length` el cliente cree éxito y diverge del servidor. **Toda mutación desde browser DEBE usar los helpers de `lib/dbWrite.ts`**:
+
+- `safeWrite(builder, ctx)` — UPDATE / INSERT estrictos. Throw si `data.length === 0`.
+- `safeDelete(builder, ctx)` — DELETE idempotente. Throw solo con error explícito.
+- `safeAuditWrite(builder, ctx)` — audit logs (`semaforo_log`, `desalojo_log`). No throw — solo warning si falla.
+
+Patrón en call-site: optimistic update local → try { await safeWrite(...) } catch { revert optimistic + window.alert(err.message) }. Sin UX nueva — usar `window.alert` donde ya se usa.
+
+## RLS por rol (etapa 2 de consolidación backend)
+
+**Matriz vigente** (migración 023, función `current_user_role()` + triggers):
+
+- `prioridades_territoriales`: UPDATE admin/editor (cualquier columna), regional solo columnas operativas (semáforo, pct_avance, responsable, en_foco, etapa, hito). INSERT/DELETE: admin/editor.
+- `seguimientos`, `documentos_prioridad`: INSERT admin/editor/regional. UPDATE/DELETE: autor O admin/editor.
+- `metricas_eje`: definición admin/editor. `valor_actual` admin/editor + regional dentro de sus `region_cods` (trigger).
+- `region_ejes`, `prego_monitoreo`: admin/editor.
+- `mop_projects`, `seia_projects`, `regional_metrics`: solo service role (los crons).
+- viewer = solo lectura estricta. `canEditOperational` en UserContext excluye viewer.
+
+Las políticas SELECT NO se tocaron (riesgo de romper lecturas) — todas siguen world-readable a cualquier autenticado. Documentado como deuda menor.
+
+## Llave estable de mutación (etapa 5)
+
+`prioridades_territoriales.id` (PK, UNIQUE BTREE) es la llave de escritura. `n` se mantiene como número de orden de negocio pero NO es UNIQUE — usarlo como llave de write puede afectar múltiples filas. **Todas las mutaciones nuevas deben usar `.eq('id', prioridad.id)`** (no `.eq('n', ...)`).
+
+FKs lógicas existentes (`seguimientos.prioridad_id`, `documentos_prioridad.prioridad_id`, `semaforo_log.prioridad_id`) siguen apuntando a `n` — migrarlas a id requiere backfill y queda como deuda separada.
+
+## Validación de input con zod (etapa 4)
+
+Las rutas que reciben body JSON usan schemas en `lib/schemas/index.ts`. Patrón:
+
+```ts
+const parse = someSchema.safeParse(await request.json())
+if (!parse.success) {
+  return NextResponse.json({ error: 'Solicitud inválida', detalle: parse.error.issues }, { status: 400 })
+}
+const body = parse.data
+```
+
+Schemas activos hoy: `carteraPdfSchema`, `minutaPostSchema`, `adminUsersPostSchema`, `desalojoDetallePatchSchema`. Las otras rutas con validación custom sólida (resto de desalojos, proposals, plan-regional) están pendientes de refactor a zod — no es urgente.
 
 ## Key data model
 
@@ -65,13 +110,19 @@ Sincronizan proyectos externos del Sistema de Evaluación de Impacto Ambiental (
 
 **Crons:** lunes 08:00 UTC (SEIA) y 09:00 UTC (MOP) — `vercel.json`.
 
-**Observabilidad:** ambos handlers escriben a `sync_status` al terminar (`lib/syncStatus.ts:recordSyncStatus`). Una query revela el estado de todos los syncs:
+**Observabilidad:** ambos handlers escriben a `sync_status` al terminar (`lib/syncStatus.ts:recordSyncStatus`). Etapa 3 de la consolidación backend extendió esto a los 11 syncs restantes vía wrapper `withSyncStatus(name, runSync)` en `lib/syncRunner.ts`. Endpoint de monitoreo: `GET /api/health` (con bearer) devuelve atrasados + con_errores. Cron diario 06:00 UTC.
+
+Si `process.env.ALERT_WEBHOOK_URL` está definida y hay algo malo, `/api/health` postea resumen JSON al webhook (formato Slack/Discord compatible). Degradación elegante: sin la variable, solo loguea.
+
+Una query revela el estado de todos los syncs:
 ```sql
 SELECT name, last_run_at, last_status, last_rows, last_error_count
 FROM sync_status ORDER BY last_run_at DESC;
 ```
 
 **Trigger manual:** `POST /api/{seia,mop}-sync` con `Authorization: Bearer <CRON_SECRET>`.
+
+**SEIA v2 (etapa 8):** ruta paralela `/api/seia-sync-v2` con troceado reanudable (cursor en `sync_status.notes`). Mismo dual-write, misma forma de datos. Corta limpio a 240s. Si `partial` queda con cursor; al reinvocar continúa. El cron de producción SIGUE apuntando a `/api/seia-sync` original hasta confirmar 2-3 corridas limpias de v2.
 
 ## Environment variables
 
@@ -80,8 +131,9 @@ FROM sync_status ORDER BY last_run_at DESC;
 | `NEXT_PUBLIC_SUPABASE_URL` | Client + server |
 | `NEXT_PUBLIC_SUPABASE_ANON` | Client (browser) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only (API routes) |
-| `CRON_SECRET` | Server only (ine-sync POST auth) |
+| `CRON_SECRET` | Server only (sync POST auth + `/api/health`) |
 | `BCCH_USER` / `BCCH_PASS` | Server only (ine-sync BCCh API) |
+| `ALERT_WEBHOOK_URL` | Opcional. Si está, `/api/health` postea alertas (Slack/Discord) |
 
 ## Tailwind CSS v4
 
