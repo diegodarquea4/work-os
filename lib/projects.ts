@@ -2,6 +2,13 @@ import fs from 'fs'
 import path from 'path'
 
 export type Iniciativa = {
+  // PK estable de prioridades_territoriales (UNIQUE, BTREE). Usar SIEMPRE
+  // como llave de mutación (.eq('id', ...)). Etapa 5 de la consolidación
+  // backend dejó de usar n como llave de write porque n NO es UNIQUE en
+  // BD: era un bug latente. n sigue siendo el número de orden de negocio.
+  // FK lógicas en seguimientos / documentos / semaforo_log SIGUEN apuntando
+  // a n — eso queda como deuda separada.
+  id: number
   n: number
   region: string
   cod: string
@@ -88,7 +95,11 @@ function parseCSV(content: string): Iniciativa[] {
     .map(r => parseFields(r))
 
   // Skip header row
+  // Nota: este fallback CSV se usa solo en dev sin Supabase. En ese contexto
+  // no hay PK real: usamos n como id sintético. En prod la app pasa por
+  // Supabase y mapRow asigna el id real.
   return rows.slice(1).map(f => ({
+    id: parseInt(f[0]) || 0,
     n: parseInt(f[0]) || 0,
     region: f[1] || '',
     cod: f[2] || '',

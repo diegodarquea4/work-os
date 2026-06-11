@@ -12,6 +12,7 @@ import type { Iniciativa } from './projects'
 
 function mapRow(row: Prioridad): Iniciativa {
   return {
+    id:                     row.id,
     n:                      row.n,
     region:                 row.region,
     cod:                    row.cod,

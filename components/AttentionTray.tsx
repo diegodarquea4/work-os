@@ -324,7 +324,9 @@ export default function AttentionTray({
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  async function handleToggleFoco(n: number, next: boolean) {
+  // Etapa 5: mutamos por id (PK estable) en vez de n. n sigue como key del
+  // estado local en WorkOSApp.handleUpdatePrioridad.
+  async function handleToggleFoco(n: number, id: number, next: boolean) {
     // Optimistic update
     onUpdatePrioridad(n, { en_foco: next })
     if (selectedIniciativa?.n === n) {
@@ -334,8 +336,8 @@ export default function AttentionTray({
     const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
-      .eq('n', n)
-      .select('n, en_foco')
+      .eq('id', id)
+      .select('id, en_foco')
 
     const failed = !!error || !data || data.length === 0
     if (failed) {
@@ -369,7 +371,7 @@ export default function AttentionTray({
     return (
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
         <button
-          onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, false) }}
+          onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, p.id, false) }}
           className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
           title="Quitar del foco"
         >
@@ -472,7 +474,7 @@ export default function AttentionTray({
     return (
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 transition-colors">
         <button
-          onClick={() => handleToggleFoco(p.n, true)}
+          onClick={() => handleToggleFoco(p.n, p.id, true)}
           className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
           title="Marcar en foco"
         >
