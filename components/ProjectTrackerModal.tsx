@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import type { Iniciativa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
 import { SEMAFORO_CONFIG, prioridadColor, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
@@ -122,14 +123,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
     const newPct = calcPctFromHitos(segsData)
     if (newPct !== (prioridad.pct_avance ?? 0)) {
+      const prevPct = prioridad.pct_avance ?? 0
       setPctAvance(newPct)
       const sb2 = getSupabase()
       const { data: { session } } = await sb2.auth.getSession()
-      await Promise.all([
-        sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('n', prioridad.n),
-        logSemaforoChange(prioridad.n, 'pct_avance', prioridad.pct_avance ?? 0, newPct, session?.user?.email ?? null),
-      ])
-      onUpdatePrioridad(prioridad.n, { pct_avance: newPct })
+      try {
+        await safeWrite(
+          sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('n', prioridad.n),
+          `pct_avance (auto-hitos) n=${prioridad.n}`,
+        )
+        await logSemaforoChange(prioridad.n, 'pct_avance', prevPct, newPct, session?.user?.email ?? null)
+        onUpdatePrioridad(prioridad.n, { pct_avance: newPct })
+      } catch (err) {
+        // Auto-cálculo silencioso al abrir el modal: rollback sin alert
+        // para no molestar al usuario por una acción que no eligió.
+        setPctAvance(prevPct)
+        console.error('[ProjectTrackerModal] loadData auto-pct rollback:', err)
+      }
     }
     setLoading(false)
   }
@@ -141,16 +151,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
    *  ajuste manual sirve como override puntual entre cambios de hitos. */
   async function commitPctAvance(newPct: number) {
     const clamped = Math.max(0, Math.min(100, Math.round(newPct)))
-    if (clamped === (prioridad.pct_avance ?? 0)) return
+    const prevPct = prioridad.pct_avance ?? 0
+    if (clamped === prevPct) return
     setSavingPct(true)
     const sb = getSupabase()
     const { data: { session } } = await sb.auth.getSession()
-    await Promise.all([
-      sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
-      logSemaforoChange(prioridad.n, 'pct_avance', prioridad.pct_avance ?? 0, clamped, session?.user?.email ?? null),
-    ])
-    onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
-    setSavingPct(false)
+    try {
+      await safeWrite(
+        sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
+        `pct_avance n=${prioridad.n}`,
+      )
+      await logSemaforoChange(prioridad.n, 'pct_avance', prevPct, clamped, session?.user?.email ?? null)
+      onUpdatePrioridad(prioridad.n, { pct_avance: clamped })
+    } catch (err) {
+      setPctAvance(prevPct)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingPct(false)
+    }
   }
 
   async function handleSaveSemaforo(newSem: SemaforoKey) {
@@ -159,12 +177,19 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingSem(true)
     const sb = getSupabase()
     const { data: { session } } = await sb.auth.getSession()
-    await Promise.all([
-      sb.from('prioridades_territoriales').update({ estado_semaforo: newSem }).eq('n', prioridad.n),
-      logSemaforoChange(prioridad.n, 'semaforo', anterior, newSem, session?.user?.email ?? null),
-    ])
-    onUpdatePrioridad(prioridad.n, { estado_semaforo: newSem })
-    setSavingSem(false)
+    try {
+      await safeWrite(
+        sb.from('prioridades_territoriales').update({ estado_semaforo: newSem }).eq('n', prioridad.n),
+        `estado_semaforo n=${prioridad.n}`,
+      )
+      await logSemaforoChange(prioridad.n, 'semaforo', anterior, newSem, session?.user?.email ?? null)
+      onUpdatePrioridad(prioridad.n, { estado_semaforo: newSem })
+    } catch (err) {
+      setSemaforo(anterior)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingSem(false)
+    }
   }
 
   async function saveMetaField(field: string, value: string) {
@@ -172,30 +197,58 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     const patch: Record<string, string | null> = { [field]: value || null }
     if (field === 'proximo_hito') patch.fecha_proximo_hito = fechaProximoHito || null
     if (field === 'fecha_proximo_hito') patch.proximo_hito = proximoHito || null
-    await getSupabase().from('prioridades_territoriales').update(patch).eq('n', prioridad.n)
-    onUpdatePrioridad(prioridad.n, patch as Partial<Iniciativa>)
-    setEditingField(null)
-    setSavingField(false)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update(patch).eq('n', prioridad.n),
+        `meta ${field} n=${prioridad.n}`,
+      )
+      onUpdatePrioridad(prioridad.n, patch as Partial<Iniciativa>)
+      setEditingField(null)
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setSavingField(false)
+    }
   }
 
   async function saveMinisterios(next: string[]) {
+    const prev = ministerios
     setSavingMinisterio(true)
     setMinisterios(next)
     const joined = joinMinisterios(next)
-    await getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('n', prioridad.n)
-    onUpdatePrioridad(prioridad.n, { ministerio: joined })
-    setSavingMinisterio(false)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('n', prioridad.n),
+        `ministerio n=${prioridad.n}`,
+      )
+      onUpdatePrioridad(prioridad.n, { ministerio: joined })
+    } catch (err) {
+      setMinisterios(prev)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingMinisterio(false)
+    }
   }
 
   // Tags: dedup case-sensitive + trim antes de persistir. Array vacío es
   // válido (borra todos los tags) — solo admin/editor llega acá.
   async function saveTags(next: string[]) {
     const cleaned = Array.from(new Set(next.map(t => t.trim()).filter(Boolean)))
+    const prev = tagsLocal
     setSavingTags(true)
     setTagsLocal(cleaned)
-    await getSupabase().from('prioridades_territoriales').update({ tags: cleaned }).eq('n', prioridad.n)
-    onUpdatePrioridad(prioridad.n, { tags: cleaned })
-    setSavingTags(false)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({ tags: cleaned }).eq('n', prioridad.n),
+        `tags n=${prioridad.n}`,
+      )
+      onUpdatePrioridad(prioridad.n, { tags: cleaned })
+    } catch (err) {
+      setTagsLocal(prev)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingTags(false)
+    }
   }
 
   function commitTagDraft() {
@@ -306,9 +359,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     disabled={!canEdit}
                     onChange={async e => {
                       const val = e.target.value as 'Alta' | 'Media' | 'Baja'
+                      const prev = prioridadLocal
                       setPrioridadLocal(val)
-                      await getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('n', prioridad.n)
-                      onUpdatePrioridad(prioridad.n, { prioridad: val })
+                      try {
+                        await safeWrite(
+                          getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('n', prioridad.n),
+                          `prioridad n=${prioridad.n}`,
+                        )
+                        onUpdatePrioridad(prioridad.n, { prioridad: val })
+                      } catch (err) {
+                        setPrioridadLocal(prev)
+                        window.alert((err as Error).message)
+                      }
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                   >
@@ -585,9 +647,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   disabled={!canEditOperational}
                   onChange={async e => {
                     const val = e.target.value
+                    const prev = responsable
                     setResponsable(val)
-                    await getSupabase().from('prioridades_territoriales').update({ responsable: val || null }).eq('n', prioridad.n)
-                    onUpdatePrioridad(prioridad.n, { responsable: val || null })
+                    try {
+                      await safeWrite(
+                        getSupabase().from('prioridades_territoriales').update({ responsable: val || null }).eq('n', prioridad.n),
+                        `responsable n=${prioridad.n}`,
+                      )
+                      onUpdatePrioridad(prioridad.n, { responsable: val || null })
+                    } catch (err) {
+                      setResponsable(prev)
+                      window.alert((err as Error).message)
+                    }
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
@@ -812,10 +883,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     onClick={async () => {
                       setSavingField(true)
                       const val = inversionMm ? parseFloat(inversionMm) : null
-                      await getSupabase().from('prioridades_territoriales').update({ inversion_mm: val }).eq('n', prioridad.n)
-                      onUpdatePrioridad(prioridad.n, { inversion_mm: val })
-                      setEditingField(null)
-                      setSavingField(false)
+                      try {
+                        await safeWrite(
+                          getSupabase().from('prioridades_territoriales').update({ inversion_mm: val }).eq('n', prioridad.n),
+                          `inversion_mm n=${prioridad.n}`,
+                        )
+                        onUpdatePrioridad(prioridad.n, { inversion_mm: val })
+                        setEditingField(null)
+                      } catch (err) {
+                        window.alert((err as Error).message)
+                      } finally {
+                        setSavingField(false)
+                      }
                     }}
                     disabled={savingField}
                     className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50"

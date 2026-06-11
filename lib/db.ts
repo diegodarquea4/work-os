@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase'
+import { safeAuditWrite } from './dbWrite'
 import type {
   Prioridad, RegionMetrics, RegionalMetric, PregoRow, PregoEstado, PregoFaseKey,
   V2Indicador, V2IndicadorValor, V2IndicadorUltimo, V2Fuente,
@@ -160,13 +161,18 @@ export async function logSemaforoChange(
   valorNuevo: string | number,
   cambiadoPor: string | null,
 ): Promise<void> {
-  await getSupabase().from('semaforo_log').insert({
-    prioridad_id:   prioridadId,
-    campo,
-    valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
-    valor_nuevo:    String(valorNuevo),
-    cambiado_por:   cambiadoPor,
-  })
+  // Audit log: si RLS bloquea, NO romper la operación principal — solo warn.
+  // Ver lib/dbWrite.ts::safeAuditWrite.
+  await safeAuditWrite(
+    getSupabase().from('semaforo_log').insert({
+      prioridad_id:   prioridadId,
+      campo,
+      valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
+      valor_nuevo:    String(valorNuevo),
+      cambiado_por:   cambiadoPor,
+    }),
+    `semaforo_log ${campo} prioridad=${prioridadId}`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -189,15 +195,21 @@ export async function logDesalojoChange(
   capaId:         number | null = null,
   fase:           string | null = null,
 ): Promise<void> {
-  await getSupabase().from('desalojo_log').insert({
-    prioridad_id:   prioridadId,
-    capa_id:        capaId,
-    fase,
-    campo,
-    valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
-    valor_nuevo:    String(valorNuevo ?? ''),
-    cambiado_por:   cambiadoPor,
-  })
+  // Audit log: mismo criterio que logSemaforoChange. La policy de
+  // desalojo_log es admin-only; un usuario no-admin que llegue acá
+  // (no debería pasar — la UI lo gatea) verá warning en consola.
+  await safeAuditWrite(
+    getSupabase().from('desalojo_log').insert({
+      prioridad_id:   prioridadId,
+      capa_id:        capaId,
+      fase,
+      campo,
+      valor_anterior: valorAnterior !== null ? String(valorAnterior) : null,
+      valor_nuevo:    String(valorNuevo ?? ''),
+      cambiado_por:   cambiadoPor,
+    }),
+    `desalojo_log ${campo} prioridad=${prioridadId}`,
+  )
 }
 
 // ---------------------------------------------------------------------------
