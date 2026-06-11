@@ -194,7 +194,36 @@ export type DesalojoCapa = {
   // Roles vigentes definidos por tipología en lib/desalojos.ts. Huérfanos se conservan.
   responsables:          DesalojoResponsables
 
+  // Vínculo opcional al catastro nacional MINVU (CNC 2026). Si está set, el
+  // mapa hereda lat/lng del bundled JSON cuando capa.lat/lng son NULL.
+  folio_minvu:           string | null
+  lat:                   number | null
+  lng:                   number | null
+
   updated_at:            string
+}
+
+// ── Catastro MINVU (CNC 2026) ────────────────────────────────────────────────
+// Una entrada del catastro nacional de campamentos publicado por MINVU. Vive
+// en public/data/catastro-minvu-2026.json (bundled estático generado por
+// scripts/build-catastro-minvu.mjs). Se vincula a una `DesalojoCapa` vía
+// `folio_minvu`; el mapa hereda lat/lng de aquí si la capa no tiene override.
+export type CatastroEntry = {
+  folio:            string                       // "510103"
+  nombre:           string
+  region:           string
+  provincia:        string
+  comuna:           string
+  estado:           string                       // "VIGENTE" | "VIGENTE SIN PRESENCIA…"
+  estrategia:       string
+  hogares_catastro: number | null
+  hogares_censo:    number | null
+  superficie_ha:    number | null
+  tipo_propiedad:   string | null                // "PRIVADO" | "FISCAL" | "MIXTO" | "MUNICIPAL" | null
+  propietario:      string | null
+  catastro_ingreso: string                       // "CATASTRO_2011" | "CATASTRO 2024" | …
+  lat:              number
+  lng:              number
 }
 
 // Documento de un caso (capa_id NULL) o de una capa (capa_id NOT NULL).

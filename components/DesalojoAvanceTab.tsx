@@ -24,6 +24,7 @@ import DesalojoCapaSelector from './DesalojoCapaSelector'
 import DesalojoFaseCard from './DesalojoFaseCard'
 import DesalojoFaseStepper from './DesalojoFaseStepper'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
+import DesalojoVinculoMinvu from './DesalojoVinculoMinvu'
 
 /**
  * Tab Avance: lo que se gestiona por CAPA.
@@ -54,6 +55,8 @@ type Props = {
   /** Subir doc vinculado a un item del checklist (capa + fase + item_key). */
   onUploadDocItem: (capaId: number, fase: DesalojoFaseConSemaforo, itemKey: string, file: File) => Promise<void>
   onDeleteDoc:     (docId: number) => Promise<void>
+  /** Región del caso, usada como filtro inicial al buscar en el catastro MINVU. */
+  regionCaso?:     string
 }
 
 export default function DesalojoAvanceTab({
@@ -61,6 +64,7 @@ export default function DesalojoAvanceTab({
   selectedCapaId, onSelectCapa,
   onPatchCapa, onPatchFase,
   onAddSeguimiento, onUploadDoc, onUploadDocItem, onDeleteDoc,
+  regionCaso,
 }: Props) {
   const activas = capas.filter(c => c.activa)
   const capa    = activas.find(c => c.id === selectedCapaId) ?? activas[0] ?? null
@@ -172,6 +176,21 @@ export default function DesalojoAvanceTab({
             )}
           </div>
         )}
+        {/* Vínculo al catastro MINVU — siempre visible (la capa tiene o no folio). */}
+        <DesalojoVinculoMinvu
+          folio={capa.folio_minvu}
+          regionPreset={regionCaso}
+          onVincular={async (folio, lat, lng) => {
+            // Set folio + coords del catastro. Si la capa tenía coords manuales, las sobreescribe
+            // (el usuario está afirmando que ESTE folio es el correcto y sus coords son la verdad).
+            await onPatchCapa(capa.id, { folio_minvu: folio, lat, lng })
+          }}
+          onQuitar={async () => {
+            // Mantener lat/lng — el usuario podría querer conservar las coords manuales
+            // aunque el vínculo formal se rompa. Solo limpiamos el folio.
+            await onPatchCapa(capa.id, { folio_minvu: null })
+          }}
+        />
       </section>
 
       {/* Asignar tipología (panel inline) */}

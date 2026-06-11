@@ -40,6 +40,7 @@ const TEXT_FIELDS = new Set([
   'contingente', 'notas_seguridad',
   'notas_social',
   'fuente', 'notas_financiamiento',
+  'folio_minvu',
 ])
 const DATE_FIELDS = new Set(['fecha_instrumento', 'fecha_tentativa_operativo'])
 const INT_FIELDS  = new Set([
@@ -49,6 +50,8 @@ const INT_FIELDS  = new Set([
   'migrantes_regular', 'migrantes_irregular',
 ])
 const NUM_FIELDS  = new Set(['superficie_ha', 'costo_demolicion_mm'])
+// Numéricos con signo (lat/lng) — Chile está en hemisferio sur, lat es negativa.
+const SIGNED_NUM_FIELDS = new Set(['lat', 'lng'])
 const BOOL_FIELDS = new Set(['activa', 'plan_operativo_listo', 'albergue_validado', 'financiamiento_asegurado'])
 
 type AnyVal = string | number | boolean | null
@@ -71,6 +74,13 @@ function coerce(field: string, raw: unknown): { ok: true; value: AnyVal } | { ok
     if (!Number.isFinite(n) || n < 0) {
       return { ok: false, error: `${field} debe ser número ≥ 0` }
     }
+    return { ok: true, value: n }
+  }
+  if (SIGNED_NUM_FIELDS.has(field)) {
+    const n = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.'))
+    if (!Number.isFinite(n)) return { ok: false, error: `${field} debe ser número` }
+    if (field === 'lat' && (n < -90  || n > 90))  return { ok: false, error: 'lat fuera de rango [-90, 90]' }
+    if (field === 'lng' && (n < -180 || n > 180)) return { ok: false, error: 'lng fuera de rango [-180, 180]' }
     return { ok: true, value: n }
   }
   if (DATE_FIELDS.has(field)) {
@@ -156,7 +166,7 @@ export async function PATCH(
   for (const [key, raw] of Object.entries(body)) {
     if (key === 'tipologia' || key === 'fase_actual') continue
     if (!TEXT_FIELDS.has(key) && !DATE_FIELDS.has(key) && !INT_FIELDS.has(key) &&
-        !NUM_FIELDS.has(key)  && !BOOL_FIELDS.has(key)) {
+        !NUM_FIELDS.has(key)  && !SIGNED_NUM_FIELDS.has(key) && !BOOL_FIELDS.has(key)) {
       continue
     }
     const r = coerce(key, raw)

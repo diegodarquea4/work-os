@@ -540,6 +540,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onUploadDoc={handleUploadDoc}
             onUploadDocItem={handleUploadDocItem}
             onDeleteDoc={handleDeleteDoc}
+            regionCaso={iniciativa.region}
           />
         )}
         {tab === 'responsables' && (
