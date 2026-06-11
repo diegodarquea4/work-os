@@ -24,6 +24,7 @@ import type { Seguimiento } from '@/lib/types'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { splitMinisterios } from '@/lib/config'
+import { carteraPdfSchema } from '@/lib/schemas'
 import CarteraPdf, { type MinisterioGroup } from '@/components/CarteraPdf'
 
 export const dynamic = 'force-dynamic'
@@ -36,10 +37,21 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const body = await request.json() as { region: Region; soloEnFoco: boolean; fecha: string }
-  if (!body?.region?.cod) {
-    return new Response(JSON.stringify({ error: 'Region requerida' }), { status: 400 })
+  let rawBody: unknown
+  try { rawBody = await request.json() }
+  catch { return new Response(JSON.stringify({ error: 'Solicitud inválida' }), { status: 400 }) }
+
+  const parse = carteraPdfSchema.safeParse(rawBody)
+  if (!parse.success) {
+    return new Response(
+      JSON.stringify({ error: 'Solicitud inválida', detalle: parse.error.issues }),
+      { status: 400 },
+    )
   }
+  // El schema valida cod + soloEnFoco + fecha. El resto del objeto region
+  // viene del cliente (nombre, capital, zona) y lo casteamos a Region porque
+  // el PDF lo necesita completo. El passthrough() del schema lo deja pasar.
+  const body = parse.data as typeof parse.data & { region: Region }
 
   // Restricción regional: regional/viewer solo pueden generar PDFs de regiones asignadas
   const isRestricted = authProfile.role === 'regional' ||
