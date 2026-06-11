@@ -1,23 +1,26 @@
 'use client'
 
 import type { DesalojoCapa } from '@/lib/types'
-import { PROTOCOLO_DIPRES } from '@/lib/desalojos'
+import { PROTOCOLO_FINANCIAMIENTO } from '@/lib/desalojos'
 
 /**
- * Widget del protocolo de financiamiento (Sección VII del 038). Árbol de
- * decisión que conduce a "Financiamiento ASEGURADO". Visualmente refleja
- * el estado de la capa: cuando `financiamiento_asegurado === true`, todos
- * los nodos quedan verdes; cuando es false, el nodo final queda en rojo.
+ * Widget del protocolo de aseguramiento de financiamiento (Sección VII del
+ * 038). Árbol de decisión que conduce a "Financiamiento ASEGURADO".
+ * Visualmente refleja el estado de la capa: cuando
+ * `financiamiento_asegurado === true`, todos los nodos quedan verdes;
+ * cuando es false, el nodo final queda en rojo.
  *
  * Solo lectura — no editable. Sirve como recordatorio metodológico
- * mientras admin gestiona el financiamiento en la fase F4.
+ * mientras admin gestiona el financiamiento en la fase F4. Por decisión
+ * de diseño no se nombra al ente validador específico en la UI: el flag
+ * es operativo y cada caso resuelve su validación en Sala Decisión.
  */
 
 type Props = {
   capa: DesalojoCapa
 }
 
-export default function DesalojoProtocoloDipres({ capa }: Props) {
+export default function DesalojoProtocoloFinanciamiento({ capa }: Props) {
   const asegurado = capa.financiamiento_asegurado === true
   const propietario = capa.propietario ?? '—'
   const fuente      = capa.fuente ?? '—'
@@ -31,7 +34,7 @@ export default function DesalojoProtocoloDipres({ capa }: Props) {
   return (
     <section className="border border-gray-200 rounded-xl bg-white overflow-hidden">
       <header className="px-4 py-3 border-b border-gray-100">
-        <h3 className="text-sm font-bold text-gray-900">Protocolo de financiamiento DIPRES</h3>
+        <h3 className="text-sm font-bold text-gray-900">Protocolo de aseguramiento de financiamiento</h3>
         <p className="text-xs text-gray-500 mt-0.5 leading-tight">
           Árbol de decisión (Sección VII, minuta 038). Ningún caso activa F3 sin financiamiento asegurado — sin excepción.
         </p>
@@ -50,7 +53,7 @@ export default function DesalojoProtocoloDipres({ capa }: Props) {
 
         {/* Paso 2: fuente primaria */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          {(Object.values(PROTOCOLO_DIPRES.fuente_primaria) as { label: string; detalle: string }[]).map(opt => (
+          {(Object.values(PROTOCOLO_FINANCIAMIENTO.fuente_primaria) as { label: string; detalle: string }[]).map(opt => (
             <div key={opt.label} className={`rounded-lg border px-3 py-2 ${nodePend}`}>
               <p className="text-xs font-bold">{opt.label}</p>
               <p className="text-[11px] text-gray-600 leading-tight mt-0.5">{opt.detalle}</p>
@@ -65,7 +68,7 @@ export default function DesalojoProtocoloDipres({ capa }: Props) {
           <p className="text-[10px] uppercase tracking-wide font-semibold text-amber-700">Paso 3</p>
           <p className="text-sm font-bold mt-0.5">Si la fuente primaria no es viable, ¿existe alternativa?</p>
           <ul className="mt-1.5 space-y-0.5 text-xs">
-            {PROTOCOLO_DIPRES.alternativas.map(a => (
+            {PROTOCOLO_FINANCIAMIENTO.alternativas.map(a => (
               <li key={a.key} className="flex items-start gap-1">
                 <span className="font-bold text-amber-700">·</span>
                 <span>
@@ -82,12 +85,12 @@ export default function DesalojoProtocoloDipres({ capa }: Props) {
 
         <ArrowDown />
 
-        {/* Paso 4: validación DIPRES en Sala Decisión */}
+        {/* Paso 4: validación en Sala Decisión */}
         <div className={`rounded-lg border px-3 py-2 ${asegurado ? nodeOk : nodeWarn}`}>
           <p className="text-[10px] uppercase tracking-wide font-semibold">Paso 4</p>
-          <p className="text-sm font-bold mt-0.5">Validación DIPRES en Sala Decisión</p>
+          <p className="text-sm font-bold mt-0.5">Validación de recursos en Sala Decisión</p>
           <p className="text-xs leading-tight mt-0.5">
-            Quien resuelve es la Sala Decisión convocada por el Ministro del Interior con DIPRES y ministerios sectoriales.
+            Resuelve la Sala Decisión convocada por el Ministro del Interior con los sectoriales relevantes.
           </p>
         </div>
 
@@ -101,7 +104,7 @@ export default function DesalojoProtocoloDipres({ capa }: Props) {
           <p className="text-xs leading-tight mt-1">
             {asegurado
               ? 'Operativo autorizado a iniciarse.'
-              : 'No se autoriza el inicio del operativo. Activa el flag "Validación DIPRES" en la fase F4 cuando se confirme.'}
+              : 'No se autoriza el inicio del operativo. Marca "Financiamiento de demolición asegurado" en F4 cuando se confirme.'}
           </p>
         </div>
 

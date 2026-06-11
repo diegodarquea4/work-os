@@ -28,14 +28,14 @@ import DesalojoTipologiaChip from './DesalojoTipologiaChip'
 /**
  * Tab Avance: lo que se gestiona por CAPA.
  *
- * Layout v3:
+ * Layout (vertical):
  *   1. Selector de capa (oculto si hay 1 sola activa).
  *   2. Header: nombre, propietario, chip tipología o CTA "Asignar tipología",
  *      tarjeta resumen del nudo crítico de la tipología.
- *   3. Banners: financiamiento DIPRES y Tipo D >30 días sin vía.
+ *   3. Banners: financiamiento asegurado y Tipo D >30 días sin vía.
  *   4. Stepper bidireccional de fases (PR → F1 → F2 → F3 → F4 → F5 → cerrado).
- *   5. 6 fase cards (PR, F1, F2, F3, F4, F5), cada una con su checklist,
- *      campos, notas, docs y timeline.
+ *   5. Fase cards (sólo las aplicables a la tipología), stack vertical, cada
+ *      una con su checklist, campos, notas, docs y timeline.
  */
 
 const TIPOLOGIA_OPTS: DesalojoTipologia[] = ['A', 'B', 'C', 'D']
@@ -51,6 +51,8 @@ type Props = {
   onPatchFase:     (capaId: number, fase: DesalojoFaseConSemaforo, patch: { semaforo?: SemaforoDimension; notas?: string | null; checklist_patch?: DesalojoChecklistEstado }) => Promise<void>
   onAddSeguimiento:(capaId: number, dimension: DesalojoDimension, tipo: DesalojoSeguimientoTipo, descripcion: string) => Promise<void>
   onUploadDoc:     (capaId: number, dimension: DesalojoDimension | null, file: File) => Promise<void>
+  /** Subir doc vinculado a un item del checklist (capa + fase + item_key). */
+  onUploadDocItem: (capaId: number, fase: DesalojoFaseConSemaforo, itemKey: string, file: File) => Promise<void>
   onDeleteDoc:     (docId: number) => Promise<void>
 }
 
@@ -58,7 +60,7 @@ export default function DesalojoAvanceTab({
   capas, fasesEstado, seguimientos, documentos,
   selectedCapaId, onSelectCapa,
   onPatchCapa, onPatchFase,
-  onAddSeguimiento, onUploadDoc, onDeleteDoc,
+  onAddSeguimiento, onUploadDoc, onUploadDocItem, onDeleteDoc,
 }: Props) {
   const activas = capas.filter(c => c.activa)
   const capa    = activas.find(c => c.id === selectedCapaId) ?? activas[0] ?? null
@@ -66,6 +68,7 @@ export default function DesalojoAvanceTab({
   const [openFases, setOpenFases] = useState<Record<DesalojoFaseConSemaforo, boolean>>({
     pr: true, f1: false, f2: false, f3: false, f4: false, f5: false,
   })
+
   const [assigningTipo, setAssigningTipo] = useState(false)
   const [tipoDraft, setTipoDraft]         = useState<DesalojoTipologia | null>(null)
   const [tipoNotaDraft, setTipoNotaDraft] = useState('')
@@ -108,7 +111,7 @@ export default function DesalojoAvanceTab({
     } finally { setSavingTipo(false) }
   }
 
-  const sinDipres   = capa.financiamiento_asegurado === false
+  const sinFinanciamiento   = capa.financiamiento_asegurado === false
   const tipoDDias   = diasDesdeTipologia(capa)
   const tipoDAlerta = tipoDSinVia(capa) && tipoDDias !== null && tipoDDias > 30
 
@@ -226,12 +229,12 @@ export default function DesalojoAvanceTab({
       )}
 
       {/* Banners */}
-      {sinDipres && (
+      {sinFinanciamiento && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
           <span className="text-base flex-shrink-0 leading-none text-red-700">!</span>
           <p className="text-xs text-red-800 leading-snug">
-            <span className="font-bold">Sin financiamiento DIPRES asegurado</span> — regla de la Mesa, sin excepción.
-            Marca el flag &quot;Validación DIPRES&quot; en la fase F4 cuando se confirme.
+            <span className="font-bold">Sin financiamiento asegurado</span> — regla de la Mesa, sin excepción.
+            Marca &quot;Recursos confirmados&quot; en la fase F4 cuando se valide.
           </p>
         </div>
       )}
@@ -254,9 +257,16 @@ export default function DesalojoAvanceTab({
         />
       </section>
 
-      {/* Fase cards — sólo las aplicables a la tipología asignada */}
+      {/* Resumen de cuántas fases aplican a la tipología */}
+      {capa.tipologia && (
+        <p className="text-xs text-gray-500">
+          {getFasesAplicables(capa.tipologia).length} fase{getFasesAplicables(capa.tipologia).length === 1 ? '' : 's'} aplicables a la tipología {capa.tipologia}.
+        </p>
+      )}
+
+      {/* Fase cards — sólo las aplicables a la tipología asignada. */}
       <div className="space-y-3">
-        {getFasesAplicables(capa.tipologia).map(f => {
+        {capa.tipologia && getFasesAplicables(capa.tipologia).map(f => {
           const estado = estadoDeFase(f)
           if (!estado) {
             return (
@@ -277,6 +287,7 @@ export default function DesalojoAvanceTab({
               onPatchFase={async patch => { await onPatchFase(capa.id, f, patch) }}
               onAddSeguimiento={async (dim, tipo, desc) => { await onAddSeguimiento(capa.id, dim, tipo, desc) }}
               onUploadDoc={async (dim, file) => { await onUploadDoc(capa.id, dim, file) }}
+              onUploadDocItem={async (itemKey, file) => { await onUploadDocItem(capa.id, f, itemKey, file) }}
               onDeleteDoc={onDeleteDoc}
               open={openFases[f]}
               onToggleOpen={() => setOpenFases(prev => ({ ...prev, [f]: !prev[f] }))}

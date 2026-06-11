@@ -22,10 +22,12 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import type { DesalojoDocumento } from '@/lib/types'
+import { checklistItems } from '@/lib/desalojos'
+import type { DesalojoDocumento, DesalojoFaseConSemaforo, DesalojoTipologia } from '@/lib/types'
 
 const SIGNED_URL_TTL_SEC = 3600
 const DIMENSIONS = new Set(['juridico', 'seguridad', 'social', 'financiamiento'])
+const FASES_VALID = new Set<DesalojoFaseConSemaforo>(['pr', 'f1', 'f2', 'f3', 'f4', 'f5'])
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^\w.\-]+/g, '_').slice(0, 120)
@@ -114,23 +116,61 @@ export async function POST(
     dimension = dimRaw
   }
 
+  // Vinculación opcional a un item del checklist: fase + item_key.
+  const faseRaw = form.get('fase')
+  let fase: DesalojoFaseConSemaforo | null = null
+  if (faseRaw !== null && faseRaw !== '') {
+    if (typeof faseRaw !== 'string' || !FASES_VALID.has(faseRaw as DesalojoFaseConSemaforo)) {
+      return NextResponse.json({ error: 'fase inválida' }, { status: 400 })
+    }
+    fase = faseRaw as DesalojoFaseConSemaforo
+  }
+  const itemKeyRaw = form.get('item_key')
+  let itemKey: string | null = null
+  if (itemKeyRaw !== null && itemKeyRaw !== '') {
+    if (typeof itemKeyRaw !== 'string' || !/^[a-z0-9_]+$/.test(itemKeyRaw)) {
+      return NextResponse.json({ error: 'item_key inválido' }, { status: 400 })
+    }
+    if (fase === null) {
+      return NextResponse.json({ error: 'item_key requiere fase' }, { status: 400 })
+    }
+    itemKey = itemKeyRaw
+  }
+
   const db = getSupabaseAdmin()
 
   // Si viene capa_id, validar que pertenezca al caso.
+  let capaTipologia: DesalojoTipologia | null = null
   if (capaId !== null) {
     const { data: capa } = await db
       .from('desalojo_capas')
-      .select('id, prioridad_id')
+      .select('id, prioridad_id, tipologia')
       .eq('id', capaId)
       .maybeSingle()
     if (!capa || capa.prioridad_id !== n) {
       return NextResponse.json({ error: 'capa_id no pertenece al caso' }, { status: 400 })
     }
+    capaTipologia = (capa.tipologia ?? null) as DesalojoTipologia | null
   }
 
-  // Subir a Storage. Path: {n}/{capa_id|'general'}/{Date.now()}_{file.name}
+  // Si viene item_key, validar que exista en el config vigente para la
+  // tipología de la capa (evita orphans desde el cliente).
+  if (itemKey !== null && fase !== null) {
+    if (capaId === null) {
+      return NextResponse.json({ error: 'item_key requiere capa_id' }, { status: 400 })
+    }
+    const items = checklistItems(capaTipologia, fase)
+    if (!items.some(i => i.key === itemKey)) {
+      return NextResponse.json({ error: `item_key '${itemKey}' no pertenece al checklist ${fase} de la tipología` }, { status: 400 })
+    }
+  }
+
+  // Subir a Storage. Path: {n}/{capa_id|'general'}/{fase|''}/{Date.now()}_{file.name}
   const safeName = sanitizeFilename(file.name)
-  const path = `${n}/${capaId ?? 'general'}/${Date.now()}_${safeName}`
+  const pathSegments = [String(n), capaId === null ? 'general' : String(capaId)]
+  if (fase) pathSegments.push(fase)
+  pathSegments.push(`${Date.now()}_${safeName}`)
+  const path = pathSegments.join('/')
   const buf  = Buffer.from(await file.arrayBuffer())
   const { error: upErr } = await db.storage
     .from('desalojos-docs')
@@ -146,6 +186,8 @@ export async function POST(
       prioridad_id: n,
       capa_id:      capaId,
       dimension,
+      fase,
+      item_key:     itemKey,
       nombre:       file.name,
       url:          path,
       tipo_archivo: file.type || null,
@@ -167,7 +209,8 @@ export async function POST(
   await db.from('desalojo_log').insert({
     prioridad_id:   n,
     capa_id:        capaId,
-    campo:          dimension ? `documento.${dimension}` : 'documento',
+    fase:           fase ?? null,
+    campo:          itemKey ? `documento.${fase}.${itemKey}` : dimension ? `documento.${dimension}` : 'documento',
     valor_anterior: null,
     valor_nuevo:    file.name,
     cambiado_por:   profile.email || null,

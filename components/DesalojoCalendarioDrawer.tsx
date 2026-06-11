@@ -176,7 +176,7 @@ export default function DesalojoCalendarioDrawer({
 
   return (
     <aside
-      className="w-[440px] flex-shrink-0 sticky top-6 self-start max-h-[calc(100vh-3rem)] overflow-y-auto"
+      className="w-[440px] flex-shrink-0 h-full overflow-y-auto py-6 pr-6"
       aria-label="Calendario de hitos"
     >
       <div className="space-y-4">

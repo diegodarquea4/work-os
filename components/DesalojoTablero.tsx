@@ -133,7 +133,7 @@ export default function DesalojoTablero({ cases, casosByN, loading, loadError }:
     }
     return m
   }, [allRows])
-  const sinDipres      = allRows.filter(r => r.capa.financiamiento_asegurado === false).length
+  const sinFinanciamiento      = allRows.filter(r => r.capa.financiamiento_asegurado === false).length
   const tipoDSinViaN   = allRows.filter(r => tipoDSinVia(r.capa) && (diasDesdeTipologia(r.capa) ?? 0) > 30).length
   const proximos30d    = allRows.filter(r => {
     const d = diasAOperativo(r.capa)
@@ -167,7 +167,7 @@ export default function DesalojoTablero({ cases, casosByN, loading, loadError }:
         {(['A','B','C','D'] as DesalojoTipologia[]).map(t => (
           <KpiTipo key={t} t={t} value={porTipologia[t]} />
         ))}
-        <Kpi label="Sin DIPRES"          value={sinDipres}    accent={sinDipres > 0    ? 'red' : 'gray'} />
+        <Kpi label="Sin financiamiento"  value={sinFinanciamiento}    accent={sinFinanciamiento > 0    ? 'red' : 'gray'} />
         <Kpi label="Tipo D >30 días"     value={tipoDSinViaN} accent={tipoDSinViaN > 0 ? 'red' : 'gray'} />
         <Kpi label="Operativos ≤30 días" value={proximos30d}  accent={proximos30d > 0  ? 'amber' : 'gray'} />
       </div>

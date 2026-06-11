@@ -1,35 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type {
   DesalojoChecklistEstado,
+  DesalojoChecklistItemEstado,
+  DesalojoDocumento,
   DesalojoFaseConSemaforo,
   DesalojoTipologia,
 } from '@/lib/types'
-import { checklistItems } from '@/lib/desalojos'
+import { checklistItems, itemDone, type ChecklistItem, type ExtraSpec } from '@/lib/desalojos'
 
 /**
- * Checklist genérico por tipología × fase. Sustituye al v2 DesalojoChecklistPaso0
- * (que era específico de PR). Estado persistido como JSONB en
- * desalojo_fase_estado.checklist_estado.
+ * Checklist genérico por tipología × fase. Cada item tiene:
+ *   - Bool `done` con fecha de cumplimiento.
+ *   - Opcionalmente, `extras`: campos estructurados (texto / número / fecha)
+ *     y/o documento adjunto (kind: 'doc').
  *
- * Sin tipología asignada: aviso, sin items.
+ * Reglas de "completo":
+ *   - Sin extras: item completo = bool done.
+ *   - Con extras required: item completo = done && todos los extras required
+ *     con valor (texto/num/fecha) o con al menos un doc (kind: 'doc').
  *
- * El PATCH envía solo el subset cambiado — el server hace shallow merge contra
- * el estado actual. Items huérfanos (cambio de tipología) se conservan sin
- * renderizar.
+ * UI: cada item es expandible. Auto-expandido si está marcado o si tiene
+ * algún extra con valor. Badge ámbar "incompleto" cuando done pero faltan
+ * extras required.
  */
 
 type Props = {
-  tipologia:    DesalojoTipologia | null
-  fase:         DesalojoFaseConSemaforo
-  estado:       DesalojoChecklistEstado
-  onPatch:      (patch: DesalojoChecklistEstado) => Promise<void>
+  tipologia:     DesalojoTipologia | null
+  fase:          DesalojoFaseConSemaforo
+  estado:        DesalojoChecklistEstado
+  /** Documentos de esta capa × fase. Se filtran por item_key para cada item. */
+  docs?:         DesalojoDocumento[]
+  onPatch:       (patch: DesalojoChecklistEstado) => Promise<void>
+  /** Subir un doc vinculado a un item del checklist. */
+  onUploadDoc?:  (itemKey: string, file: File) => Promise<void>
+  onDeleteDoc?:  (docId: number) => Promise<void>
 }
 
-export default function DesalojoChecklistFase({ tipologia, fase, estado, onPatch }: Props) {
+export default function DesalojoChecklistFase({
+  tipologia, fase, estado, docs = [], onPatch, onUploadDoc, onDeleteDoc,
+}: Props) {
   const items = checklistItems(tipologia, fase)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
 
   if (!tipologia) {
     return (
@@ -46,30 +58,21 @@ export default function DesalojoChecklistFase({ tipologia, fase, estado, onPatch
     )
   }
 
-  const completos = items.filter(it => estado?.[it.key]?.done).length
-  const pct       = Math.round((completos / items.length) * 100)
-
-  async function toggleDone(key: string, current: boolean) {
-    const node = estado?.[key] ?? { done: false, fecha: null }
-    setSavingKey(key)
-    try {
-      await onPatch({ [key]: { done: !current, fecha: node.fecha } })
-    } finally {
-      setSavingKey(null)
-    }
+  // Conteo de docs por item.
+  const docsByItem: Record<string, DesalojoDocumento[]> = {}
+  for (const d of docs) {
+    if (d.fase !== fase || !d.item_key) continue
+    const arr = docsByItem[d.item_key] ?? []
+    arr.push(d)
+    docsByItem[d.item_key] = arr
   }
 
-  async function changeFecha(key: string, fecha: string) {
-    const node    = estado?.[key] ?? { done: false, fecha: null }
-    const nueva   = fecha || null
-    if (nueva !== null && !/^\d{4}-\d{2}-\d{2}$/.test(nueva)) return
-    setSavingKey(key)
-    try {
-      await onPatch({ [key]: { done: node.done, fecha: nueva } })
-    } finally {
-      setSavingKey(null)
-    }
-  }
+  // Progreso real considerando extras required.
+  const completos = items.filter(it => {
+    const itemDocs = docsByItem[it.key]?.length ?? 0
+    return itemDone(it, estado?.[it.key], itemDocs)
+  }).length
+  const pct = Math.round((completos / items.length) * 100)
 
   return (
     <div className="space-y-2">
@@ -85,48 +88,258 @@ export default function DesalojoChecklistFase({ tipologia, fase, estado, onPatch
       </div>
 
       <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-        {items.map(item => {
-          const node    = estado?.[item.key]
-          const done    = !!node?.done
-          const fecha   = node?.fecha ?? ''
-          const saving  = savingKey === item.key
-          return (
-            <li key={item.key} className="px-3 py-2.5 flex items-start gap-3 bg-white">
-              <button
-                type="button"
-                onClick={() => toggleDone(item.key, done)}
-                disabled={saving}
-                aria-pressed={done}
-                className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors disabled:opacity-50 flex-shrink-0 ${
-                  done
-                    ? 'bg-slate-900 border-slate-900 text-white'
-                    : 'bg-white border-gray-300 text-transparent hover:border-slate-400'
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M2 6l3 3 5-6"/>
-                </svg>
-              </button>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium leading-snug ${done ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
-                  {item.label}
-                </p>
-                {item.descripcion && (
-                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{item.descripcion}</p>
-                )}
-              </div>
-              <input
-                type="date"
-                value={fecha}
-                onChange={e => changeFecha(item.key, e.target.value)}
-                disabled={saving}
-                className="text-xs px-2 py-1 border border-gray-200 rounded text-gray-700 disabled:opacity-50 flex-shrink-0"
-                title="Fecha de cumplimiento (opcional)"
-              />
-            </li>
-          )
-        })}
+        {items.map(item => (
+          <ItemRow
+            key={item.key}
+            item={item}
+            node={estado?.[item.key]}
+            docs={docsByItem[item.key] ?? []}
+            onPatch={onPatch}
+            onUploadDoc={onUploadDoc}
+            onDeleteDoc={onDeleteDoc}
+          />
+        ))}
       </ul>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────
+
+function ItemRow({
+  item, node, docs, onPatch, onUploadDoc, onDeleteDoc,
+}: {
+  item:        ChecklistItem
+  node:        DesalojoChecklistItemEstado | undefined
+  docs:        DesalojoDocumento[]
+  onPatch:     (patch: DesalojoChecklistEstado) => Promise<void>
+  onUploadDoc?: (itemKey: string, file: File) => Promise<void>
+  onDeleteDoc?: (docId: number) => Promise<void>
+}) {
+  const done    = !!node?.done
+  const extras  = node?.extras ?? {}
+  const hasExtras = !!item.extras && item.extras.length > 0
+  // Determinar si hay extras required faltantes.
+  const completo = itemDone(item, node, docs.length)
+  const incompleto = done && !completo
+
+  // Auto-expandir si está marcado o tiene algún valor extra.
+  const hasAnyValue = Object.values(extras).some(v => v != null && v !== '')
+  const [expanded, setExpanded] = useState<boolean>(done || hasAnyValue || docs.length > 0)
+  const [saving, setSaving]     = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function toggleDone() {
+    setSaving(true)
+    try { await onPatch({ [item.key]: { done: !done, fecha: node?.fecha ?? null } }) }
+    finally { setSaving(false) }
+    if (!done) setExpanded(true)
+  }
+  async function changeExtra(extraKey: string, value: string | number | null) {
+    setSaving(true)
+    try {
+      await onPatch({ [item.key]: { done, fecha: node?.fecha ?? null, extras: { [extraKey]: value } } })
+    } finally { setSaving(false) }
+  }
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !onUploadDoc) return
+    e.target.value = ''
+    setSaving(true)
+    try { await onUploadDoc(item.key, file) }
+    finally { setSaving(false) }
+  }
+
+  function fmtBytes(n: number | null): string {
+    if (!n) return ''
+    if (n < 1024) return `${n} B`
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return (
+    <li className="bg-white">
+      <div className="px-3 py-2.5 flex items-start gap-3">
+        <button
+          type="button"
+          onClick={toggleDone}
+          disabled={saving}
+          aria-pressed={done}
+          className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors disabled:opacity-50 flex-shrink-0 ${
+            done
+              ? incompleto
+                ? 'bg-amber-500 border-amber-500 text-white'
+                : 'bg-slate-900 border-slate-900 text-white'
+              : 'bg-white border-gray-300 text-transparent hover:border-slate-400'
+          }`}
+          title={incompleto ? 'Marcado pero faltan datos obligatorios' : undefined}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M2 6l3 3 5-6"/>
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded(e => !e)}
+          className="flex-1 min-w-0 text-left"
+        >
+          <p className={`text-sm font-medium leading-snug ${done && !incompleto ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
+            {item.label}
+            {incompleto && (
+              <span className="ml-2 inline-flex items-center text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-50 ring-1 ring-amber-200 rounded-full px-1.5 py-0.5">
+                faltan datos
+              </span>
+            )}
+          </p>
+          {item.descripcion && (
+            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{item.descripcion}</p>
+          )}
+        </button>
+        {hasExtras && (
+          <button
+            type="button"
+            onClick={() => setExpanded(e => !e)}
+            className="text-gray-400 hover:text-gray-700 flex-shrink-0 p-1"
+            aria-label={expanded ? 'Ocultar campos' : 'Mostrar campos'}
+            title={expanded ? 'Ocultar campos' : 'Mostrar campos'}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
+              <path d="M4 6l4 4 4-4"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {hasExtras && expanded && (
+        <div className="px-3 pb-3 pl-11 bg-gray-50 border-t border-gray-100 space-y-2">
+          {item.extras!.map(extra => (
+            <ExtraRow
+              key={extra.key}
+              extra={extra}
+              value={extras[extra.key] ?? null}
+              docs={extra.kind === 'doc' ? docs : []}
+              saving={saving}
+              onChange={(v) => changeExtra(extra.key, v)}
+              onUploadClick={extra.kind === 'doc' && onUploadDoc ? () => fileRef.current?.click() : undefined}
+              onDeleteDoc={onDeleteDoc}
+              fmtBytes={fmtBytes}
+            />
+          ))}
+          {onUploadDoc && (
+            <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────
+
+function ExtraRow({
+  extra, value, docs, saving, onChange, onUploadClick, onDeleteDoc, fmtBytes,
+}: {
+  extra:         ExtraSpec
+  value:         string | number | null
+  docs:          DesalojoDocumento[]
+  saving:        boolean
+  onChange:      (v: string | number | null) => void
+  onUploadClick?: () => void
+  onDeleteDoc?:  (docId: number) => Promise<void>
+  fmtBytes:      (n: number | null) => string
+}) {
+  const labelEl = (
+    <label className="text-[11px] font-semibold text-gray-600">
+      {extra.label}
+      {extra.required && <span className="text-rose-500 ml-0.5" title="Obligatorio">*</span>}
+    </label>
+  )
+
+  if (extra.kind === 'doc') {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          {labelEl}
+          {onUploadClick && (
+            <button
+              type="button"
+              onClick={onUploadClick}
+              disabled={saving}
+              className="text-[11px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
+            >
+              + Subir
+            </button>
+          )}
+        </div>
+        {extra.hint && (
+          <p className="text-[10px] text-gray-500 leading-tight">{extra.hint}</p>
+        )}
+        {docs.length === 0 ? (
+          <p className="text-[11px] text-gray-400 italic">Sin documento adjunto.</p>
+        ) : (
+          <ul className="space-y-1">
+            {docs.map(d => (
+              <li key={d.id} className="flex items-center gap-2 px-2 py-1 bg-white border border-gray-200 rounded text-[11px]">
+                <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate" title={d.nombre}>
+                  {d.nombre}
+                </a>
+                {d.tamano_bytes && <span className="text-gray-400 flex-shrink-0">{fmtBytes(d.tamano_bytes)}</span>}
+                {onDeleteDoc && (
+                  <button onClick={() => onDeleteDoc(d.id)} className="text-gray-400 hover:text-red-600 flex-shrink-0 text-sm leading-none px-1" title="Eliminar" aria-label="Eliminar documento">×</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
+  if (extra.kind === 'num') {
+    return (
+      <div className="space-y-0.5">
+        {labelEl}
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={value === null || value === undefined ? '' : String(value)}
+            onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+            disabled={saving}
+            className="flex-1 text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 disabled:opacity-50"
+          />
+          {extra.unit && <span className="text-[11px] text-gray-500">{extra.unit}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  if (extra.kind === 'fecha') {
+    return (
+      <div className="space-y-0.5">
+        {labelEl}
+        <input
+          type="date"
+          value={value === null || value === undefined ? '' : String(value)}
+          onChange={e => onChange(e.target.value || null)}
+          disabled={saving}
+          className="text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 disabled:opacity-50"
+        />
+      </div>
+    )
+  }
+
+  // texto
+  return (
+    <div className="space-y-0.5">
+      {labelEl}
+      <input
+        type="text"
+        value={value === null || value === undefined ? '' : String(value)}
+        onChange={e => onChange(e.target.value || null)}
+        disabled={saving}
+        placeholder={extra.placeholder}
+        className="w-full text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 placeholder:text-gray-400 disabled:opacity-50"
+      />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // ==========================================================================
 // Desalojos v3 — config canónica de tipologías, fases, checklists por fase
-//                + matriz jurídica + protocolo DIPRES.
+//                + matriz jurídica + protocolo de aseguramiento de financiamiento.
 //
 // La metodología real de la Mesa Interministerial (minuta 038, mayo 2026) se
 // organiza POR FASE, no por dimensión transversal. Las 4 dimensiones del v2
@@ -11,7 +11,7 @@
 //   F1 — Intervención policial (vive lo "Seguridad")
 //   F2 — Catastro social (vive lo "Social")
 //   F3 — Desalojo (vive lo "Seguridad operativa")
-//   F4 — Demolición simultánea (vive lo "Financiamiento DIPRES")
+//   F4 — Demolición simultánea (vive lo "Financiamiento")
 //   F5 — Recuperación
 //
 // Cada tipología (A/B/C/D) tiene un checklist específico POR FASE. Los items
@@ -22,13 +22,18 @@
 //     obligatorios sin completar en el checklist PR.
 //   - F3 y F4 son SIMULTÁNEAS (regla del PDF: sin demolición simultánea hay
 //     retoma). La UI las muestra como par; el modelo las mantiene discretas.
-//   - F4 no se autoriza sin financiamiento DIPRES asegurado.
+//   - F4 no se autoriza sin financiamiento asegurado.
+//
+// El UI no nombra entes presupuestarios específicos (decisión de diseño:
+// el flag es operativo, no compromete a un ministerio puntual).
 //
 // Sin override (decisión Mesa, "sin excepción").
 // ==========================================================================
 
 import type {
   DesalojoCapa,
+  DesalojoChecklistEstado,
+  DesalojoChecklistItemEstado,
   DesalojoFase,
   DesalojoFaseConSemaforo,
   DesalojoFaseEstado,
@@ -53,7 +58,7 @@ export const FASE_CFG: Record<DesalojoFase, {
   f1:      { label: 'Intervención policial',  short: 'F1',  sublabel: 'F1',       descripcion: 'Plan operativo de Carabineros con contingente dimensionado.' },
   f2:      { label: 'Catastro social',        short: 'F2',  sublabel: 'F2',       descripcion: 'Hogares, NNA, AM, embarazadas, discapacidad, migrantes. Albergue validado.' },
   f3:      { label: 'Desalojo',               short: 'F3',  sublabel: 'F3',       descripcion: 'Despeje del polígono. Simultáneo a F4 (sin demolición hay retoma).' },
-  f4:      { label: 'Demolición simultánea',  short: 'F4',  sublabel: 'F4',       descripcion: 'Demolición manzana a manzana. Requiere financiamiento DIPRES asegurado.' },
+  f4:      { label: 'Demolición simultánea',  short: 'F4',  sublabel: 'F4',       descripcion: 'Demolición manzana a manzana. Requiere financiamiento asegurado.' },
   f5:      { label: 'Recuperación',           short: 'F5',  sublabel: 'F5',       descripcion: 'Cierre perimetral y nuevo uso del suelo.' },
   cerrado: { label: 'Caso cerrado',           short: 'OK',  sublabel: 'Cerrado',  descripcion: 'Polígono recuperado.' },
 }
@@ -64,7 +69,24 @@ export const FASE_CFG: Record<DesalojoFase, {
 // Paleta: A=indigo, B=cyan, C=violet, D=orange. Evita verde/rojo (semáforos)
 // y amber (en_foco). Tokens validados para no competir.
 
-export type ChecklistItem = { key: string; label: string; descripcion?: string }
+// Campo estructurado asociado a un item del checklist. La existencia de un
+// extra `required` sin valor hace que el item NO cuente como "done" para
+// canAdvanceFase, aunque el bool del check esté marcado. Esto vuelve honesto
+// el chequeo: no se puede decir "resolución publicada" sin la resolución.
+export type ExtraSpec =
+  | { kind: 'texto'; key: string; label: string; placeholder?: string; required?: boolean }
+  | { kind: 'num';   key: string; label: string; unit?: string; required?: boolean }
+  | { kind: 'fecha'; key: string; label: string; required?: boolean }
+  | { kind: 'doc';   key: string; label: string; required?: boolean; hint?: string }
+
+export type ChecklistItem = {
+  key:         string
+  label:       string
+  descripcion?: string
+  /** Campos estructurados que acompañan al check. Si alguno es `required` y
+   *  no tiene valor, el item se considera incompleto aunque `done === true`. */
+  extras?:     ExtraSpec[]
+}
 export type ChecklistsFase = Record<DesalojoFaseConSemaforo, ChecklistItem[]>
 
 export type RolCfg = {
@@ -102,24 +124,74 @@ export type TipologiaCfg = {
 // Checklists base reutilizados (F2, F3, F5 son bastante comunes entre tipologías).
 const CHECKLIST_F2_BASE: ChecklistItem[] = [
   { key: 'catastro_social_levantado', label: 'Catastro social levantado',
-    descripcion: 'Hogares, NNA, AM, embarazadas, discapacidad, migrantes.' },
-  { key: 'oferta_albergue_validada',  label: 'Oferta de albergue validada' },
+    descripcion: 'Hogares, NNA, AM, embarazadas, discapacidad, migrantes.',
+    extras: [
+      { kind: 'fecha', key: 'fecha_levantamiento', label: 'Fecha del levantamiento', required: true },
+      { kind: 'doc',   key: 'catastro',            label: 'Catastro (PDF / planilla)', required: true,
+        hint: 'Documento con la composición demográfica del polígono.' },
+    ],
+  },
+  { key: 'oferta_albergue_validada',  label: 'Oferta de albergue validada',
+    extras: [
+      { kind: 'num', key: 'cupos',    label: 'Cupos disponibles', unit: 'personas', required: true },
+      { kind: 'doc', key: 'convenio', label: 'Convenio / oferta firmada',
+        hint: 'Albergue MIDESO, fundación, municipio, etc.' },
+    ],
+  },
   { key: 'protocolo_21430_activado',  label: 'Protocolo Ley 21.430 activado (si hay NNA)',
-    descripcion: 'Articulado con Oficinas Locales de la Niñez.' },
-  { key: 'derivaciones_sociales_listas', label: 'Derivaciones a subsidios / servicios coordinadas' },
+    descripcion: 'Articulado con Oficinas Locales de la Niñez.',
+    extras: [
+      { kind: 'fecha', key: 'fecha_activacion', label: 'Fecha de activación' },
+    ],
+  },
+  { key: 'derivaciones_sociales_listas', label: 'Derivaciones a subsidios / servicios coordinadas',
+    extras: [
+      { kind: 'doc', key: 'listado', label: 'Listado de derivaciones',
+        hint: 'Familias × subsidio o servicio derivado.' },
+    ],
+  },
 ]
 
 const CHECKLIST_F3_BASE: ChecklistItem[] = [
-  { key: 'fecha_operativo_fijada',     label: 'Fecha de operativo fijada' },
-  { key: 'cuadrantes_definidos',       label: 'Cuadrantes / etapas definidos' },
-  { key: 'resguardo_perimetral_coord', label: 'Resguardo perimetral coordinado con Carabineros' },
-  { key: 'derivacion_nna_lista',       label: 'Derivación de NNA a albergues transitorios preparada' },
+  { key: 'fecha_operativo_fijada',     label: 'Fecha de operativo fijada',
+    extras: [
+      { kind: 'fecha', key: 'fecha_operativo', label: 'Fecha del operativo', required: true },
+    ],
+  },
+  { key: 'cuadrantes_definidos',       label: 'Cuadrantes / etapas definidos',
+    extras: [
+      { kind: 'doc', key: 'mapa_cuadrantes', label: 'Mapa de cuadrantes', required: true,
+        hint: 'Plano del polígono con cuadrantes/etapas numeradas.' },
+    ],
+  },
+  { key: 'resguardo_perimetral_coord', label: 'Resguardo perimetral coordinado con Carabineros',
+    extras: [
+      { kind: 'doc', key: 'plan_resguardo', label: 'Plan de resguardo perimetral' },
+    ],
+  },
+  { key: 'derivacion_nna_lista',       label: 'Derivación de NNA a albergues transitorios preparada',
+    extras: [
+      { kind: 'doc', key: 'listado_nna', label: 'Listado NNA → albergue',
+        hint: 'Familias y albergue asignado.' },
+    ],
+  },
 ]
 
 const CHECKLIST_F5_BASE: ChecklistItem[] = [
-  { key: 'cierre_perimetral_financiado', label: 'Cierre perimetral definitivo financiado' },
+  { key: 'cierre_perimetral_financiado', label: 'Cierre perimetral definitivo financiado',
+    extras: [
+      { kind: 'num',   key: 'monto_mm', label: 'Monto', unit: 'MM CLP', required: true },
+      { kind: 'texto', key: 'fuente',   label: 'Fuente de recursos', required: true,
+        placeholder: 'Servicio propietario / FNDR / Municipal / otro' },
+    ],
+  },
   { key: 'nuevo_uso_suelo_definido',     label: 'Nuevo uso del suelo definido',
-    descripcion: 'Articulado MINVU regional + municipio + GORE.' },
+    descripcion: 'Articulado MINVU regional + municipio + GORE.',
+    extras: [
+      { kind: 'texto', key: 'uso',         label: 'Uso definido', placeholder: 'Ej. parque, equipamiento público, plan habitacional' },
+      { kind: 'doc',   key: 'instrumento', label: 'Instrumento (Plan Maestro / convenio / decreto)' },
+    ],
+  },
 ]
 
 export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
@@ -140,8 +212,8 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
         descripcion: 'Plan operativo + contingente.' },
       { key: 'mideso',        label: 'SEREMI Desarrollo Social y Familia', required: true,
         descripcion: 'Catastro social + albergues + protocolo 21.430.' },
-      { key: 'dipres',        label: 'Contraparte DIPRES',
-        descripcion: 'Validación financiamiento si requiere provisión extraordinaria.' },
+      { key: 'validacion_presupuestaria', label: 'Validación presupuestaria',
+        descripcion: 'Confirmación de recursos para la demolición. Definir caso a caso.' },
       { key: 'mma_salud',     label: 'SEREMI Salud + MMA',
         descripcion: 'Residuos peligrosos y vertedero autorizado.' },
       { key: 'municipio',     label: 'Municipalidad',
@@ -149,26 +221,80 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
     ],
     checklists: {
       pr: [
-        { key: 'resolucion_publicada_do',     label: 'Resolución exenta SERVIU publicada en D.O.' },
-        { key: 'plazo_abandono_definido',     label: 'Plazo de abandono voluntario definido' },
-        { key: 'informe_tecnico_poligono',    label: 'Informe técnico del polígono' },
-        { key: 'costo_demolicion_presentado', label: 'SERVIU presentó costo y plazo de demolición' },
+        { key: 'resolucion_publicada_do',     label: 'Resolución exenta SERVIU publicada en D.O.',
+          extras: [
+            { kind: 'texto', key: 'numero',    label: 'Número de resolución', placeholder: 'Ej. 99/2026', required: true },
+            { kind: 'fecha', key: 'fecha_do',  label: 'Fecha publicación D.O.', required: true },
+            { kind: 'doc',   key: 'resolucion', label: 'Resolución (PDF)', required: true },
+          ],
+        },
+        { key: 'plazo_abandono_definido',     label: 'Plazo de abandono voluntario definido',
+          extras: [
+            { kind: 'fecha', key: 'fecha_limite', label: 'Fecha límite de abandono', required: true },
+          ],
+        },
+        { key: 'informe_tecnico_poligono',    label: 'Informe técnico del polígono',
+          extras: [
+            { kind: 'doc',   key: 'informe', label: 'Informe técnico (PDF)', required: true },
+            { kind: 'texto', key: 'autor',   label: 'Autor / unidad responsable', placeholder: 'SERVIU / SEREMI / otro' },
+          ],
+        },
+        { key: 'costo_demolicion_presentado', label: 'SERVIU presentó costo y plazo de demolición',
+          extras: [
+            { kind: 'num',   key: 'monto_mm',     label: 'Costo estimado', unit: 'MM CLP', required: true },
+            { kind: 'fecha', key: 'plazo_inicio', label: 'Plazo de inicio propuesto' },
+            { kind: 'doc',   key: 'minuta',       label: 'Minuta de costo' },
+          ],
+        },
       ],
       f1: [
         { key: 'comite_caso_convocado',       label: 'Comité Caso convocado por DPR',
-          descripcion: 'SERVIU regional + Carabineros + MDSF + Niñez + Salud + Migraciones + municipio.' },
-        { key: 'plan_operativo_carabineros',  label: 'Plan operativo de Carabineros levantado' },
-        { key: 'contingente_dimensionado',    label: 'Contingente dimensionado' },
-        { key: 'refuerzos_comunicados',       label: 'Refuerzos de otras regiones comunicados con plazo de aviso' },
+          descripcion: 'SERVIU regional + Carabineros + MDSF + Niñez + Salud + Migraciones + municipio.',
+          extras: [
+            { kind: 'fecha', key: 'fecha_convocatoria', label: 'Fecha de convocatoria', required: true },
+            { kind: 'doc',   key: 'acta',                label: 'Acta de la sesión' },
+          ],
+        },
+        { key: 'plan_operativo_carabineros',  label: 'Plan operativo de Carabineros levantado',
+          extras: [
+            { kind: 'doc', key: 'plan', label: 'Plan operativo (PDF)', required: true,
+              hint: 'Documento elaborado por Carabineros con dispositivo del operativo.' },
+          ],
+        },
+        { key: 'contingente_dimensionado',    label: 'Contingente dimensionado',
+          extras: [
+            { kind: 'num', key: 'efectivos', label: 'Efectivos comprometidos', unit: 'personas', required: true },
+          ],
+        },
+        { key: 'refuerzos_comunicados',       label: 'Refuerzos de otras regiones comunicados con plazo de aviso',
+          extras: [
+            { kind: 'num', key: 'dias_aviso', label: 'Plazo de aviso', unit: 'días' },
+          ],
+        },
       ],
       f2: CHECKLIST_F2_BASE,
       f3: CHECKLIST_F3_BASE,
       f4: [
-        { key: 'dipres_asegurado',            label: 'Financiamiento DIPRES asegurado',
-          descripcion: 'Regla de bloqueo: sin DIPRES no se autoriza el operativo.' },
+        { key: 'financiamiento_confirmado',   label: 'Financiamiento de demolición asegurado',
+          descripcion: 'Regla de bloqueo: sin recursos confirmados no se autoriza el operativo.',
+          extras: [
+            { kind: 'num',   key: 'monto_mm',    label: 'Monto confirmado', unit: 'MM CLP', required: true },
+            { kind: 'texto', key: 'fuente',      label: 'Fuente de recursos', placeholder: 'SERVIU / FNDR / Convenio / Provisión', required: true },
+            { kind: 'doc',   key: 'validacion',  label: 'Documento de validación' },
+          ],
+        },
         { key: 'residuos_peligrosos_coord',   label: 'Manejo de residuos peligrosos coordinado',
-          descripcion: 'Asbesto y otros — SEREMI Salud + MMA.' },
-        { key: 'vertedero_autorizado',        label: 'Vertedero autorizado por MMA confirmado' },
+          descripcion: 'Asbesto y otros — SEREMI Salud + MMA.',
+          extras: [
+            { kind: 'doc', key: 'plan_residuos', label: 'Plan de manejo de residuos' },
+          ],
+        },
+        { key: 'vertedero_autorizado',        label: 'Vertedero autorizado por MMA confirmado',
+          extras: [
+            { kind: 'texto', key: 'vertedero',   label: 'Vertedero / destino final' },
+            { kind: 'doc',   key: 'autorizacion', label: 'Autorización MMA' },
+          ],
+        },
         { key: 'demolicion_simultanea',       label: 'Demolición simultánea al despeje (manzana a manzana)' },
       ],
       f5: CHECKLIST_F5_BASE,
@@ -190,39 +316,99 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
         descripcion: 'Convenio de transferencia + acompañamiento técnico de demolición.' },
       { key: 'carabineros',          label: 'Jefatura de Carabineros (Zona/Prefectura)', required: true },
       { key: 'mideso',               label: 'SEREMI Desarrollo Social y Familia', required: true },
-      { key: 'dipres',               label: 'Contraparte DIPRES',
-        descripcion: 'Validación financiamiento por convenio o provisión.' },
+      { key: 'validacion_presupuestaria', label: 'Validación presupuestaria',
+        descripcion: 'Confirmación de recursos por convenio o provisión. Definir caso a caso.' },
       { key: 'municipio',            label: 'Municipalidad',
         descripcion: 'Traspaso o concesión post-demolición si aplica.' },
     ],
     checklists: {
       pr: [
-        { key: 'resolucion_servicio_propietario', label: 'Resolución exenta del Servicio propietario' },
-        { key: 'convenio_cooperacion',            label: 'Convenio Servicio – DPR – municipio firmado' },
+        { key: 'resolucion_servicio_propietario', label: 'Resolución exenta del Servicio propietario',
+          extras: [
+            { kind: 'texto', key: 'servicio', label: 'Servicio propietario', placeholder: 'BB.NN. / SAG / DIRECTEMAR / FF.AA.', required: true },
+            { kind: 'texto', key: 'numero',   label: 'Número de resolución', required: true },
+            { kind: 'fecha', key: 'fecha',    label: 'Fecha de la resolución', required: true },
+            { kind: 'doc',   key: 'resolucion', label: 'Resolución (PDF)', required: true },
+          ],
+        },
+        { key: 'convenio_cooperacion',            label: 'Convenio Servicio – DPR – municipio firmado',
+          extras: [
+            { kind: 'fecha', key: 'fecha_firma', label: 'Fecha de firma', required: true },
+            { kind: 'doc',   key: 'convenio',    label: 'Convenio (PDF)', required: true },
+          ],
+        },
         { key: 'financiador_definido',            label: 'Financiador de demolición definido',
-          descripcion: 'Servicio / convenio MINVU-SERVIU / FNDR / municipio.' },
+          descripcion: 'Servicio / convenio MINVU-SERVIU / FNDR / municipio.',
+          extras: [
+            { kind: 'texto', key: 'financiador', label: 'Financiador', placeholder: 'Servicio / MINVU / FNDR / municipio', required: true },
+          ],
+        },
         { key: 'convenio_transferencia',          label: 'Convenio de transferencia firmado',
-          descripcion: 'Antes de fijar fecha operativa.' },
+          descripcion: 'Antes de fijar fecha operativa.',
+          extras: [
+            { kind: 'fecha', key: 'fecha_firma', label: 'Fecha de firma', required: true },
+            { kind: 'doc',   key: 'convenio',    label: 'Convenio (PDF)', required: true },
+          ],
+        },
       ],
       f1: [
-        { key: 'comite_caso_convocado',       label: 'Comité Caso convocado por DPR' },
-        { key: 'plan_operativo_carabineros',  label: 'Plan operativo de Carabineros levantado' },
-        { key: 'contingente_dimensionado',    label: 'Contingente dimensionado' },
+        { key: 'comite_caso_convocado',       label: 'Comité Caso convocado por DPR',
+          extras: [
+            { kind: 'fecha', key: 'fecha_convocatoria', label: 'Fecha de convocatoria', required: true },
+            { kind: 'doc',   key: 'acta',                label: 'Acta de la sesión' },
+          ],
+        },
+        { key: 'plan_operativo_carabineros',  label: 'Plan operativo de Carabineros levantado',
+          extras: [
+            { kind: 'doc', key: 'plan', label: 'Plan operativo (PDF)', required: true },
+          ],
+        },
+        { key: 'contingente_dimensionado',    label: 'Contingente dimensionado',
+          extras: [
+            { kind: 'num', key: 'efectivos', label: 'Efectivos comprometidos', unit: 'personas', required: true },
+          ],
+        },
         { key: 'convenio_demolicion_activo',  label: 'Convenio operativo de demolición activado',
-          descripcion: 'Convenio vigente del Servicio o licitación adjudicada.' },
+          descripcion: 'Convenio vigente del Servicio o licitación adjudicada.',
+          extras: [
+            { kind: 'doc',   key: 'convenio_o_licitacion', label: 'Convenio / acta de licitación' },
+            { kind: 'fecha', key: 'fecha_vigencia',         label: 'Fecha de vigencia' },
+          ],
+        },
       ],
       f2: CHECKLIST_F2_BASE,
       f3: CHECKLIST_F3_BASE,
       f4: [
-        { key: 'dipres_asegurado',            label: 'Financiamiento DIPRES asegurado' },
-        { key: 'residuos_peligrosos_coord',   label: 'Manejo de residuos peligrosos coordinado' },
-        { key: 'vertedero_autorizado',        label: 'Vertedero autorizado por MMA confirmado' },
+        { key: 'financiamiento_confirmado',   label: 'Financiamiento de demolición asegurado',
+          extras: [
+            { kind: 'num',   key: 'monto_mm', label: 'Monto confirmado', unit: 'MM CLP', required: true },
+            { kind: 'texto', key: 'fuente',   label: 'Fuente de recursos', required: true,
+              placeholder: 'Servicio / Convenio MINVU / FNDR / Municipal / Provisión' },
+            { kind: 'doc',   key: 'validacion', label: 'Documento de validación' },
+          ],
+        },
+        { key: 'residuos_peligrosos_coord',   label: 'Manejo de residuos peligrosos coordinado',
+          extras: [
+            { kind: 'doc', key: 'plan_residuos', label: 'Plan de manejo de residuos' },
+          ],
+        },
+        { key: 'vertedero_autorizado',        label: 'Vertedero autorizado por MMA confirmado',
+          extras: [
+            { kind: 'texto', key: 'vertedero',   label: 'Vertedero / destino final' },
+            { kind: 'doc',   key: 'autorizacion', label: 'Autorización MMA' },
+          ],
+        },
         { key: 'demolicion_simultanea',       label: 'Demolición simultánea al despeje' },
       ],
       f5: [
         ...CHECKLIST_F5_BASE,
         { key: 'traspaso_o_concesion_evaluado', label: 'Traspaso o concesión del terreno al municipio evaluado',
-          descripcion: 'Modelo Armada – La Chimba si aplica.' },
+          descripcion: 'Modelo Armada – La Chimba si aplica.',
+          extras: [
+            { kind: 'texto', key: 'modalidad',  label: 'Modalidad', placeholder: 'Traspaso / concesión / convenio de uso' },
+            { kind: 'doc',   key: 'evaluacion', label: 'Documento de evaluación' },
+          ],
+        },
       ],
     },
   },
@@ -233,7 +419,7 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
     financiamiento_default: 'Propietario privado (o convenio público supletorio)',
     rol_dpr: 'Materializa lo ordenado por el tribunal.',
     nudo_critico: 'Magnitud y conflictividad — plan plurianual, no operativo puntual.',
-    // C no usa F4 — la demolición la asume el propietario privado, sin DIPRES.
+    // C no usa F4 — la demolición la asume el propietario privado, sin validación pública de recursos.
     fases_aplicables: ['pr', 'f1', 'f2', 'f3', 'f5'],
     roles: [
       { key: 'dpr',              label: 'Delegada/o Presidencial Regional', required: true,
@@ -251,35 +437,82 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
     ],
     checklists: {
       pr: [
-        { key: 'sentencia_firme',             label: 'Sentencia o resolución judicial firme' },
-        { key: 'propietario_identificado',    label: 'Propietario identificado' },
-        { key: 'deslindes_verificados',       label: 'Deslindes verificados' },
+        { key: 'sentencia_firme',             label: 'Sentencia o resolución judicial firme',
+          extras: [
+            { kind: 'texto', key: 'rol_causa', label: 'Rol de la causa', placeholder: 'Ej. C-1234-2023', required: true },
+            { kind: 'texto', key: 'tribunal',  label: 'Tribunal', placeholder: 'Ej. Corte Suprema', required: true },
+            { kind: 'fecha', key: 'fecha',     label: 'Fecha de la sentencia', required: true },
+            { kind: 'doc',   key: 'sentencia', label: 'Sentencia (PDF)', required: true },
+          ],
+        },
+        { key: 'propietario_identificado',    label: 'Propietario identificado',
+          extras: [
+            { kind: 'texto', key: 'nombre', label: 'Nombre / razón social', required: true },
+            { kind: 'texto', key: 'rut',    label: 'RUT' },
+          ],
+        },
+        { key: 'deslindes_verificados',       label: 'Deslindes verificados',
+          extras: [
+            { kind: 'doc', key: 'plano', label: 'Plano de deslindes' },
+          ],
+        },
         { key: 'rol_propietario_definido',    label: 'Rol del propietario definido',
-          descripcion: 'Seguridad, cierre perimetral, demolición, recuperación.' },
-        { key: 'plan_maestro_articulado',     label: 'Plan Maestro / cooperativas articulados (si aplica)' },
+          descripcion: 'Seguridad, cierre perimetral, demolición, recuperación.',
+          extras: [
+            { kind: 'texto', key: 'compromiso', label: 'Qué asume el propietario',
+              placeholder: 'Seguridad / cierre / demolición / recuperación', required: true },
+          ],
+        },
+        { key: 'plan_maestro_articulado',     label: 'Plan Maestro / cooperativas articulados (si aplica)',
+          extras: [
+            { kind: 'doc', key: 'plan', label: 'Plan Maestro / convenio cooperativa' },
+          ],
+        },
       ],
       f1: [
         { key: 'plan_resguardo_permanente',   label: 'Plan de resguardo permanente levantado',
-          descripcion: 'F1 en Tipo C suele requerir resguardo durante toda la desocupación gradual.' },
-        { key: 'contingente_dimensionado',    label: 'Contingente reforzado dimensionado' },
-        { key: 'estrategia_cuadrantes',       label: 'Estrategia de desocupación gradual por cuadrantes definida' },
+          descripcion: 'F1 en Tipo C suele requerir resguardo durante toda la desocupación gradual.',
+          extras: [
+            { kind: 'doc', key: 'plan', label: 'Plan de resguardo (PDF)', required: true },
+          ],
+        },
+        { key: 'contingente_dimensionado',    label: 'Contingente reforzado dimensionado',
+          extras: [
+            { kind: 'num', key: 'efectivos', label: 'Efectivos comprometidos', unit: 'personas', required: true },
+          ],
+        },
+        { key: 'estrategia_cuadrantes',       label: 'Estrategia de desocupación gradual por cuadrantes definida',
+          extras: [
+            { kind: 'doc', key: 'mapa', label: 'Mapa de cuadrantes / cronograma', required: true },
+          ],
+        },
       ],
       f2: CHECKLIST_F2_BASE,
       f3: [
         ...CHECKLIST_F3_BASE,
         { key: 'mensaje_subsidios_unico',     label: 'Mensaje único sobre subsidios al territorio',
-          descripcion: 'Oferta habitacional vinculada al proyecto técnico, no a la presión.' },
+          descripcion: 'Oferta habitacional vinculada al proyecto técnico, no a la presión.',
+          extras: [
+            { kind: 'texto', key: 'mensaje',    label: 'Mensaje aprobado',
+              placeholder: 'Texto literal del mensaje vocero único.', required: true },
+            { kind: 'fecha', key: 'fecha_aprobacion', label: 'Fecha de aprobación' },
+          ],
+        },
       ],
       f4: [
         { key: 'demolicion_propietario_o_convenio', label: 'Demolición asumida por propietario o por convenio público' },
-        { key: 'dipres_asegurado_si_publico',       label: 'Si financia el Estado: validación DIPRES' },
+        { key: 'financiamiento_publico_validado',   label: 'Si financia el Estado: validación de recursos' },
         { key: 'residuos_peligrosos_coord',         label: 'Manejo de residuos peligrosos coordinado' },
         { key: 'demolicion_simultanea',             label: 'Demolición simultánea al despeje' },
       ],
       f5: [
         ...CHECKLIST_F5_BASE,
         { key: 'regeneracion_urbana_integrada',     label: 'Proyecto de regeneración urbana integrado (si aplica)',
-          descripcion: 'Centinela: Plan Maestro de ~9.800 viviendas.' },
+          descripcion: 'Centinela: Plan Maestro de ~9.800 viviendas.',
+          extras: [
+            { kind: 'doc', key: 'proyecto', label: 'Proyecto de regeneración (PDF)' },
+          ],
+        },
       ],
     },
   },
@@ -309,11 +542,33 @@ export const TIPOLOGIA_CFG: Record<DesalojoTipologia, TipologiaCfg> = {
     checklists: {
       pr: [
         { key: 'via_juridica_decidida',       label: 'Vía jurídica decidida',
-          descripcion: 'Art. 148/157 LGUC (riesgo) / Ley 21.633 (querella + cautelar) / Expropiación. Plazo máx. 30 días.' },
-        { key: 'expediente_tecnico_social',   label: 'Expediente técnico-social levantado' },
+          descripcion: 'Art. 148/157 LGUC (riesgo) / Ley 21.633 (querella + cautelar) / Expropiación. Plazo máx. 30 días.',
+          extras: [
+            { kind: 'texto', key: 'via',          label: 'Vía elegida', required: true,
+              placeholder: 'Art. 148 LGUC / Art. 157 LGUC / Ley 21.633 / Expropiación' },
+            { kind: 'fecha', key: 'fecha_decision', label: 'Fecha de decisión', required: true },
+          ],
+        },
+        { key: 'expediente_tecnico_social',   label: 'Expediente técnico-social levantado',
+          extras: [
+            { kind: 'doc', key: 'expediente', label: 'Expediente técnico-social', required: true },
+          ],
+        },
         { key: 'instrumento_ingresado',       label: 'Instrumento ingresado',
-          descripcion: 'Querella, denuncia, oficio o decreto presentado.' },
-        { key: 'ministerio_publico_coord',    label: 'Ministerio Público coordinado (si Ley 21.633)' },
+          descripcion: 'Querella, denuncia, oficio o decreto presentado.',
+          extras: [
+            { kind: 'texto', key: 'tipo',         label: 'Tipo de instrumento', required: true,
+              placeholder: 'Querella / denuncia / oficio / decreto' },
+            { kind: 'fecha', key: 'fecha_ingreso', label: 'Fecha de ingreso', required: true },
+            { kind: 'doc',   key: 'instrumento',   label: 'Instrumento ingresado (PDF)' },
+          ],
+        },
+        { key: 'ministerio_publico_coord',    label: 'Ministerio Público coordinado (si Ley 21.633)',
+          extras: [
+            { kind: 'texto', key: 'contacto',  label: 'Fiscal / unidad de contacto' },
+            { kind: 'fecha', key: 'fecha_oficio', label: 'Fecha del oficio' },
+          ],
+        },
       ],
       f1: [
         { key: 'plan_operativo_post_via',     label: 'Plan operativo de Carabineros (post-vía resuelta)',
@@ -417,10 +672,41 @@ export function prevFaseAplicable(
 
 export type AdvanceCheck = { ok: boolean; reasons: string[] }
 
+/**
+ * Un item del checklist se considera "completo" si:
+ *   1. Su bool `done` está marcado, Y
+ *   2. Todos sus extras `required` tienen valor no vacío.
+ *
+ * Para extras `kind: 'doc'`, el valor "no vacío" se verifica contra la lista
+ * de documentos vinculados (pasada por separado) — el JSONB no guarda los doc
+ * ids, los docs viven en desalojo_documentos con fase + item_key.
+ */
+export function itemDone(
+  item:           ChecklistItem,
+  itemEstado:     DesalojoChecklistItemEstado | undefined,
+  itemDocsCount:  number = 0,
+): boolean {
+  if (!itemEstado?.done) return false
+  if (!item.extras || item.extras.length === 0) return true
+  for (const extra of item.extras) {
+    if (!extra.required) continue
+    if (extra.kind === 'doc') {
+      if (itemDocsCount === 0) return false
+      continue
+    }
+    const v = itemEstado.extras?.[extra.key]
+    if (v === undefined || v === null) return false
+    if (typeof v === 'string' && v.trim() === '') return false
+  }
+  return true
+}
+
 export function canAdvanceFase(
   capa:        DesalojoCapa,
   fasesEstado: DesalojoFaseEstado[],
   destino:     DesalojoFase,
+  /** docs ya filtrados a esta capa. Si se omiten, los extras DOC required no se chequean. */
+  docs:        Array<{ capa_id: number | null; fase: DesalojoFaseConSemaforo | null; item_key: string | null }> = [],
 ): AdvanceCheck {
   const reasons: string[] = []
 
@@ -439,7 +725,10 @@ export function canAdvanceFase(
     if (capa.tipologia) {
       const itemsPR = TIPOLOGIA_CFG[capa.tipologia].checklists.pr
       const estado  = pr?.checklist_estado ?? {}
-      const faltan  = itemsPR.filter(it => !estado[it.key]?.done)
+      const faltan  = itemsPR.filter(it => {
+        const docsItem = docs.filter(d => d.capa_id === capa.id && d.fase === 'pr' && d.item_key === it.key).length
+        return !itemDone(it, estado[it.key], docsItem)
+      })
       if (faltan.length > 0) {
         reasons.push(`Quedan ${faltan.length} item(s) del checklist PR sin completar.`)
       }
@@ -578,15 +867,19 @@ export function sugerenciasInstrumento(tipologia: DesalojoTipologia | null) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// PROTOCOLO DIPRES (Sección VII del 038) — árbol de decisión
+// PROTOCOLO DE ASEGURAMIENTO DE FINANCIAMIENTO (Sección VII del 038)
 // ─────────────────────────────────────────────────────────────────────────
-// Ningún caso debe activar Fase 3 sin financiamiento de demolición asegurado.
+// Árbol de decisión genérico. Ningún caso debe activar Fase 3 sin
+// financiamiento de demolición asegurado. El estado final ("recursos
+// confirmados") es un flag operativo: deliberadamente no se nombra al
+// ente validador específico para no comprometer a un ministerio puntual
+// desde la UI (cada caso lo resuelve la Sala Decisión).
 
-type DipresAlternativa = { key: string; label: string; detalle?: string }
+type AlternativaFinanciamiento = { key: string; label: string; detalle?: string }
 
-export const PROTOCOLO_DIPRES: {
+export const PROTOCOLO_FINANCIAMIENTO: {
   fuente_primaria: Record<'serviu' | 'otro_servicio' | 'privado', { label: string; detalle: string }>
-  alternativas:    DipresAlternativa[]
+  alternativas:    AlternativaFinanciamiento[]
   estado_final:    { label: string; detalle: string }
 } = {
   fuente_primaria: {
@@ -602,7 +895,7 @@ export const PROTOCOLO_DIPRES: {
       detalle: 'Sólo casos calificados por Sala Decisión.' },
   ],
   estado_final: {
-    label: 'Validación DIPRES en Sala Decisión',
+    label: 'Recursos confirmados en Sala Decisión',
     detalle: 'Financiamiento ASEGURADO — sólo entonces se autoriza el inicio del operativo.',
   },
 }
@@ -629,15 +922,22 @@ export function checklistItems(
 }
 
 // Progreso del checklist (completos / total) — usado por la UI para badges.
+// Si se pasa `docsCountByItem`, el progreso honra los extras DOC required
+// (un item con DOC required sin docs no cuenta como completo). Sin
+// docsCountByItem, el conteo es por bool + extras no-DOC required.
 export function checklistProgreso(
   tipologia: DesalojoTipologia | null,
   fase:      DesalojoFaseConSemaforo,
-  estado:    Record<string, { done: boolean }> | null | undefined,
+  estado:    DesalojoChecklistEstado | null | undefined,
+  docsCountByItem?: Record<string, number>,
 ): { completos: number; total: number } {
   const items = checklistItems(tipologia, fase)
   const total = items.length
   if (total === 0) return { completos: 0, total: 0 }
-  const completos = items.filter(it => estado?.[it.key]?.done).length
+  const completos = items.filter(it => {
+    const docsCount = docsCountByItem?.[it.key] ?? 0
+    return itemDone(it, estado?.[it.key], docsCount)
+  }).length
   return { completos, total }
 }
 

@@ -327,6 +327,36 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     }
   }
 
+  /** Sube un doc vinculado a un item específico del checklist de una fase. */
+  async function handleUploadDocItem(
+    capaId:  number,
+    fase:    DesalojoFaseConSemaforo,
+    itemKey: string,
+    file:    File,
+  ) {
+    const form = new FormData()
+    form.set('file', file)
+    form.set('capa_id',  String(capaId))
+    form.set('fase',     fase)
+    form.set('item_key', itemKey)
+    try {
+      const res = await fetch(`/api/desalojos/${iniciativa.n}/documentos`, {
+        method: 'POST',
+        body:   form,
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        window.alert(json?.error ?? `Error HTTP ${res.status}`)
+        return
+      }
+      if (json.documento) {
+        setDocumentos(prev => [json.documento, ...prev])
+      }
+    } catch (err) {
+      window.alert(`Error de red: ${String(err)}`)
+    }
+  }
+
   async function handleDeleteDoc(docId: number) {
     if (!window.confirm('¿Eliminar este documento?')) return
     const prev = documentos
@@ -387,14 +417,18 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }, 0)
 
   return (
-    <div className="h-full overflow-y-auto">
-      {/* Contenedor que agrupa contenido + calendario.
-          - Cerrado: max-w-5xl (1024px) mx-auto → contenido centrado, ancho histórico.
+    // Scroll INDEPENDIENTE: el outer NO scrollea. La columna de contenido y
+    // la del calendario son cada una su propio overflow-y-auto. Así el usuario
+    // puede tener el calendario fijo en febrero mientras hace deep-dive en el
+    // contenido (o viceversa).
+    <div className="h-full overflow-hidden">
+      {/* Contenedor centrado.
+          - Cerrado: max-w-5xl (1024px) mx-auto.
           - Abierto: max-w-[1500px] flex → contenido + calendario adyacentes,
-            el bloque entero sigue mx-auto centrado (el contenido sólo se corre
-            lo justo para hacer lugar al panel, que queda pegado a su borde). */}
-      <div className={`mx-auto px-6 py-6 ${calOpen ? 'max-w-[1500px] flex gap-6 items-start' : 'max-w-5xl'}`}>
-        <div className="flex-1 min-w-0 max-w-5xl space-y-4">
+            el bloque entero sigue mx-auto centrado. */}
+      <div className={`mx-auto h-full ${calOpen ? 'max-w-[1500px] flex gap-6' : 'max-w-5xl'}`}>
+        <div className="flex-1 min-w-0 max-w-5xl h-full overflow-y-auto">
+        <div className="px-6 py-6 space-y-4">
 
         {/* Header del caso */}
         <header className="space-y-2">
@@ -504,6 +538,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onPatchFase={handlePatchFase}
             onAddSeguimiento={handleAddSeguimiento}
             onUploadDoc={handleUploadDoc}
+            onUploadDocItem={handleUploadDocItem}
             onDeleteDoc={handleDeleteDoc}
           />
         )}
@@ -516,10 +551,10 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
           />
         )}
         </div>
+        </div>
 
-        {/* Calendario — sibling adyacente al contenido, dentro del mismo
-            contenedor centrado. Sticky: queda visible mientras el contenido
-            scrollea verticalmente. */}
+        {/* Calendario — sibling adyacente al contenido, con su propio
+            overflow-y-auto: scrollea independiente del contenido principal. */}
         <DesalojoCalendarioDrawer
           open={calOpen}
           onClose={() => setCalOpen(false)}

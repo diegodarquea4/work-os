@@ -241,9 +241,16 @@ export async function PATCH(
         // Solo avanzar PR → F1 requiere validación. El resto (incluido el
         // retroceso) queda permitido — el audit log lo registra.
         if (prev.fase_actual === 'pr' && nueva === 'f1') {
-          const { data: fasesEstado } = await db
-            .from('desalojo_fase_estado').select('*').eq('capa_id', capaId)
-          const check = canAdvanceFase(prev, (fasesEstado ?? []) as DesalojoFaseEstado[], nueva)
+          const [{ data: fasesEstado }, { data: docs }] = await Promise.all([
+            db.from('desalojo_fase_estado').select('*').eq('capa_id', capaId),
+            db.from('desalojo_documentos').select('capa_id, fase, item_key').eq('capa_id', capaId).eq('fase', 'pr'),
+          ])
+          const check = canAdvanceFase(
+            prev,
+            (fasesEstado ?? []) as DesalojoFaseEstado[],
+            nueva,
+            (docs ?? []) as Array<{ capa_id: number | null; fase: 'pr' | 'f1' | 'f2' | 'f3' | 'f4' | 'f5' | null; item_key: string | null }>,
+          )
           if (!check.ok) {
             return NextResponse.json(
               { error: 'No se puede avanzar a F1', reasons: check.reasons },

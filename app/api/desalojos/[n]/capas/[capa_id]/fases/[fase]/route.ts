@@ -153,7 +153,7 @@ export async function PATCH(
     }
   }
 
-  // ── checklist (merge parcial; solo keys vigentes) ─────────────────────
+  // ── checklist (merge parcial; solo keys vigentes; extras anidados) ────
   let mergedChecklist: DesalojoChecklistEstado | null = null
   if ('checklist_patch' in body) {
     const raw = body.checklist_patch
@@ -161,40 +161,93 @@ export async function PATCH(
       errors.push('checklist_patch debe ser objeto')
     } else {
       const items = checklistItems(capa.tipologia as 'A' | 'B' | 'C' | 'D' | null, fase)
-      const keysVigentes = new Set(items.map(i => i.key))
-      const cleanPatch: DesalojoChecklistEstado = {}
-      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        if (!keysVigentes.has(k)) continue
-        if (!v || typeof v !== 'object')                          { errors.push(`checklist.${k} inválido`); continue }
-        const node = v as { done?: unknown; fecha?: unknown }
-        if (typeof node.done !== 'boolean')                       { errors.push(`checklist.${k}.done debe ser boolean`); continue }
-        const fecha = node.fecha == null ? null : String(node.fecha)
-        if (fecha !== null && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { errors.push(`checklist.${k}.fecha inválida`); continue }
-        cleanPatch[k] = { done: node.done, fecha }
-      }
-      mergedChecklist = { ...(prev.checklist_estado ?? {}), ...cleanPatch }
+      const itemsByKey = new Map(items.map(i => [i.key, i]))
+      const merged: DesalojoChecklistEstado = { ...(prev.checklist_estado ?? {}) }
 
-      for (const [k, v] of Object.entries(cleanPatch)) {
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        const itemCfg = itemsByKey.get(k)
+        if (!itemCfg) continue        // huérfano — no se acepta patch
+        if (!v || typeof v !== 'object' || Array.isArray(v)) { errors.push(`checklist.${k} inválido`); continue }
+        const node = v as { done?: unknown; fecha?: unknown; extras?: unknown }
         const prevItem = prev.checklist_estado?.[k]
-        if (!prevItem || prevItem.done !== v.done) {
-          logRows.push({
-            prioridad_id: n, capa_id: capaId, fase,
+        const current  = merged[k] ?? prevItem ?? { done: false, fecha: null }
+
+        // done
+        let nextDone = current.done
+        if ('done' in node) {
+          if (typeof node.done !== 'boolean') { errors.push(`checklist.${k}.done debe ser boolean`); continue }
+          nextDone = node.done
+        }
+
+        // fecha (de cumplimiento del check, no del extra)
+        let nextFecha = current.fecha
+        if ('fecha' in node) {
+          const f = node.fecha == null ? null : String(node.fecha)
+          if (f !== null && !/^\d{4}-\d{2}-\d{2}$/.test(f)) { errors.push(`checklist.${k}.fecha inválida`); continue }
+          nextFecha = f
+        }
+
+        // extras (merge anidado, solo keys vigentes del config)
+        let nextExtras = current.extras
+        if ('extras' in node) {
+          if (!node.extras || typeof node.extras !== 'object' || Array.isArray(node.extras)) {
+            errors.push(`checklist.${k}.extras debe ser objeto`); continue
+          }
+          const validExtraKeys = new Set((itemCfg.extras ?? []).filter(e => e.kind !== 'doc').map(e => e.key))
+          const cleanExtras: Record<string, string | number | null> = { ...(current.extras ?? {}) }
+          for (const [ek, ev] of Object.entries(node.extras as Record<string, unknown>)) {
+            if (!validExtraKeys.has(ek)) continue
+            const spec = itemCfg.extras?.find(e => e.key === ek)
+            if (!spec) continue
+            if (ev === null || ev === '') { cleanExtras[ek] = null; continue }
+            if (spec.kind === 'num') {
+              const num = typeof ev === 'number' ? ev : Number(String(ev).replace(',', '.'))
+              if (!Number.isFinite(num)) { errors.push(`extra ${k}.${ek} debe ser número`); continue }
+              cleanExtras[ek] = num
+            } else if (spec.kind === 'fecha') {
+              const s = String(ev)
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) { errors.push(`extra ${k}.${ek} debe ser YYYY-MM-DD`); continue }
+              cleanExtras[ek] = s
+            } else { // texto
+              if (typeof ev !== 'string') { errors.push(`extra ${k}.${ek} debe ser string`); continue }
+              cleanExtras[ek] = ev.trim() || null
+            }
+          }
+          nextExtras = cleanExtras
+        }
+
+        const nextItem: typeof current = { done: nextDone, fecha: nextFecha }
+        if (nextExtras) nextItem.extras = nextExtras
+        merged[k] = nextItem
+
+        // Audit log
+        if (!prevItem || prevItem.done !== nextDone) {
+          logRows.push({ prioridad_id: n, capa_id: capaId, fase,
             campo: `checklist.${k}.done`,
             valor_anterior: prevItem ? String(prevItem.done) : null,
-            valor_nuevo: String(v.done),
-            cambiado_por: profile.email || null,
-          })
+            valor_nuevo:    String(nextDone),
+            cambiado_por:   profile.email || null })
         }
-        if (!prevItem || (prevItem.fecha ?? null) !== (v.fecha ?? null)) {
-          logRows.push({
-            prioridad_id: n, capa_id: capaId, fase,
+        if (!prevItem || (prevItem.fecha ?? null) !== (nextFecha ?? null)) {
+          logRows.push({ prioridad_id: n, capa_id: capaId, fase,
             campo: `checklist.${k}.fecha`,
             valor_anterior: prevItem?.fecha ?? null,
-            valor_nuevo: v.fecha ?? '',
-            cambiado_por: profile.email || null,
-          })
+            valor_nuevo:    nextFecha ?? '',
+            cambiado_por:   profile.email || null })
+        }
+        if (nextExtras) {
+          const prevExtras = prevItem?.extras ?? {}
+          for (const [ek, ev] of Object.entries(nextExtras)) {
+            if ((prevExtras[ek] ?? null) === (ev ?? null)) continue
+            logRows.push({ prioridad_id: n, capa_id: capaId, fase,
+              campo: `checklist.${k}.extras.${ek}`,
+              valor_anterior: prevExtras[ek] != null ? String(prevExtras[ek]) : null,
+              valor_nuevo:    ev != null ? String(ev) : '',
+              cambiado_por:   profile.email || null })
+          }
         }
       }
+      mergedChecklist = merged
     }
   }
 

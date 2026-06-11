@@ -16,7 +16,7 @@ import { FASE_CFG, checklistProgreso } from '@/lib/desalojos'
 import { formatResponsableDisplay } from '@/lib/responsable'
 import DesalojoChecklistFase from './DesalojoChecklistFase'
 import DesalojoMatrizJuridica from './DesalojoMatrizJuridica'
-import DesalojoProtocoloDipres from './DesalojoProtocoloDipres'
+import DesalojoProtocoloFinanciamiento from './DesalojoProtocoloFinanciamiento'
 
 /**
  * Card de una fase. Es la pieza central del tab Avance v3 — reemplaza al
@@ -75,8 +75,8 @@ const FASE_FIELDS: Record<DesalojoFaseConSemaforo, FieldCfg[]> = {
   f4: [
     { key: 'costo_demolicion_mm',      label: 'Costo demolición (MM$)', type: 'num' },
     { key: 'fuente',                   label: 'Fuente de financiamiento', type: 'text' },
-    { key: 'financiamiento_asegurado', label: 'Validación DIPRES',        type: 'bool',
-      hint: 'Regla de la Mesa: sin DIPRES no se autoriza el operativo.' },
+    { key: 'financiamiento_asegurado', label: 'Recursos confirmados',     type: 'bool',
+      hint: 'Regla de la Mesa: sin recursos confirmados no se autoriza el operativo.' },
     { key: 'notas_financiamiento',     label: 'Notas de financiamiento',  type: 'textarea' },
   ],
   f5: [],
@@ -106,21 +106,31 @@ type Props = {
   onPatchFase:       (patch: { semaforo?: SemaforoDimension; notas?: string | null; checklist_patch?: DesalojoChecklistEstado }) => Promise<void>
   onAddSeguimiento:  (dimension: DesalojoDimension, tipo: DesalojoSeguimientoTipo, descripcion: string) => Promise<void>
   onUploadDoc:       (dimension: DesalojoDimension, file: File) => Promise<void>
+  /** Subir un doc vinculado a un item del checklist de esta fase. */
+  onUploadDocItem?:  (itemKey: string, file: File) => Promise<void>
   onDeleteDoc:       (docId: number) => Promise<void>
   open?:             boolean
   onToggleOpen?:     () => void
+  /** Modo compacto para layout horizontal: oculta descripción del header,
+      padding más chico, sigla más pequeña. */
+  compact?:          boolean
 }
 
 export default function DesalojoFaseCard({
   capa, fase, estado, seguimientos, documentos,
-  onPatchCapa, onPatchFase, onAddSeguimiento, onUploadDoc, onDeleteDoc,
-  open = true, onToggleOpen,
+  onPatchCapa, onPatchFase, onAddSeguimiento, onUploadDoc, onUploadDocItem, onDeleteDoc,
+  open = true, onToggleOpen, compact = false,
 }: Props) {
   const cfg            = FASE_CFG[fase]
   const fields         = FASE_FIELDS[fase]
   const dimEquiv       = FASE_TO_DIMENSION[fase]
   const semValue       = estado.semaforo
-  const { completos, total } = checklistProgreso(capa.tipologia, fase, estado.checklist_estado)
+  // Docs vinculados a items del checklist de esta fase (item_key NOT NULL).
+  const docsItems      = documentos.filter(d => d.fase === fase && d.item_key)
+  // Conteo por item para que el progreso honre los extras DOC required.
+  const docsCountByItem: Record<string, number> = {}
+  for (const d of docsItems) if (d.item_key) docsCountByItem[d.item_key] = (docsCountByItem[d.item_key] ?? 0) + 1
+  const { completos, total } = checklistProgreso(capa.tipologia, fase, estado.checklist_estado, docsCountByItem)
 
   const segFase  = seguimientos.filter(s => s.dimension === dimEquiv)
   const docsFase = documentos.filter(d => d.dimension === dimEquiv)
@@ -240,25 +250,27 @@ export default function DesalojoFaseCard({
     return `${(n / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // Aviso especial F4: sin DIPRES, banner inline.
-  const sinDipresWarning = fase === 'f4' && capa.financiamiento_asegurado === false
+  // Aviso especial F4: sin financiamiento asegurado, banner inline.
+  const sinFinanciamientoWarning = fase === 'f4' && capa.financiamiento_asegurado === false
 
   return (
     <section className="border border-gray-200 rounded-xl overflow-hidden bg-white">
       <header
         onClick={onToggleOpen}
-        className={`flex items-center gap-3 px-4 py-3 ${onToggleOpen ? 'cursor-pointer hover:bg-gray-50' : ''} border-b border-gray-100`}
+        className={`flex items-center gap-2.5 ${compact ? 'px-3 py-2' : 'px-4 py-3'} ${onToggleOpen ? 'cursor-pointer hover:bg-gray-50' : ''} border-b border-gray-100`}
       >
-        <span className="w-10 h-10 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+        <span className={`${compact ? 'w-8 h-8 text-[10px]' : 'w-10 h-10 text-xs'} rounded-full bg-slate-900 text-white font-bold flex items-center justify-center flex-shrink-0`}>
           {cfg.short}
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-gray-900">{cfg.label}</h3>
-          <p className="text-xs text-gray-500 mt-0.5 leading-tight">{cfg.descripcion}</p>
+          <h3 className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-gray-900 leading-tight`} title={cfg.descripcion}>{cfg.label}</h3>
+          {!compact && (
+            <p className="text-xs text-gray-500 mt-0.5 leading-tight">{cfg.descripcion}</p>
+          )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
           {total > 0 && (
-            <span className="text-[10px] text-gray-500 tabular-nums bg-gray-50 px-2 py-0.5 rounded">
+            <span className="text-[10px] text-gray-500 tabular-nums bg-gray-50 px-1.5 py-0.5 rounded">
               {completos}/{total}
             </span>
           )}
@@ -270,13 +282,14 @@ export default function DesalojoFaseCard({
                 onClick={() => handleSemaforo(opt.value)}
                 disabled={saving}
                 title={opt.label}
-                className={`text-xs px-2 py-1 rounded-full transition-colors flex items-center gap-1 ring-1 disabled:opacity-50 ${
-                  active ? opt.chipActive : 'bg-white text-gray-400 ring-gray-200 hover:ring-gray-300'
+                aria-label={opt.label}
+                aria-pressed={active}
+                className={`w-5 h-5 rounded-full transition-all flex items-center justify-center disabled:opacity-50 ${
+                  active
+                    ? `${opt.dot} ring-2 ring-offset-1 ring-gray-700 scale-110`
+                    : `${opt.dot} opacity-30 hover:opacity-70`
                 }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`}/>
-                {active && opt.label}
-              </button>
+              />
             )
           })}
         </div>
@@ -293,11 +306,11 @@ export default function DesalojoFaseCard({
       {open && (
         <div className="px-4 py-3 space-y-4">
 
-          {/* Aviso DIPRES en F4 */}
-          {sinDipresWarning && (
+          {/* Aviso de financiamiento en F4 */}
+          {sinFinanciamientoWarning && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800">
-              <p className="font-bold">Sin financiamiento DIPRES asegurado</p>
-              <p className="leading-snug mt-0.5">Regla de la Mesa, sin excepción. Activa el flag &quot;Validación DIPRES&quot; abajo cuando se confirme.</p>
+              <p className="font-bold">Sin financiamiento asegurado</p>
+              <p className="leading-snug mt-0.5">Regla de la Mesa, sin excepción. Marca &quot;Recursos confirmados&quot; abajo cuando se valide.</p>
             </div>
           )}
 
@@ -322,15 +335,18 @@ export default function DesalojoFaseCard({
           {/* PR: matriz jurídica como referencia */}
           {fase === 'pr' && <DesalojoMatrizJuridica tipologia={capa.tipologia} />}
 
-          {/* F4: protocolo DIPRES como árbol de decisión */}
-          {fase === 'f4' && <DesalojoProtocoloDipres capa={capa} />}
+          {/* F4: protocolo de aseguramiento de financiamiento como árbol de decisión */}
+          {fase === 'f4' && <DesalojoProtocoloFinanciamiento capa={capa} />}
 
           {/* Checklist */}
           <DesalojoChecklistFase
             tipologia={capa.tipologia}
             fase={fase}
             estado={estado.checklist_estado}
+            docs={docsItems}
             onPatch={async patch => { await onPatchFase({ checklist_patch: patch }) }}
+            onUploadDoc={onUploadDocItem ? async (itemKey, file) => { await onUploadDocItem(itemKey, file) } : undefined}
+            onDeleteDoc={onDeleteDoc}
           />
 
           {/* Campos estructurados de la fase */}

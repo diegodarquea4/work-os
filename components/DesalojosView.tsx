@@ -157,7 +157,7 @@ export default function DesalojosView({ projects }: Props) {
             const capasActivasIds = new Set(capas.filter(k => k.activa).map(k => k.id))
             const isActive = c.n === selectedN
             const sem      = SEMAFORO_CONFIG[c.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-            const sinDipres = capas.some(k => k.activa && k.financiamiento_asegurado === false)
+            const sinFinanciamiento = capas.some(k => k.activa && k.financiamiento_asegurado === false)
             return (
               <li key={c.n}>
                 <button
@@ -195,9 +195,9 @@ export default function DesalojosView({ projects }: Props) {
                             </span>
                           )
                         })}
-                        {/* Indicador silencioso si alguna capa activa sin DIPRES */}
-                        {sinDipres && (
-                          <span title="Una o más capas sin financiamiento DIPRES" className="text-[10px] text-red-600 font-bold ml-auto">!</span>
+                        {/* Indicador silencioso si alguna capa activa sin financiamiento */}
+                        {sinFinanciamiento && (
+                          <span title="Una o más capas sin financiamiento asegurado" className="text-[10px] text-red-600 font-bold ml-auto">!</span>
                         )}
                         {capasActivasIds.size > 1 && (
                           <span title={`${capasActivasIds.size} capas`} className="text-[10px] text-gray-500 ml-auto">

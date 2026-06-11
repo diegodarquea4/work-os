@@ -84,7 +84,18 @@ export type DesalojoFaseConSemaforo = Exclude<DesalojoFase, 'cerrado'>
 // Estado del checklist específico de una capa × fase. Persistido como JSONB
 // en desalojo_fase_estado.checklist_estado. Items definidos en lib/desalojos.ts
 // por tipología × fase; el server hace shallow merge. Huérfanos se conservan.
-export type DesalojoChecklistEstado = Record<string, { done: boolean; fecha: string | null }>
+//
+// v3.2: cada item puede tener `extras` (valores de campos estructurados
+// definidos por el config — número/texto/fecha) además del done/fecha. Los
+// documentos asociados al item viven en desalojo_documentos con fase + item_key
+// y se relacionan por query, no por puntero en el JSONB.
+export type DesalojoChecklistItemEstado = {
+  done:    boolean
+  fecha:   string | null
+  /** Valores de los extras definidos por TIPOLOGIA_CFG[t].checklists[f][i].extras. */
+  extras?: Record<string, string | number | null>
+}
+export type DesalojoChecklistEstado = Record<string, DesalojoChecklistItemEstado>
 
 // Responsable de un rol específico de una capa. Roles definidos por tipología
 // en lib/desalojos.ts (TIPOLOGIA_CFG[t].roles); el JSONB se llena por key.
@@ -187,13 +198,17 @@ export type DesalojoCapa = {
 }
 
 // Documento de un caso (capa_id NULL) o de una capa (capa_id NOT NULL).
-// Opcionalmente categorizado por dimensión. Archivos viven en bucket privado
-// `desalojos-docs`; `url` es path relativo, se firma con TTL al servir.
+// Opcionalmente categorizado por dimensión y/o vinculado a un item del
+// checklist de una fase (fase + item_key — migración 021).
+// Archivos viven en bucket privado `desalojos-docs`; `url` es path relativo,
+// se firma con TTL al servir.
 export type DesalojoDocumento = {
   id:           number
   prioridad_id: number
   capa_id:      number | null              // NULL = documento del caso
   dimension:    DesalojoDimension | null   // NULL = general de capa o caso
+  fase:         DesalojoFaseConSemaforo | null  // doc vinculado a una fase
+  item_key:     string | null              // doc vinculado a un item del checklist
   nombre:       string
   url:          string                      // path en bucket (no signed URL)
   tipo_archivo: string | null
