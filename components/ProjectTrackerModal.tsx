@@ -129,7 +129,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       const { data: { session } } = await sb2.auth.getSession()
       try {
         await safeWrite(
-          sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('n', prioridad.n),
+          sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('id', prioridad.id),
           `pct_avance (auto-hitos) n=${prioridad.n}`,
         )
         await logSemaforoChange(prioridad.n, 'pct_avance', prevPct, newPct, session?.user?.email ?? null)
@@ -158,7 +158,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     const { data: { session } } = await sb.auth.getSession()
     try {
       await safeWrite(
-        sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('n', prioridad.n),
+        sb.from('prioridades_territoriales').update({ pct_avance: clamped }).eq('id', prioridad.id),
         `pct_avance n=${prioridad.n}`,
       )
       await logSemaforoChange(prioridad.n, 'pct_avance', prevPct, clamped, session?.user?.email ?? null)
@@ -179,7 +179,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     const { data: { session } } = await sb.auth.getSession()
     try {
       await safeWrite(
-        sb.from('prioridades_territoriales').update({ estado_semaforo: newSem }).eq('n', prioridad.n),
+        sb.from('prioridades_territoriales').update({ estado_semaforo: newSem }).eq('id', prioridad.id),
         `estado_semaforo n=${prioridad.n}`,
       )
       await logSemaforoChange(prioridad.n, 'semaforo', anterior, newSem, session?.user?.email ?? null)
@@ -199,7 +199,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     if (field === 'fecha_proximo_hito') patch.proximo_hito = proximoHito || null
     try {
       await safeWrite(
-        getSupabase().from('prioridades_territoriales').update(patch).eq('n', prioridad.n),
+        getSupabase().from('prioridades_territoriales').update(patch).eq('id', prioridad.id),
         `meta ${field} n=${prioridad.n}`,
       )
       onUpdatePrioridad(prioridad.n, patch as Partial<Iniciativa>)
@@ -218,7 +218,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     const joined = joinMinisterios(next)
     try {
       await safeWrite(
-        getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('n', prioridad.n),
+        getSupabase().from('prioridades_territoriales').update({ ministerio: joined }).eq('id', prioridad.id),
         `ministerio n=${prioridad.n}`,
       )
       onUpdatePrioridad(prioridad.n, { ministerio: joined })
@@ -239,7 +239,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setTagsLocal(cleaned)
     try {
       await safeWrite(
-        getSupabase().from('prioridades_territoriales').update({ tags: cleaned }).eq('n', prioridad.n),
+        getSupabase().from('prioridades_territoriales').update({ tags: cleaned }).eq('id', prioridad.id),
         `tags n=${prioridad.n}`,
       )
       onUpdatePrioridad(prioridad.n, { tags: cleaned })
@@ -267,7 +267,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
-      .eq('n', prioridad.n)
+      .eq('id', prioridad.id)
       .select('n, en_foco')
     const failed = !!error || !data || data.length === 0
     if (failed) {
@@ -363,7 +363,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                       setPrioridadLocal(val)
                       try {
                         await safeWrite(
-                          getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('n', prioridad.n),
+                          getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('id', prioridad.id),
                           `prioridad n=${prioridad.n}`,
                         )
                         onUpdatePrioridad(prioridad.n, { prioridad: val })
@@ -651,7 +651,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     setResponsable(val)
                     try {
                       await safeWrite(
-                        getSupabase().from('prioridades_territoriales').update({ responsable: val || null }).eq('n', prioridad.n),
+                        getSupabase().from('prioridades_territoriales').update({ responsable: val || null }).eq('id', prioridad.id),
                         `responsable n=${prioridad.n}`,
                       )
                       onUpdatePrioridad(prioridad.n, { responsable: val || null })
@@ -885,7 +885,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                       const val = inversionMm ? parseFloat(inversionMm) : null
                       try {
                         await safeWrite(
-                          getSupabase().from('prioridades_territoriales').update({ inversion_mm: val }).eq('n', prioridad.n),
+                          getSupabase().from('prioridades_territoriales').update({ inversion_mm: val }).eq('id', prioridad.id),
                           `inversion_mm n=${prioridad.n}`,
                         )
                         onUpdatePrioridad(prioridad.n, { inversion_mm: val })

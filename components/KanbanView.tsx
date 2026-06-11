@@ -364,20 +364,23 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   // Toggle del flag "en foco" desde cualquier card del Kanban. Optimistic +
   // rollback en error. La persistencia se hace acá porque WorkOSApp solo
   // mantiene estado local — cada componente persiste sus propios cambios.
-  async function handleToggleFoco(n: number, next: boolean) {
+  // Etapa 5: mutamos por id (PK estable) en vez de n. n sigue como key del
+  // estado local en WorkOSApp.handleUpdatePrioridad (FK lógicas de la tabla
+  // de seguimientos/documentos también apuntan a n — no se tocan).
+  async function handleToggleFoco(n: number, id: number, next: boolean) {
     onUpdatePrioridad(n, { en_foco: next })
     const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
       .update({ en_foco: next })
-      .eq('n', n)
-      .select('n, en_foco')
+      .eq('id', id)
+      .select('id, en_foco')
     const failed = !!error || !data || data.length === 0
     if (failed) {
       onUpdatePrioridad(n, { en_foco: !next })
       const msg = error
         ? `Error guardando foco: ${error.message}`
         : 'No se pudo guardar el foco (0 filas actualizadas — probable RLS / permisos).'
-      console.error('[KanbanView] handleToggleFoco:', { n, next, error, data })
+      console.error('[KanbanView] handleToggleFoco:', { n, id, next, error, data })
       window.alert(msg)
     } else {
       console.log('[KanbanView] Foco guardado:', data)
@@ -778,7 +781,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       Sin iniciativas
                     </div>
                   ) : (
-                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />)
+                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />)
                   )}
                 </div>
               </div>
@@ -822,7 +825,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       </div>
                     ) : (
                       cards.map(p => (
-                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />
+                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
                       ))
                     )}
                   </div>
@@ -862,7 +865,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                     se permite scroll lateral interno en vez de cortarse. */}
                 <div className="bg-slate-50 p-3 space-y-2 overflow-x-auto">
                   {group.iniciativas.map(p => (
-                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} />
+                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
                   ))}
                 </div>
               </details>
