@@ -303,7 +303,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     <UserProvider
       canEditRegion={canEditRegion}
       canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}
-      canEditOperational={!!profile}
+      // viewer pasa a solo lectura estricta a partir de etapa 2 de la
+      // consolidación backend. RLS también lo bloquea en BD.
+      canEditOperational={!!profile && profile.role !== 'viewer'}
       isAdmin={profile?.role === 'admin'}
       userEmail={profile?.email ?? ''}
     >
