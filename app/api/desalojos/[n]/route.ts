@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { desalojoDetallePatchSchema } from '@/lib/schemas'
 import type { DesalojoDocumento } from '@/lib/types'
 
 const SIGNED_URL_TTL_SEC = 3600
@@ -75,18 +76,19 @@ export async function PATCH(
   const n = Number(nStr)
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
-  let body: { resumen_narrativo?: unknown }
-  try { body = await req.json() }
-  catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+  let rawBody: unknown
+  try { rawBody = await req.json() }
+  catch { return NextResponse.json({ error: 'Solicitud inválida' }, { status: 400 }) }
 
+  const parse = desalojoDetallePatchSchema.safeParse(rawBody)
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Solicitud inválida', detalle: parse.error.issues },
+      { status: 400 },
+    )
+  }
   // Único campo editable a nivel caso. Operación por dimensión va a /capas.
-  if (!('resumen_narrativo' in body)) {
-    return NextResponse.json({ error: 'Sin campos válidos. Solo resumen_narrativo.' }, { status: 400 })
-  }
-  const raw = body.resumen_narrativo
-  if (raw !== null && typeof raw !== 'string') {
-    return NextResponse.json({ error: 'resumen_narrativo debe ser string o null' }, { status: 400 })
-  }
+  const raw = parse.data.resumen_narrativo
   const nuevo = raw === null ? null : (raw.trim() || null)
 
   const db = getSupabaseAdmin()

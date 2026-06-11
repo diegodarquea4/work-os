@@ -10,6 +10,7 @@ import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog }
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { minutaPostSchema } from '@/lib/schemas'
 import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent, type FichaExtraData } from '@/lib/minutaAI'
 import provinciasData from '@/data/provincias-comunas.json'
 import { getSupabaseColega } from '@/lib/supabaseColega'
@@ -57,7 +58,21 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authProfile = await requireAuth()
   if (!authProfile) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  const body = await request.json() as { region: Region; fecha: string; tipo?: MinutaTipo; force?: boolean }
+
+  let rawBody: unknown
+  try { rawBody = await request.json() }
+  catch { return new Response(JSON.stringify({ error: 'Solicitud inválida' }), { status: 400 }) }
+
+  const parse = minutaPostSchema.safeParse(rawBody)
+  if (!parse.success) {
+    return new Response(
+      JSON.stringify({ error: 'Solicitud inválida', detalle: parse.error.issues }),
+      { status: 400 },
+    )
+  }
+  // El schema valida cod + nombre + fecha + tipo + force. El passthrough()
+  // deja pasar el resto de Region (capital, zona) que el PDF puede usar.
+  const body = parse.data as typeof parse.data & { region: Region; tipo: MinutaTipo }
 
   // regional / filtered-viewer can only generate minutas for their assigned regions
   const isRestricted = authProfile.role === 'regional' ||
@@ -65,8 +80,8 @@ export async function POST(request: Request) {
   if (isRestricted && !authProfile.region_cods.includes(body.region.cod)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   }
-  const tipo: MinutaTipo = body.tipo ?? 'completo'
-  const force = body.force ?? false
+  const tipo: MinutaTipo = body.tipo
+  const force = body.force
   const today = new Date().toISOString().slice(0, 10)
 
   let projects: Iniciativa[]
