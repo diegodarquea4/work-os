@@ -10,7 +10,8 @@ import type { Iniciativa } from './projects'
 // Prioridades
 // ---------------------------------------------------------------------------
 
-function mapRow(row: Prioridad): Iniciativa {
+// Exportado para tests (etapa 6). En producción solo se usa internamente.
+export function mapRow(row: Prioridad): Iniciativa {
   return {
     id:                     row.id,
     n:                      row.n,
