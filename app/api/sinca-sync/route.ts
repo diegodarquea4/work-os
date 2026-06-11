@@ -15,6 +15,7 @@
 import { NextRequest } from 'next/server'
 import { isAuthorizedSync, upsertV2WithLog } from '@/lib/syncHelper'
 import { matchRegionName } from '@/lib/regionNameMatcher'
+import { withSyncStatus } from '@/lib/syncRunner'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -40,12 +41,12 @@ type SincaStation = {
 
 export async function GET(request: NextRequest) {
   if (!isAuthorizedSync(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('sinca', runSync)
 }
 
 export async function POST(request: NextRequest) {
   if (!isAuthorizedSync(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('sinca', runSync)
 }
 
 async function runSync() {

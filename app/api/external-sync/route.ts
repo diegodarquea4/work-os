@@ -18,6 +18,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_INVERSE } from '@/lib/regions'
+import { withSyncStatus } from '@/lib/syncRunner'
 
 // ── v2 mapping: Census fields → v2 indicator codes ──────────────────────────
 // Only maps computed census fields that the external-sync calculates (pct_*, etc.)
@@ -65,12 +66,12 @@ function isAuthorized(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('external', runSync)
 }
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return runSync()
+  return withSyncStatus('external', runSync)
 }
 
 // ── Main sync ─────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
+import { withSyncStatus } from '@/lib/syncRunner'
 
 export const dynamic    = 'force-dynamic'
 export const runtime    = 'nodejs'
@@ -275,7 +276,7 @@ export async function GET(request: NextRequest) {
   if (request.headers.get('x-vercel-cron') !== '1') {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return runSync()
+  return withSyncStatus('pib', runSync)
 }
 
 export async function POST(request: NextRequest) {
@@ -284,7 +285,7 @@ export async function POST(request: NextRequest) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return runSync()
+  return withSyncStatus('pib', runSync)
 }
 
 // ── Core sync ────────────────────────────────────────────────────────────────
