@@ -877,11 +877,11 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       {/* ── Estado mode: 4 semáforo columns ──────────────────────────────────── */}
       {viewMode === 'kanban' && !isGroupedMode && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex h-full gap-4 px-6 py-4 min-w-max">
+          <div className="flex h-full gap-fluid-md px-6 py-4 min-w-max">
             {COLUMNS.map(col => {
               const cards = byCol[col.key] ?? []
               return (
-                <div key={col.key} className="flex flex-col w-72 flex-shrink-0">
+                <div key={col.key} className="flex flex-col w-[clamp(280px,18vw,360px)] flex-shrink-0">
                   <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3 ${col.header}`}>
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${col.dot}`} />
                     <span className="text-sm font-semibold flex-1">{col.label}</span>

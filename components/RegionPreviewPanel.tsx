@@ -169,7 +169,7 @@ export default function RegionPreviewPanel({
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <h2 className="text-lg font-bold text-slate-900 truncate">{region.nombre}</h2>
+              <h2 className="text-fluid-xl font-bold text-slate-900 truncate">{region.nombre}</h2>
               <span className="text-xs text-gray-400 shrink-0">{region.zona}</span>
             </div>
             <p className="text-xs text-gray-400">{regionIniciativas.length} iniciativas · {region.capital}</p>
@@ -194,7 +194,7 @@ export default function RegionPreviewPanel({
               style={{ width: `${avgPct}%` }}
             />
           </div>
-          <span className="text-xl font-bold text-slate-800 tabular-nums w-12 text-right">{avgPct}%</span>
+          <span className="text-fluid-xl font-bold text-slate-800 tabular-nums w-12 text-right">{avgPct}%</span>
         </div>
         <div className="flex items-center gap-2 mb-3 text-[11px]">
           <DeltaBadge delta={deltaPct} />
@@ -265,7 +265,7 @@ export default function RegionPreviewPanel({
           {/* KPI 1: Atención */}
           <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Atención</p>
-            <p className={`text-2xl font-bold tabular-nums leading-none ${totalAlertas > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+            <p className={`text-fluid-2xl font-bold tabular-nums leading-none ${totalAlertas > 0 ? 'text-red-700' : 'text-slate-400'}`}>
               {totalAlertas}
             </p>
             <p className="text-[10px] text-gray-400 mt-1">
@@ -280,7 +280,7 @@ export default function RegionPreviewPanel({
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Próximo hito</p>
             {proximoHito && proximoHitoDias !== null ? (
               <>
-                <p className={`text-2xl font-bold tabular-nums leading-none ${
+                <p className={`text-fluid-2xl font-bold tabular-nums leading-none ${
                   proximoHitoDias < 0 ? 'text-red-700'
                   : proximoHitoDias <= 2 ? 'text-amber-700'
                   : 'text-slate-700'
@@ -293,7 +293,7 @@ export default function RegionPreviewPanel({
               </>
             ) : (
               <>
-                <p className="text-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
+                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
                 <p className="text-[10px] text-gray-400 mt-1">Sin hitos próximos</p>
               </>
             )}
@@ -304,7 +304,7 @@ export default function RegionPreviewPanel({
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Última actividad</p>
             {ultimaActividad ? (
               <>
-                <p className="text-2xl font-bold tabular-nums leading-none text-slate-700">
+                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-700">
                   {ultimaActividad.dias === 0 ? 'Hoy' : ultimaActividad.dias === 1 ? '1d' : `${ultimaActividad.dias}d`}
                 </p>
                 <p className="text-[10px] text-gray-500 mt-1 truncate" title={ultimaActividad.iniciativa.nombre}>
@@ -313,7 +313,7 @@ export default function RegionPreviewPanel({
               </>
             ) : (
               <>
-                <p className="text-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
+                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
                 <p className="text-[10px] text-gray-400 mt-1">Sin registros</p>
               </>
             )}

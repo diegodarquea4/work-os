@@ -190,15 +190,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // resalta el polígono correspondiente.
   const [hoveredCod, setHoveredCod]             = useState<string | null>(null)
   // Ancho del sidebar default (mapaMode === 'summary'). Persistido en
-  // localStorage. Solo se puede achicar: el default 384 es el máximo (sumar
-  // ancho no aporta — el contenido ya respira), el mínimo 280 mantiene las
-  // filas legibles.
+  // localStorage. Min 280 (legibilidad), max 450 para que en monitores
+  // grandes (≥1920) el sidebar no se vea diminuto. El default inicial se
+  // calcula proporcional al viewport en el effect de hidratación: ~22% del
+  // ancho, clamped a [280, 450]. El usuario puede achicar con drag.
   const SUMMARY_MIN = 280
-  const SUMMARY_MAX = 384
+  const SUMMARY_MAX = 450
   const [summarySidebarWidth, setSummarySidebarWidth] = useState<number>(384)
   const summaryDragStart = useRef<{ x: number; w: number } | null>(null)
 
   // Restaurar el ancho del sidebar default desde localStorage al hidratar.
+  // Si no hay valor persistido, calcular un default proporcional al viewport.
   useEffect(() => {
     try {
       const stored = localStorage.getItem('workos:summarySidebarWidth')
@@ -206,8 +208,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         const n = parseInt(stored, 10)
         if (Number.isFinite(n) && n >= SUMMARY_MIN && n <= SUMMARY_MAX) {
           setSummarySidebarWidth(n)
+          return
         }
       }
+      // Sin preferencia stored — proporcional al viewport actual.
+      const proportional = Math.round(Math.min(SUMMARY_MAX, Math.max(SUMMARY_MIN, window.innerWidth * 0.22)))
+      setSummarySidebarWidth(proportional)
     } catch { /* noop */ }
   }, [])
 
@@ -360,8 +366,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         <div className="flex items-center gap-4">
           <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-14 w-auto rounded-lg shadow-sm" />
           <div className="flex flex-col">
-            <span className="text-white font-bold text-base tracking-wide leading-tight">PSG</span>
-            <span className="text-slate-400 text-sm leading-tight">Panel Seguimiento Gubernamental — Regiones</span>
+            <span className="text-white font-bold text-fluid-base tracking-wide leading-tight">PSG</span>
+            <span className="text-slate-400 text-fluid-sm leading-tight">Panel Seguimiento Gubernamental — Regiones</span>
           </div>
         </div>
 
@@ -564,7 +570,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             style={{
               flexGrow:   mapaMode === 'summary' ? 1 : 0,
               flexShrink: 1,
-              flexBasis:  mapaMode === 'summary' ? 'auto' : `${100 - previewWidthPct}%`,
+              flexBasis:  mapaMode === 'summary' ? 'auto' : `calc(100% - min(${previewWidthPct}vw, 900px))`,
             }}
           >
             <ChileMap
@@ -580,7 +586,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           {mapaMode === 'preview' && selectedRegion && (
             <div
               className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-              style={{ flexBasis: `${previewWidthPct}%` }}
+              style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
             >
               <RegionPreviewPanel
                 region={selectedRegion}

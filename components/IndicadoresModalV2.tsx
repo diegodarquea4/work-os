@@ -389,24 +389,24 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
           <>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#dc2626' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Casos/sem</p>
-              <p className="text-2xl font-bold text-gray-900">{delitoKpis.currentCount.toLocaleString('es-CL')}</p>
+              <p className="text-fluid-2xl font-bold text-gray-900">{delitoKpis.currentCount.toLocaleString('es-CL')}</p>
               <p className="text-[10px] text-gray-600 mt-1">{selectedDelito}</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#6366f1' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">% del total</p>
-              <p className="text-2xl font-bold text-gray-900">{delitoKpis.pctTotal.toFixed(1)}%</p>
+              <p className="text-fluid-2xl font-bold text-gray-900">{delitoKpis.pctTotal.toFixed(1)}%</p>
               <p className="text-[10px] text-gray-600 mt-1">de todos los casos</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: delitoKpis.trend != null && delitoKpis.trend > 0 ? '#dc2626' : '#16a34a' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Tendencia</p>
-              <p className={`text-2xl font-bold ${delitoKpis.trend != null && delitoKpis.trend > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <p className={`text-fluid-2xl font-bold ${delitoKpis.trend != null && delitoKpis.trend > 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {delitoKpis.trend != null ? `${delitoKpis.trend > 0 ? '+' : ''}${delitoKpis.trend.toFixed(1)}%` : '—'}
               </p>
               <p className="text-[10px] text-gray-600 mt-1">vs 4 semanas atrás</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: '#d1d5db' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Prom. 4 sem</p>
-              <p className="text-2xl font-bold text-gray-900">{Math.round(delitoKpis.avg4).toLocaleString('es-CL')}</p>
+              <p className="text-fluid-2xl font-bold text-gray-900">{Math.round(delitoKpis.avg4).toLocaleString('es-CL')}</p>
               <p className="text-[10px] text-gray-600 mt-1">casos/semana</p>
             </div>
           </>
@@ -415,18 +415,18 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
             <KpiCardV2 ctx={desoc ?? { codigo: 'EMP_DESOC_TASA', nombre: 'Desocupación', valor: null, periodo: null, unidad: '%', calidad: 'verificado', edadDias: null, nacional: null, ranking: null, delta: null, deltaGood: null, fuente: 'INE-ENE', stale: false, catalogo: null, lowerIsBetter: true }} accentColor={color} />
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: regionRow?.casos_ultima_semana != null ? '#dc2626' : '#d1d5db' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Casos última semana</p>
-              <p className="text-2xl font-bold text-gray-900">{regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</p>
+              <p className="text-fluid-2xl font-bold text-gray-900">{regionRow?.casos_ultima_semana?.toLocaleString('es-CL') ?? '—'}</p>
               <p className="text-[10px] text-gray-600 mt-1">{leystopSemana || 'LeyStop'}</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.tasa_registro ?? 0) > (avgTasa ?? 0) ? '#dc2626' : '#16a34a' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Tasa delictual</p>
-              <p className="text-2xl font-bold text-gray-900">{regionRow?.tasa_registro?.toFixed(0) ?? '—'}</p>
+              <p className="text-fluid-2xl font-bold text-gray-900">{regionRow?.tasa_registro?.toFixed(0) ?? '—'}</p>
               <p className="text-[10px] text-gray-600 mt-1">casos / 100k hab</p>
               {avgTasa != null && <p className={`text-[10px] font-medium mt-1 ${(regionRow?.tasa_registro ?? 0) > avgTasa ? 'text-red-600' : 'text-green-600'}`}>Prom. nacional: {avgTasa.toFixed(0)}</p>}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center" style={{ borderBottomWidth: 3, borderBottomColor: (regionRow?.var_ultima_semana ?? 0) > 0 ? '#dc2626' : '#16a34a' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Var. semanal</p>
-              <p className={`text-2xl font-bold ${(regionRow?.var_ultima_semana ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <p className={`text-fluid-2xl font-bold ${(regionRow?.var_ultima_semana ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {regionRow?.var_ultima_semana != null ? `${regionRow.var_ultima_semana > 0 ? '+' : ''}${regionRow.var_ultima_semana.toFixed(1)}%` : '—'}
               </p>
               <p className="text-[10px] text-gray-600 mt-1">vs semana anterior</p>
@@ -489,21 +489,21 @@ function PulsoTab({ indicadores, series, allRegionsUltimos, regionId, color, reg
             <ChartCard title="Actividad operativa — última semana">
               <div className="grid grid-cols-2 gap-4 py-2">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.controles)}</p>
+                  <p className="text-fluid-2xl font-bold text-gray-800">{num(regionRow.controles)}</p>
                   <p className="text-[10px] text-gray-600 uppercase mt-1">Controles</p>
                   <p className="text-[10px] text-gray-500">{num(regionRow.controles_identidad)} identidad · {num(regionRow.controles_vehicular)} vehicular</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.fiscalizaciones)}</p>
+                  <p className="text-fluid-2xl font-bold text-gray-800">{num(regionRow.fiscalizaciones)}</p>
                   <p className="text-[10px] text-gray-600 uppercase mt-1">Fiscalizaciones</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.incautaciones)}</p>
+                  <p className="text-fluid-2xl font-bold text-gray-800">{num(regionRow.incautaciones)}</p>
                   <p className="text-[10px] text-gray-600 uppercase mt-1">Incautaciones</p>
                   <p className="text-[10px] text-gray-500">{num(regionRow.incaut_fuego)} fuego · {num(regionRow.incaut_blancas)} blancas</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-800">{num(regionRow.allanamientos_anno)}</p>
+                  <p className="text-fluid-2xl font-bold text-gray-800">{num(regionRow.allanamientos_anno)}</p>
                   <p className="text-[10px] text-gray-600 uppercase mt-1">Allanamientos (año)</p>
                 </div>
               </div>

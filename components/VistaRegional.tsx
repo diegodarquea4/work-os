@@ -92,7 +92,7 @@ function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, tren
           <Sparkline data={sparkData} color={sparkColor} />
         )}
       </div>
-      <p className="text-xl font-bold text-slate-900 leading-tight">{value}</p>
+      <p className="text-fluid-2xl font-bold text-slate-900 leading-tight">{value}</p>
       {valueNote && <p className="text-[10px] text-gray-400">{valueNote}</p>}
       {trend !== null && (
         <p className={`text-xs mt-1 ${trendCls}`}>
@@ -361,7 +361,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-6xl mx-auto px-6 py-5">
+      <div className="max-w-[min(72rem,90vw)] mx-auto px-6 py-5">
 
         {/* Toast */}
         {toastMsg && (
@@ -431,7 +431,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             {/* Left: region name + progress + semáforo */}
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-3 mb-0.5">
-                <h2 className="text-xl font-bold text-slate-900 truncate">{region?.nombre ?? '—'}</h2>
+                <h2 className="text-fluid-2xl font-bold text-slate-900 truncate">{region?.nombre ?? '—'}</h2>
                 <span className="text-xs text-gray-400 shrink-0">{region?.zona}</span>
               </div>
               <p className="text-xs text-gray-400 mb-3">{regionIniciativas.length} iniciativas · {region?.capital}</p>
@@ -444,7 +444,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                     style={{ width: `${avgPct}%` }}
                   />
                 </div>
-                <span className="text-2xl font-bold text-slate-800 tabular-nums">{avgPct}%</span>
+                <span className="text-fluid-3xl font-bold text-slate-800 tabular-nums">{avgPct}%</span>
                 <span className="text-xs text-gray-400">avance promedio</span>
               </div>
 
@@ -743,12 +743,13 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                 el paso de "modo general" a "modo detalle" se sienta como un
                 respiro y no como un corte. */}
             {ejeData.length > 0 && (
-              <div className="flex gap-3">
-                {/* Grid de ejes: a full width sin selección, se comprime a una col al abrir el panel */}
+              <div className="flex flex-col lg:flex-row gap-3">
+                {/* Grid de ejes: a full width sin selección, se comprime a una col al abrir el panel.
+                    Bajo lg (<1024px), el grid y el drawer apilan vertical en lugar de splitearse 40/60. */}
                 <div
                   className={`transition-all duration-300 ease-out ${
                     selectedEjeIdForMetrics
-                      ? 'w-2/5 grid grid-cols-1 gap-2'
+                      ? 'w-full lg:w-2/5 grid grid-cols-1 gap-2'
                       : 'w-full grid grid-cols-2 lg:grid-cols-3 gap-3'
                   }`}
                 >
@@ -829,7 +830,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                   const selectedEje = regionEjes.find(e => e.id === selectedEjeIdForMetrics)
                   if (!selectedEje) return null
                   return (
-                    <div className="w-3/5">
+                    <div className="w-full lg:w-3/5">
                       <MetricasEjeDrawer
                         region={region}
                         eje={selectedEje}
@@ -911,7 +912,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                 <span className="text-sm">🌿</span>
                 <span className="text-xs font-semibold text-gray-700">SEIA — Evaluación Ambiental</span>
               </div>
-              <p className="text-2xl font-bold text-slate-800 tabular-nums">{seiaTotal}</p>
+              <p className="text-fluid-2xl font-bold text-slate-800 tabular-nums">{seiaTotal}</p>
               <p className="text-xs text-gray-400 mt-0.5">proyectos en evaluación</p>
               {seiaProjects.length > 0 && (
                 <p className="text-xs text-gray-500 mt-2">
@@ -929,7 +930,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                 <span className="text-sm">🏗</span>
                 <span className="text-xs font-semibold text-gray-700">MOP — Obras Públicas</span>
               </div>
-              <p className="text-2xl font-bold text-slate-800 tabular-nums">{mopTotal}</p>
+              <p className="text-fluid-2xl font-bold text-slate-800 tabular-nums">{mopTotal}</p>
               <p className="text-xs text-gray-400 mt-0.5">proyectos de infraestructura</p>
               {mopProjects.length > 0 && (() => {
                 const etapas: Record<string, number> = {}
