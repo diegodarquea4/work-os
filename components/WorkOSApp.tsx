@@ -176,22 +176,47 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
 
-  // ── Mapa: modo y drag ──────────────────────────────────────────────────────
+  // ── Mapa: modo ─────────────────────────────────────────────────────────────
   // El Mapa tiene dos modos visuales según haya región seleccionada:
   //   - 'summary': sidebar derecho con 16 filas accionables (default).
-  //   - 'preview': preview compacto del Dashboard regional con CTA "Ver
-  //                dashboard completo" + drag right-to-left para transición.
-  // `previewWidthPct` controla el ancho actual del preview (entre 30 y 100).
-  // Al llegar a >= 80 dispara el switch a `vista-regional` y reset a 40.
-  type MapaMode = 'summary' | 'preview' | 'transitioning'
+  //   - 'preview': preview compacto del Dashboard regional con CTA "Ver Mi
+  //                Región" para saltar al dashboard completo.
+  // `previewWidthPct` controla el ancho del preview. Default 48%; al click
+  // del CTA "Ver Mi Región" anima a 100% antes de hacer setView.
+  type MapaMode = 'summary' | 'preview'
   const [mapaMode, setMapaMode]                 = useState<MapaMode>('summary')
-  const [previewWidthPct, setPreviewWidthPct]   = useState<number>(40)
+  const [previewWidthPct, setPreviewWidthPct]   = useState<number>(48)
   // Highlight cruzado entre sidebar y mapa: hover sobre una fila del sidebar
   // resalta el polígono correspondiente.
   const [hoveredCod, setHoveredCod]             = useState<string | null>(null)
+  // Ancho del sidebar default (mapaMode === 'summary'). Persistido en
+  // localStorage. Solo se puede achicar: el default 384 es el máximo (sumar
+  // ancho no aporta — el contenido ya respira), el mínimo 280 mantiene las
+  // filas legibles.
+  const SUMMARY_MIN = 280
+  const SUMMARY_MAX = 384
+  const [summarySidebarWidth, setSummarySidebarWidth] = useState<number>(384)
+  const summaryDragStart = useRef<{ x: number; w: number } | null>(null)
 
-  const dragStartXMapa     = useRef<number | null>(null)
-  const dragStartWidthMapa = useRef<number>(40)
+  // Restaurar el ancho del sidebar default desde localStorage al hidratar.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('workos:summarySidebarWidth')
+      if (stored) {
+        const n = parseInt(stored, 10)
+        if (Number.isFinite(n) && n >= SUMMARY_MIN && n <= SUMMARY_MAX) {
+          setSummarySidebarWidth(n)
+        }
+      }
+    } catch { /* noop */ }
+  }, [])
+
+  // Persistir cambios del ancho. setState dispara muchos renders durante el drag
+  // pero localStorage es síncrono y barato para un número.
+  useEffect(() => {
+    if (!hydrated) return
+    try { localStorage.setItem('workos:summarySidebarWidth', String(summarySidebarWidth)) } catch { /* noop */ }
+  }, [summarySidebarWidth, hydrated])
 
   const [actividad, setActividad]             = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(true)
@@ -240,46 +265,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       setView('vista-regional')
     }
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
-  // Drag right-to-left desde el borde izquierdo del preview. Pointer Events
-  // cubre mouse + touch + pen sin código separado. Llega a >= 80% → snap a
-  // 100 + setView('vista-regional'). Snap intermedio en [50, 80) a 60%. <50%
-  // vuelve a 40%. Resistente a reduced motion vía CSS transitions (las
-  // duraciones se respetan; con prefers-reduced-motion el snap se ve
-  // instantáneo en navegadores modernos).
-  function handlePreviewPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (mapaMode !== 'preview') return
+  // Resize del sidebar default. Pointer Events cubre mouse + touch.
+  // Listeners en window porque el cursor puede salir del handle durante el drag.
+  function handleSummaryResizeStart(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault()
-    setMapaMode('transitioning')
-    dragStartXMapa.current = e.clientX
-    dragStartWidthMapa.current = previewWidthPct
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-
-  function handlePreviewPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (mapaMode !== 'transitioning' || dragStartXMapa.current === null) return
-    const dx = dragStartXMapa.current - e.clientX  // positivo si arrastra hacia izquierda
-    const viewportW = window.innerWidth
-    const newPct = Math.min(100, Math.max(30, dragStartWidthMapa.current + (dx / viewportW) * 100))
-    setPreviewWidthPct(newPct)
-  }
-
-  function handlePreviewPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* noop */ }
-    dragStartXMapa.current = null
-    if (previewWidthPct >= 80) {
-      setPreviewWidthPct(100)
-      setTimeout(() => {
-        setView('vista-regional')
-        setPreviewWidthPct(40)
-        setMapaMode('preview')
-      }, 300)
-    } else if (previewWidthPct >= 50) {
-      setPreviewWidthPct(60)
-      setMapaMode('preview')
-    } else {
-      setPreviewWidthPct(40)
-      setMapaMode('preview')
+    summaryDragStart.current = { x: e.clientX, w: summarySidebarWidth }
+    function onMove(ev: PointerEvent) {
+      const start = summaryDragStart.current
+      if (!start) return
+      // Drag a la izquierda agranda; drag a la derecha achica.
+      const dx = start.x - ev.clientX
+      const next = Math.min(SUMMARY_MAX, Math.max(SUMMARY_MIN, start.w + dx))
+      setSummarySidebarWidth(next)
     }
+    function onUp() {
+      summaryDragStart.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
   }
 
   function handleUpdatePrioridad(n: number, patch: Partial<Iniciativa>) {
@@ -545,12 +552,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
       {/* Map view — entrada geográfica al Dashboard regional.
          Sin región: MapaSummarySidebar con 16 filas accionables.
-         Con región: RegionPreviewPanel + drag right-to-left → vista-regional. */}
+         Con región: RegionPreviewPanel (preview compacto) + CTA "Ver Mi
+         Región" para saltar al dashboard completo. La transition CSS se
+         activa cuando previewWidthPct cambia (e.g. al click del CTA, que
+         anima 48% → 100% antes del setView). */}
       {view === 'mapa' && (
         <div className="flex flex-1 overflow-hidden">
-          {/* Mapa: width responde a previewWidthPct cuando hay preview abierto. */}
+          {/* Mapa */}
           <div
-            className="relative min-w-0 transition-[flex-basis] duration-300 ease-out motion-reduce:transition-none"
+            className="relative min-w-0 transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
               flexGrow:   mapaMode === 'summary' ? 1 : 0,
               flexShrink: 1,
@@ -567,29 +577,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           </div>
 
           {/* Preview regional */}
-          {(mapaMode === 'preview' || mapaMode === 'transitioning') && selectedRegion && (
+          {mapaMode === 'preview' && selectedRegion && (
             <div
-              className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-out motion-reduce:transition-none"
+              className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
               style={{ flexBasis: `${previewWidthPct}%` }}
             >
               <RegionPreviewPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
                 actividad={actividad}
+                nationalAvgPct={globalAvgPct}
                 onClose={() => setSelectedRegion(null)}
                 onGoToKanban={() => setView('kanban')}
-                onGoToDashboard={() => {
-                  setMapaMode('transitioning')
-                  setPreviewWidthPct(100)
-                  setTimeout(() => {
-                    setView('vista-regional')
-                    setPreviewWidthPct(40)
-                    setMapaMode('preview')
-                  }, 300)
-                }}
-                onPointerDownDragHandle={handlePreviewPointerDown}
-                onPointerMoveDragHandle={handlePreviewPointerMove}
-                onPointerUpDragHandle={handlePreviewPointerUp}
+                onGoToDashboard={() => setView('vista-regional')}
               />
             </div>
           )}
@@ -608,6 +608,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               avgPctFor={avgPctFor}
               onSelectRegion={handleSelectRegion}
               onHoverRegion={setHoveredCod}
+              width={summarySidebarWidth}
+              onResizeStart={handleSummaryResizeStart}
             />
           )}
         </div>

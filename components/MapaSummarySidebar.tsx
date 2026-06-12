@@ -40,6 +40,11 @@ type Props = {
   onSelectRegion:  (regionName: string, cod: string) => void
   /** Opcional: notifica al mapa qué cod está hover para que resalte el polígono. */
   onHoverRegion?:  (cod: string | null) => void
+  /** Ancho actual del sidebar en píxeles. Lo controla WorkOSApp para persistir
+   *  la preferencia del usuario entre sesiones. */
+  width:           number
+  /** Handler del drag para el resize. Si null, no se renderiza el handle. */
+  onResizeStart?:  (e: React.PointerEvent<HTMLDivElement>) => void
 }
 
 type SortMode = 'geografico' | 'urgencia'
@@ -56,6 +61,8 @@ export default function MapaSummarySidebar({
   avgPctFor,
   onSelectRegion,
   onHoverRegion,
+  width,
+  onResizeStart,
 }: Props) {
   const [sortMode, setSortMode] = useState<SortMode>('geografico')
 
@@ -85,7 +92,21 @@ export default function MapaSummarySidebar({
   }, [projects, actividad, projectCounts, ragFor, avgPctFor, lockedRegions, sortMode])
 
   return (
-    <div className="w-80 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+    <div
+      className="flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden relative"
+      style={{ width }}
+    >
+      {/* Resize handle (borde izquierdo) — arrastrar para ajustar ancho */}
+      {onResizeStart && (
+        <div
+          onPointerDown={onResizeStart}
+          className="absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-ew-resize group touch-none"
+          title="Arrastra para ajustar el ancho"
+        >
+          <div className="absolute inset-y-0 left-0 w-0.5 bg-transparent group-hover:bg-blue-400 group-active:bg-blue-500 transition-colors" />
+        </div>
+      )}
+
       {/* Header con resumen nacional + toggle de orden */}
       <div className="px-5 py-4 border-b border-gray-100 bg-slate-50">
         <div className="flex items-center justify-between mb-2">

@@ -1,65 +1,90 @@
 'use client'
 
 /**
- * Preview compacto del Dashboard regional. Reemplaza a ProjectsPanel cuando
- * el usuario hace click sobre una región en el Mapa. Las 3 piezas de mayor
- * valor del dashboard completo:
+ * Preview compacto del Dashboard regional. Se muestra al hacer click sobre
+ * una región del Mapa. Reemplaza al ProjectsPanel viejo (que era un Kanban
+ * con polígonos arriba) — ahora es síntesis ejecutiva con perspectiva nacional.
  *
- *   1. Header strip: nombre + zona + avance + chips RAG + pills PREGO
- *   2. Alertas top 3 (rojo, hito próximo, sin actividad)
- *   3. Top 3 ejes por urgencia (avgPct ASC)
+ * Estructura:
+ *   1. Header: nombre + zona + capital + N iniciativas + barra avance con
+ *      delta vs promedio nacional + 4 chips RAG + PREGO dots + label de
+ *      fase actual.
+ *   2. 3 KPI cards: Atención (suma de alertas) / Próximo hito ≤7d /
+ *      Última actividad (con nombre de iniciativa).
+ *   3. Avance por eje (TODOS los ejes en barras horizontales) — sin cutoff
+ *      a top 3 para no esconder problemas.
+ *   4. Footer con CTAs: "Ver N iniciativas en Kanban" + "Ver Mi Región".
  *
  * Sin botones de escritura — todo es lectura. El usuario que quiera actuar
- * usa el CTA "Ver dashboard completo" para saltar a VistaRegional, donde sí
- * viven los botones (Proponer actualización, Generar minuta, etc.).
+ * usa el CTA "Ver Mi Región" para saltar al dashboard completo (VistaRegional).
  *
- * El ancho lo controla WorkOSApp (state `previewWidthPct`) para que el drag
- * right-to-left pueda expandirlo hasta disparar el switch a Dashboard.
+ * El ancho lo controla WorkOSApp (CSS var `--preview-pct`) para que el drag
+ * right-to-left desde el borde izquierdo pueda expandirlo hasta disparar el
+ * switch a `vista-regional`.
  */
 
 import { useEffect, useState, useMemo } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { PregoRow } from '@/lib/types'
+import type { PregoRow, PregoEstado } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
-import AlertCard, { type AlertItem } from './AlertCard'
 import {
-  diasSinActividad,
   diasHastaHito,
   iniciativasDeRegion,
   iniciativasEnRojo,
   iniciativasConHitoCritico,
   iniciativasSinActividad,
   ejeBreakdownFor,
-  topEjesPorAtencion,
+  ultimaActividadConIniciativa,
 } from '@/lib/regionSummary'
 
 type Props = {
   region:           Region
   projects:         Iniciativa[]
   actividad:        Record<number, string | null>
+  /** Promedio nacional de avance — usado para mostrar delta vs región. */
+  nationalAvgPct:   number
   onClose:          () => void
   onGoToKanban:     () => void
   onGoToDashboard:  () => void
-  /** Handlers del drag desde el borde izquierdo. Si onPointerDown es null,
-   *  el handle no se renderiza (sin gesto disponible). */
-  onPointerDownDragHandle?: (e: React.PointerEvent<HTMLDivElement>) => void
-  onPointerMoveDragHandle?: (e: React.PointerEvent<HTMLDivElement>) => void
-  onPointerUpDragHandle?:   (e: React.PointerEvent<HTMLDivElement>) => void
 }
+
+// ── PREGO helper ──────────────────────────────────────────────────────────────
+
+/**
+ * Fase actual del PREGO según prioridad: primer bloqueado, después primer
+ * en_curso, después primer pendiente. Si todas están completadas, devuelve
+ * "Todo completo". Si no hay info, null.
+ */
+function pregoFaseActual(prego: PregoRow | null): { fase: string; estado: PregoEstado | 'todo_completo' } | null {
+  if (!prego) return null
+  const buscar = (estado: PregoEstado) => {
+    for (const f of PREGO_FASES) {
+      if (prego[f.key] === estado) return f
+    }
+    return null
+  }
+  const bloqueado = buscar('bloqueado')
+  if (bloqueado) return { fase: `${bloqueado.label} ${bloqueado.sublabel}`, estado: 'bloqueado' }
+  const enCurso = buscar('en_curso')
+  if (enCurso) return { fase: `${enCurso.label} ${enCurso.sublabel}`, estado: 'en_curso' }
+  const pendiente = buscar('pendiente')
+  if (pendiente) return { fase: `${pendiente.label} ${pendiente.sublabel}`, estado: 'pendiente' }
+  return { fase: 'Todo completo', estado: 'todo_completo' }
+}
+
+// ── Componente ────────────────────────────────────────────────────────────────
 
 export default function RegionPreviewPanel({
   region,
   projects,
   actividad,
+  nationalAvgPct,
   onClose,
   onGoToKanban,
   onGoToDashboard,
-  onPointerDownDragHandle,
-  onPointerMoveDragHandle,
-  onPointerUpDragHandle,
 }: Props) {
   const [prego, setPrego] = useState<PregoRow | null>(null)
   const { ejes: regionEjes } = useRegionEjes(region.cod)
@@ -89,6 +114,7 @@ export default function RegionPreviewPanel({
   const avgPct = regionIniciativas.length > 0
     ? Math.round(regionIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / regionIniciativas.length)
     : 0
+  const deltaPct = avgPct - nationalAvgPct  // positivo = región va mejor que el promedio
 
   const semaforo = useMemo(() => ({
     verde: regionIniciativas.filter(p => p.estado_semaforo === 'verde').length,
@@ -100,8 +126,9 @@ export default function RegionPreviewPanel({
   const pregoCompletadas = prego
     ? PREGO_FASES.filter(f => prego[f.key] === 'completado').length
     : 0
+  const faseActual = pregoFaseActual(prego)
 
-  // Alertas (full lists para los counts; slice al renderizar las cards)
+  // Alertas (counts agregados para la KPI card de Atención).
   const alertaRojo = useMemo(
     () => iniciativasEnRojo(region.cod, projects),
     [region.cod, projects],
@@ -114,52 +141,32 @@ export default function RegionPreviewPanel({
     () => iniciativasSinActividad(region.cod, projects, actividad),
     [region.cod, projects, actividad],
   )
+  const totalAlertas = alertaRojo.length + alertaHitos.length + alertaSinActividad.length
 
-  const itemsRojo: AlertItem[] = alertaRojo.slice(0, 3).map(p => ({
-    label:   p.nombre,
-    sub:     p.ministerio ?? p.eje ?? '',
-    isUrgent: true,
-  }))
-  const itemsHitos: AlertItem[] = alertaHitos.slice(0, 3).map(p => {
-    const d = diasHastaHito(p.fecha_proximo_hito)
-    const sub = d === null ? '' : d < 0 ? `Vencido hace ${Math.abs(d)} días` : d === 0 ? 'Hoy' : `En ${d} días`
-    return { label: p.nombre, sub, isUrgent: d !== null && d <= 0 }
-  })
-  const itemsSinActividad: AlertItem[] = alertaSinActividad.slice(0, 3).map(p => {
-    const d = diasSinActividad(actividad[p.n])
-    const sub = d === null ? 'Sin actividad registrada' : `Hace ${d} días`
-    return { label: p.nombre, sub }
-  })
+  // Próximo hito más urgente (primero en la lista ordenada por urgencia ASC).
+  const proximoHito = alertaHitos[0] ?? null
+  const proximoHitoDias = proximoHito ? diasHastaHito(proximoHito.fecha_proximo_hito) : null
 
-  // Top 3 ejes por urgencia
-  const topEjes = useMemo(
-    () => topEjesPorAtencion(ejeBreakdownFor(region.cod, projects, regionEjes), 3),
-    [region.cod, projects, regionEjes],
+  // Última actividad con nombre de iniciativa.
+  const ultimaActividad = useMemo(
+    () => ultimaActividadConIniciativa(region.cod, projects, actividad),
+    [region.cod, projects, actividad],
   )
 
-  const totalAlertas = alertaRojo.length + alertaHitos.length + alertaSinActividad.length
+  // Breakdown completo de ejes (TODOS, no cutoff a 3). Ordenado por número
+  // ascendente para mantener el orden estructural del catálogo.
+  const ejes = useMemo(
+    () => ejeBreakdownFor(region.cod, projects, regionEjes),
+    [region.cod, projects, regionEjes],
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="relative h-full bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-      {/* Drag handle (borde izquierdo) — opcional */}
-      {onPointerDownDragHandle && (
-        <div
-          onPointerDown={onPointerDownDragHandle}
-          onPointerMove={onPointerMoveDragHandle}
-          onPointerUp={onPointerUpDragHandle}
-          onPointerCancel={onPointerUpDragHandle}
-          className="absolute left-0 top-0 bottom-0 w-2 z-20 cursor-ew-resize group touch-none"
-          title="Arrastra a la izquierda para abrir el dashboard completo"
-        >
-          <div className="absolute inset-y-0 left-0 w-0.5 bg-gray-200 group-hover:bg-blue-400 group-active:bg-blue-500 transition-colors" />
-        </div>
-      )}
-
       {/* Header strip */}
       <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
               <h2 className="text-lg font-bold text-slate-900 truncate">{region.nombre}</h2>
@@ -179,8 +186,8 @@ export default function RegionPreviewPanel({
           </button>
         </div>
 
-        {/* Avance bar */}
-        <div className="flex items-center gap-3 mb-3">
+        {/* Avance bar + delta vs nacional */}
+        <div className="flex items-center gap-3 mb-2">
           <div className="flex-1 bg-gray-100 rounded-full h-2.5">
             <div
               className="h-2.5 rounded-full bg-blue-500 transition-all"
@@ -188,6 +195,10 @@ export default function RegionPreviewPanel({
             />
           </div>
           <span className="text-xl font-bold text-slate-800 tabular-nums w-12 text-right">{avgPct}%</span>
+        </div>
+        <div className="flex items-center gap-2 mb-3 text-[11px]">
+          <DeltaBadge delta={deltaPct} />
+          <span className="text-gray-400">vs nacional {nationalAvgPct}%</span>
         </div>
 
         {/* Semáforo */}
@@ -210,100 +221,147 @@ export default function RegionPreviewPanel({
           </span>
         </div>
 
-        {/* PREGO pills */}
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mr-1">PREGO</span>
-          {PREGO_FASES.map((f) => {
-            const estado = prego?.[f.key] ?? 'pendiente'
-            const cfg = PREGO_ESTADO_CONFIG[estado]
-            return (
-              <div
-                key={f.key}
-                title={`${f.label} ${f.sublabel}: ${cfg.label}`}
-                className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${cfg.pill}`}
-              >
-                {cfg.dot}
-              </div>
-            )
-          })}
-          <span className="text-xs text-gray-400 ml-1">{pregoCompletadas}/{PREGO_FASES.length}</span>
+        {/* PREGO pills + label fase actual */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mr-1">PREGO</span>
+            {PREGO_FASES.map((f) => {
+              const estado = prego?.[f.key] ?? 'pendiente'
+              const cfg = PREGO_ESTADO_CONFIG[estado]
+              return (
+                <div
+                  key={f.key}
+                  title={`${f.label} ${f.sublabel}: ${cfg.label}`}
+                  className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${cfg.pill}`}
+                >
+                  {cfg.dot}
+                </div>
+              )
+            })}
+            <span className="text-[11px] text-gray-400 ml-1 tabular-nums">{pregoCompletadas}/{PREGO_FASES.length}</span>
+          </div>
+          {faseActual && (
+            <span className="text-[11px] text-gray-500 truncate">
+              <span className="text-gray-400">Fase actual:</span>{' '}
+              <span className={`font-medium ${
+                faseActual.estado === 'bloqueado' ? 'text-red-700'
+                : faseActual.estado === 'en_curso' ? 'text-amber-700'
+                : faseActual.estado === 'todo_completo' ? 'text-green-700'
+                : 'text-slate-700'
+              }`}>
+                {faseActual.fase}
+                {faseActual.estado === 'bloqueado' && ' (bloqueada)'}
+                {faseActual.estado === 'en_curso' && ' (en curso)'}
+              </span>
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Cuerpo scrolleable: alertas + ejes */}
+      {/* Cuerpo scrolleable */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {/* Alertas top 3 (3 cards en grid si hay espacio) */}
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alertas críticas</h3>
-            {totalAlertas > 0 && (
-              <span className="text-[11px] text-gray-400">{totalAlertas} en total</span>
+        {/* 3 KPI cards */}
+        <section className="grid grid-cols-3 gap-2">
+          {/* KPI 1: Atención */}
+          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Atención</p>
+            <p className={`text-2xl font-bold tabular-nums leading-none ${totalAlertas > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+              {totalAlertas}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-1">
+              {totalAlertas === 0
+                ? 'Sin alertas'
+                : `${alertaRojo.length}R · ${alertaHitos.length}H · ${alertaSinActividad.length}SA`}
+            </p>
+          </div>
+
+          {/* KPI 2: Próximo hito */}
+          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Próximo hito</p>
+            {proximoHito && proximoHitoDias !== null ? (
+              <>
+                <p className={`text-2xl font-bold tabular-nums leading-none ${
+                  proximoHitoDias < 0 ? 'text-red-700'
+                  : proximoHitoDias <= 2 ? 'text-amber-700'
+                  : 'text-slate-700'
+                }`}>
+                  {proximoHitoDias < 0 ? `-${Math.abs(proximoHitoDias)}d` : `${proximoHitoDias}d`}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1 truncate" title={proximoHito.nombre}>
+                  {proximoHito.nombre}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
+                <p className="text-[10px] text-gray-400 mt-1">Sin hitos próximos</p>
+              </>
             )}
           </div>
-          {totalAlertas === 0 ? (
-            <div className="text-xs text-gray-400 italic px-2 py-3">Sin alertas críticas en esta región.</div>
-          ) : (
-            <div className="grid grid-cols-1 gap-2">
-              {itemsRojo.length > 0 && (
-                <AlertCard icon="●" title={`En rojo (${alertaRojo.length})`} color="red"   items={itemsRojo} />
-              )}
-              {itemsHitos.length > 0 && (
-                <AlertCard icon="◐" title={`Hitos ≤ 7 días (${alertaHitos.length})`} color="amber" items={itemsHitos} />
-              )}
-              {itemsSinActividad.length > 0 && (
-                <AlertCard icon="○" title={`Sin actividad >15d (${alertaSinActividad.length})`} color="gray"  items={itemsSinActividad} />
-              )}
-            </div>
-          )}
+
+          {/* KPI 3: Última actividad */}
+          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Última actividad</p>
+            {ultimaActividad ? (
+              <>
+                <p className="text-2xl font-bold tabular-nums leading-none text-slate-700">
+                  {ultimaActividad.dias === 0 ? 'Hoy' : ultimaActividad.dias === 1 ? '1d' : `${ultimaActividad.dias}d`}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1 truncate" title={ultimaActividad.iniciativa.nombre}>
+                  {ultimaActividad.iniciativa.nombre}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
+                <p className="text-[10px] text-gray-400 mt-1">Sin registros</p>
+              </>
+            )}
+          </div>
         </section>
 
-        {/* Top 3 ejes por urgencia */}
+        {/* Avance por eje — TODOS los ejes */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Ejes que requieren atención</h3>
-          {topEjes.length === 0 ? (
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Avance por eje</h3>
+            <span className="text-[11px] text-gray-400">{ejes.length}</span>
+          </div>
+          {ejes.length === 0 ? (
             <div className="text-xs text-gray-400 italic px-2 py-3">
-              {regionEjes.length === 0
-                ? 'Esta región todavía no tiene ejes catalogados.'
-                : 'Sin iniciativas asignadas a los ejes del catálogo.'}
+              Esta región todavía no tiene ejes catalogados.
             </div>
           ) : (
-            <div className="space-y-2">
-              {topEjes.map(e => {
-                const barColor = e.avgPct >= 60 ? 'bg-blue-500' : e.avgPct >= 30 ? 'bg-amber-400' : 'bg-red-400'
+            <div className="space-y-1.5">
+              {ejes.map(e => {
+                const necesitaAtencion = e.total > 0 && e.avgPct < 30
+                const barColor = e.total === 0 ? 'bg-gray-200'
+                              : e.avgPct >= 60 ? 'bg-blue-500'
+                              : e.avgPct >= 30 ? 'bg-amber-400'
+                              : 'bg-red-400'
                 return (
-                  <div key={e.ejeId} className="rounded-lg border border-gray-100 p-3 bg-slate-50/40">
-                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <span className="text-xs font-semibold text-slate-700 truncate">
-                        Eje {e.numero}: {e.nombre}
+                  <div
+                    key={e.ejeId}
+                    className="flex items-center gap-2 text-[11px]"
+                  >
+                    {/* Número + nombre del eje */}
+                    <div className="flex items-baseline gap-1.5 w-32 min-w-0 shrink-0">
+                      <span className="text-gray-400 tabular-nums w-3 text-right">{e.numero}</span>
+                      <span className={`truncate ${e.total === 0 ? 'text-gray-400' : 'text-slate-700 font-medium'}`} title={e.nombre}>
+                        {e.nombre}
                       </span>
-                      <span className="text-sm font-bold text-slate-800 tabular-nums">{e.avgPct}%</span>
                     </div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                        <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${e.avgPct}%` }} />
-                      </div>
+                    {/* Barra */}
+                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 min-w-0">
+                      <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${e.avgPct}%` }} />
                     </div>
-                    <div className="flex items-center gap-3 text-[11px]">
-                      <span className="text-gray-400">{e.total} {e.total === 1 ? 'iniciativa' : 'iniciativas'}</span>
-                      {e.verde > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500"/>
-                          <span className="text-green-700 font-medium">{e.verde}</span>
-                        </span>
-                      )}
-                      {e.ambar > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>
-                          <span className="text-amber-700 font-medium">{e.ambar}</span>
-                        </span>
-                      )}
-                      {e.rojo > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"/>
-                          <span className="text-red-700 font-medium">{e.rojo}</span>
-                        </span>
-                      )}
-                    </div>
+                    {/* % + count + RAG */}
+                    <span className="tabular-nums w-8 text-right text-slate-700 font-semibold">
+                      {e.avgPct}%
+                    </span>
+                    <span className="tabular-nums text-gray-400 w-3 text-right">{e.total}</span>
+                    {necesitaAtencion && (
+                      <span className="text-red-600 font-medium text-[10px] shrink-0">atención</span>
+                    )}
                   </div>
                 )
               })}
@@ -327,15 +385,31 @@ export default function RegionPreviewPanel({
           onClick={onGoToDashboard}
           className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
         >
-          <span>Ver dashboard completo</span>
-          <span className="flex items-center gap-1.5 text-[11px] text-slate-300 font-normal">
-            <span className="hidden md:inline">o arrastra ←</span>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M5 3l4 4-4 4"/>
-            </svg>
-          </span>
+          <span>Ver Mi Región</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M5 3l4 4-4 4"/>
+          </svg>
         </button>
       </div>
     </div>
+  )
+}
+
+// ── DeltaBadge ────────────────────────────────────────────────────────────────
+
+/** Badge de delta vs nacional. Color verde si la región va mejor (positivo
+ *  con `betterIsHigher` true), rojo si va peor. Gris si delta == 0. */
+function DeltaBadge({ delta }: { delta: number }) {
+  const rounded = Math.round(delta)
+  if (rounded === 0) {
+    return <span className="text-gray-500 font-medium">= nacional</span>
+  }
+  const isUp = rounded > 0
+  const color = isUp ? 'text-green-700' : 'text-red-700'
+  const arrow = isUp ? '↑' : '↓'
+  return (
+    <span className={`font-semibold ${color}`}>
+      {arrow} {Math.abs(rounded)}pp
+    </span>
   )
 }

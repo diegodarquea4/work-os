@@ -134,6 +134,34 @@ export function diasDesdeUltimaActividad(
   return Math.floor((Date.now() - masReciente) / (1000 * 60 * 60 * 24))
 }
 
+/**
+ * Última iniciativa con actividad en la región, junto con los días desde el
+ * timestamp. Útil para el footer del preview ("Hace 4 días — Vivienda Alto
+ * Hospicio"): da cara al "última señal de vida" en vez de solo un número.
+ * null si NINGUNA iniciativa de la región tiene actividad registrada.
+ */
+export function ultimaActividadConIniciativa(
+  cod: string,
+  projects: Iniciativa[],
+  actividad: Record<number, string | null>,
+): { iniciativa: Iniciativa; dias: number } | null {
+  let masReciente: { iniciativa: Iniciativa; ts: number } | null = null
+  for (const p of projects) {
+    if (p.cod !== cod) continue
+    const ts = actividad[p.n]
+    if (!ts) continue
+    const t = new Date(ts).getTime()
+    if (masReciente === null || t > masReciente.ts) {
+      masReciente = { iniciativa: p, ts: t }
+    }
+  }
+  if (!masReciente) return null
+  return {
+    iniciativa: masReciente.iniciativa,
+    dias: Math.floor((Date.now() - masReciente.ts) / (1000 * 60 * 60 * 24)),
+  }
+}
+
 // ── Breakdown por eje ─────────────────────────────────────────────────────────
 
 export type EjeBreakdown = {

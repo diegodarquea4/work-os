@@ -9,6 +9,7 @@ import {
   iniciativasSinActividad,
   criticalAlertCountFor,
   diasDesdeUltimaActividad,
+  ultimaActividadConIniciativa,
   ejeBreakdownFor,
   topEjesPorAtencion,
 } from '@/lib/regionSummary'
@@ -221,6 +222,37 @@ describe('diasDesdeUltimaActividad', () => {
       1: new Date(NOW - 1 * 24 * 60 * 60 * 1000).toISOString(),
     }
     expect(diasDesdeUltimaActividad('II', projects, actividad)).toBeNull()
+  })
+})
+
+describe('ultimaActividadConIniciativa', () => {
+  it('devuelve null si NINGUNA iniciativa tiene actividad', () => {
+    const projects = [makeIniciativa({ id: 1, n: 1, cod: 'II' })]
+    expect(ultimaActividadConIniciativa('II', projects, { 1: null })).toBeNull()
+  })
+
+  it('devuelve la iniciativa con actividad más reciente y sus días', () => {
+    const projects = [
+      makeIniciativa({ id: 1, n: 1, cod: 'II', nombre: 'Vieja' }),
+      makeIniciativa({ id: 2, n: 2, cod: 'II', nombre: 'Fresca' }),
+    ]
+    const actividad: Record<number, string | null> = {
+      1: new Date(NOW - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      2: new Date(NOW - 2  * 24 * 60 * 60 * 1000).toISOString(),
+    }
+    const result = ultimaActividadConIniciativa('II', projects, actividad)
+    expect(result?.iniciativa.nombre).toBe('Fresca')
+    expect(result?.dias).toBe(2)
+  })
+
+  it('ignora iniciativas de otras regiones', () => {
+    const projects = [
+      makeIniciativa({ id: 1, n: 1, cod: 'III', nombre: 'Otra región' }),
+    ]
+    const actividad: Record<number, string | null> = {
+      1: new Date(NOW - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+    expect(ultimaActividadConIniciativa('II', projects, actividad)).toBeNull()
   })
 })
 
