@@ -18,24 +18,16 @@ import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
 import RegionEjesPanel from './RegionEjesPanel'
+import AlertCard from './AlertCard'
 import { useCanEditAny } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import {
+  diasSinActividad,
+  diasHastaHito,
+  ejeBreakdownFor,
+} from '@/lib/regionSummary'
 
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function diasSinActividad(lastIso: string | null | undefined): number | null {
-  if (!lastIso) return null
-  return Math.floor((Date.now() - new Date(lastIso).getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function diasHastaHito(fechaStr: string | null): number | null {
-  if (!fechaStr) return null
-  const hoy = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local timezone
-  const diff = new Date(fechaStr).getTime() - new Date(hoy).getTime()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 
@@ -62,51 +54,6 @@ function Sparkline({ data, color = '#3B82F6', height = 30 }: { data: number[]; c
         strokeLinecap="round"
       />
     </svg>
-  )
-}
-
-// ── AlertCard ─────────────────────────────────────────────────────────────────
-
-type AlertItem = { label: string; sub: string; isUrgent?: boolean }
-
-function AlertCard({ icon, title, color, items }: {
-  icon: string
-  title: string
-  color: 'red' | 'amber' | 'gray'
-  items: AlertItem[]
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const borderCls = color === 'red'   ? 'border-red-100 bg-red-50'
-                  : color === 'amber' ? 'border-amber-100 bg-amber-50'
-                  :                     'border-gray-100 bg-gray-50'
-  const titleCls  = color === 'red'   ? 'text-red-700'
-                  : color === 'amber' ? 'text-amber-700'
-                  :                     'text-gray-600'
-  const visible   = expanded ? items : items.slice(0, 3)
-
-  return (
-    <div className={`rounded-xl border p-3 ${borderCls}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-xs font-semibold flex items-center gap-1.5 ${titleCls}`}>
-          <span>{icon}</span>{title}
-        </span>
-        {items.length > 3 && (
-          <button onClick={() => setExpanded(e => !e)} className="text-[10px] text-gray-400 hover:text-gray-600">
-            {expanded ? 'Ver menos' : `+${items.length - 3} más`}
-          </button>
-        )}
-      </div>
-      <div className="space-y-1.5">
-        {visible.map((item, i) => (
-          <div key={i} className="flex flex-col">
-            <span className={`text-xs font-medium leading-tight truncate ${item.isUrgent ? 'text-red-700' : 'text-slate-700'}`}>
-              {item.label}
-            </span>
-            <span className="text-[10px] text-gray-400 truncate">{item.sub}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 
@@ -326,43 +273,15 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     ? PREGO_FASES.filter(f => prego[f.key] === 'bloqueado')
     : []
 
-  // Eje breakdown — iteramos el catálogo `region_ejes` (no los strings libres)
-  // y agregamos las iniciativas que matchean por `eje_id`. Las iniciativas
-  // sin `eje_id` (legacy raro post-migración) quedan fuera del breakdown —
+  // Eje breakdown — extraído a lib/regionSummary.ts::ejeBreakdownFor para
+  // compartir con el preview del Mapa (RegionPreviewPanel). Iteramos el
+  // catálogo `region_ejes` (no los strings libres) y agregamos las iniciativas
+  // matcheadas por `eje_id`. Las sin `eje_id` quedan fuera del breakdown —
   // si admin las ve faltar en los totales, las edita y les asigna eje.
-  // Ordenado por `numero` ascendente — el orden estructural del catálogo.
-  const ejeData = useMemo(() => {
-    return regionEjes
-      .map(re => {
-        const matching = regionIniciativas.filter(p => p.eje_id === re.id)
-        const total = matching.length
-        if (total === 0) {
-          return {
-            ejeId: re.id,
-            numero: re.numero,
-            nombre: re.nombre,
-            total: 0,
-            avgPct: 0,
-            verde: 0, ambar: 0, rojo: 0,
-            invSum: 0,
-          }
-        }
-        const pctSum = matching.reduce((s, p) => s + (p.pct_avance ?? 0), 0)
-        const verde  = matching.filter(p => p.estado_semaforo === 'verde').length
-        const ambar  = matching.filter(p => p.estado_semaforo === 'ambar').length
-        const rojo   = matching.filter(p => p.estado_semaforo === 'rojo').length
-        const invSum = matching.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
-        return {
-          ejeId: re.id,
-          numero: re.numero,
-          nombre: re.nombre,
-          total,
-          avgPct: Math.round(pctSum / total),
-          verde, ambar, rojo,
-          invSum,
-        }
-      })
-  }, [regionEjes, regionIniciativas])
+  const ejeData = useMemo(
+    () => selectedCod ? ejeBreakdownFor(selectedCod, iniciativas, regionEjes) : [],
+    [selectedCod, iniciativas, regionEjes],
+  )
 
   // Metric series from v2
   const desocCtx = v2Ind.get('EMP_DESOC_TASA')

@@ -6,8 +6,8 @@ import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS } from '@/lib/regions'
-import { getRegionColor } from '@/lib/regionColors'
-import ProjectsPanel from './ProjectsPanel'
+import MapaSummarySidebar from './MapaSummarySidebar'
+import RegionPreviewPanel from './RegionPreviewPanel'
 import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
@@ -136,6 +136,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     }
   }, [view, activeRegionName, selectedRegion?.cod])
 
+  // Mapa: sincronizar `mapaMode` con la presencia de región seleccionada. Sin
+  // este effect el modo quedaría desfasado cuando el usuario abre/cierra el
+  // preview clickeando el polígono o la X. No tocamos `previewWidthPct` acá
+  // — eso lo maneja el drag.
+  useEffect(() => {
+    if (view !== 'mapa') return
+    setMapaMode(selectedRegion ? 'preview' : 'summary')
+  }, [selectedRegion, view])
+
   // Regiones que el usuario puede ver. null = sin restricción (admin/editor/viewer
   // sin region_cods); array = lista exacta de nombres permitidos. Se pasa a los
   // selectores de Kanban/Atención para que muestren TODAS las regiones aunque
@@ -166,10 +175,24 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setViewDropOpen(prev => !prev)
   }
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
-  // Default 680px: por encima del umbral de 640px que activa el grid de 2 columnas
-  // en ProjectsPanel — así el panel arranca mostrando más iniciativas al toque.
-  // El usuario puede achicarlo manualmente hasta 320 si lo prefiere a 1 columna.
-  const [panelWidth, setPanelWidth]           = useState(680)
+
+  // ── Mapa: modo y drag ──────────────────────────────────────────────────────
+  // El Mapa tiene dos modos visuales según haya región seleccionada:
+  //   - 'summary': sidebar derecho con 16 filas accionables (default).
+  //   - 'preview': preview compacto del Dashboard regional con CTA "Ver
+  //                dashboard completo" + drag right-to-left para transición.
+  // `previewWidthPct` controla el ancho actual del preview (entre 30 y 100).
+  // Al llegar a >= 80 dispara el switch a `vista-regional` y reset a 40.
+  type MapaMode = 'summary' | 'preview' | 'transitioning'
+  const [mapaMode, setMapaMode]                 = useState<MapaMode>('summary')
+  const [previewWidthPct, setPreviewWidthPct]   = useState<number>(40)
+  // Highlight cruzado entre sidebar y mapa: hover sobre una fila del sidebar
+  // resalta el polígono correspondiente.
+  const [hoveredCod, setHoveredCod]             = useState<string | null>(null)
+
+  const dragStartXMapa     = useRef<number | null>(null)
+  const dragStartWidthMapa = useRef<number>(40)
+
   const [actividad, setActividad]             = useState<Record<number, string | null>>({})
   const [actividadLoading, setActividadLoading] = useState(true)
 
@@ -217,31 +240,46 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       setView('vista-regional')
     }
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
-  const isDragging                            = useRef(false)
-  const dragStartX                            = useRef(0)
-  const dragStartWidth                        = useRef(420)
-
-  function handleResizeStart(e: React.MouseEvent) {
+  // Drag right-to-left desde el borde izquierdo del preview. Pointer Events
+  // cubre mouse + touch + pen sin código separado. Llega a >= 80% → snap a
+  // 100 + setView('vista-regional'). Snap intermedio en [50, 80) a 60%. <50%
+  // vuelve a 40%. Resistente a reduced motion vía CSS transitions (las
+  // duraciones se respetan; con prefers-reduced-motion el snap se ve
+  // instantáneo en navegadores modernos).
+  function handlePreviewPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (mapaMode !== 'preview') return
     e.preventDefault()
-    isDragging.current = true
-    dragStartX.current = e.clientX
-    dragStartWidth.current = panelWidth
+    setMapaMode('transitioning')
+    dragStartXMapa.current = e.clientX
+    dragStartWidthMapa.current = previewWidthPct
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
 
-    function onMouseMove(ev: MouseEvent) {
-      if (!isDragging.current) return
-      const delta = dragStartX.current - ev.clientX
-      const newWidth = Math.min(Math.max(320, dragStartWidth.current + delta), 900)
-      setPanelWidth(newWidth)
+  function handlePreviewPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (mapaMode !== 'transitioning' || dragStartXMapa.current === null) return
+    const dx = dragStartXMapa.current - e.clientX  // positivo si arrastra hacia izquierda
+    const viewportW = window.innerWidth
+    const newPct = Math.min(100, Math.max(30, dragStartWidthMapa.current + (dx / viewportW) * 100))
+    setPreviewWidthPct(newPct)
+  }
+
+  function handlePreviewPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* noop */ }
+    dragStartXMapa.current = null
+    if (previewWidthPct >= 80) {
+      setPreviewWidthPct(100)
+      setTimeout(() => {
+        setView('vista-regional')
+        setPreviewWidthPct(40)
+        setMapaMode('preview')
+      }, 300)
+    } else if (previewWidthPct >= 50) {
+      setPreviewWidthPct(60)
+      setMapaMode('preview')
+    } else {
+      setPreviewWidthPct(40)
+      setMapaMode('preview')
     }
-
-    function onMouseUp() {
-      isDragging.current = false
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
   }
 
   function handleUpdatePrioridad(n: number, patch: Partial<Iniciativa>) {
@@ -505,137 +543,72 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
-      {/* Map view */}
+      {/* Map view — entrada geográfica al Dashboard regional.
+         Sin región: MapaSummarySidebar con 16 filas accionables.
+         Con región: RegionPreviewPanel + drag right-to-left → vista-regional. */}
       {view === 'mapa' && (
         <div className="flex flex-1 overflow-hidden">
-          {/* Map */}
-          <div className="flex-1 relative">
+          {/* Mapa: width responde a previewWidthPct cuando hay preview abierto. */}
+          <div
+            className="relative min-w-0 transition-[flex-basis] duration-300 ease-out motion-reduce:transition-none"
+            style={{
+              flexGrow:   mapaMode === 'summary' ? 1 : 0,
+              flexShrink: 1,
+              flexBasis:  mapaMode === 'summary' ? 'auto' : `${100 - previewWidthPct}%`,
+            }}
+          >
             <ChileMap
               geoData={geoData}
-              selectedCod={selectedRegion?.cod ?? null}
+              selectedCod={selectedRegion?.cod ?? hoveredCod}
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
               lockedRegions={lockedRegions}
             />
-
-            {!selectedRegion && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-md text-xs text-gray-600 pointer-events-none z-[1000]">
-                Haz clic en una región para ver sus iniciativas
-              </div>
-            )}
           </div>
 
-          {/* Side panel — projects */}
-          {selectedRegion && (
+          {/* Preview regional */}
+          {(mapaMode === 'preview' || mapaMode === 'transitioning') && selectedRegion && (
             <div
-              className="flex-shrink-0 overflow-hidden shadow-xl z-[1100] relative"
-              style={{ width: panelWidth }}
+              className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-out motion-reduce:transition-none"
+              style={{ flexBasis: `${previewWidthPct}%` }}
             >
-              {/* Resize handle */}
-              <div
-                onMouseDown={handleResizeStart}
-                className="absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-col-resize group"
-              >
-                <div className="absolute inset-0 group-hover:bg-blue-400/30 group-active:bg-blue-400/50 transition-colors" />
-              </div>
-              <ProjectsPanel
+              <RegionPreviewPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
-                panelWidth={panelWidth}
+                actividad={actividad}
                 onClose={() => setSelectedRegion(null)}
-                onUpdatePrioridad={handleUpdatePrioridad}
-                onDeletePrioridad={handleDeletePrioridad}
+                onGoToKanban={() => setView('kanban')}
+                onGoToDashboard={() => {
+                  setMapaMode('transitioning')
+                  setPreviewWidthPct(100)
+                  setTimeout(() => {
+                    setView('vista-regional')
+                    setPreviewWidthPct(40)
+                    setMapaMode('preview')
+                  }, 300)
+                }}
+                onPointerDownDragHandle={handlePreviewPointerDown}
+                onPointerMoveDragHandle={handlePreviewPointerMove}
+                onPointerUpDragHandle={handlePreviewPointerUp}
               />
             </div>
           )}
 
-          {/* Region list sidebar */}
-          {!selectedRegion && (
-            <div className="w-80 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-              {/* Summary header */}
-              <div className="px-5 py-4 border-b border-gray-100 bg-slate-50">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Situación general</h3>
-                  <span className="text-xs text-gray-400">16 regiones</span>
-                </div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all"
-                      style={{ width: `${globalAvgPct}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-bold text-slate-700 w-10 text-right">{globalAvgPct}%</span>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></span>
-                  <span className="ml-auto text-gray-400">{localIniciativas.length} iniciativas</span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto">
-                {REGIONS.map(region => {
-                  const count  = projectCounts[region.nombre] ?? 0
-                  const color  = getRegionColor(region.nombre)
-                  const rag    = ragFor(region.nombre)
-                  const avgPct = avgPctFor(region.nombre)
-                  const barColor = avgPct === 100 ? 'bg-green-500' : avgPct >= 60 ? 'bg-blue-500' : avgPct >= 30 ? 'bg-amber-400' : avgPct > 0 ? 'bg-red-400' : 'bg-gray-200'
-                  const isLocked = lockedRegions.includes(region.cod)
-                  return (
-                    <button
-                      key={region.cod}
-                      onClick={() => !isLocked && handleSelectRegion(region.nombre, region.cod)}
-                      disabled={isLocked}
-                      className={`w-full px-5 py-3.5 text-left border-b border-gray-100 transition-colors ${isLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-1" style={{ backgroundColor: color }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <div className="text-sm font-semibold text-gray-800 truncate">{region.nombre}</div>
-                            <div className="flex-shrink-0 text-right">
-                              <span className="text-sm font-bold text-gray-700">{count}</span>
-                              <span className="text-xs text-gray-400 ml-1">init.</span>
-                            </div>
-                          </div>
-                          <div className="text-xs text-gray-500 mb-2">{region.capital}</div>
-                          {/* Progress bar */}
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                              <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${avgPct}%` }} />
-                            </div>
-                            <span className="text-xs text-gray-500 w-8 text-right">{avgPct}%</span>
-                          </div>
-                          {/* RAG indicators */}
-                          <div className="flex items-center gap-2">
-                            {rag.rojo > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <span className="w-2 h-2 rounded-full bg-red-500"/>
-                                <span className="text-xs text-red-600 font-medium">{rag.rojo}</span>
-                              </span>
-                            )}
-                            {rag.ambar > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <span className="w-2 h-2 rounded-full bg-amber-400"/>
-                                <span className="text-xs text-amber-600 font-medium">{rag.ambar}</span>
-                              </span>
-                            )}
-                            {rag.verde > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <span className="w-2 h-2 rounded-full bg-green-500"/>
-                                <span className="text-xs text-green-600 font-medium">{rag.verde}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+          {/* Sidebar resumen (default) */}
+          {mapaMode === 'summary' && (
+            <MapaSummarySidebar
+              projects={localIniciativas}
+              actividad={actividad}
+              projectCounts={projectCounts}
+              globalAvgPct={globalAvgPct}
+              globalRag={globalRag}
+              totalIniciativas={localIniciativas.length}
+              lockedRegions={lockedRegions}
+              ragFor={ragFor}
+              avgPctFor={avgPctFor}
+              onSelectRegion={handleSelectRegion}
+              onHoverRegion={setHoveredCod}
+            />
           )}
         </div>
       )}
