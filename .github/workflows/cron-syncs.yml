@@ -56,7 +56,10 @@ on:
           - todos-semanales
 
 env:
-  BASE_URL: https://work-os-sandy.vercel.app
+  # Producción real: el proyecto Vercel "psg-regiones" sirve este dominio.
+  # El otro proyecto Vercel "work-os" (sandy) existe pero no tiene env vars
+  # — pendiente eliminarlo cuando se confirme que no se usa.
+  BASE_URL: https://work-os-theta.vercel.app
 
 jobs:
   run:
