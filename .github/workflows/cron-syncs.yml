@@ -1,0 +1,129 @@
+name: Cron syncs to Vercel
+
+# Ejecuta los syncs del proyecto contra los endpoints de producción.
+# Reemplaza a los crons de vercel.json — Vercel Hobby limita a 2 crons
+# activos máximo, esto despeja el cupo.
+#
+# Schedules: idénticos a los originales en vercel.json. Cada trigger
+# `schedule` se distingue por `github.event.schedule` (string del cron),
+# que se mapea al endpoint correspondiente en el step `resolve`.
+#
+# Auth: el endpoint exige `Authorization: Bearer <CRON_SECRET>`. El secret
+# se setea como GitHub repo secret (Settings → Secrets and variables →
+# Actions → New repository secret → Name: CRON_SECRET).
+#
+# Trigger manual: Actions → "Cron syncs to Vercel" → "Run workflow" →
+# elegir endpoint del dropdown.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'           # sinca + health (diario)
+    - cron: '0 7 * * 1'           # ine-sync
+    - cron: '0 8 * * 1'           # seia-sync
+    - cron: '0 9 * * 1'           # mop-sync
+    - cron: '0 10 * * 3'          # stop-sync (miércoles)
+    - cron: '0 11 * * 1'          # pib-sync
+    - cron: '0 12 * * 1'          # external-sync
+    - cron: '0 13 * * 1'          # cne-sync
+    - cron: '0 14 1 * *'          # deis-sync (día 1 cada mes)
+    - cron: '0 14 15 3 *'         # mineduc-sync (15 marzo)
+    - cron: '0 15 1 1,7 *'        # subtel-sync (1 enero/julio)
+    - cron: '0 15 5 1,7 *'        # mercadopublico-sync (5 enero/julio)
+    - cron: '0 16 5 1,4,7,10 *'   # dipres-sync (5 trimestral)
+
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: 'Endpoint a disparar manualmente'
+        required: true
+        default: 'sinca-sync'
+        type: choice
+        options:
+          - sinca-sync
+          - ine-sync
+          - seia-sync
+          - mop-sync
+          - pib-sync
+          - stop-sync
+          - external-sync
+          - cne-sync
+          - deis-sync
+          - subtel-sync
+          - dipres-sync
+          - mineduc-sync
+          - mercadopublico-sync
+          - health
+          - todos-semanales
+
+env:
+  BASE_URL: https://work-os-sandy.vercel.app
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: sync-${{ github.event.schedule || inputs.endpoint }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Resolver endpoint(s) según trigger
+        id: resolve
+        run: |
+          case "${{ github.event.schedule }}" in
+            '0 6 * * *')          ENDPOINTS="sinca-sync health" ;;
+            '0 7 * * 1')          ENDPOINTS="ine-sync" ;;
+            '0 8 * * 1')          ENDPOINTS="seia-sync" ;;
+            '0 9 * * 1')          ENDPOINTS="mop-sync" ;;
+            '0 10 * * 3')         ENDPOINTS="stop-sync" ;;
+            '0 11 * * 1')         ENDPOINTS="pib-sync" ;;
+            '0 12 * * 1')         ENDPOINTS="external-sync" ;;
+            '0 13 * * 1')         ENDPOINTS="cne-sync" ;;
+            '0 14 1 * *')         ENDPOINTS="deis-sync" ;;
+            '0 14 15 3 *')        ENDPOINTS="mineduc-sync" ;;
+            '0 15 1 1,7 *')       ENDPOINTS="subtel-sync" ;;
+            '0 15 5 1,7 *')       ENDPOINTS="mercadopublico-sync" ;;
+            '0 16 5 1,4,7,10 *')  ENDPOINTS="dipres-sync" ;;
+            *)
+              # workflow_dispatch manual
+              case "${{ inputs.endpoint }}" in
+                todos-semanales)
+                  ENDPOINTS="ine-sync seia-sync mop-sync pib-sync external-sync cne-sync"
+                  ;;
+                *)
+                  ENDPOINTS="${{ inputs.endpoint }}"
+                  ;;
+              esac
+              ;;
+          esac
+          echo "endpoints=$ENDPOINTS" >> "$GITHUB_OUTPUT"
+          echo "→ Disparando: $ENDPOINTS"
+
+      - name: POST a producción
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET en este repo. Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          fail=0
+          for ep in ${{ steps.resolve.outputs.endpoints }}; do
+            echo "::group::POST /api/$ep"
+            echo "→ $BASE_URL/api/$ep"
+            HTTP_CODE=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+              --max-time 600 \
+              -X POST "$BASE_URL/api/$ep" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json" \
+              || echo "000")
+            echo "HTTP $HTTP_CODE"
+            head -c 4096 /tmp/body.json
+            echo
+            if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" = "000" ]; then
+              echo "::error::$ep falló con HTTP $HTTP_CODE"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
