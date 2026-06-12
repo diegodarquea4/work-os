@@ -8,33 +8,13 @@ export async function GET() {
   if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const db = getSupabaseAdmin()
-  const { data: profiles, error: profileError } = await db
+  const { data, error } = await db
     .from('user_profiles')
     .select('id, email, full_name, role, region_cods, created_at')
     .order('created_at', { ascending: true })
 
-  if (profileError) return Response.json({ error: profileError.message }, { status: 500 })
-
-  // last_sign_in_at vive en auth.users. Lo leemos vía la Admin API y
-  // mergeamos por id. perPage=1000 cubre la base actual; si crece más
-  // allá, sumar paginación. Si falla, degradamos a null sin romper la
-  // respuesta — la columna mostrará "Nunca" en UI.
-  const { data: authData, error: authError } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (authError) {
-    console.error('[admin/users] auth.admin.listUsers error:', authError.message ?? authError)
-  }
-
-  const signInById = new Map<string, string | null>()
-  if (!authError && authData?.users) {
-    for (const u of authData.users) signInById.set(u.id, u.last_sign_in_at ?? null)
-  }
-
-  const enriched = (profiles ?? []).map(p => ({
-    ...p,
-    last_sign_in_at: signInById.get(p.id) ?? null,
-  }))
-
-  return Response.json(enriched)
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data)
 }
 
 export async function POST(request: Request) {

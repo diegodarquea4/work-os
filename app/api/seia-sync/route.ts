@@ -20,7 +20,7 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
-import { withSyncStatus } from '@/lib/syncRunner'
+import { recordSyncStatus } from '@/lib/syncStatus'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   if (request.headers.get('x-vercel-cron') !== '1') {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return withSyncStatus('seia', runSync)
+  return runSync()
 }
 
 export async function POST(request: NextRequest) {
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return withSyncStatus('seia', runSync)
+  return runSync()
 }
 
 // ── Core sync ────────────────────────────────────────────────────────────────
@@ -174,6 +174,8 @@ async function runSync() {
     totalUpserted === 0 && errors.length > 0 ? 'error'
     : errors.length > 0 ? 'partial'
     : 'ok'
+
+  await recordSyncStatus('seia', { status, durationMs, rows: totalUpserted, errors })
 
   if (status === 'error') return Response.json({ ok: false, errors })
 

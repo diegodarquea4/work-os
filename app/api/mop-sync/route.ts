@@ -17,7 +17,7 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
-import { withSyncStatus } from '@/lib/syncRunner'
+import { recordSyncStatus } from '@/lib/syncStatus'
 
 export const dynamic = 'force-dynamic'
 export const runtime  = 'nodejs'
@@ -299,6 +299,8 @@ async function runSync() {
     : errors.length > 0 ? 'partial'
     : 'ok'
 
+  await recordSyncStatus('mop', { status, durationMs, rows: totalUpserted, errors })
+
   if (status === 'error') return Response.json({ ok: false, errors })
 
   return Response.json({
@@ -317,7 +319,7 @@ export async function GET(request: NextRequest) {
   if (request.headers.get('x-vercel-cron') !== '1') {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return withSyncStatus('mop', runSync)
+  return runSync()
 }
 
 export async function POST(request: NextRequest) {
@@ -326,5 +328,5 @@ export async function POST(request: NextRequest) {
   if (!secret || auth !== `Bearer ${secret}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return withSyncStatus('mop', runSync)
+  return runSync()
 }
