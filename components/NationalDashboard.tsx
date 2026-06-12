@@ -605,7 +605,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
           {/* Avance */}
           <div className="flex-shrink-0 text-center px-3">
-            <div className="text-2xl font-bold text-slate-700 leading-none">{avgPct}%</div>
+            <div className="text-fluid-3xl font-bold text-slate-700 leading-none">{avgPct}%</div>
             <div className="text-xs text-gray-400 mt-0.5">avance</div>
           </div>
 
@@ -943,7 +943,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <tr>
               {visibleCols.has('n')             && <ColHeader col="n" label="#" />}
               {visibleCols.has('estado')        && <ColHeader col="semaforo" label="Estado" />}
-              {visibleCols.has('iniciativa')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Iniciativa</th>}
+              {visibleCols.has('iniciativa')    && <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">Iniciativa</th>}
               {visibleCols.has('region')        && <ColHeader col="region" label="Región" />}
               {visibleCols.has('comuna')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Comuna</th>}
               {visibleCols.has('ministerio')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Ministerio</th>}
@@ -1281,7 +1281,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           </td>
         )}
         {visibleCols.has('iniciativa') && (
-          <td className="px-3 py-3.5 max-w-xs">
+          <td className="sticky left-0 z-10 bg-white px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">
             <div className="flex items-start gap-1.5">
               {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
               <div className="flex-1 min-w-0">

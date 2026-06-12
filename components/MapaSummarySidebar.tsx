@@ -221,7 +221,7 @@ function RegionRow({ region, count, avgPct, rag, alertas, dias, isLocked, onSele
         <div className="flex-1 min-w-0">
           {/* Línea 1: nombre + count + avance */}
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <div className="text-sm font-semibold text-gray-800 truncate">{region.nombre}</div>
+            <div className="text-fluid-sm font-semibold text-gray-800 truncate">{region.nombre}</div>
             <div className="flex items-baseline gap-2 flex-shrink-0">
               <span className="text-xs text-gray-400 tabular-nums">{count}</span>
               <span className="text-sm font-bold text-gray-700 tabular-nums w-9 text-right">{avgPct}%</span>

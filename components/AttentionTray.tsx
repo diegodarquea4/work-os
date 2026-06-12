@@ -530,7 +530,7 @@ export default function AttentionTray({
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-3xl mx-auto px-6 py-6">
+      <div className="max-w-[min(48rem,90vw)] mx-auto px-6 py-6">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
