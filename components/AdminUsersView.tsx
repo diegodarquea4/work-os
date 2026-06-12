@@ -13,6 +13,22 @@ type UserRow = {
   role: UserRole
   region_cods: string[]
   created_at: string
+  // ISO timestamp del último login (auth.users.last_sign_in_at). null si el
+  // usuario nunca inició sesión (recién creado y no entró todavía).
+  last_sign_in_at: string | null
+}
+
+/** Etiqueta y color para "Último acceso" según antigüedad. */
+function formatUltimoAcceso(iso: string | null): { label: string; color: string; sub: string | null } {
+  if (!iso) return { label: 'Nunca', color: 'text-gray-300', sub: 'Sin ingreso registrado' }
+  const ts = new Date(iso).getTime()
+  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24))
+  const fecha = new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (dias <= 0)  return { label: 'Hoy',           color: 'text-green-700', sub: fecha }
+  if (dias === 1) return { label: 'Ayer',          color: 'text-slate-700', sub: fecha }
+  if (dias < 7)   return { label: `Hace ${dias}d`, color: 'text-slate-700', sub: fecha }
+  if (dias < 30)  return { label: `Hace ${dias}d`, color: 'text-amber-700', sub: fecha }
+  return { label: `Hace ${dias}d`, color: 'text-red-700', sub: fecha }
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -259,6 +275,7 @@ export default function AdminUsersView() {
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
@@ -297,6 +314,17 @@ export default function AdminUsersView() {
                       ) : (
                         <span className="text-gray-300 text-xs">—</span>
                       )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {(() => {
+                        const { label, color, sub } = formatUltimoAcceso(u.last_sign_in_at)
+                        return (
+                          <div className="flex flex-col" title={u.last_sign_in_at ?? 'Nunca'}>
+                            <span className={`text-xs font-medium ${color}`}>{label}</span>
+                            {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1">
