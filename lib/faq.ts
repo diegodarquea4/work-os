@@ -111,6 +111,77 @@ Si echas en falta algún atajo en particular, escríbenos.`,
     ultima_revision: '2026-06-08',
   },
 
+  {
+    id: 'inicio-mapa-preview',
+    audiencia: 'todos',
+    categoria: 'Primeros pasos',
+    pregunta: '¿Para qué sirve el panel lateral del Mapa con KPIs?',
+    respuesta:
+`Cuando haces clic en una región en el Mapa, el panel lateral derecho muestra una previsualización rápida de esa región:
+
+- 3 KPI cards: Atención (alertas activas), Próximo hito (con cuántos días para vencer) y Última actividad (cuándo se actualizó algo).
+- Avance promedio + delta vs nacional + fase PREGO actual.
+- Avance por eje en barras compactas.
+- Dos CTAs al pie: "Ver Mi Región" (entra directo al Dashboard regional) y "Cerrar".
+
+Pensado para decidir rápido si vale la pena entrar al Dashboard sin perder de vista el mapa. Si tu pantalla no es muy ancha, puedes achicar el sidebar arrastrando el borde — quedan 280px como mínimo.`,
+    relacionadas: ['inicio-region-activa'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'inicio-region-activa',
+    audiencia: 'todos',
+    categoria: 'Primeros pasos',
+    pregunta: 'El panel ¿se acuerda en qué región estaba mirando la última vez?',
+    respuesta:
+`Sí. La región activa se sincroniza entre todas las vistas (Mapa, Mi Región, Dashboard, Kanban, Bandeja) y se guarda en tu navegador (localStorage). Cuando vuelves a abrir el panel mañana, arrancas donde dejaste.
+
+Casos especiales:
+- Si eres regional y la región guardada NO es una de tus regiones asignadas (puede pasar si te cambiaron de delegación), el panel hace fallback automático a una que sí puedas ver.
+- Si limpias el caché del navegador, se pierde la región guardada. La próxima vez arrancas en el Mapa nacional.
+- Si tienes varias regiones asignadas, puedes cambiar de una a otra desde el selector "Región: ▾" presente en cada vista. El cambio se propaga al instante a todas las demás.`,
+    relacionadas: ['inicio-mapa-preview', 'cuenta-multi-region'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'inicio-pantalla-recomendada',
+    audiencia: 'todos',
+    categoria: 'Primeros pasos',
+    pregunta: '¿Qué tamaño de pantalla recomiendan para usar el panel?',
+    respuesta:
+`El panel está diseñado para desktop y monitores grandes (1280px de ancho hacia arriba, hasta 4K). Los componentes son fluidos: las tipografías y espaciados crecen con la pantalla, así que tanto en una laptop 13" como en un monitor 27" se ve cómodo.
+
+- Recomendado: laptop 13" o superior (1280px+) hasta monitor 4K.
+- Best-effort: tablet en landscape (1024-1279px). Algunas vistas densas (Dashboard, Kanban) pueden requerir scroll horizontal.
+- No soportado: mobile (< 1024px). El panel entra y se ve, pero las tablas y modales quedan incómodos. Para uso en terreno, ver "¿El panel se puede usar desde el celular?".
+
+Si trabajas en pantalla más chica y notas que algo no se ve bien (texto cortado, columnas desbordadas), escríbenos con captura.`,
+    relacionadas: ['cuenta-mobile', 'cuenta-responsive'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'inicio-cambios-recientes',
+    audiencia: 'regional',
+    categoria: 'Primeros pasos',
+    pregunta: '¿Qué hay de nuevo en el panel desde la última vez que entré?',
+    respuesta:
+`Los cambios más recientes que vas a notar (junio 2026):
+
+- Mapa rediseñado: al hacer clic en una región se abre un panel lateral con KPIs y un botón directo a Mi Región (antes te llevaba al Dashboard).
+- Métricas por eje: al hacer clic en un eje en Mi Región, se despliega un drawer lateral con las métricas de ese eje.
+- Etiquetas (tags) en iniciativas: clasificación libre multi-valor. Filtras por etiqueta en Dashboard, Bandeja y Kanban.
+- Modo Kanban "Por tag": tercera vista junto a Por eje y Por ministerio.
+- Filtros rediseñados: en Dashboard y Bandeja, los filtros ahora son multi-select con search y chips activos arriba.
+- En la ficha: nueva etapa "Prefactibilidad" + trayectoria del avance en Historial + dot de hito en Calendario + edición inline de tags.
+- Catastro MINVU: link directo cuando una iniciativa está marcada en el catastro nacional.
+- Indicadores v2: el modal de Indicadores tiene 7 tabs por familia (Pulso, Económico, Social, Demográfico, Salud y Educación, Seguridad, Ambiente).
+- Atajo: Shift+/ abre el Centro de Ayuda desde cualquier vista.
+
+Para el detalle de cada novedad busca el tema en el FAQ.`,
+    relacionadas: ['inicio-mapa-preview', 'metricas-drawer-eje', 'tags-uso', 'filtros-multi-select'],
+    ultima_revision: '2026-06-16',
+  },
+
   // ── 1. Carga semanal ────────────────────────────────────────────────────
   {
     id: 'carga-descargar-excel',
@@ -400,6 +471,115 @@ Para mantener el flujo sano, conviene que el equipo admin acuerde quién revisa 
     ultima_revision: '2026-06-08',
   },
 
+  {
+    id: 'carga-flujo-completo',
+    audiencia: 'regional',
+    categoria: 'Carga semanal',
+    pregunta: '¿Cuál es el paso a paso completo de una carga semanal típica?',
+    respuesta:
+`Un flujo end-to-end que toma 10-20 minutos:
+
+1. DESCARGA. Mi Región → botón "Proponer actualización" → enlace "Descarga las iniciativas actuales de [tu región]". El archivo viene pre-llenado con todos los datos vigentes y una hoja "Ejes válidos" como referencia.
+
+2. EDICIÓN OFFLINE. Abre el Excel. Modifica SOLO las celdas que cambiaron esta semana — las que dejas intactas se mantienen igual. Si tienes iniciativas nuevas, agrégalas al final con la columna # vacía.
+
+3. SUBIDA. Vuelve a "Proponer actualización" → seleccionas el Excel → escribes una nota corta para el revisor ("carga semanal", "incluye actualización de Hospital X que entra en obras", etc.). Botón "Enviar propuesta".
+
+4. CONFIRMACIÓN. La propuesta queda como "Pendiente" en "Mis propuestas". El revisor de la división tiene hasta 48 hábiles para responder (típicamente el mismo día).
+
+5. SEGUIMIENTO. Cuando cambia el estado a Aprobada / Rechazada / Aplicada con avisos, abres la propuesta para ver el diff y la nota del revisor.
+
+6. ITERACIÓN. Si hubo errores parciales o rechazo, descargas un Excel nuevo (ya con los cambios aprobados aplicados) y rehaces solo las filas que fallaron.`,
+    relacionadas: ['carga-descargar-excel', 'carga-estado-propuesta', 'carga-correcciones-tipicas'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'carga-revisor-asignado',
+    audiencia: 'regional',
+    categoria: 'Carga semanal',
+    pregunta: '¿Quién revisa mi propuesta? ¿Siempre la misma persona?',
+    respuesta:
+`No hay una persona asignada por región — todas las propuestas pendientes caen en una bandeja central que ve el equipo admin de la división. Quien la abra primero la revisa.
+
+Implicancias prácticas:
+- No esperes feedback "personalizado" basado en lo que sabe específicamente alguien. La nota del revisor se atiene al diff que entregaste y a las validaciones del sistema.
+- Si necesitas contexto humano sobre una iniciativa puntual, complementa la propuesta con un correo o llamada a tu contraparte habitual en DCI. La nota del panel queda para trazabilidad.
+- Si una propuesta lleva >24h pendiente y es tiempo-sensible, escríbenos directo a ${CONTACTO} mencionando el ID.
+
+A futuro vamos a asignar contrapartes por región. Por ahora, bandeja única.`,
+    relacionadas: ['carga-aprobar-propuesta', 'cuenta-contacto-dci'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'carga-correcciones-tipicas',
+    audiencia: 'regional',
+    categoria: 'Carga semanal',
+    pregunta: '¿Cuáles son los errores que más frecuentemente dejan una propuesta como "Aplicada con avisos"?',
+    respuesta:
+`Por orden de frecuencia:
+
+1. SEMÁFORO MAL ESCRITO. Los únicos 4 valores válidos: verde / ambar / rojo / gris. Si escribes "amarillo", "verde claro", "Verde", o lo dejas en blanco, esa fila no se actualiza. Tip: copia y pega de otra fila válida.
+
+2. FECHA EN FORMATO NO ESTÁNDAR. Usa siempre DD-MM-YYYY (ej. 30-06-2026). Si Excel te lo convirtió a "30/06/2026" o "30 jun 2026", el parser lo rechaza.
+
+3. % AVANCE INVÁLIDO. Tiene que ser un número entre 0 y 100. Sin signo %. "85%" → falla. "85" → funciona.
+
+4. EJE QUE NO EXISTE EN EL CATÁLOGO. Falla antes de subir, con mensaje específico. Tip: revisa la hoja "Ejes válidos" del Excel descargado.
+
+5. MINISTERIO O COMUNA QUE NO ESTÁ EN EL CATÁLOGO. Como tags multi-valor, usa el separador ; (no coma). Ejemplo válido: "MINVU;MOP".
+
+6. TAGS MAL FORMATEADAS. Separador ;, sin espacios alrededor. Una tag puede tener comas internas (ej. "Salud, bienestar"), por eso el separador es ;.
+
+7. CÓDIGO BIP DUPLICADO entre dos filas nuevas. El sistema requiere que cada BIP sea único en tu cartera.`,
+    relacionadas: ['carga-aplicada-con-avisos', 'carga-eje-no-existe'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'carga-multi-region',
+    audiencia: 'regional',
+    categoria: 'Carga semanal',
+    pregunta: 'Tengo varias regiones asignadas, ¿subo un Excel por cada una?',
+    respuesta:
+`Sí. Cada Excel cubre UNA región, porque el catálogo de ejes y comunas es per-región. Si descargas el Excel desde Mi Región con una región seleccionada y luego lo subes, el sistema lo asocia automáticamente a esa región.
+
+Flujo recomendado para multi-región:
+
+1. Cambia de región en el selector "Región: ▾" de Mi Región.
+2. Descarga el Excel de la región actual.
+3. Edita y súbelo como propuesta.
+4. Repite para cada región tuya.
+
+Cada propuesta queda independiente en "Mis propuestas" con su etiqueta de región. El revisor las puede aprobar en cualquier orden.
+
+Atajo si trabajas mucho con varias: una hoja de trabajo separada por región en tu Excel local, y al subir copias-pegas las filas a un Excel limpio descargado del panel. Evita mezclar regiones en un solo archivo.`,
+    relacionadas: ['cuenta-multi-region', 'carga-descargar-excel'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'carga-diff-preview',
+    audiencia: 'admin',
+    categoria: 'Carga semanal',
+    pregunta: 'Antes de aprobar una propuesta, ¿qué tengo que mirar exactamente?',
+    respuesta:
+`Un checklist práctico de revisión:
+
+1. CONTEO. Arriba del preview hay un resumen: N filas a INSERTAR, M filas a UPDATE, K filas con error. Si los números no calzan con lo que esperabas (ej. "100 UPDATE" cuando esperabas 5), hay algo raro.
+
+2. CAMBIOS ESTRUCTURALES. Las filas marcadas con badge "ESTRUCTURAL" tocan eje, ministerio, prioridad, RAT o código BIP. Esas merecen revisión especial — el cambio queda en log con tu email como aprobador.
+
+3. ERRORES PARCIALES. Las filas con ⚠ rojo no se van a aplicar al aprobar. Mira si son errores típicos (semáforo mal, fecha mal) o algo conceptual.
+
+4. NOTA DEL AUTOR. Lee la nota que dejó el regional. A menudo explica algo que no se ve en el diff (cambio de criterio, contexto operativo).
+
+5. CONSISTENCIA INTERNA. ¿La región está aumentando todos los semáforos a verde de golpe? ¿Bajando todos los avances? Patrones raros pueden indicar carga sin revisar.
+
+6. NUEVAS INICIATIVAS. Si hay INSERTs, revisa que tengan datos básicos completos (eje, ministerio, prioridad, código BIP si corresponde).
+
+Aprobar = aplicar todo lo válido + dejar los errores parciales sin aplicar. Rechazar = nada se aplica, requiere nota obligatoria.`,
+    relacionadas: ['carga-aprobar-propuesta', 'carga-aprobar-parcial', 'carga-aplicada-con-avisos'],
+    ultima_revision: '2026-06-16',
+  },
+
   // ── 2. Permisos y roles ─────────────────────────────────────────────────
   {
     id: 'permisos-roles-existentes',
@@ -599,6 +779,71 @@ El cambio aplica al próximo login del usuario (o al refrescar su sesión).`,
     ultima_revision: '2026-06-08',
   },
 
+  {
+    id: 'permisos-mesa-desalojos',
+    audiencia: 'todos',
+    categoria: 'Permisos y roles',
+    pregunta: '¿Qué es la Mesa Interministerial de Desalojos y quién puede entrar?',
+    respuesta:
+`La Mesa Interministerial de Desalojos es un módulo dedicado, accesible solo para rol admin, donde se gestionan los casos de desalojo que requieren coordinación multi-ministerial.
+
+Cada caso es una iniciativa marcada con el toggle "es_desalojo". El módulo agrega capas por polígono (zonas geográficas dentro del caso), fases por tipología (A/B/C/D, distintas según el tipo de caso), responsables y calendario.
+
+Lo que ve cada rol:
+- Admin: acceso completo al módulo Mesa de Desalojos, modo Lista y modo Tablero. Edita capas, fases, responsables, documentos.
+- Editor: ve la Mesa pero solo en lectura.
+- Regional: NO ve la Mesa. Ve sus iniciativas marcadas con badge "Desalojo" en Kanban/Dashboard si la región tiene casos, pero no entra al módulo.
+- Viewer: solo lectura del módulo si la jefatura DCI le abre el acceso explícito.
+
+Si crees que tu región tiene un caso que debería estar en la Mesa, escríbenos a ${CONTACTO} con los detalles para evaluar.`,
+    relacionadas: ['desalojos-modulo', 'permisos-toggle-desalojo'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'permisos-toggle-desalojo',
+    audiencia: 'admin',
+    categoria: 'Permisos y roles',
+    pregunta: '¿Cómo marco una iniciativa como caso de Mesa de Desalojos?',
+    respuesta:
+`Desde la ficha de la iniciativa (admin-only). En el header de la ficha hay un toggle "Marca como Desalojo" — el cambio pasa por un endpoint dedicado (\`/api/prioridades/toggle-desalojo\`) que valida que solo admin puede ejecutarlo.
+
+Cuando marcas:
+- La iniciativa gana un badge "Desalojo" visible en Kanban, Dashboard y Bandeja.
+- Aparece en el módulo Mesa de Desalojos en el modo Lista.
+- Se crea un registro inicial en \`desalojo_detalle\` para el contexto del caso.
+
+Para empezar a trabajar con el caso una vez marcado:
+1. Define la tipología (A/B/C/D) en \`desalojo_detalle\`.
+2. Agrega 1 o más capas (polígonos) desde "Capas" en la ficha del caso.
+3. Para cada capa, gestiona las fases (PR, F1-F5 según tipología) con su semáforo y checklist.
+
+Desmarcar: el toggle se puede deshacer, pero los datos de capas/fases se conservan (no se borran). Si vas a desmarcar y quieres limpiar, primero borra capas manualmente.`,
+    relacionadas: ['permisos-mesa-desalojos', 'desalojos-modulo', 'desalojos-tipologias'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'permisos-ultimo-acceso',
+    audiencia: 'admin',
+    categoria: 'Permisos y roles',
+    pregunta: '¿Dónde veo cuándo entró cada usuario por última vez al panel?',
+    respuesta:
+`En la sección Usuarios (admin-only), la columna "Último acceso" muestra cuándo cada usuario se autenticó por última vez. Tiene dos líneas: una relativa ("Hoy", "Ayer", "Hace 4 días") y una absoluta (fecha completa).
+
+Código de color para escanear rápido:
+- Verde "Hoy" → activo en el día.
+- Gris "Ayer" o "Hace 1-6 días" → uso reciente normal.
+- Ámbar "Hace 7-29 días" → tibio, vale la pena verificar.
+- Rojo "Hace 30+ días" → posiblemente inactivo, candidato a desactivar.
+- Gris "Nunca" → la cuenta nunca se ha usado. Típico de altas recientes que aún no se logueado, o cuentas olvidadas.
+
+Útil para:
+- Identificar usuarios que no usan el panel y considerar desactivarlos (libera asientos).
+- Confirmar que un alta reciente efectivamente se logueó.
+- Investigar si un equipo regional dejó de usar el panel.`,
+    relacionadas: ['cuenta-listar-ultimo-acceso', 'cuenta-export-ultimo-acceso'],
+    ultima_revision: '2026-06-16',
+  },
+
   // ── 3. Ejes ──────────────────────────────────────────────────────────────
   {
     id: 'ejes-mi-region',
@@ -736,6 +981,77 @@ Si realmente quieres eliminarlo:
 Recomendación: para fusionar dos ejes que en realidad son lo mismo, mover todo al "ganador" y luego eliminar el "perdedor".`,
     relacionadas: ['ejes-crear'],
     ultima_revision: '2026-06-08',
+  },
+
+  {
+    id: 'ejes-catalogo-formal',
+    audiencia: 'todos',
+    categoria: 'Ejes',
+    pregunta: '¿Qué es el "catálogo formal de ejes" que mencionan en algunas partes?',
+    respuesta:
+`Es la lista versionada de ejes oficiales de cada región. Cada eje tiene un número único (1, 2, 3...) y un nombre. Las iniciativas y métricas referencian al catálogo por FK — no es un campo de texto libre como antes.
+
+Beneficios:
+- Validación temprana en Excel: si subes una iniciativa con un eje que no existe, el panel te avisa antes de enviarla.
+- Display consistente: en todas las vistas (Mi Región, Kanban, Dashboard, minutas) los ejes se muestran como "Eje N: Nombre".
+- Renombrar es seguro: cambiar el nombre no rompe las iniciativas (siguen unidas por número).
+- Reportes agregados confiables: el avance "por eje" no se rompe por variantes de tipeo.
+
+Quién gestiona:
+- Admin/editor de la división: crea, renombra y elimina ejes desde "Gestionar ejes" en Mi Región.
+- Regional: solo consulta. Si necesita un eje nuevo, lo pide vía correo.
+
+El catálogo es per-región: el Eje 1 de Antofagasta no tiene ninguna relación con el Eje 1 de Biobío. Son listas independientes.`,
+    relacionadas: ['ejes-mi-region', 'ejes-gestionar-panel', 'ejes-formato-canonico'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'ejes-prefactibilidad',
+    audiencia: 'todos',
+    categoria: 'Ejes',
+    pregunta: 'Veo una etapa "Prefactibilidad" en algunas iniciativas, ¿qué significa?',
+    respuesta:
+`Es una etapa nueva entre Preinversión y Diseño. Se incorporó porque muchas iniciativas tenían un período "intermedio" — los estudios técnicos y económicos previos al diseño definitivo — que antes no tenía nombre propio y caía mal en Preinversión o Diseño.
+
+Etapas vigentes en orden:
+- Preinversión
+- Prefactibilidad ← nueva
+- Diseño
+- Ejecución
+- Terminado
+- Operación
+
+Cuándo marcar Prefactibilidad:
+- Estás haciendo o esperando estudios de viabilidad económica.
+- Está en evaluación de DIPRES/MIDESO antes de pasar a diseño.
+- Tienes un anteproyecto pero no contrato de consultoría de diseño aún.
+
+Si una iniciativa ya estaba en Diseño y notas que se ajusta mejor a Prefactibilidad, cambia el campo en la próxima carga semanal.`,
+    relacionadas: ['carga-celdas-modificar', 'permisos-ficha-editables'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'ejes-gestionar-panel',
+    audiencia: 'admin_editor',
+    categoria: 'Ejes',
+    pregunta: '¿Cómo entro al panel para gestionar los ejes de una región?',
+    respuesta:
+`En Mi Región (con la región objetivo seleccionada en el selector) → junto al título "Avance por eje estratégico" hay un botón "Gestionar ejes". Click → se abre el panel CRUD lateral.
+
+Operaciones disponibles:
+- Listar ejes existentes con su número, nombre y conteo de iniciativas referenciándolos.
+- Agregar un eje nuevo (número único 1-99 + nombre puro, sin prefijo "Eje N:").
+- Editar el nombre de un eje existente (cambiar el número está bloqueado por seguridad).
+- Eliminar un eje (solo si no tiene iniciativas ni métricas asociadas).
+
+Buenas prácticas:
+- Usa numeración 1..N por orden de prioridad estratégica del plan regional.
+- Evita saltos de numeración: no agregues "Eje 9" si no existen 7 y 8.
+- Para fusionar dos ejes que en realidad son uno, primero reasigna todas las iniciativas al "ganador" y luego elimina el "perdedor".
+
+Cada cambio queda en el historial con tu email como autor.`,
+    relacionadas: ['ejes-crear', 'ejes-renombrar-impacto', 'ejes-eliminar-con-iniciativas'],
+    ultima_revision: '2026-06-16',
   },
 
   // ── 4. Métricas y PREGO ──────────────────────────────────────────────────
@@ -889,6 +1205,70 @@ Si el avance de fase es relevante (típicamente lo es), complementá con un corr
 Notificación automática por correo está en la lista de mejoras a futuro.`,
     relacionadas: ['prego-avanzar-fase'],
     ultima_revision: '2026-06-08',
+  },
+
+  {
+    id: 'metricas-drawer-eje',
+    audiencia: 'regional',
+    categoria: 'Métricas y PREGO',
+    pregunta: '¿Cómo abro las métricas de un eje específico para reportar valores?',
+    respuesta:
+`En Mi Región, en la sección "Avance por eje estratégico", haz clic en la tarjeta del eje que quieres trabajar. Se abre un drawer lateral con todas las métricas definidas para ese eje en tu región.
+
+Lo que ves por métrica:
+- Nombre y unidad ("Kilómetros de ruta mejorados · km").
+- Valor actual y meta.
+- Barra de progreso (valor actual / meta).
+- Última fecha de reporte.
+
+Para reportar un nuevo valor, clic en "Actualizar valor" → modal con input numérico + fecha del reporte. Confirma y queda guardado al instante.
+
+Tip operativo: si reportas muchas métricas, hazlo en una sola sesión semanal (ej. el lunes después de cargar el Excel) para mantener consistencia temporal.
+
+Si no ves métricas en el eje, es porque la división aún no las definió para tu región. Cualquier admin/editor de DCI puede agregarlas desde el mismo drawer con "Nueva métrica".`,
+    relacionadas: ['metricas-reportar-valor', 'metricas-historial-valores', 'metricas-vs-avance'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'metricas-historial-valores',
+    audiencia: 'regional',
+    categoria: 'Métricas y PREGO',
+    pregunta: '¿Se puede ver cómo evolucionó una métrica en el tiempo?',
+    respuesta:
+`Sí. En el drawer de métricas del eje, cada métrica tiene un mini-historial con los últimos valores reportados y sus fechas. Útil para ver la tendencia de un vistazo: ¿está mejorando? ¿estancada? ¿cayó la semana pasada?
+
+Para historial más profundo (todos los reportes, no solo los últimos), abre la métrica en detalle clicando su tarjeta. Te muestra todos los reportes con fecha y autor.
+
+Casos de uso típicos:
+- Validar una conversación: "el reporte de hace dos semanas decía 85%, ahora está en 70%. ¿Qué pasó?".
+- Documentar progreso en una minuta o reporte: "logramos pasar de 30% a 71% en 4 meses".
+- Identificar reportes con dedos pesados: si un valor saltó de 30% a 90% en una semana, posiblemente fue error de digitación.
+
+Si necesitas exportar este histórico para análisis externo, escríbenos a ${CONTACTO}.`,
+    relacionadas: ['metricas-drawer-eje', 'metricas-reportar-valor'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'metricas-eliminar-revisar',
+    audiencia: 'admin_editor',
+    categoria: 'Métricas y PREGO',
+    pregunta: '¿Qué pasa si elimino una métrica que ya tiene valores reportados?',
+    respuesta:
+`El sistema te lo advierte explícitamente con el conteo de valores reportados antes de proceder.
+
+Si confirmas eliminar:
+- La definición de la métrica se borra.
+- Los valores históricos quedan huérfanos en la BD pero ya no aparecen en ninguna vista del panel.
+- Las minutas y reportes generados antes de la eliminación siguen mostrando el valor que tenían — no se regeneran retroactivamente.
+
+Recomendaciones:
+- Si la métrica quedó conceptualmente obsoleta (cambio de plan), considera renombrarla o redefinir su objetivo en lugar de borrar — preservas el histórico.
+- Si fue un error (la métrica se creó por accidente), borra cuanto antes para evitar que el regional reporte contra ella.
+- Antes de borrar una métrica con histórico significativo, descarga un PDF o screenshot del histórico actual por si necesitas el dato a futuro.
+
+A futuro vamos a habilitar un "archivar métrica" que la oculta de los flujos activos pero preserva el histórico visible.`,
+    relacionadas: ['metricas-crear', 'metricas-drawer-eje'],
+    ultima_revision: '2026-06-16',
   },
 
   // ── 5. Atención y foco ───────────────────────────────────────────────────
@@ -1058,6 +1438,304 @@ Por eso ambos importan: el avance dice "cuánto", el semáforo dice "cómo va".`
 Si ninguna aplica y crees que es un bug, escríbenos con captura de pantalla.`,
     relacionadas: ['cuenta-sin-region', 'cuenta-contacto-dci'],
     ultima_revision: '2026-06-08',
+  },
+
+  {
+    id: 'tags-uso',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: '¿Para qué sirven las etiquetas (tags) en una iniciativa?',
+    respuesta:
+`Las etiquetas son una clasificación transversal libre que cruza ejes, ministerios y regiones. Sirven para agrupar iniciativas según criterios que no calzan con los campos estructurales (eje, ministerio, prioridad).
+
+Casos de uso típicos:
+- Marcar las iniciativas que van a un comité o gabinete específico ("Comité crisis junio").
+- Agrupar las que comparten un programa transversal ("Plan Frontera Segura").
+- Identificar las "vitrina" para una autoridad ("Visita Subsecretaria").
+- Categorizar por temática que no es eje ("Costa", "Salud rural", "Pueblos originarios").
+
+Una iniciativa puede tener varias tags al mismo tiempo (separadas por ; en el Excel). En la ficha y en las cards aparecen como chips compactos.
+
+Las tags son filtrables en Dashboard, Bandeja y Kanban — clic en el filtro "Etiquetas" y eliges una o varias. El Kanban tiene un modo "Por tag" que pone una columna por cada tag presente.`,
+    relacionadas: ['tags-quien-crea', 'tags-filtrar', 'kanban-modo-tag'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'tags-quien-crea',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: '¿Quién crea las etiquetas? ¿Puedo inventar las mías?',
+    respuesta:
+`No hay catálogo cerrado de tags — son libres. Cualquier propuesta vía Excel puede agregar tags nuevas (las separas con ; en la columna "Etiquetas"). Cuando un admin aprueba la propuesta, las tags nuevas quedan disponibles para todos.
+
+En la ficha, admin/editor pueden editar tags inline (escribes el texto y Enter o ; las commitea). El regional solo lee — para agregar nuevas, vía Excel.
+
+Buenas prácticas para no inflar el catálogo:
+- Antes de inventar una tag nueva, fíjate si ya existe una equivalente. El autocompletado de tags en la ficha sugiere las que ya están en uso en tu cartera.
+- Evita variaciones del mismo concepto ("comité-crisis", "Comité Crisis", "ComitéCrisis") — el panel las trata como tags distintas.
+- Las tags efímeras (de una semana) tienden a quedar para siempre. Si es para un evento puntual, sé explícito: "Comité 2026-06-15".
+
+Si las tags de tu región se desordenan, escríbenos para una limpieza masiva.`,
+    relacionadas: ['tags-uso', 'tags-filtrar'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'tags-filtrar',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: '¿Cómo filtro por etiqueta en el Dashboard o en el Kanban?',
+    respuesta:
+`En Dashboard y Bandeja:
+- En la barra de filtros superior, busca el filtro "Etiquetas" → clic abre un popover con la lista de tags disponibles en tu cartera (con conteo de iniciativas por tag).
+- Selecciona una o varias — el filtro es OR (muestra iniciativas que tengan cualquiera de las tags seleccionadas).
+- Aparece un chip activo arriba con las tags elegidas — clic en × para quitarlas.
+
+En Kanban:
+- Hay un toggle de modo: "Por eje / Por ministerio / Por tag".
+- En modo "Por tag", cada columna es una etiqueta única presente en tu cartera. Las iniciativas con varias tags aparecen en varias columnas (no se duplican: cada card es la misma).
+
+Tip de productividad: combina filtro de etiqueta + filtro de semáforo. Por ejemplo: tag "Plan Frontera Segura" + semáforo "Bloqueada" → te muestra las iniciativas del plan que necesitan tu gestión.`,
+    relacionadas: ['tags-uso', 'kanban-modo-tag', 'filtros-multi-select'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'kanban-modo-tag',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: '¿Qué es el modo "Por tag" del Kanban?',
+    respuesta:
+`Es una tercera vista del Kanban (junto a "Por eje" y "Por ministerio"). Cada columna del tablero es una etiqueta presente en tu cartera. Las iniciativas se distribuyen según las tags que tengan.
+
+Comportamiento:
+- Si una iniciativa tiene varias tags, aparece en cada una de las columnas correspondientes. No se duplica el dato — es el mismo card mostrado en varias columnas.
+- Si una iniciativa NO tiene tags, NO aparece en este modo. Para verla, cambia a "Por eje" o "Por ministerio".
+- Las columnas se ordenan por cantidad de iniciativas, descendente.
+
+Útil para:
+- Visualizar qué planes transversales concentran tu cartera ("Plan Frontera Segura" tiene 30 iniciativas, mientras que "Visita Ministro" tiene 4).
+- Identificar tags huérfanas o poco usadas (1-2 iniciativas) que vale la pena consolidar.
+
+Si tu cartera tiene muchas tags (>20), considera filtrar por semáforo o eje arriba para reducir las columnas visibles.`,
+    relacionadas: ['tags-uso', 'tags-filtrar'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'filtros-multi-select',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: '¿Cómo uso los filtros multi-select del Dashboard y la Bandeja?',
+    respuesta:
+`Cada filtro (Región, Eje, Ministerio, Semáforo, etc.) ahora es un popover multi-select. Al hacer clic se abre con:
+
+- Buscador rápido para filtrar la lista (útil cuando hay muchas opciones, ej. Comuna).
+- Checkboxes para seleccionar varias opciones — el filtro es OR (muestra todas las iniciativas que tengan cualquiera de las opciones seleccionadas).
+- Conteo entre paréntesis indica cuántas iniciativas tendría cada opción dado el resto de filtros activos.
+- "Limpiar" en la esquina inferior izquierda deselecciona todo.
+
+Los filtros se combinan con AND entre sí: si seleccionas Eje 1 + 2 y Semáforo Rojo, ves iniciativas (Eje 1 OR Eje 2) AND Semáforo Rojo.
+
+Cierre del popover: clic fuera del popover, tecla Esc, o clic en el chevron del filtro.
+
+Los chips arriba de la tabla muestran qué filtros están activos. Clic × en cada chip lo quita; "Limpiar todo" resetea todo de un golpe.`,
+    relacionadas: ['filtros-chips-activos', 'tags-filtrar', 'kanban-vacio'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'filtros-chips-activos',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: 'Los chips arriba de las tablas (Dashboard, Bandeja) ¿para qué sirven?',
+    respuesta:
+`Son los filtros activos en un solo lugar visible. Cada chip muestra qué se está filtrando — "Región: Antofagasta", "Eje: 1, 2", "Semáforo: rojo, ámbar" — y al clic × se quita ese filtro específico.
+
+Sirven para:
+- Confirmar de un vistazo qué estás viendo. Útil cuando llegas al panel y no recuerdas qué filtros tenías puestos.
+- Quitar filtros uno por uno sin abrir cada popover.
+- Documentar lo que ves: una captura de pantalla con los chips visibles transmite el contexto del filtrado.
+
+Atajos:
+- Botón "Limpiar todo" al lado de los chips resetea todos los filtros de una vez.
+- Los filtros persisten al recargar la página (se guardan en localStorage). Si quieres empezar limpio cada sesión, "Limpiar todo" antes de cerrar.`,
+    relacionadas: ['filtros-multi-select', 'kanban-vacio'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'bandeja-actividad',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: 'En la Bandeja veo un indicador "Hace N días" con color, ¿qué significa?',
+    respuesta:
+`Es el indicador de tiempo desde la última actividad registrada en esa iniciativa. Se calcula desde el último seguimiento, edición o cambio de semáforo.
+
+Código de color:
+- Negro/normal (≤7 días): actividad reciente, todo bien.
+- Ámbar (8-15 días): tibio. Revisa si la iniciativa sigue avanzando o se quedó.
+- Rojo (>15 días): sin actividad por más de dos semanas. Aparece en las "Alertas activas" de Mi Región. Probablemente bloqueada, sin gestión o terminada (y nadie la cerró).
+
+Cuándo es legítimo que esté "sin actividad":
+- Iniciativa terminada pero no marcada como tal — corrígelo (etapa = Terminado).
+- Está en espera de una decisión externa (DIPRES, comunidad, autoridad) — registra un seguimiento "En espera de X" para resetear el contador.
+- Es un proyecto de largo plazo sin hitos próximos — agrega un seguimiento "Hito a evaluar el [fecha]" para tener el calendario al día.
+
+Acción recomendada: cada lunes revisa las que estén en rojo y decide: cerrar, registrar contexto, o gestionar.`,
+    relacionadas: ['atencion-agendar-seguimiento', 'inicio-orden-revision'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'foco-en-cards',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: '¿Cómo marco/desmarco foco directo desde las tarjetas, sin abrir la ficha?',
+    respuesta:
+`En todas las vistas que muestran cards (Mi Región, Kanban, Bandeja, Dashboard cuando está en modo card), cada iniciativa tiene una bandera 🚩 a la derecha. Clic → marca/desmarca foco al instante, sin necesidad de abrir la ficha.
+
+Estado visual:
+- Bandera gris claro → no está en foco. Clic la marca.
+- Bandera rojo intenso → está en foco. Clic la desmarca. La iniciativa puede tener borde ámbar suave para hacerla más visible.
+
+Cuándo NO usar el atajo:
+- Si necesitas agregar contexto del foco (por qué lo marcas), abre la ficha y deja un seguimiento corto. La bandera por sí sola no documenta el motivo.
+
+El cambio es inmediato y se propaga a todas las vistas: la Bandeja del equipo refleja el cambio al refrescar (próximo navegación o F5).
+
+Tip: combina filtro "En foco" + ordenar por "Última actividad" para ver tu lista corta priorizada por frescura.`,
+    relacionadas: ['foco-marcar', 'foco-visibilidad-equipo', 'foco-tags-combinacion'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'foco-tags-combinacion',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: '¿Puedo combinar etiquetas + foco para tener una bandeja muy específica?',
+    respuesta:
+`Sí, y es uno de los flujos más útiles para equipos que gestionan muchas iniciativas.
+
+Ejemplo: tu equipo va a un comité interministerial el viernes. Quieres llegar con foco en las 12 iniciativas relevantes.
+
+Flujo:
+1. En la Bandeja o el Dashboard, filtras por tag "Comité junio" (asumiendo que ya las etiquetaste).
+2. Para cada iniciativa filtrada, clic en la bandera para marcarlas en foco. La Bandeja del equipo ahora tiene esas 12.
+3. El día del comité, abre la Bandeja sin filtro de tag — ves esas 12 más cualquier otra que el equipo haya marcado para otros temas.
+4. Después del comité, filtras tag "Comité junio" otra vez y desmarcas el foco de las que ya no necesitan vigilancia.
+
+Variantes:
+- Tag temporal ("Viaje Subsecretario semana 23") para curar la bandeja durante un período acotado.
+- Tag duradera ("Top Subsecretaria") + foco permanente para las top 5 del equipo.
+
+Sin tags, la bandeja crece sin organización. Con tags + foco, mantienes señal en un panel que de otra forma se ahoga.`,
+    relacionadas: ['foco-en-cards', 'tags-uso', 'foco-limite'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'historial-trayectoria',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: '¿Dónde veo cómo evolucionó el % de avance de una iniciativa en el tiempo?',
+    respuesta:
+`En la ficha de la iniciativa → pestaña "Historial" → sección "Trayectoria del avance". Te muestra un timeline visual con cada cambio reportado:
+
+- Cada burbuja es un reporte: el % de avance, fecha y autor.
+- Delta vs anterior: ↑+5 si subió 5 puntos, ↓-3 si bajó 3, → si no cambió.
+- Los reportes se ordenan cronológicamente, los más recientes a la derecha.
+- Hover sobre una burbuja muestra fecha exacta y autor del cambio.
+
+Útil para:
+- Detectar si una iniciativa se quedó "pegada" en el mismo % por mucho tiempo (signo de bloqueo no declarado).
+- Validar contra reportes externos: "esta iniciativa avanzó del 35% al 72% en 3 meses, según el panel".
+- Auditar reportes raros: si saltó de 40% a 95% en una semana, posiblemente fue error o cambio de criterio.
+
+La trayectoria solo muestra cambios del campo "% avance". Para ver TODOS los cambios (semáforo, responsable, etapa, etc.), revisa la pestaña Historial completa.`,
+    relacionadas: ['semaforo-vs-avance', 'metricas-historial-valores'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'calendario-hitos',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: 'En la pestaña Calendario de la ficha, ¿qué representa el círculo con anillo de color ámbar?',
+    respuesta:
+`Es el marcador del próximo hito de la iniciativa (campo \`fecha_proximo_hito\`). Se diferencia visualmente de los seguimientos:
+
+- Dots de color sólido (azul, gris, rojo, verde) → seguimientos registrados (notas, riesgos, reuniones, hitos cumplidos). Un día puede tener varios.
+- Anillo ámbar (no relleno) → próximo hito declarado. Solo hay uno a la vez.
+
+Al hacer clic en el día del hito, el panel inferior del calendario muestra el texto del hito (campo "Próximo hito" de la ficha).
+
+Cuándo aparece:
+- Si la ficha tiene "Próximo hito" con fecha definida, el día se marca con el anillo ámbar.
+- Cuando llegas a ≤7 días del hito, también aparece en las "Alertas activas" de Mi Región para que no se te pase.
+- Si actualizas el próximo hito a uno nuevo (porque el anterior se cumplió), el anillo se mueve al nuevo día.
+
+Tip: usa el campo Próximo hito con disciplina. Iniciativas sin próximo hito son las que más pasan desapercibidas.`,
+    relacionadas: ['atencion-agendar-seguimiento', 'inicio-orden-revision'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'catastro-minvu',
+    audiencia: 'regional',
+    categoria: 'Atención y foco',
+    pregunta: '¿Qué es el link a "Catastro MINVU" que aparece en algunas iniciativas?',
+    respuesta:
+`Es un enlace directo a la ficha del Catastro Nacional de Campamentos (CNC) del MINVU para iniciativas que están marcadas en ese catastro.
+
+Solo aparece en iniciativas relacionadas a campamentos, ocupaciones irregulares o procesos habitacionales. La división de Coordinación Interministerial cruza la cartera regional con el catastro nacional del MINVU; cuando hay match, el enlace se muestra automáticamente en la ficha.
+
+Útil para:
+- Confirmar el estado oficial de un campamento según MINVU sin salir del panel.
+- Llevar el código del catastro a una reunión interministerial.
+- Verificar datos demográficos del campamento (nº de familias, etc.) que MINVU sí gestiona.
+
+Si tu iniciativa debería estar marcada en el catastro pero no ves el link, escríbenos. Si el link aparece pero te lleva a una ficha equivocada (cambio de código por parte de MINVU), también avísanos.`,
+    relacionadas: ['cuenta-contacto-dci'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'desalojos-modulo',
+    audiencia: 'admin',
+    categoria: 'Atención y foco',
+    pregunta: '¿Cómo está organizada la vista de la Mesa Interministerial de Desalojos?',
+    respuesta:
+`La Mesa de Desalojos tiene dos modos de visualización (acceso desde el menú admin):
+
+MODO LISTA (default)
+- Lista lateral de casos a la izquierda (ancho fijo 340px) con mini-dots que resumen el semáforo por fase.
+- Ficha del caso seleccionado a la derecha: contexto, capas, fases activas, responsables.
+- Útil para trabajo cotidiano: revisar un caso a la vez, agregar capas, avanzar fases.
+
+MODO TABLERO
+- Matriz densa de casos × fases. Cada fila es un caso, cada columna una fase.
+- Pensado para proyección en sesión (gabinete, comité).
+- Permite ver el avance de toda la cartera de desalojos en una sola pantalla.
+
+Componentes clave de cada caso:
+- Capas: cada caso puede tener 1 o más polígonos (capas) con su tipología (A/B/C/D), datos físicos, catastro social, financiamiento DIPRES.
+- Fases: PR (preliminar) + F1-F5 (variables según tipología). Cada fase tiene semáforo, checklist y notas.
+- Semáforo rollup: el color del caso es el peor de sus capas; el color de la capa es el peor de sus fases.
+
+Atajo: clic en el botón "Tablero" arriba a la derecha para alternar entre Lista y Tablero. La selección persiste por sesión.`,
+    relacionadas: ['permisos-mesa-desalojos', 'permisos-toggle-desalojo', 'desalojos-tipologias'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'desalojos-tipologias',
+    audiencia: 'admin',
+    categoria: 'Atención y foco',
+    pregunta: 'Las tipologías A/B/C/D de los casos de desalojo ¿en qué se diferencian?',
+    respuesta:
+`Cada tipología activa un subconjunto distinto de fases (PR + F1-F5):
+
+- TIPOLOGÍA A. Usa las 6 fases completas (PR + F1 + F2 + F3 + F4 + F5). Casos con todos los antecedentes claros, vía jurídica definida y financiamiento DIPRES en curso.
+- TIPOLOGÍA B. Usa las 6 fases completas, igual que A. Diferencia operativa según contexto del caso (revisa documentación del modelo si necesitas precisar).
+- TIPOLOGÍA C. Salta F4 (no aplica esa fase). PR + F1 + F2 + F3 + F5.
+- TIPOLOGÍA D. Solo PR. Es el "limbo": casos donde aún no se decide la vía jurídica. Mientras está en D, la Mesa monitorea sin activar fases. Si lleva >30 días en D, aparece un banner persistente "sin vía jurídica".
+
+Cambio de tipología:
+- Puedes cambiar A/B/C/D en cualquier momento desde la ficha de la capa.
+- Si una capa estaba en F3 y cambias de A a D, los datos de F3 se conservan silenciosamente — no se borran. Si vuelves a A, vuelven a estar visibles.
+
+Banner persistente "Sin financiamiento DIPRES" aparece para cualquier tipología si la capa no tiene "financiamiento_confirmado". Es ortogonal a la tipología.`,
+    relacionadas: ['desalojos-modulo', 'permisos-toggle-desalojo'],
+    ultima_revision: '2026-06-16',
   },
 
   // ── 6. Minutas e indicadores ─────────────────────────────────────────────
@@ -1246,6 +1924,73 @@ NO TAN COMPARABLES
 El modal de Indicadores no muestra el comparativo entre regiones (es per-región). Si necesitas el comparativo, pídelo a un editor — DCI maneja reportes nacionales agregados.`,
     relacionadas: ['indicadores-fuentes', 'permisos-ver-otras-regiones'],
     ultima_revision: '2026-06-08',
+  },
+
+  {
+    id: 'indicadores-v2-tabs',
+    audiencia: 'todos',
+    categoria: 'Minutas e indicadores',
+    pregunta: 'Los Indicadores ahora tienen 7 tabs (Pulso, Económico, Social, etc.), ¿qué hay en cada uno?',
+    respuesta:
+`El modal de Indicadores (botón "📊 Indicadores" en Mi Región) tiene 7 tabs temáticas que organizan ~84 indicadores:
+
+- PULSO. Resumen de los headlines: avance regional, foco activo, alertas críticas. Mira esto primero si tienes 30 segundos.
+- ECONÓMICO. PIB regional, IMACEC, ventas regionales, desocupación (BCCh).
+- SOCIAL. Pobreza CASEN, ingresos, multidimensional, organizaciones sociales.
+- DEMOGRÁFICO. Población, estructura etaria, migración, urbanización.
+- SALUD Y EDUCACIÓN. Cobertura, indicadores de gestión (DEIS, MINEDUC).
+- SEGURIDAD. Casos LeyStop / Fiscalía, ENUSC, denuncias.
+- AMBIENTE. SEIA en curso, SINCA (calidad del aire), proyectos por estado ambiental.
+
+Cada indicador muestra: valor actual, fuente, última fecha de actualización, y un sparkline (mini-gráfica) con la tendencia histórica. Si el indicador tiene comparativa nacional, se muestra el delta.
+
+Si un dato falta o se ve desactualizado, mira la fecha del último sync. Es contexto externo, no algo que el regional cargue — depende de cuándo la fuente publicó.`,
+    relacionadas: ['indicadores-sparklines', 'indicadores-fuentes', 'indicadores-fallo-sync'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'indicadores-sparklines',
+    audiencia: 'regional',
+    categoria: 'Minutas e indicadores',
+    pregunta: '¿Qué son las pequeñas gráficas (sparklines) que aparecen junto a cada indicador?',
+    respuesta:
+`Son mini-gráficas de línea que muestran la tendencia histórica del indicador, sin ejes ni leyendas para no saturar.
+
+Útil para leer "de un vistazo":
+- Línea subiendo → el indicador mejora (si es positivo) o empeora (si es negativo, ej. desocupación).
+- Línea plana → estable.
+- Bajón abrupto → posiblemente un cambio metodológico o un evento puntual.
+
+El tamaño y la temporalidad dependen de la frecuencia:
+- Mensuales (desocupación, IMACEC) → últimos 24 meses.
+- Trimestrales (PIB) → últimos 12 trimestres.
+- Anuales (CASEN) → últimos 5 años.
+
+Si necesitas el detalle exacto del dato puntual de una sparkline, hover sobre el punto para ver fecha y valor.
+
+Cuando aplica, el indicador también muestra:
+- Delta WoW (semana sobre semana) o MoM (mes sobre mes).
+- Comparativa con el promedio nacional (% por arriba/debajo).`,
+    relacionadas: ['indicadores-v2-tabs', 'indicadores-fuentes'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'indicadores-fallo-sync',
+    audiencia: 'admin_editor',
+    categoria: 'Minutas e indicadores',
+    pregunta: 'Si un indicador queda sin actualizar (atrasado), ¿qué hago?',
+    respuesta:
+`Síntoma típico: en el modal de Indicadores, la fecha del último dato es de hace muchas semanas, o la sparkline muestra los mismos valores los últimos meses. Es probable que el sync de la fuente esté roto.
+
+Pasos:
+1. Verifica si es generalizado o puntual: si solo un indicador está atrasado pero los demás de la misma fuente están al día, puede ser un problema específico del indicador. Si toda una fuente está atrasada (ej. todos los BCCh), el sync del servicio está caído.
+2. Consulta el estado de sincronización en \`sync_status\` (admin con acceso a Supabase puede ver tabla directamente, o pedir a soporte). Cada sync tiene \`last_run_at\` y \`last_status\`.
+3. Disparar manualmente el sync: cualquier admin con acceso al CRON_SECRET puede hacer POST al endpoint correspondiente (\`/api/ine-sync\`, \`/api/seia-sync\`, etc.) con \`Authorization: Bearer $CRON_SECRET\`. Los crons están migrados a GitHub Actions; también se puede disparar desde ahí (Actions → Run workflow).
+4. Si el problema es estructural (la fuente cambió su API o falló durante semanas), escríbenos a ${CONTACTO} para revisión técnica.
+
+Mientras dura el atraso, el panel se queda con el último dato bueno conocido. No muestra valores falsos.`,
+    relacionadas: ['indicadores-fuentes', 'cuenta-contacto-dci'],
+    ultima_revision: '2026-06-16',
   },
 
   // ── 7. Cuenta y acceso ───────────────────────────────────────────────────
@@ -1448,6 +2193,72 @@ En evaluación / roadmap:
 Si tu equipo o un ministerio identifica una integración que ahorraría trabajo, escríbenos — las priorizamos según uso real.`,
     relacionadas: ['indicadores-fuentes', 'cuenta-contacto-dci'],
     ultima_revision: '2026-06-08',
+  },
+  {
+    id: 'cuenta-responsive',
+    audiencia: 'todos',
+    categoria: 'Cuenta y acceso',
+    pregunta: 'Si entro desde una pantalla más chica que un monitor normal, ¿se ve todo bien?',
+    respuesta:
+`El panel está diseñado desktop-first con escalado fluido entre 1280px y 4K. Lo que esperar según tamaño:
+
+- 1280px (laptop 13" típica): cómodo, sin desbordes en Dashboard ni Kanban. La primera columna de la tabla del Dashboard queda sticky para que el contexto no se pierda al scrollear horizontal.
+- 1440-1920px (laptop estándar / monitor común): sweet spot. Todo a tamaño natural.
+- 2560px+ (4K virtual o monitor grande): las tipografías y espaciados crecen fluidamente. KPI cards y preview del Mapa no se inflan absurdamente — tienen tope proporcional para mantener legibilidad.
+
+Tablet en landscape (1024-1279px): "best effort". Algunas vistas densas (Kanban con todas las columnas, Dashboard con muchos filtros) pueden requerir scroll horizontal o mostrar warnings.
+
+NO soportado oficialmente: mobile (<1024px). Entra y se ve, pero los modales y tablas quedan estrechos. Para uso en terreno, ver la FAQ sobre uso móvil.
+
+Si tu pantalla está en el rango soportado y aún así notas problemas (texto cortado, columnas pisadas), captura y escríbenos.`,
+    relacionadas: ['cuenta-mobile', 'inicio-pantalla-recomendada'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'cuenta-listar-ultimo-acceso',
+    audiencia: 'admin',
+    categoria: 'Cuenta y acceso',
+    pregunta: '¿Cómo identifico usuarios inactivos en mi base de equipo regional?',
+    respuesta:
+`En la sección Usuarios (admin-only), ordena por la columna "Último acceso" descendente. Los inactivos quedan al final:
+
+- "Nunca": cuentas creadas que nunca se han logueado. Validar si la persona efectivamente recibió la invitación.
+- "Hace 30+ días": probable inactividad. Conversa con la jefatura antes de desactivar — pueden ser equipos que solo lo usan en momentos clave (gabinete trimestral, comité semestral).
+- "Hace 7-29 días" (ámbar): tibio. Vale la pena un correo de chequeo para asegurar que sigue siendo útil.
+
+Acciones según el caso:
+- Cuenta nunca usada: re-enviar invitación o desactivar después de 30 días.
+- Inactivo +60 días sin justificación: contactar jefatura para confirmar si sigue en el cargo. Si no, desactivar.
+- Inactivo justificado (uso esporádico): dejar activo pero documentar el caso para no contaminar los reportes de uso del panel.
+
+Buenas prácticas:
+- Hacer este sweep trimestral, no más seguido.
+- Antes de desactivar masivo, exportar la lista con sus tags para auditoría.
+- Comunicar el plan al equipo antes de desactivar — evita sorpresas.`,
+    relacionadas: ['permisos-ultimo-acceso', 'cuenta-export-ultimo-acceso', 'permisos-admin-crear-usuario'],
+    ultima_revision: '2026-06-16',
+  },
+  {
+    id: 'cuenta-export-ultimo-acceso',
+    audiencia: 'admin',
+    categoria: 'Cuenta y acceso',
+    pregunta: '¿Hay forma de exportar la lista de accesos para un reporte?',
+    respuesta:
+`Hoy no hay un botón "Exportar usuarios" en la UI. Para obtener el listado de usuarios + último acceso, dos vías:
+
+OPCIÓN A (rápida, copy/paste)
+- En la sección Usuarios, selecciona toda la tabla (Ctrl+A o arrastrar) y copia a Excel/Google Sheets. Las columnas quedan tabuladas.
+- Funciona bien para una foto puntual.
+
+OPCIÓN B (pedido a soporte)
+- Escríbenos a ${CONTACTO} con el motivo del export. Te lo armamos en CSV con todas las columnas relevantes (nombre, email, rol, regiones, último acceso, creación de cuenta).
+- Útil para auditorías o reportes a jefatura.
+
+A futuro vamos a habilitar el botón "Exportar" en la sección Usuarios directamente. Por ahora estos caminos cubren el 90% de los casos.
+
+Recordatorio: la lista contiene datos personales (emails institucionales). Manéjala según protocolo de la división y NO la subas a herramientas externas no institucionales (Google Docs personales, ChatGPT, etc.).`,
+    relacionadas: ['permisos-ultimo-acceso', 'cuenta-listar-ultimo-acceso'],
+    ultima_revision: '2026-06-16',
   },
 ]
 
