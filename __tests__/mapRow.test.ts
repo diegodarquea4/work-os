@@ -45,6 +45,7 @@ function makeRow(overrides: Partial<Prioridad> = {}): Prioridad {
     eje_id: null,
     tags: [],
     es_desalojo: false,
+    capa: 'lll',
     ...overrides,
   }
 }
@@ -97,5 +98,15 @@ describe('mapRow', () => {
     const out = mapRow(makeRow({ eje_id: 5, eje: 'Eje 5: Salud' }))
     expect(out.eje_id).toBe(5)
     expect(out.eje).toBe('Eje 5: Salud')
+  })
+
+  it('defaultea capa a "lll" si falta (pre-migración 024)', () => {
+    const out = mapRow(makeRow({ capa: undefined }))
+    expect(out.capa).toBe('lll')
+  })
+
+  it('preserva capa = "l" y capa = "ll" cuando vienen seteadas', () => {
+    expect(mapRow(makeRow({ capa: 'l' })).capa).toBe('l')
+    expect(mapRow(makeRow({ capa: 'll' })).capa).toBe('ll')
   })
 })

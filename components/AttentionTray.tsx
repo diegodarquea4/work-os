@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Iniciativa } from '@/lib/projects'
+import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
 import { useCanEditAny, useIsAdmin } from '@/lib/context/UserContext'
@@ -101,6 +101,8 @@ export default function AttentionTray({
   // Toggle "Solo desalojos" — admin only. El chip se oculta para el resto
   // de roles (no pueden ver la marca). La lógica del filtro queda igual.
   const [filterDesalojo, setFilterDesalojo]     = useState<boolean>(false)
+  // Capa de importancia (migración 024). Multi-select 'l'|'ll'|'lll'.
+  const [filterCapa, setFilterCapa]             = useState<Set<Capa>>(new Set())
 
   // UI
   const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
@@ -136,7 +138,8 @@ export default function AttentionTray({
     filterEje.size > 0 || filterEjeGob.size > 0 || filterSemaforo.size > 0 ||
     filterPrioridad.size > 0 || filterEtapa.size > 0 || filterRat.size > 0 ||
     filterFuente.size > 0 || filterComuna.size > 0 || filterOrigen.size > 0 ||
-    filterTags.size > 0 || filterResponsable.size > 0 || filterDesalojo
+    filterTags.size > 0 || filterResponsable.size > 0 || filterDesalojo ||
+    filterCapa.size > 0
 
   // Contador para el badge "Más filtros (N)". Región y semáforo viven en la
   // fila primaria; los demás en la secundaria.
@@ -167,6 +170,7 @@ export default function AttentionTray({
     setFilterTags(new Set())
     setFilterResponsable(new Set())
     setFilterDesalojo(false)
+    setFilterCapa(new Set())
   }
 
   // ── Pool base + availables ────────────────────────────────────────────────
@@ -176,7 +180,7 @@ export default function AttentionTray({
   type FilterKey =
     | 'region' | 'eje' | 'ejeGob' | 'semaforo' | 'prioridad'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
-    | 'tags'   | 'responsable' | 'desalojo' | null
+    | 'tags'   | 'responsable' | 'desalojo' | 'capa' | null
 
   function basePool(excluding: FilterKey) {
     const q = search.toLowerCase()
@@ -195,6 +199,7 @@ export default function AttentionTray({
       if (excluding !== 'tags'         && filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                                return false
       if (excluding !== 'responsable'  && filterResponsable.size > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                  return false
       if (excluding !== 'desalojo'     && filterDesalojo            && p.es_desalojo !== true)                                                     return false
+      if (excluding !== 'capa'         && filterCapa.size > 0       && !filterCapa.has(p.capa))                                                    return false
       return true
     })
   }
@@ -221,7 +226,7 @@ export default function AttentionTray({
     projects, search,
     filterRegion, filterEje, filterEjeGob, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
-    filterTags, filterResponsable, filterDesalojo,
+    filterTags, filterResponsable, filterDesalojo, filterCapa,
   ]
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -259,6 +264,18 @@ export default function AttentionTray({
         count,
       }))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
+  }, baseDeps)
+  // Capa: orden fijo I → II → III (no por counts) — la jerarquía importa más
+  // que la frecuencia.
+  const availableCapas = useMemo(() => {
+    const pool = basePool('capa')
+    const counts: Record<Capa, number> = { l: 0, ll: 0, lll: 0 }
+    for (const p of pool) counts[p.capa] += 1
+    return [
+      { value: 'l',   label: 'Capa I',   sublabel: 'Las prioridades', count: counts.l   },
+      { value: 'll',  label: 'Capa II',  sublabel: 'Más importante',  count: counts.ll  },
+      { value: 'lll', label: 'Capa III', sublabel: 'Cartera regular', count: counts.lll },
+    ] satisfies FilterOption[]
   }, baseDeps)
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -526,6 +543,14 @@ export default function AttentionTray({
     filterDesalojo
       ? { key: 'desalojo', label: '🏚 Desalojos', onClear: () => setFilterDesalojo(false) }
       : null,
+    filterCapa.size > 0
+      ? {
+          key: 'capa',
+          label: 'Capa',
+          value: Array.from(filterCapa).map(v => v === 'l' ? 'I' : v === 'll' ? 'II' : 'III').join(', '),
+          onClear: () => setFilterCapa(new Set()),
+        }
+      : null,
   ].filter((c): c is ActiveChip => c !== null)
 
   return (
@@ -673,6 +698,12 @@ export default function AttentionTray({
               <FilterPopover label="Origen"       options={availableOrigenes}     selected={filterOrigen}      onChange={setFilterOrigen} />
               <FilterPopover label="Etiquetas"    options={availableTags}         selected={filterTags}        onChange={setFilterTags} />
               <FilterPopover label="Responsable"  options={availableResponsables} selected={filterResponsable} onChange={setFilterResponsable} />
+              <FilterPopover
+                label="Capa"
+                options={availableCapas}
+                selected={filterCapa as Set<string>}
+                onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
+              />
             </div>
           )}
         </div>

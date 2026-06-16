@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef } from 'react'
-import type { Iniciativa } from '@/lib/projects'
+import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
@@ -15,6 +15,7 @@ import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import TagChips from './TagChips'
 import DesalojoBadge from './DesalojoBadge'
+import { CapaBadge } from './CapaBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
 import { formatResponsableDisplay } from '@/lib/responsable'
@@ -31,7 +32,7 @@ const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
 type SortDir = 'asc' | 'desc'
-type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'capa' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
 
 const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'n',                label: '#',                     defaultVisible: false },
@@ -53,6 +54,7 @@ const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'rat',              label: 'RAT',                   defaultVisible: false },
   { id: 'fuente',           label: 'Fuente Financiamiento', defaultVisible: false },
   { id: 'enFoco',           label: 'En Foco',               defaultVisible: false },
+  { id: 'capa',             label: 'Capa',                  defaultVisible: false },
   { id: 'origen',           label: 'Origen',                defaultVisible: false },
   { id: 'descripcion',      label: 'Descripción',           defaultVisible: false },
   { id: 'responsable',      label: 'Responsable',           defaultVisible: false },
@@ -118,6 +120,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
   // Toggle "En foco": activo → solo p.en_foco === true; inactivo → todas.
   const [filterFoco, setFilterFoco]               = useState<boolean>(false)
+  // Capa de importancia (migración 024). Multi-select sobre valores 'l'|'ll'|'lll'.
+  const [filterCapa, setFilterCapa]               = useState<Set<Capa>>(new Set())
   // Toggle "Solo desalojos" (admin only — el chip se oculta para otros roles
   // porque la marca es admin-only y filtrar por algo que no podés ver es
   // confuso). La lógica del filtro funciona aunque el chip esté oculto.
@@ -200,6 +204,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))   return false
       if (filterFoco     && p.en_foco     !== true) return false
       if (filterDesalojo && p.es_desalojo !== true) return false
+      if (filterCapa.size > 0 && !filterCapa.has(p.capa)) return false
       return true
     })
 
@@ -220,7 +225,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, sortCol, sortDir, actividad])
+  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -251,7 +256,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   type FilterKey =
     | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'prioridad'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
-    | 'tags'   | 'responsable' | 'foco' | 'desalojo' | null
+    | 'tags'   | 'responsable' | 'foco' | 'desalojo' | 'capa' | null
 
   function basePool(excluding: FilterKey) {
     const q = search.toLowerCase()
@@ -275,6 +280,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (excluding !== 'responsable'  && filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                          return false
       if (excluding !== 'foco'         && filterFoco              && p.en_foco     !== true)                                                               return false
       if (excluding !== 'desalojo'     && filterDesalojo          && p.es_desalojo !== true)                                                               return false
+      if (excluding !== 'capa'         && filterCapa.size > 0     && !filterCapa.has(p.capa))                                                              return false
       return true
     })
   }
@@ -306,7 +312,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     projects, search,
     filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
-    filterTags, filterResponsable, filterFoco, filterDesalojo,
+    filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa,
   ]
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -349,6 +355,18 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       }))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
   }, baseDeps)
+  // Capa: orden fijo I → II → III (no por counts) — la jerarquía importa
+  // visualmente más que la frecuencia.
+  const availableCapas = useMemo(() => {
+    const pool = basePool('capa')
+    const counts: Record<Capa, number> = { l: 0, ll: 0, lll: 0 }
+    for (const p of pool) counts[p.capa] += 1
+    return [
+      { value: 'l',   label: 'Capa I',   sublabel: 'Las prioridades', count: counts.l   },
+      { value: 'll',  label: 'Capa II',  sublabel: 'Más importante',  count: counts.ll  },
+      { value: 'lll', label: 'Capa III', sublabel: 'Cartera regular', count: counts.lll },
+    ] satisfies FilterOption[]
+  }, baseDeps)
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const rojo   = filtered.filter(p => p.estado_semaforo === 'rojo').length
@@ -376,6 +394,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setFilterResponsable(new Set())
     setFilterFoco(false)
     setFilterDesalojo(false)
+    setFilterCapa(new Set())
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -523,7 +542,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     filterSemaforo.size > 0 || filterPrioridad.size > 0 ||
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
     filterComuna.size > 0 || filterOrigen.size > 0 ||
-    filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo
+    filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo ||
+    filterCapa.size > 0
 
   // Conteo de filtros del bloque secundario activos. Sirve para mostrar el
   // badge "Más filtros (3)" en lugar de un dot abstracto.
@@ -705,6 +725,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             filterDesalojo
               ? { key: 'desalojo', label: '🏚 Desalojos', onClear: () => setFilterDesalojo(false) }
               : null,
+            filterCapa.size > 0
+              ? {
+                  key: 'capa',
+                  label: 'Capa',
+                  value: Array.from(filterCapa).map(v => v === 'l' ? 'I' : v === 'll' ? 'II' : 'III').join(', '),
+                  onClear: () => setFilterCapa(new Set()),
+                }
+              : null,
           ].filter((c): c is ActiveChip => c !== null)
           return <ActiveFiltersBar chips={chips} clearFilters={clearFilters} />
         })()}
@@ -775,6 +803,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <span className="text-[10px]">⚑</span>
             En foco
           </button>
+
+          {/* Capa de importancia — popover multi-select. I/II destacan visualmente
+              porque son las que ordenan la atención; III queda como "default". */}
+          <FilterPopover
+            label="Capa"
+            options={availableCapas}
+            selected={filterCapa as Set<string>}
+            onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
+          />
 
           {/* Solo desalojos — admin only. Filtra casos de la Mesa
               Interministerial. Color slate para no chocar con foco amber. */}
@@ -960,6 +997,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('rat')              && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">RAT</th>}
               {visibleCols.has('fuente')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fuente</th>}
               {visibleCols.has('enFoco')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">En Foco</th>}
+              {visibleCols.has('capa')             && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Capa</th>}
               {visibleCols.has('origen')           && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Origen</th>}
               {visibleCols.has('descripcion')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Descripción</th>}
               {visibleCols.has('responsable')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Responsable</th>}
@@ -1424,6 +1462,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             {p.en_foco
               ? <span className="text-xs text-amber-700 font-semibold">⚑ Sí</span>
               : <span className="text-gray-300 text-xs">—</span>}
+          </td>
+        )}
+        {visibleCols.has('capa') && (
+          <td className="px-3 py-3.5 whitespace-nowrap">
+            <CapaBadge value={p.capa} size="sm" />
           </td>
         )}
         {visibleCols.has('origen') && (

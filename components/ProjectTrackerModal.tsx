@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Iniciativa } from '@/lib/projects'
+import type { Iniciativa, Capa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
@@ -16,6 +16,7 @@ import DocumentosTab  from './modal/DocumentosTab'
 import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 import { HomeIcon } from './icons/HomeIcon'
+import { CapaBadge } from './CapaBadge'
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
 
@@ -75,6 +76,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // RLS es authenticated_write (cualquier autenticado puede mutar).
   const [esDesalojo, setEsDesalojo]                 = useState<boolean>(prioridad.es_desalojo === true)
   const [savingDesalojo, setSavingDesalojo]         = useState(false)
+  // Nivel de importancia (migración 024). Solo admin/editor edita — para
+  // regional/viewer se renderiza el badge read-only. El trigger 023 bloquea
+  // el UPDATE si lo intenta un regional (capa no está en la whitelist).
+  const [capaLocal, setCapaLocal]                   = useState<Capa>(prioridad.capa)
+  const [savingCapa, setSavingCapa]                 = useState(false)
   const [editingField, setEditingField]             = useState<string | null>(null)
   const [savingField, setSavingField]               = useState(false)
   const [confirmDelete, setConfirmDelete]           = useState(false)
@@ -317,6 +323,28 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     setSavingDesalojo(false)
   }
 
+  // Capa de importancia (migración 024). Solo admin/editor edita — el trigger
+  // 023 bloquea el UPDATE si lo intenta un regional/viewer. La columna `capa`
+  // NO está en la whitelist de la migración 023, intencional.
+  async function handleSetCapa(next: Capa) {
+    if (next === capaLocal) return
+    const prev = capaLocal
+    setSavingCapa(true)
+    setCapaLocal(next)
+    onUpdatePrioridad(prioridad.n, { capa: next })
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({ capa: next }).eq('id', prioridad.id).select('id, capa'),
+        `capa n=${prioridad.n}`,
+      )
+    } catch (err) {
+      setCapaLocal(prev)
+      onUpdatePrioridad(prioridad.n, { capa: prev })
+      window.alert((err as Error).message)
+    }
+    setSavingCapa(false)
+  }
+
   async function handleDelete() {
     setDeleting(true)
     const res = await fetch(`/api/iniciativa/${prioridad.n}`, { method: 'DELETE' })
@@ -393,6 +421,36 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Capa de importancia (migración 024). Segmented control
+                  visible solo para admin/editor. Regional/viewer ve el badge
+                  read-only (si no es 'lll'). Convive con "En foco" — capa es
+                  permanente y centralizada, foco es ciclo y editable por todos. */}
+              {canEditAny ? (
+                <div className="inline-flex items-center rounded-md ring-1 ring-gray-200 bg-white overflow-hidden" title="Nivel de importancia (Capa)">
+                  {(['l','ll','lll'] as Capa[]).map(v => {
+                    const active = capaLocal === v
+                    const activeBg = v === 'l'
+                      ? 'bg-[#6b1d2c] text-white'
+                      : v === 'll'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-gray-100 text-gray-700'
+                    const label = v === 'l' ? 'I' : v === 'll' ? 'II' : 'III'
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => handleSetCapa(v)}
+                        disabled={savingCapa}
+                        className={`px-2 py-1 text-[11px] font-semibold tracking-wide transition-colors disabled:opacity-50 ${active ? activeBg : 'text-gray-400 hover:bg-gray-50'}`}
+                        title={`Capa ${label}`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <CapaBadge value={capaLocal} size="md" hideDefault />
+              )}
               {/* Marcar/quitar foco es transversal: cualquier usuario autenticado
                   (incluyendo regional/viewer) puede priorizar iniciativas para
                   su seguimiento. Va directo a BD via cliente — RLS authenticated_write

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition, useLayoutEffect, useRef, useEffect } from 'react'
-import type { Iniciativa } from '@/lib/projects'
+import type { Iniciativa, Capa } from '@/lib/projects'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
 import { getSupabase } from '@/lib/supabase'
 import { REGIONS } from '@/lib/regions'
@@ -9,6 +9,7 @@ import ProjectTrackerModal from './ProjectTrackerModal'
 import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
 import DesalojoBadge from './DesalojoBadge'
+import { CapaBadge } from './CapaBadge'
 
 // ── Mosaic helpers ────────────────────────────────────────────────────────────
 
@@ -151,6 +152,7 @@ function EjeCard({ p, onSelect, onToggleFoco }: {
       <div className="flex items-center gap-2 mb-2">
         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${sem.dot}`} />
         <span className="text-xs text-gray-600 font-medium">{sem.label}</span>
+        <CapaBadge value={p.capa} size="sm" hideDefault />
         {esDesalojo && <DesalojoBadge size="sm" />}
       </div>
       <p className="text-xs font-semibold text-gray-800 line-clamp-2 mb-2 group-hover:text-slate-900">
@@ -225,6 +227,9 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
       {/* Badge desalojo — inline, antes del nombre, solo si está marcado */}
       {esDesalojo && <DesalojoBadge size="sm" className="flex-shrink-0" />}
 
+      {/* Badge capa — solo si no es lll (default), para no saturar */}
+      <CapaBadge value={p.capa} size="sm" hideDefault className="flex-shrink-0" />
+
       {/* Nombre */}
       <p className="text-sm font-medium text-slate-800 line-clamp-1 flex-1 min-w-0">
         {p.nombre}
@@ -294,7 +299,9 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   // 'tag' (migración 016): una columna por tag único entre las iniciativas
   // filtradas. Una iniciativa con N tags aparece en N columnas (decisión del
   // usuario, igual que ya pasaba con multi-ministerio).
-  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio' | 'tag'>('ministerio')
+  // 'capa' (migración 024): tres columnas fijas (Capa I / II / III) por nivel
+  // de importancia. Pensado para la vista "qué hay en mi cartera de prioridades".
+  const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio' | 'tag' | 'capa'>('ministerio')
   const [showSmall, setShowSmall]       = useState(false)
   const [cellSize, setCellSize]         = useState(56)
   const gridRef                         = useRef<HTMLDivElement>(null)
@@ -470,6 +477,20 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     return cols
   }, [filtered, isGroupedMode, groupBy])
 
+  // ── Modo "por capa" (migración 024): 3 columnas fijas I/II/III ───────────
+  // Orden de importancia decreciente. Sin columna "sin capa" — la BD garantiza
+  // NOT NULL DEFAULT 'lll', toda iniciativa cae en una de las tres.
+  const capaColumns = useMemo(() => {
+    if (!isGroupedMode || groupBy !== 'capa') return null
+    const buckets: Record<Capa, Iniciativa[]> = { l: [], ll: [], lll: [] }
+    for (const p of filtered) buckets[p.capa].push(p)
+    return [
+      { capa: 'l' as Capa,   label: 'Capa I',   sub: 'Las prioridades',  cards: buckets.l   },
+      { capa: 'll' as Capa,  label: 'Capa II',  sub: 'Más importante',   cards: buckets.ll  },
+      { capa: 'lll' as Capa, label: 'Capa III', sub: 'Cartera regular',  cards: buckets.lll },
+    ]
+  }, [filtered, isGroupedMode, groupBy])
+
   // ── Estado mode byCol ──────────────────────────────────────────────────────
   const byCol: Record<string, Iniciativa[]> = { rojo: [], ambar: [], verde: [], gris: [] }
   if (!isGroupedMode && viewMode === 'kanban') {
@@ -592,6 +613,15 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
               }`}
             >
               Tags
+            </button>
+            <button
+              onClick={() => setGroupBy('capa')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                groupBy === 'capa' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Agrupar por capa de importancia (I/II/III)"
+            >
+              Capa
             </button>
           </div>
         )}
@@ -833,6 +863,50 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Modo "por capa" (migración 024): 3 columnas fijas I/II/III ──────── */}
+      {/* Header coloreado con la paleta del badge: wine, amber, gris. La columna
+          III queda al final, en gris suave — donde aterriza la mayoría. */}
+      {isGroupedMode && groupBy === 'capa' && capaColumns && (
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div
+            className="grid h-full px-6 pt-4 mx-auto w-fit"
+            style={{
+              gridTemplateColumns: 'repeat(3, 22rem)',
+              columnGap: '1rem',
+            }}
+          >
+            {capaColumns.map(({ capa, label, sub, cards }) => {
+              const headerBg =
+                capa === 'l'  ? 'bg-[#6b1d2c] text-white' :
+                capa === 'll' ? 'bg-amber-100 text-amber-900' :
+                                'bg-gray-100 text-gray-700'
+              return (
+                <div key={capa} className="flex flex-col overflow-hidden pb-4">
+                  <div className={`px-3 py-2.5 rounded-xl mb-3 ${headerBg}`}>
+                    <p className="text-xs font-bold tracking-wide">{label}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[11px] opacity-80">{sub}</span>
+                      <span className="text-xs font-bold bg-white/40 text-current px-2 py-0.5 rounded-full">{cards.length}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    {cards.length === 0 ? (
+                      <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
+                        Sin iniciativas en esta capa
+                      </div>
+                    ) : (
+                      cards.map(p => (
+                        <EjeCard key={`${p.n}-${capa}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
