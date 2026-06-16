@@ -236,6 +236,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
   },
+  // Capa de importancia (migración 024). I=wine institucional, II=amber.
+  // III queda invisible en el PDF (default) — el espacio se gana para
+  // chips realmente informativos.
+  chipCapaI: {
+    backgroundColor: '#6b1d2c', color: '#ffffff',
+    paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
+    fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
+  },
+  chipCapaII: {
+    backgroundColor: '#fef3c7', color: '#92400e',
+    paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
+    fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
+  },
   chipPrio: {
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
@@ -354,6 +367,8 @@ function FichaCompacta({ p, seguimientos }: { p: Iniciativa; seguimientos: Segui
         <Text style={s.chipNeutro}>Avance: {p.pct_avance ?? 0}%</Text>
         <Text style={s.chipNeutro}>{tr(p.eje, 32)}</Text>
         {p.en_foco === true && <Text style={s.chipFoco}>⚑ EN FOCO</Text>}
+        {p.capa === 'l'  && <Text style={s.chipCapaI}>CAPA I</Text>}
+        {p.capa === 'll' && <Text style={s.chipCapaII}>CAPA II</Text>}
       </View>
 
       {/* Hito + etapa */}

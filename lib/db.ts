@@ -46,6 +46,10 @@ export function mapRow(row: Prioridad): Iniciativa {
     tags:                   row.tags ?? [],
     // Defensive: pre-migración 017 las filas vienen sin es_desalojo.
     es_desalojo:            row.es_desalojo ?? false,
+    // Defensive: pre-migración 024 las filas vienen sin capa. Default 'lll'
+    // (cartera regular). La BD tiene NOT NULL DEFAULT 'lll' — post-deploy
+    // siempre vendrá seteado.
+    capa:                   (row.capa ?? 'lll') as Iniciativa['capa'],
   }
 }
 

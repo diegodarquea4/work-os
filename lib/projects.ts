@@ -44,7 +44,12 @@ export type Iniciativa = {
   // Interministerial de Desalojos. El seguimiento estructurado vive aparte
   // en `desalojo_detalle` / `desalojo_seguimientos` / `desalojo_log`.
   es_desalojo: boolean
+  // Nivel de importancia (migración 024). l = las prioridades, ll = más
+  // importante, lll = menos importante (default). Solo admin/editor edita.
+  capa: Capa
 }
+
+export type Capa = 'l' | 'll' | 'lll'
 
 export function getIniciativas(): Iniciativa[] {
   const filePath = path.join(process.cwd(), 'data', 'prioridades_territoriales.csv')
@@ -128,5 +133,6 @@ function parseCSV(content: string): Iniciativa[] {
     en_foco: false,
     tags: [],
     es_desalojo: false,
+    capa: 'lll' as const,
   }))
 }

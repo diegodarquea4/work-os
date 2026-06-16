@@ -34,6 +34,7 @@ export const TEMPLATE_COLS = [
   { key: 'estado_semaforo',         label: 'Semáforo',                desc: 'Valores: verde | ambar | rojo | gris  — puede estar vacío',                                                                                                                                                            wch: 12 },
   { key: 'pct_avance',              label: '% Avance',                desc: 'Número entero 0–100 — puede estar vacío',                                                                                                                                                                              wch: 12 },
   { key: 'en_foco',                 label: 'En Foco',                 desc: 'Valores: Sí | No  — puede estar vacío',                                                                                                                                                                                wch: 10 },
+  { key: 'capa',                    label: 'Capa',                    desc: 'Nivel de importancia: l (las prioridades) | ll (más importante) | lll (menos importante, default). Solo admin/editor puede modificar — propuestas regionales con capa quedan pendientes de aprobación.',                wch: 14 },
   { key: 'inversion_mm',            label: 'Inversión ($MM)',         desc: 'Número en millones de pesos, puede tener decimales  (ej: 1500  o  1500.5) — puede estar vacío',                                                                                                                        wch: 18 },
   { key: 'origen',                  label: 'Origen',                  desc: 'Texto libre — fuente u origen de la iniciativa (ej: Plan Regional, GORE, Delegación) — puede estar vacío',                                                                                                              wch: 24 },
   { key: 'descripcion',             label: 'Descripción',             desc: 'Texto libre — descripción detallada de la iniciativa — puede estar vacío',                                                                                                                                              wch: 54 },
@@ -76,6 +77,7 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['Semáforo', 'No', 'verde · ambar · rojo · gris', 'Estado actual de la iniciativa (operativo). Por defecto "gris" = sin evaluar.'],
   ['% Avance', 'No', 'Número entero 0–100', 'Porcentaje de avance de la iniciativa.'],
   ['En Foco', 'No', 'Sí · No', 'Marca de seguimiento prioritario.'],
+  ['Capa', 'No', 'l · ll · lll', 'Nivel de importancia. l = las prioridades · ll = más importante · lll = menos importante (default). Solo admin/editor edita; si una región propone capa, queda como propuesta pendiente.'],
   ['Inversión ($MM)', 'No', 'Número  (ej: 1500  o  1500.5)', 'Monto en millones de pesos. Puede estar vacío.'],
   ['Descripción', 'No', 'Texto libre', 'Descripción detallada de la iniciativa.'],
   ['Etiquetas', 'No', 'Libres, separadas por PUNTO Y COMA — ej: Costa;Urgente;Salud, bienestar', 'Tags multi-valor para agrupar iniciativas como te plazca. Una iniciativa puede tener N etiquetas. El separador es punto y coma (;) — esto permite que un tag individual lleve coma dentro (ej: "Salud, bienestar"). Sin catálogo cerrado: el control queda en la aprobación de la propuesta. Celda vacía NO borra los tags previos.'],
@@ -154,6 +156,7 @@ function rowFromIniciativa(p: Iniciativa, ejeByIdMap?: Map<number, RegionEje>): 
       case 'estado_semaforo':         return p.estado_semaforo ?? ''
       case 'pct_avance':              return typeof p.pct_avance === 'number' ? p.pct_avance : ''
       case 'en_foco':                 return p.en_foco ? 'Sí' : 'No'
+      case 'capa':                    return p.capa ?? 'lll'
       case 'inversion_mm':            return p.inversion_mm ?? ''
       case 'origen':                  return p.origen ?? ''
       case 'descripcion':             return p.descripcion ?? ''

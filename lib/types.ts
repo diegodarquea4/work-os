@@ -43,6 +43,10 @@ export type Prioridad = {
   // estructurado vive en tablas aparte (desalojo_detalle / seguimientos / log).
   // Opcional para tolerar lecturas pre-ALTER, igual que en_foco.
   es_desalojo?: boolean
+  // Nivel de importancia (migración 024). 'l' = las prioridades, 'll' = más
+  // importante, 'lll' = menos importante (default). Solo admin/editor edita —
+  // queda fuera de la whitelist regional del trigger 023.
+  capa?: 'l' | 'll' | 'lll'
 }
 
 // ── Desalojos (migración 017) ────────────────────────────────────────────────

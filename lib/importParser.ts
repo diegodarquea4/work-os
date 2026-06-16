@@ -32,6 +32,7 @@ export const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Términ
 export const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Inicio Obras', 'Término Obras/Programa', 'Término Obras', 'Inauguración', 'Finalizado'] as const
 export const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE'] as const
 export const VALID_SEMAFORO       = ['verde', 'ambar', 'rojo', 'gris'] as const
+export const VALID_CAPA           = ['l', 'll', 'lll'] as const
 
 // ── Tipos de salida ──────────────────────────────────────────────────────────
 
@@ -323,6 +324,19 @@ export function parseImportWorkbook(
         rowErrors.push(`en foco "${focoStr}" inválido (esperado: Sí / No)`)
       }
     }
+    // Capa de importancia (migración 024). Solo admin/editor puede aplicarla
+    // — si una región la propone vía Excel, queda en la propuesta y el admin
+    // decide. Si el flow es import directo regional, el trigger 023 rechaza
+    // la fila con SQLSTATE 42501 (mensaje del trigger explica la whitelist).
+    const capaStr = col(row, 'Capa')
+    if (capaStr) {
+      const norm = capaStr.toLowerCase().trim()
+      if (!(VALID_CAPA as readonly string[]).includes(norm)) {
+        rowErrors.push(`capa "${capaStr}" inválida (esperado: l, ll, lll)`)
+      } else {
+        target.capa = norm
+      }
+    }
     const fechaRaw = col(row, 'Fecha Próximo Hito')
     if (fechaRaw !== undefined && fechaRaw !== '') {
       // Aceptamos DD-MM-AAAA (canónico), DD/MM/AAAA (formato fecha corta común
@@ -470,6 +484,9 @@ export function parseImportWorkbook(
         estado_semaforo:   'gris',
         pct_avance:        0,
         codigo_iniciativa: codigoIniciativa,
+        // Default de la migración 024 — se sobreescribe si parseOptionalFields
+        // encuentra una capa válida en la columna correspondiente.
+        capa:              'lll',
       }
       parseOptionalFields(row, insertData, rowErrors, /* isUpdate */ false)
       rows.push({

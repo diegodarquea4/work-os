@@ -102,3 +102,10 @@ export const desalojoDetallePatchSchema = z.object({
 })
 
 export type DesalojoDetallePatchBody = z.infer<typeof desalojoDetallePatchSchema>
+
+// ── Capa de importancia (migración 024) ──────────────────────────────────────
+// Los 3 niveles fijos. Reusable por importParser y por futuras rutas API que
+// quieran validar payloads con capa explícita.
+
+export const CAPA_VALUES = ['l', 'll', 'lll'] as const
+export const capaSchema = z.enum(CAPA_VALUES)
