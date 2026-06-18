@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -610,6 +611,23 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Dynamic column count for colspan calculation
   const colCount = visibleCols.size
 
+  // Virtualization: con 3000+ filas el render directo bloqueaba el browser.
+  // estimateSize 64 cubre la altura tipica del row (2 lineas en nombre/descripcion).
+  // overscan 10 evita huecos visibles durante scroll rapido.
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const totalVirtualSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length > 0
+    ? totalVirtualSize - virtualRows[virtualRows.length - 1].end
+    : 0
+
   function ColHeader({ col, label }: { col: SortCol; label: string }) {
     const active = sortCol === col
     return (
@@ -1022,7 +1040,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       )}
 
       {/* ── Table ── */}
-      <div className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
+      <div ref={tableScrollRef} className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
             <tr>
@@ -1062,7 +1080,22 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 </td>
               </tr>
             ) : (
-              filtered.map(p => <DataRow key={p.n} p={p} />)
+              <>
+                {paddingTop > 0 && (
+                  <tr aria-hidden style={{ height: paddingTop }}>
+                    <td colSpan={colCount} className="p-0 border-0" />
+                  </tr>
+                )}
+                {virtualRows.map(vi => {
+                  const p = filtered[vi.index]
+                  return <DataRow key={p.n} p={p} />
+                })}
+                {paddingBottom > 0 && (
+                  <tr aria-hidden style={{ height: paddingBottom }}>
+                    <td colSpan={colCount} className="p-0 border-0" />
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>
