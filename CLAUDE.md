@@ -48,16 +48,21 @@ Patrón en call-site: optimistic update local → try { await safeWrite(...) } c
 
 ## RLS por rol (etapa 2 de consolidación backend)
 
-**Matriz vigente** (migración 023, función `current_user_role()` + triggers):
+**Matriz vigente** (migración 023 + 026, función `current_user_role()` + triggers):
 
 - `prioridades_territoriales`: UPDATE admin/editor (cualquier columna), regional solo columnas operativas (semáforo, pct_avance, responsable, en_foco, etapa, hito). INSERT/DELETE: admin/editor.
-- `seguimientos`, `documentos_prioridad`: INSERT admin/editor/regional. UPDATE/DELETE: autor O admin/editor.
+- `seguimientos`, `documentos_prioridad`: INSERT cualquier autenticado (mig 026 — **incluido viewer**). UPDATE/DELETE: autor O admin/editor.
 - `metricas_eje`: definición admin/editor. `valor_actual` admin/editor + regional dentro de sus `region_cods` (trigger).
 - `region_ejes`, `prego_monitoreo`: admin/editor.
 - `mop_projects`, `seia_projects`, `regional_metrics`: solo service role (los crons).
-- viewer = solo lectura estricta. `canEditOperational` en UserContext excluye viewer.
+- viewer = solo lectura **salvo** Seguimientos/Documentos (puede crear, y editar/borrar lo suyo). `canEditOperational` en UserContext sigue excluyendo viewer del trio operativo de prioridades.
 
 Las políticas SELECT NO se tocaron (riesgo de romper lecturas) — todas siguen world-readable a cualquier autenticado. Documentado como deuda menor.
+
+**Storage policies** (mig 026):
+- `project-docs` (bucket público, donde van los Documentos de iniciativas): SELECT any, INSERT cualquier autenticado, UPDATE admin/editor, DELETE owner (`storage.objects.owner = auth.uid()`) O admin/editor.
+- `desalojos-docs` (bucket privado): admin-only (sin cambios).
+- `plan-regional`, `import-proposals`: sin policies hoy → uploads desde browser fallarían. Deuda: abrir si aparece reporte.
 
 ## Llave estable de mutación (etapa 5)
 
