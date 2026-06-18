@@ -10,6 +10,7 @@ import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
 import DesalojoBadge from './DesalojoBadge'
 import { CapaBadge } from './CapaBadge'
+import { useCanEditOperational } from '@/lib/context/UserContext'
 
 // ── Mosaic helpers ────────────────────────────────────────────────────────────
 
@@ -124,10 +125,11 @@ type Props = {
 
 // ── EjeCard — card for eje mode ───────────────────────────────────────────────
 
-function EjeCard({ p, onSelect, onToggleFoco }: {
+function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }: {
   p: Iniciativa
   onSelect: (p: Iniciativa) => void
   onToggleFoco: (n: number, next: boolean) => void
+  canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
   const pc  = prioridadColor(p.prioridad)
@@ -140,15 +142,21 @@ function EjeCard({ p, onSelect, onToggleFoco }: {
         enFoco ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'
       }`}
     >
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
-        className={`absolute top-2 right-2 p-1 rounded transition-all duration-500 ease-out ${
-          enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
-        }`}
-        title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
-      >
-        <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
-      </button>
+      {canEditFoco ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+          className={`absolute top-2 right-2 p-1 rounded transition-all duration-500 ease-out ${
+            enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
+          }`}
+          title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+        >
+          <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
+        </button>
+      ) : enFoco ? (
+        <span className="absolute top-2 right-2 p-1 text-amber-500" title="En foco">
+          <FlagIcon filled className="w-3.5 h-3.5" />
+        </span>
+      ) : null}
       <div className="flex items-center gap-2 mb-2">
         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${sem.dot}`} />
         <span className="text-xs text-gray-600 font-medium">{sem.label}</span>
@@ -183,10 +191,11 @@ function EjeCard({ p, onSelect, onToggleFoco }: {
 
 // ── MinistryRow — fila compacta para vista Monday por ministerio ──────────────
 
-function MinistryRow({ p, onSelect, onToggleFoco }: {
+function MinistryRow({ p, onSelect, onToggleFoco, canEditFoco }: {
   p: Iniciativa
   onSelect: (p: Iniciativa) => void
   onToggleFoco: (n: number, next: boolean) => void
+  canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
   const pc  = prioridadColor(p.prioridad)
@@ -211,15 +220,23 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
       }`}
     >
       {/* Flag */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
-        className={`flex-shrink-0 p-1 -m-1 rounded transition-all duration-500 ease-out ${
-          enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
-        }`}
-        title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
-      >
-        <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
-      </button>
+      {canEditFoco ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+          className={`flex-shrink-0 p-1 -m-1 rounded transition-all duration-500 ease-out ${
+            enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
+          }`}
+          title={enFoco ? 'Quitar del foco' : 'Marcar en foco'}
+        >
+          <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-all duration-500" />
+        </button>
+      ) : enFoco ? (
+        <span className="flex-shrink-0 p-1 -m-1 text-amber-500" title="En foco">
+          <FlagIcon filled className="w-3.5 h-3.5" />
+        </span>
+      ) : (
+        <span className="flex-shrink-0 w-3.5 h-3.5" aria-hidden />
+      )}
 
       {/* Semáforo */}
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
@@ -282,6 +299,7 @@ function MinistryRow({ p, onSelect, onToggleFoco }: {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames }: Props) {
+  const canEditFoco = useCanEditOperational()
   const [selected, setSelected]         = useState<Iniciativa | null>(null)
   // Región filtrada controlada por el state global (WorkOSApp). Fallback a la
   // primera región alfabética si llega vacío (ej. arranque antes de hidratar).
@@ -811,7 +829,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       Sin iniciativas
                     </div>
                   ) : (
-                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />)
+                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />)
                   )}
                 </div>
               </div>
@@ -855,7 +873,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       </div>
                     ) : (
                       cards.map(p => (
-                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
+                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
                       ))
                     )}
                   </div>
@@ -899,7 +917,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       </div>
                     ) : (
                       cards.map(p => (
-                        <EjeCard key={`${p.n}-${capa}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
+                        <EjeCard key={`${p.n}-${capa}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
                       ))
                     )}
                   </div>
@@ -939,7 +957,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                     se permite scroll lateral interno en vez de cortarse. */}
                 <div className="bg-slate-50 p-3 space-y-2 overflow-x-auto">
                   {group.iniciativas.map(p => (
-                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} />
+                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
                   ))}
                 </div>
               </details>

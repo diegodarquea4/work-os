@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
-import { useCanEditAny, useIsAdmin } from '@/lib/context/UserContext'
+import { useCanEditAny, useCanEditOperational, useIsAdmin } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import TagChips from './TagChips'
@@ -79,6 +79,7 @@ export default function AttentionTray({
   allowedRegionNames,
 }: Props) {
   const canEditAny = useCanEditAny()
+  const canEditFoco = useCanEditOperational()
   const isAdmin    = useIsAdmin()
 
   // ── Filters state ─────────────────────────────────────────────────────────
@@ -387,13 +388,19 @@ export default function AttentionTray({
 
     return (
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, p.id, false) }}
-          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
-          title="Quitar del foco"
-        >
-          <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
-        </button>
+        {canEditFoco ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, p.id, false) }}
+            className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
+            title="Quitar del foco"
+          >
+            <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
+          </button>
+        ) : (
+          <span className="flex-shrink-0 text-amber-500 p-1 -m-1" title="En foco">
+            <FlagIcon filled className="w-4 h-4" />
+          </span>
+        )}
 
         <button
           onClick={() => setSelectedIniciativa(p)}
@@ -490,13 +497,17 @@ export default function AttentionTray({
     const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
     return (
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 transition-colors">
-        <button
-          onClick={() => handleToggleFoco(p.n, p.id, true)}
-          className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
-          title="Marcar en foco"
-        >
-          <FlagIcon className="w-4 h-4 transition-all duration-500" />
-        </button>
+        {canEditFoco ? (
+          <button
+            onClick={() => handleToggleFoco(p.n, p.id, true)}
+            className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
+            title="Marcar en foco"
+          >
+            <FlagIcon className="w-4 h-4 transition-all duration-500" />
+          </button>
+        ) : (
+          <span className="flex-shrink-0 w-4 h-4" aria-hidden />
+        )}
         <button onClick={() => setSelectedIniciativa(p)} className="flex-1 text-left min-w-0 flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sem.dot}`} />
           <div className="flex-1 min-w-0">
