@@ -16,6 +16,11 @@ import provinciasData from '@/data/provincias-comunas.json'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 import { registerPdfFonts } from '@/lib/pdfFonts'
 
+// Cap a 300s: 7+ queries Supabase en serie + Anthropic AI con PDF + render react-pdf.
+// Sin esto Vercel mata el handler a ~60s y el usuario ve "no se generó la minuta"
+// (mismo vector que sufrió SEIA en mayo 2026 — timeout silencioso).
+export const maxDuration = 300
+
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
 
 // Read logo as base64 data URL at startup — more reliable than file paths in serverless
