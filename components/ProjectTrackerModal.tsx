@@ -1088,7 +1088,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               prioridadId={prioridad.n}
               seguimientos={seguimientos}
               onRefresh={loadData}
-              canCreate={canEditOperational}
+              canCreate={!!currentUserEmail}
               canDeleteAny={canEditAny}
               currentUserEmail={currentUserEmail}
             />
@@ -1105,7 +1105,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               prioridadId={prioridad.n}
               documentos={documentos}
               onRefresh={loadData}
-              canCreate={canEditOperational}
+              canCreate={!!currentUserEmail}
               canDeleteAny={canEditAny}
               currentUserEmail={currentUserEmail}
             />
