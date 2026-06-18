@@ -18,6 +18,7 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { updateV2Pipeline } from '@/lib/syncHelper'
 
 export const dynamic    = 'force-dynamic'
 export const runtime    = 'nodejs'
@@ -388,7 +389,12 @@ async function runSync() {
       await supabase.from('v2_indicadores_valores')
         .upsert(batch, { onConflict: 'codigo_indicador,region_id,periodo' })
     }
-    supabase.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+    // Pipeline metadata: sin esto los PIB_* sectoriales aparecen como
+    // "nunca corrió" en /admin/pipeline aunque tengan datos frescos.
+    const codigosV2 = [...new Set(v2Rows.map(r => r.codigo_indicador))]
+    await updateV2Pipeline(codigosV2, 'pib-sync', { count: v2Rows.length })
+    // Refresh matview con await por O-04 (telemetría durable en serverless).
+    await supabase.rpc('refresh_v2_indicadores_ultimo')
   }
 
   return Response.json({

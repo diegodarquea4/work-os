@@ -611,33 +611,6 @@ export type V2IndicadorUltimo = {
   fecha_carga_sistema: string
 }
 
-export type V2Iniciativa = {
-  id: number
-  codigo_iniciativa: string | null
-  region_id: number
-  eje_id: number | null
-  ministerio_id: number | null
-  nombre: string
-  descripcion: string | null
-  prioridad: 'Alta' | 'Media' | 'Baja' | null
-  etapa_actual: string | null
-  estado_planificacion: 'planificada' | 'en_marcha' | 'cerrada'
-  estado_semaforo: 'verde' | 'ambar' | 'rojo' | 'sin_evaluar'
-  pct_avance: number
-  proximo_hito: string | null
-  fecha_proximo_hito: string | null
-  fuente_financiamiento: string | null
-  codigo_bip: string | null
-  inversion_mm_clp: number | null
-  comuna: string | null
-  responsable: string | null
-  fecha_apertura_monitoreo: string | null
-  cargado_por: string | null
-  fuente_origen: string | null
-  created_at: string
-  updated_at: string
-}
-
 export type V2MinutaLog = {
   id: number
   region_id: number

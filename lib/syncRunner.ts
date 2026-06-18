@@ -58,11 +58,22 @@ export async function withSyncStatus(
     )
   }
 
-  // Persistir status en background — best effort. Si falla, sólo warning.
-  // No bloquea la response al cron / usuario.
-  void persistFromResponse(name, startedAt, response).catch(e =>
-    console.warn(`[withSyncStatus] ${name}: no pude persistir sync_status:`, e),
-  )
+  // Persistir status — await acotado por timeout. Pre-O-04 era fire-and-forget
+  // (`void ... catch`), pero en Vercel la función puede congelarse tras Response
+  // y perder la escritura (síntoma SEIA mayo 2026). Awaitearlo sin techo
+  // hacía que un Supabase lento bloqueara el cron completo: cubrimos los dos
+  // riesgos con un race de 5s — durabilidad cuando Supabase responde, no
+  // bloqueo cuando no.
+  try {
+    await Promise.race([
+      persistFromResponse(name, startedAt, response),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout 5s persistFromResponse')), 5000),
+      ),
+    ])
+  } catch (e) {
+    console.warn(`[withSyncStatus] ${name}: no pude persistir sync_status:`, e)
+  }
 
   return response
 }

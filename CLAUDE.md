@@ -89,6 +89,20 @@ Two separate region tables:
 
 **Critical:** check `regionId === undefined`, not `!regionId` — `region_id = 0` is valid and falsy.
 
+## v2 — Estado (junio 2026)
+
+**v2 está congelado como "solo indicadores".** El cutover completo (que la migración 001_v2_schema.sql anunciaba como Fase 5) nunca se hizo y no se va a hacer — mantener ambos modelos a medias era la fuente principal de confusión.
+
+- **Vivo en v2**: `v2_indicadores_*` (catálogo, valores, pipeline, log), `v2_fuentes`, `v2_regiones`, `v2_proyectos_inversion`, `v2_seguridad_semanal`.
+- **Eliminadas (mig 025)**: `v2_iniciativas`, `v2_iniciativas_seguimiento`, `v2_iniciativas_documentos`, `v2_iniciativas_semaforo_log`. Eran huérfanas (0 consumidores TS).
+- **Canon (v1, NO migrar)**: `prioridades_territoriales`, `region_metrics`, `regional_metrics`, todo lo de iniciativas/minutas/RLS por rol.
+
+**Observabilidad unificada**: `/api/health` lee `sync_status` **Y** `v2_indicadores_pipeline`. Para v1 devuelve `atrasados[]` + `con_errores[]` (mismo formato de siempre). Para v2 devuelve `indicadores_v2: { activos, con_data, error, parcial, never, stale }` + `indicadores_v2_problemas[]` (lista por indicador con `motivo` y `dias_desde`). Stale se calcula **por fila** usando la columna `tolerancia_atraso_dias` del catálogo, NO agrupando por `fuente_endpoint` (que en prod es URL/descriptor, no nombre de sync). El estado `'never'` cuenta pero no dispara `ok=false` (es backlog, no falla). Si la query a v2 falla se propaga vía `indicadores_v2_query_error` y baja `ok` (antes era silencioso). Webhook opcional vía `ALERT_WEBHOOK_URL`. Los syncs que upsertan inline a `v2_indicadores_valores` (ine, pib, external) deben llamar `updateV2Pipeline()` de `lib/syncHelper.ts` para no aparecer como "nunca corrió" en `/admin/pipeline`.
+
+**Crons**: en `.github/workflows/cron-syncs.yml` (no en `vercel.json` — Vercel Hobby solo permite 2 crons). `BASE_URL = work-os-theta.vercel.app`, `Authorization: Bearer $CRON_SECRET`. Si falta el secret, el step termina con `exit 1`.
+
+**Telemetría en serverless**: todas las escrituras a `sync_status`, `v2_indicadores_pipeline*`, `refresh_v2_indicadores_ultimo` van con `await`. Pre-O-04 eran `.then(() => {})` y la función podía congelarse tras `Response` y perderlas (síntoma: SEIA 53 días de silencio en mayo 2026).
+
 ## BCCh sync (`app/api/ine-sync/route.ts`)
 
 Syncs regional unemployment and PIB series from BCCh REST API. One series per API call. Series IDs:
