@@ -2,6 +2,11 @@ import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { applyImport, recordImportLog, type ImportPayload } from '@/lib/importApplier'
 
+// Cap a 300s: imports masivos hacen SELECT region + UPDATE por fila en serie.
+// Sin esto Vercel mata el handler a ~60s y el usuario ve "Aplicada con errores
+// parciales" sin razon clara. Mismo vector que sufrio SEIA en mayo 2026.
+export const maxDuration = 300
+
 /**
  * POST /api/import — import directo desde el modal de NationalDashboard.
  *
