@@ -1,5 +1,6 @@
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { adminUsersPatchSchema } from '@/lib/schemas'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
@@ -7,13 +8,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const body = await request.json() as {
-    role?: string
-    region_cods?: string[]
-    full_name?: string
-    reset_password?: boolean
+  const parse = adminUsersPatchSchema.safeParse(await request.json())
+  if (!parse.success) {
+    return Response.json(
+      { error: 'Solicitud invalida', detalle: parse.error.issues },
+      { status: 400 },
+    )
   }
-  const { role, region_cods, full_name, reset_password } = body
+  const { role, region_cods, full_name, reset_password } = parse.data
 
   const db = getSupabaseAdmin()
 

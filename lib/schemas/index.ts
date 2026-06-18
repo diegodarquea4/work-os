@@ -95,6 +95,17 @@ export const adminUsersPostSchema = z.object({
 
 export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
 
+// ── /api/admin/users/[id] PATCH ──────────────────────────────────────────────
+
+export const adminUsersPatchSchema = z.object({
+  role:           z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
+  region_cods:    z.array(z.string().min(1)).optional(),
+  full_name:      z.string().min(1).optional(),
+  reset_password: z.boolean().optional(),
+})
+
+export type AdminUsersPatchBody = z.infer<typeof adminUsersPatchSchema>
+
 // ── /api/desalojos/[n] PATCH ─────────────────────────────────────────────────
 
 export const desalojoDetallePatchSchema = z.object({
