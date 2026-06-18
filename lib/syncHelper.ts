@@ -67,28 +67,56 @@ export async function upsertV2WithLog(
     upserted += batch.length
   }
 
-  // Log per indicator
+  // Log per indicator + pipeline update.
+  // Ojo: en Vercel serverless las promises sin await se pueden congelar tras
+  // la Response (causa 6.10 de la auditoría: telemetría perdida). Awaiteamos
+  // explícito; cuesta ~200ms en cron pero garantiza durabilidad.
   const codigos = [...new Set(rows.map(r => r.codigo_indicador))]
   for (const codigo of codigos) {
     const count = rows.filter(r => r.codigo_indicador === codigo).length
-    sb.from('v2_indicadores_pipeline_log').insert({
+    await sb.from('v2_indicadores_pipeline_log').insert({
       codigo_indicador: codigo,
       estado: lastError ? 'error' : 'ok',
       filas_persistidas: count,
       errores: lastError ? { message: lastError } : null,
-    }).then(() => {})
+    })
 
-    sb.from('v2_indicadores_pipeline').update({
+    await sb.from('v2_indicadores_pipeline').update({
       ultima_ejecucion: new Date().toISOString(),
       ultima_ejecucion_estado: lastError ? 'error' : 'ok',
       ultima_ejecucion_mensaje: lastError ?? `${count} filas via ${sourceName}`,
-    }).eq('codigo_indicador', codigo).then(() => {})
+    }).eq('codigo_indicador', codigo)
   }
 
   // Refresh materialized view
   if (!lastError) {
-    sb.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+    await sb.rpc('refresh_v2_indicadores_ultimo')
   }
 
   return { upserted, error: lastError }
+}
+
+/**
+ * Actualiza v2_indicadores_pipeline.ultima_ejecucion para los códigos dados.
+ * Pensado para syncs que upsertan a v2_indicadores_valores manualmente
+ * (pib, seia, mop, stop, external — los que no usan upsertV2WithLog).
+ *
+ * NO updatea pipeline_log — esa granularidad la maneja upsertV2WithLog cuando
+ * aplica. Acá solo necesitamos que el indicador no se vea "nunca corrió" en
+ * /admin/pipeline ni /api/health.
+ */
+export async function updateV2Pipeline(
+  codigos: string[],
+  sourceName: string,
+  result: { count: number; error?: string },
+): Promise<void> {
+  if (codigos.length === 0) return
+  const sb = getSupabaseAdmin()
+  const mensaje = result.error ?? `${result.count} filas via ${sourceName}`
+  const estado = result.error ? 'error' : 'ok'
+  await sb.from('v2_indicadores_pipeline').update({
+    ultima_ejecucion: new Date().toISOString(),
+    ultima_ejecucion_estado: estado,
+    ultima_ejecucion_mensaje: mensaje,
+  }).in('codigo_indicador', codigos)
 }

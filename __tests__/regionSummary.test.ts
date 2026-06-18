@@ -67,6 +67,7 @@ function makeIniciativa(overrides: Partial<Iniciativa> = {}): Iniciativa {
     en_foco:            false,
     tags:               [],
     es_desalojo:        false,
+    capa:               'lll',
     ...overrides,
   }
 }

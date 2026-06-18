@@ -19,6 +19,7 @@ import { join } from 'path'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_INVERSE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { updateV2Pipeline } from '@/lib/syncHelper'
 
 // ── v2 mapping: Census fields → v2 indicator codes ──────────────────────────
 // Only maps computed census fields that the external-sync calculates (pct_*, etc.)
@@ -183,7 +184,10 @@ async function runSync() {
           await sb.from('v2_indicadores_valores')
             .upsert(v2Rows.slice(i, i + 500), { onConflict: 'codigo_indicador,region_id,periodo' })
         }
-        sb.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+        // Pipeline metadata para /admin/pipeline y /api/health.
+        const codigosV2 = [...new Set(v2Rows.map(r => r.codigo_indicador))]
+        await updateV2Pipeline(codigosV2, 'external-sync', { count: v2Rows.length })
+        await sb.rpc('refresh_v2_indicadores_ultimo')
         console.log(`[external-sync] v2 census: ${v2Rows.length} valores`)
       }
     } catch (v2Err) {

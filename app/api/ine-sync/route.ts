@@ -31,9 +31,14 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { updateV2Pipeline } from '@/lib/syncHelper'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+// ine-sync hace ~50 llamadas BCCh secuenciales (1 serie × 16 regiones × N
+// series). Sin esto Vercel mata el handler a los ~60s (mismo vector de
+// timeout silencioso que afectó SEIA en mayo 2026 — 53 días de silencio).
+export const maxDuration = 300
 
 const BCCH_API = 'https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx'
 
@@ -352,9 +357,10 @@ async function runSync() {
         }
       }
 
-      // Refresh materialized view (fire-and-forget)
+      // Refresh materialized view. await por O-04 — pre-fix workflow era
+      // .then(()=>{}) huérfano que se podía perder en Vercel serverless.
       if (!v2Error) {
-        supabase.rpc('refresh_v2_indicadores_ultimo').then(() => {})
+        await supabase.rpc('refresh_v2_indicadores_ultimo')
       }
     }
   } catch (err) {
@@ -362,28 +368,19 @@ async function runSync() {
   }
 
   // ── v2 pipeline log ────────────────────────────────────────────────────────
-  // Log each metric's sync result for the pipeline monitoring dashboard
+  // Bulk insert vía un solo round-trip (pre-fix era N inserts secuenciales).
   const syncEnd = Date.now()
   const v2Metrics = [...new Set(v2Rows.map(r => r.codigo_indicador))]
-  for (const codigo of v2Metrics) {
-    const metricRows = v2Rows.filter(r => r.codigo_indicador === codigo)
-    supabase.from('v2_indicadores_pipeline_log').insert({
+  if (v2Metrics.length > 0) {
+    const logRows = v2Metrics.map(codigo => ({
       codigo_indicador: codigo,
       estado: v2Error ? 'error' : 'ok',
-      filas_persistidas: metricRows.length,
+      filas_persistidas: v2Rows.filter(r => r.codigo_indicador === codigo).length,
       duracion_ms: syncEnd - start,
       errores: v2Error ? { message: v2Error } : null,
-    }).then(() => {})
-
-    // Update pipeline status
-    supabase.from('v2_indicadores_pipeline')
-      .update({
-        ultima_ejecucion: new Date().toISOString(),
-        ultima_ejecucion_estado: v2Error ? 'error' : 'ok',
-        ultima_ejecucion_mensaje: v2Error ?? `${metricRows.length} filas`,
-      })
-      .eq('codigo_indicador', codigo)
-      .then(() => {})
+    }))
+    await supabase.from('v2_indicadores_pipeline_log').insert(logRows)
+    await updateV2Pipeline(v2Metrics, 'ine-sync', { count: v2Rows.length, error: v2Error ?? undefined })
   }
 
   return Response.json({

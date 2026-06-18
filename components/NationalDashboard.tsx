@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -98,6 +98,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // este botón — los regionales/viewers usan el flow de propuesta desde "Mi región".
   const canImport = useIsAdmin()
   const [search, setSearch]                   = useState('')
+  // D1-03: useDeferredValue posterga el efecto de la búsqueda mientras el
+  // usuario tipea. El <input> sigue ligado a `search` (responsive UX), pero
+  // `filtered` y `basePool` consumen `deferredSearch` (no recalculan cada
+  // keystroke). React batchea los updates en frames de baja prioridad.
+  const deferredSearch = useDeferredValue(search)
   // Todos los filtros son multi-select Set<string>. Set vacío = "no filtra".
   // El rediseño unificó el patrón: nada de "todas"/"todos" como sentinel,
   // toda la lógica usa `.size === 0` y `.has(valor)`. Esto desbloquea filtrar
@@ -144,7 +149,33 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   // New UI state
   const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
+  // D1-02: persistir selección de columnas. Antes era useState efímero y se
+  // reseteaba en cada window.location.reload() post-import. Patrón clonado
+  // de WorkOSApp.tsx:93-124 (hydrated flag + try/catch silencioso).
   const [visibleCols, setVisibleCols]                   = useState<Set<ColId>>(DEFAULT_COLS)
+  const [colsHydrated, setColsHydrated]                 = useState(false)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('workos:dashboardCols')
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[]
+        const validIds = new Set<ColId>(ALL_COLS.map(c => c.id))
+        const intersected = new Set<ColId>(parsed.filter((id): id is ColId => validIds.has(id as ColId)))
+        // Solo restauramos si quedan IDs válidos. Antes el guard era >=3
+        // pero un usuario que eligió 1-2 columnas a propósito veía la
+        // selección reseteada silenciosamente — peor que respetar el intent.
+        if (intersected.size > 0) setVisibleCols(intersected)
+      }
+    } catch {
+      // localStorage bloqueado o JSON corrupto — arrancamos con default.
+    } finally {
+      setColsHydrated(true)
+    }
+  }, [])
+  useEffect(() => {
+    if (!colsHydrated) return
+    try { localStorage.setItem('workos:dashboardCols', JSON.stringify([...visibleCols])) } catch { /* noop */ }
+  }, [visibleCols, colsHydrated])
   const [showColsPanel, setShowColsPanel]               = useState(false)
 
   const selectedSynced = selected
@@ -182,8 +213,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   const filtered = useMemo(() => {
     let list = projects.filter(p => {
-      if (search) {
-        const q = search.toLowerCase()
+      if (deferredSearch) {
+        const q = deferredSearch.toLowerCase()
         if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
             !(p.ministerio ?? '').toLowerCase().includes(q)) return false
@@ -225,7 +256,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, search, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, sortCol, sortDir, actividad])
+  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -259,9 +290,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     | 'tags'   | 'responsable' | 'foco' | 'desalojo' | 'capa' | null
 
   function basePool(excluding: FilterKey) {
-    const q = search.toLowerCase()
+    // D1-03: usa deferredSearch igual que filtered. Los counts en los popovers
+    // se actualizan junto con el resultado de la tabla, no por keystroke.
+    const q = deferredSearch.toLowerCase()
     return projects.filter(p => {
-      if (search) {
+      if (deferredSearch) {
         if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
             !(p.ministerio ?? '').toLowerCase().includes(q)) return false
@@ -309,7 +342,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   const baseDeps = [
-    projects, search,
+    projects, deferredSearch,
     filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
     filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa,
@@ -494,16 +527,28 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // se pueda identificar qué eje pertenece a cada una (ver buildPrefilledWorkbook).
 
   function openExportModal() {
+    // Si el usuario ya filtró por región, partimos con esa selección — antes
+    // se abría con las 16 marcadas independiente del filtro y eso confundía
+    // (exportCount mostraba solo la región filtrada pero las 16 checks
+    // marcadas sugerían "estás exportando todo").
+    if (filterRegion.size > 0) {
+      setExportRegions(new Set(filterRegion))
+    }
     setExportModalOpen(true)
   }
 
-  const exportCount = projects.filter(p => exportRegions.has(p.region)).length
+  // D1-04: el universo de export es `filtered` (los 14 filtros activos
+  // aplicados), no `projects`. El selector de regiones del modal sigue siendo
+  // un "scope adicional" — si el usuario marca solo Antofagasta y ya tiene
+  // filtro semáforo=rojo, se exportan solo las rojas de Antofagasta.
+  // Pre-D1-04 ignoraba todos los filtros excepto regiones — bug de UX.
+  const exportCount = filtered.filter(p => exportRegions.has(p.region)).length
 
   async function exportExcelFiltered() {
     if (exportRegions.size === 0 || exporting) return
     setExporting(true)
     try {
-      const toExport = projects.filter(p => exportRegions.has(p.region))
+      const toExport = filtered.filter(p => exportRegions.has(p.region))
       // Mapeo región → cod para cargar el catálogo de ejes correspondiente
       // y construir la hoja "Ejes válidos". Si una región seleccionada no
       // tiene cod conocido (REGIONS no la trae), se omite — defensivo.
@@ -536,8 +581,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  // Usamos deferredSearch para mantener consistencia con `filtered`. Antes
+  // usábamos `search` y el chip aparecía antes de que la tabla reflejara el
+  // filtro (gap visual de varios frames durante typing rápido).
   const hasFilters =
-    !!search ||
+    !!deferredSearch ||
     filterRegion.size > 0 || filterEje.size > 0 || filterEjeGobierno.size > 0 ||
     filterSemaforo.size > 0 || filterPrioridad.size > 0 ||
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
@@ -706,7 +754,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         {hasFilters && (() => {
           const empty = (): Set<string> => new Set<string>()
           const chips: ActiveChip[] = [
-            search ? { key: 'search', label: 'Búsqueda', value: search, onClear: () => setSearch('') } : null,
+            deferredSearch ? { key: 'search', label: 'Búsqueda', value: deferredSearch, onClear: () => setSearch('') } : null,
             setChip('Región',       filterRegion,      () => setFilterRegion(empty())),
             setChip('Eje Regional', filterEje,         () => setFilterEje(empty())),
             setChip('Eje Gobierno', filterEjeGobierno, () => setFilterEjeGobierno(empty())),

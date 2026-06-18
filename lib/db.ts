@@ -2,7 +2,6 @@ import { getSupabase } from './supabase'
 import { safeAuditWrite } from './dbWrite'
 import type {
   Prioridad, RegionMetrics, RegionalMetric, PregoRow, PregoEstado, PregoFaseKey,
-  V2Indicador, V2IndicadorValor, V2IndicadorUltimo, V2Fuente,
 } from './types'
 import type { Iniciativa } from './projects'
 
@@ -292,73 +291,3 @@ export async function updatePregoFase(
   if (error) throw new Error(`DB error (prego update): ${error.message}`)
 }
 
-// ---------------------------------------------------------------------------
-// v2 — Indicadores (new data model)
-// ---------------------------------------------------------------------------
-
-/** Full indicator catalog with joined source info. */
-export async function getV2Catalogo(): Promise<V2Indicador[]> {
-  const { data, error } = await getSupabase()
-    .from('v2_indicadores_catalogo')
-    .select('*, fuente:v2_fuentes(*)')
-    .order('categoria')
-    .order('orden_presentacion', { ascending: true, nullsFirst: false })
-
-  if (error) throw new Error(`DB error (v2 catalogo): ${error.message}`)
-  return (data ?? []) as V2Indicador[]
-}
-
-/** Latest value per indicator for a region (uses materialized view). */
-export async function getV2UltimosPorRegion(regionId: number): Promise<V2IndicadorUltimo[]> {
-  const { data, error } = await getSupabase()
-    .from('v2_indicadores_ultimo')
-    .select('*')
-    .eq('region_id', regionId)
-
-  if (error) throw new Error(`DB error (v2 ultimo): ${error.message}`)
-  return (data ?? []) as V2IndicadorUltimo[]
-}
-
-/** Time-series for a specific indicator in a region. */
-export async function getV2Serie(
-  codigo: string,
-  regionId: number,
-  limit = 60,
-): Promise<V2IndicadorValor[]> {
-  const { data, error } = await getSupabase()
-    .from('v2_indicadores_valores')
-    .select('*')
-    .eq('codigo_indicador', codigo)
-    .eq('region_id', regionId)
-    .order('periodo', { ascending: true })
-    .limit(limit)
-
-  if (error) throw new Error(`DB error (v2 serie): ${error.message}`)
-  return (data ?? []) as V2IndicadorValor[]
-}
-
-/** Latest national value for an indicator (region_id = 0). */
-export async function getV2NacionalUltimo(codigo: string): Promise<V2IndicadorUltimo | null> {
-  const { data, error } = await getSupabase()
-    .from('v2_indicadores_ultimo')
-    .select('*')
-    .eq('codigo_indicador', codigo)
-    .eq('region_id', 0)
-    .maybeSingle()
-
-  if (error) throw new Error(`DB error (v2 nacional): ${error.message}`)
-  return data as V2IndicadorUltimo | null
-}
-
-/** All 16 regions ranked by an indicator (excludes national). */
-export async function getV2RankingIndicador(codigo: string): Promise<V2IndicadorUltimo[]> {
-  const { data, error } = await getSupabase()
-    .from('v2_indicadores_ultimo')
-    .select('*')
-    .eq('codigo_indicador', codigo)
-    .gt('region_id', 0)
-    .order('valor', { ascending: true })
-
-  if (error) throw new Error(`DB error (v2 ranking): ${error.message}`)
-  return (data ?? []) as V2IndicadorUltimo[]
-}
