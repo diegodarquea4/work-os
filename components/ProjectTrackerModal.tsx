@@ -1063,12 +1063,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-28 flex-shrink-0">RAT</span>
               <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
-                ['FI','IN','RS','RE','OT'].includes(rat) ? 'bg-green-100'  :
-                rat === 'En Tramitación'                 ? 'bg-orange-100' : 'bg-gray-100'
+                ['FI','IN','RS','RE','OT','AD','CF'].includes(rat) ? 'bg-green-100'  :
+                rat === 'En Tramitación'                            ? 'bg-orange-100' : 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
                 <span className={`text-xs font-medium truncate flex-1 ${
-                  ['FI','IN','RS','RE','OT'].includes(rat) ? 'text-green-700'  :
-                  rat === 'En Tramitación'                 ? 'text-orange-700' : 'text-gray-400'
+                  ['FI','IN','RS','RE','OT','AD','CF'].includes(rat) ? 'text-green-700'  :
+                  rat === 'En Tramitación'                            ? 'text-orange-700' : 'text-gray-400'
                 }`}>{rat && rat !== 'No Requiere' && rat !== 'No Ingresado' ? rat : '—'}</span>
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-gray-500">
                   <path d="M1.5 3L4 5.5L6.5 3"/>
@@ -1092,6 +1092,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   <option>OT</option>
                   <option>RE</option>
                   <option>RS</option>
+                  <option>AD</option>
+                  <option>CF</option>
                 </select>
               </label>
             </div>
