@@ -19,7 +19,7 @@ import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
 import RegionEjesPanel from './RegionEjesPanel'
 import AlertCard from './AlertCard'
-import { useCanEditAny } from '@/lib/context/UserContext'
+import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import {
   diasSinActividad,
@@ -158,7 +158,8 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   const [selectedEjeIdForMetrics, setSelectedEjeIdForMetrics] = useState<number | null>(null)
   // Modal de gestión del catálogo de ejes de la región (solo admin/editor DCI).
   const [manageEjesOpen, setManageEjesOpen] = useState(false)
-  const canEditAny = useCanEditAny()
+  const canEditAny      = useCanEditAny()
+  const canPropose      = useCanEditOperational()
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
@@ -498,7 +499,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
               {/* Buttons */}
               <div className="flex items-center gap-2">
-                {region && (
+                {region && canPropose && (
                   <button
                     onClick={() => setProposeModalOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"

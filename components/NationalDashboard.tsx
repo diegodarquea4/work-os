@@ -7,7 +7,7 @@ import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import * as XLSX from 'xlsx'
 import { prioridadColor } from '@/lib/config'
-import { useIsAdmin } from '@/lib/context/UserContext'
+import { useCanEditAny } from '@/lib/context/UserContext'
 import { downloadTemplate as downloadTemplateExcel, buildPrefilledWorkbook, downloadPrefilled } from '@/lib/templateExcel'
 import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
 import { getSupabase } from '@/lib/supabase'
@@ -96,9 +96,10 @@ function ratColor(r: string): string {
 }
 
 export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad }: Props) {
-  // Importar masivo es solo para admin. Editores/regionales/viewers no tienen
-  // este botón — los regionales/viewers usan el flow de propuesta desde "Mi región".
-  const canImport = useIsAdmin()
+  // Importar masivo: admin y editor escriben directo (tienen permisos
+  // estructurales). Regional canaliza vía "Proponer actualización" en Mi
+  // Región. Viewer no carga.
+  const canImport = useCanEditAny()
   const [search, setSearch]                   = useState('')
   // D1-03: useDeferredValue posterga el efecto de la búsqueda mientras el
   // usuario tipea. El <input> sigue ligado a `search` (responsive UX), pero
@@ -130,7 +131,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Capa de importancia (migración 024). Multi-select sobre valores 'l'|'ll'|'lll'.
   const [filterCapa, setFilterCapa]               = useState<Set<Capa>>(new Set())
   // Toggle "Solo desalojos" (admin only — el chip se oculta para otros roles
-  // porque la marca es admin-only y filtrar por algo que no podés ver es
+  // porque la marca es admin-only y filtrar por algo que no puedes ver es
   // confuso). La lógica del filtro funciona aunque el chip esté oculto.
   const [filterDesalojo, setFilterDesalojo]       = useState<boolean>(false)
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
@@ -1169,8 +1170,16 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )}
 
                 {hasFile && importParseErrors.length > 0 && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <ImportErrorReport errors={importParseErrors} variant="full" />
+                  <div className="space-y-2">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <ImportErrorReport errors={importParseErrors} variant="full" />
+                    </div>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs text-slate-600 hover:text-slate-900 underline"
+                    >
+                      Cargar otro archivo
+                    </button>
                   </div>
                 )}
 

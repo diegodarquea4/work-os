@@ -2,6 +2,9 @@
 
 import { useState, useRef } from 'react'
 import { downloadPrefilled } from '@/lib/templateExcel'
+import { parseImportWorkbook, type ParsedRow } from '@/lib/importParser'
+import { REGIONS } from '@/lib/regions'
+import ImportErrorReport from './ImportErrorReport'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 
@@ -11,9 +14,14 @@ import type { RegionEje } from '@/lib/types'
  * la revisa después desde "Usuarios → Propuestas de actualización".
  *
  * Diferencia con el flow directo del Dashboard:
- *   - NO parsea el .xlsx en cliente (lo hace el endpoint approve cuando se aprueba).
- *   - NO muestra preview de filas (la revisión es offline en Excel).
- *   - Solo sube el archivo + metadata opcional.
+ *   - NO aplica los cambios — solo deja la propuesta en pending.
+ *   - SÍ valida el archivo en cliente con el mismo parser que el flow directo
+ *     (lib/importParser) para que el regional vea errores y resumen antes de
+ *     mandar la propuesta. Esto corta el loop "subir a ciegas → días después
+ *     el admin la rechaza por header mal nombrado".
+ *   - Si el parse encuentra errores, el botón "Enviar" sigue habilitado para
+ *     que el regional pueda enviar igual con una nota explicativa, salvo que
+ *     CERO filas hayan quedado válidas — en ese caso bloqueamos.
  */
 type Props = {
   open: boolean
@@ -23,15 +31,24 @@ type Props = {
   // actualización"). Se envía a `regions_claim` y permite que "Mis propuestas"
   // muestre solo las propuestas relevantes a esta región.
   regionName: string
-  // Iniciativas vigentes de la región (para pre-llenar el Excel de descarga).
-  // Si no hay, el archivo sale con headers solamente (equivalente al template
-  // vacío) — apto para regiones nuevas que solo cargan altas.
+  // Iniciativas vigentes de la región (para pre-llenar el Excel de descarga
+  // y para validar updates con # contra iniciativas que existen).
   iniciativas?: Iniciativa[]
   // Catálogo formal de ejes de la región — alimenta la hoja "Ejes válidos"
-  // del Excel descargado y queda como referencia para el delegado regional.
+  // del Excel descargado y valida los ejes del archivo en cliente.
   regionEjes?: RegionEje[]
   // Callback al submit exitoso (para refrescar "Mis propuestas").
   onSubmitted?: () => void
+}
+
+type ParsePreview = {
+  rows:        ParsedRow[]
+  fileErrors:  string[]
+  rowErrors:   string[]
+  inserts:     number
+  updates:     number
+  conErrores:  number
+  sinCambios:  number
 }
 
 export default function ProposeImportModal({ open, onClose, regionName, iniciativas, regionEjes, onSubmitted }: Props) {
@@ -39,9 +56,9 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
   const [note, setNote]       = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]     = useState<string | null>(null)
-  // Si el POST devuelve ejeErrors estructurados (validación temprana del
-  // catálogo), los mostramos como lista. Distinto de `error` que es una
-  // sola línea.
+  const [preview, setPreview] = useState<ParsePreview | null>(null)
+  const [parsing, setParsing] = useState(false)
+  // Errores devueltos por /api/proposals tras enviar (caso server-side reject).
   const [ejeErrors, setEjeErrors] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
   const fileInputRef          = useRef<HTMLInputElement>(null)
@@ -54,11 +71,12 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     setNote('')
     setError(null)
     setEjeErrors([])
+    setPreview(null)
     setSuccess(false)
     onClose()
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
     if (!f.name.toLowerCase().endsWith('.xlsx') && !f.name.toLowerCase().endsWith('.xls')) {
@@ -68,6 +86,41 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     setFile(f)
     setError(null)
     setEjeErrors([])
+    setPreview(null)
+    setParsing(true)
+    try {
+      const buffer = await f.arrayBuffer()
+      // Catálogo de ejes solo de la región del usuario. Si el archivo tiene
+      // iniciativas de otras regiones (no debería, RLS lo rechaza igual), el
+      // parser las marcará como "eje no existe en catálogo" — el banner del
+      // ImportErrorReport categoriza el caso bien.
+      const ejesMap = new Map<string, RegionEje[]>()
+      const cod = regionEjes?.[0]?.region_cod
+        ?? REGIONS.find(r => r.nombre === regionName)?.cod
+      if (cod && regionEjes && regionEjes.length > 0) {
+        ejesMap.set(cod, regionEjes)
+      }
+      const parsed = parseImportWorkbook(buffer, iniciativas ?? [], ejesMap)
+      const rowErrors = parsed.rows.flatMap(r => r.errors.map(e => `#${r.n}: ${e}`))
+      const inserts    = parsed.rows.filter(r => r.errors.length === 0 && r.isNew).length
+      const updates    = parsed.rows.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length > 0).length
+      const conErrores = parsed.rows.filter(r => r.errors.length > 0).length
+      const sinCambios = parsed.rows.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length === 0).length
+      setPreview({
+        rows:       parsed.rows,
+        fileErrors: parsed.fileErrors,
+        rowErrors,
+        inserts,
+        updates,
+        conErrores,
+        sinCambios,
+      })
+    } catch (err) {
+      setError('No se pudo leer el archivo. Verifica que sea un Excel válido.')
+      console.error('[ProposeImportModal] parse failed', err)
+    } finally {
+      setParsing(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -96,10 +149,15 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
     }
   }
 
+  // Total de filas validas (con cambios reales). Si es 0, no tiene sentido
+  // mandar la propuesta — bloqueamos el submit.
+  const hayCambiosValidos = preview ? (preview.inserts + preview.updates) > 0 : true
+  const todosLosErrores   = preview ? [...preview.fileErrors, ...preview.rowErrors] : []
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={handleClose}>
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <header className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
@@ -141,7 +199,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-600 leading-relaxed">
               Sube un Excel con los cambios que quieres proponer.{' '}
               <button
@@ -174,9 +232,56 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
               {file && (
                 <p className="text-xs text-slate-500 mt-1">
                   {file.name} · {(file.size / 1024).toFixed(0)} KB
+                  {parsing && ' · revisando…'}
                 </p>
               )}
             </div>
+
+            {preview && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  {preview.inserts > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-medium border border-blue-200">
+                      + {preview.inserts} nueva{preview.inserts !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {preview.updates > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-green-100 text-green-800 font-medium border border-green-200">
+                      ✓ {preview.updates} actualizacion{preview.updates !== 1 ? 'es' : ''}
+                    </span>
+                  )}
+                  {preview.conErrores > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-800 font-medium border border-red-200">
+                      ✗ {preview.conErrores} con errores
+                    </span>
+                  )}
+                  {preview.sinCambios > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium">
+                      — {preview.sinCambios} sin cambios
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
+                  >
+                    Cargar otro archivo
+                  </button>
+                </div>
+
+                {todosLosErrores.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <ImportErrorReport errors={todosLosErrores} variant="compact" />
+                  </div>
+                )}
+
+                {!hayCambiosValidos && (
+                  <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                    Ninguna fila quedó válida para proponer. Corrige el archivo y vuelve a cargarlo.
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -218,8 +323,9 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
               </button>
               <button
                 type="submit"
-                disabled={!file || submitting}
+                disabled={!file || submitting || parsing || !hayCambiosValidos}
                 className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50"
+                title={!hayCambiosValidos ? 'Corrige los errores antes de enviar' : undefined}
               >
                 {submitting ? 'Enviando...' : 'Enviar propuesta'}
               </button>

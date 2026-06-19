@@ -73,7 +73,7 @@ const INSTRUCTIONS_AOA: (string | number)[][] = [
   ['Prioridad', 'No', 'Alta | Media | Baja', 'Nivel de prioridad de la iniciativa.'],
   ['Fuente Financiamiento', 'No', 'FNDR · Mixto · Sectorial · Privado · FONDEMA · PEDZE', 'Fuente de financiamiento. PEDZE = Plan Especial Zonas Extremas.'],
   ['Código BIP', 'No', 'Código numérico', 'Código del BIP/MIDESO. Dejar vacío si no aplica.'],
-  ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS', 'RS = Recomendación Satisfactoria; FI = Factibilidad Inicial; IN = Ingresado.'],
+  ['RAT', 'No', 'No Requiere · No Ingresado · En Tramitación · FI · IN · OT · RE · RS · AD · CF', 'RS = Recomendación Satisfactoria; FI = Factibilidad Inicial; IN = Ingresado. AD y CF también son valores oficiales del catálogo — consultar con DCI si necesitas su definición precisa.'],
   ['Semáforo', 'No', 'verde · ambar · rojo · gris', 'Estado actual de la iniciativa (operativo). Por defecto "gris" = sin evaluar.'],
   ['% Avance', 'No', 'Número entero 0–100', 'Porcentaje de avance de la iniciativa.'],
   ['En Foco', 'No', 'Sí · No', 'Marca de seguimiento prioritario.'],
