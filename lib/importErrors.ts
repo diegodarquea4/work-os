@@ -152,60 +152,60 @@ function bannerForDominant(
       return {
         title: `${count} de ${total} filas marcan "${columna} requerid${columna === 'Nombre Iniciativa' ? 'o' : columna === 'Ministerio' ? 'o' : 'a'}"`,
         body:
-          `Cuando todas las filas comparten el mismo error es casi seguro que la columna ${columna} ` +
-          `no se llama exactamente como el sistema espera. Tu archivo si trae el dato, pero el parser ` +
-          `no encuentra la columna por el nombre del header.`,
+          `Cuando todas las filas comparten el mismo error, es casi seguro que la columna ${columna} ` +
+          `no se llama exactamente como el sistema espera. Tu archivo sí trae el dato, pero el parser ` +
+          `no encuentra la columna por el nombre del encabezado.`,
         action:
-          `Abri el .xlsx y en la fila de encabezados verifica que ${headerExacto || `la columna se llame exactamente "${columna}"`}. ` +
-          `Tip: descarga el template oficial desde el boton "Bajar template" en este mismo panel y copia tus datos ahi — ` +
-          `evita escribir los headers a mano.`,
+          `Abre el .xlsx y en la fila de encabezados verifica que ${headerExacto || `la columna se llame exactamente "${columna}"`}. ` +
+          `Recomendación: descarga el template oficial desde el botón "Bajar template" en este mismo panel y copia tus datos ahí — ` +
+          `así evitas escribir los encabezados a mano.`,
       }
     }
 
     case 'region-invalida':
       return {
-        title: `${count} filas con region no reconocida`,
+        title: `${count} filas con región no reconocida`,
         body:
-          `El sistema mantiene un catalogo fijo de 16 regiones con nombre canonico. ` +
-          `Si tu archivo tiene "Region Metropolitana" en vez de "Metropolitana", o "Magallanes y la Antartica" ` +
-          `con typo, el parser no la matchea.`,
+          `El sistema mantiene un catálogo fijo de 16 regiones con nombre canónico. ` +
+          `Si tu archivo tiene "Region Metropolitana" en vez de "Metropolitana", o "Magallanes y la Antártica" ` +
+          `con error de escritura, el parser no la reconoce.`,
         action:
-          `Revisa la columna "Región" y usa el nombre exacto del catalogo: ` +
+          `Revisa la columna "Región" y usa el nombre exacto del catálogo: ` +
           `Arica y Parinacota · Tarapacá · Antofagasta · Atacama · Coquimbo · Valparaíso · Metropolitana · ` +
           `O'Higgins · Maule · Ñuble · Biobío · La Araucanía · Los Ríos · Los Lagos · Aysén · Magallanes.`,
       }
 
     case 'eje-invalido':
       return {
-        title: `${count} filas con eje invalido para su region`,
+        title: `${count} filas con eje inválido para su región`,
         body:
-          `Cada region tiene su catalogo de ejes definido por DCI. El parser valida que el eje del Excel ` +
-          `exista en el catalogo de la region de esa fila — si la fila tiene un eje que no esta listado para esa region, falla.`,
+          `Cada región tiene su catálogo de ejes definido por la DCI. El parser valida que el eje del Excel ` +
+          `exista en el catálogo de la región de esa fila — si la fila tiene un eje que no está listado para esa región, falla.`,
         action:
-          `Verifica que el numero y nombre del eje coincida con los ejes oficiales de esa region. ` +
-          `Si la region no tiene este eje aun en su catalogo, pidele a un admin que lo agregue antes de cargar.`,
+          `Verifica que el número y nombre del eje coincidan con los ejes oficiales de esa región. ` +
+          `Si la región aún no tiene ese eje en su catálogo, pide a un administrador que lo agregue antes de cargar.`,
       }
 
     case 'region-mismatch':
       return {
-        title: `${count} filas con region inconsistente`,
+        title: `${count} filas con región inconsistente`,
         body:
-          `Estas filas tienen un # de iniciativa que existe en otra region distinta a la que pone el archivo. ` +
-          `El # es la llave de update — no podes mover una iniciativa entre regiones via import.`,
+          `Estas filas tienen un # de iniciativa que existe en otra región distinta a la que pone el archivo. ` +
+          `El # es la llave de actualización — no se puede mover una iniciativa entre regiones desde el import.`,
         action:
-          `Si queres actualizar iniciativas existentes, deja la region original. ` +
-          `Si queres crear iniciativas nuevas en una region, deja la columna # vacia.`,
+          `Si quieres actualizar iniciativas existentes, deja la región original. ` +
+          `Si quieres crear iniciativas nuevas en una región, deja la columna # vacía.`,
       }
 
     case 'permiso-denegado':
       return {
         title: `${count} filas rechazadas por permisos`,
         body:
-          `Tu rol no puede modificar los campos que estas intentando cambiar en estas iniciativas. ` +
-          `Si sos regional: solo podes editar semaforo, % avance, responsable, etapa, hito y foco — ` +
-          `el resto va canalizado como propuesta para que un admin la apruebe.`,
+          `Tu rol no puede modificar los campos que estás intentando cambiar en estas iniciativas. ` +
+          `Si eres regional: solo puedes editar semáforo, % avance, responsable, etapa, hito y foco — ` +
+          `el resto se canaliza como propuesta para que un administrador la apruebe.`,
         action:
-          `Sacar de tu Excel los campos fuera de la whitelist regional, o pedile a un admin que cargue ` +
+          `Quita de tu Excel los campos fuera de la whitelist regional, o pide a un administrador que cargue ` +
           `los cambios estructurales.`,
       }
 
@@ -213,41 +213,41 @@ function bannerForDominant(
       return {
         title: `${count} filas con valores duplicados`,
         body:
-          `Estas filas intentan insertar valores que ya existen en una columna unica (n, id, ` +
+          `Estas filas intentan insertar valores que ya existen en una columna única (n, id, ` +
           `codigo_iniciativa). Puede pasar si dos filas del Excel comparten un identificador ` +
           `o si la iniciativa ya estaba cargada.`,
         action:
-          `Reviza si esas filas tienen identificadores repetidos entre si, o si ya existian en el ` +
-          `sistema desde antes — en ese caso pasalas a UPDATE rellenando la columna #.`,
+          `Revisa si esas filas tienen identificadores repetidos entre sí, o si ya existían en el ` +
+          `sistema desde antes — en ese caso pásalas a UPDATE rellenando la columna #.`,
       }
 
     case 'formato':
       return {
-        title: `${count} filas con formato invalido`,
+        title: `${count} filas con formato inválido`,
         body:
           `Hay celdas con valores que no calzan con el tipo esperado: una fecha sin formato DD-MM-AAAA, ` +
-          `un numero con letras, o un texto donde se esperaba un numero entero.`,
+          `un número con letras, o un texto donde se esperaba un número entero.`,
         action:
-          `Verifica las columnas de fechas (Próximo Hito), numericas (% Avance, Inversión) y enums (Semáforo, RAT).`,
+          `Verifica las columnas de fechas (Próximo Hito), numéricas (% Avance, Inversión) y enumeraciones (Semáforo, RAT).`,
       }
 
     case 'fk-faltante':
       return {
         title: `${count} filas referencian datos inexistentes`,
         body:
-          `Estas filas apuntan a un eje, region o catalogo que no esta en el sistema. Suele pasar al ` +
-          `cargar ejes nuevos antes de que el admin los registre.`,
+          `Estas filas apuntan a un eje, región o catálogo que no está en el sistema. Suele pasar al ` +
+          `cargar ejes nuevos antes de que un administrador los registre.`,
         action:
-          `Pedile al admin que registre el catalogo faltante antes de reintentar la carga.`,
+          `Pide a un administrador que registre el catálogo faltante antes de reintentar la carga.`,
       }
 
     case 'valor-invalido':
       return {
         title: `${count} filas con valores fuera de las opciones permitidas`,
         body:
-          `Hay celdas con valores que no estan en la lista oficial (RAT, Semáforo, Prioridad, etc.).`,
+          `Hay celdas con valores que no están en la lista oficial (RAT, Semáforo, Prioridad, etc.).`,
         action:
-          `Revisa que cada celda use uno de los valores listados en la fila de "descripcion" del template oficial.`,
+          `Revisa que cada celda use uno de los valores listados en la fila de "descripción" del template oficial.`,
       }
 
     case 'otro':
@@ -268,12 +268,12 @@ function prettyColumna(raw: string): string {
 function exactHeaderHint(raw: string): string {
   const lower = raw.toLowerCase()
   if (lower === 'nombre')
-    return 'el header sea EXACTAMENTE "Nombre Iniciativa" (con N y I en mayuscula, separadas por un espacio, sin tilde)'
+    return 'el encabezado sea EXACTAMENTE "Nombre Iniciativa" (con N y I en mayúscula, separadas por un espacio, sin tilde)'
   if (lower === 'región' || lower === 'region')
-    return 'el header sea EXACTAMENTE "Región" (con tilde en la o)'
+    return 'el encabezado sea EXACTAMENTE "Región" (con tilde en la o)'
   if (lower === 'eje')
-    return 'el header sea EXACTAMENTE "Eje"'
+    return 'el encabezado sea EXACTAMENTE "Eje"'
   if (lower === 'ministerio')
-    return 'el header sea EXACTAMENTE "Ministerio"'
+    return 'el encabezado sea EXACTAMENTE "Ministerio"'
   return ''
 }
