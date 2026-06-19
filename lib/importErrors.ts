@@ -1,0 +1,279 @@
+/**
+ * Clasificacion y resumen de errores de import.
+ *
+ * Antes el modal mostraba N lineas crudas tipo "#3789: Nombre requerido"
+ * repetidas 373 veces. Para el usuario era invisible que el problema real
+ * era UN header mal nombrado en el Excel — pensaba que tenia 373 problemas
+ * distintos.
+ *
+ * Este helper:
+ *   1. Detecta familias frecuentes (header faltante, dato obligatorio,
+ *      RLS, region/eje invalido, etc.).
+ *   2. Detecta patrones globales (todos los errores son del mismo tipo →
+ *      casi seguro es header mal nombrado).
+ *   3. Mapea mensajes tecnicos de Postgres a copy castellano accionable
+ *      (42501, 23505, 23503, 22P02...).
+ *   4. Devuelve un banner explicativo cuando aplica, y la lista cruda
+ *      como fallback para errores que no calzan con ningun patron.
+ */
+
+export type ErrorFamily =
+  | 'header-faltante'
+  | 'dato-requerido'
+  | 'valor-invalido'
+  | 'region-invalida'
+  | 'eje-invalido'
+  | 'region-mismatch'
+  | 'permiso-denegado'
+  | 'duplicado'
+  | 'fk-faltante'
+  | 'formato'
+  | 'otro'
+
+export type ClassifiedError = {
+  raw: string
+  family: ErrorFamily
+  fila?: number       // # de la iniciativa si el error la menciona
+}
+
+export type ImportErrorSummary = {
+  total: number
+  banner: ImportErrorBanner | null
+  items: ClassifiedError[]
+}
+
+export type ImportErrorBanner = {
+  title:  string
+  body:   string
+  action: string
+}
+
+const RE_FILA = /#(\d+)\s*[:\-—·]/
+
+/** Clasifica un string de error en una familia. */
+export function classifyError(raw: string): ClassifiedError {
+  const filaMatch = raw.match(RE_FILA)
+  const fila = filaMatch ? Number(filaMatch[1]) : undefined
+  const t = raw.toLowerCase()
+
+  // Dato obligatorio faltante en parsing — el caso del Excel sin la columna.
+  if (/(nombre|región|region|eje|ministerio)\s+requerid[ao]/i.test(raw)) {
+    return { raw, family: 'dato-requerido', fila }
+  }
+
+  // Region no esta en el catalogo de 16.
+  if (/región\s+".+"\s+no\s+reconocida/i.test(raw)) {
+    return { raw, family: 'region-invalida', fila }
+  }
+
+  // Eje no esta en el catalogo de su region.
+  if (/eje.*no.*catalog/i.test(raw) || /eje.*no\s+existe/i.test(raw)) {
+    return { raw, family: 'eje-invalido', fila }
+  }
+
+  // RAT o valor enum invalido.
+  if (/inválido|invalido|fuera\s+de\s+rango|valores?\s+v[aá]lidos?/i.test(raw)) {
+    return { raw, family: 'valor-invalido', fila }
+  }
+
+  // Region del # no coincide con la del Excel.
+  if (/el\s+#\s*\d+\s+corresponde\s+a\s+la\s+región/i.test(raw)) {
+    return { raw, family: 'region-mismatch', fila }
+  }
+
+  // Permisos.
+  if (/sin\s+permiso|permission\s+denied|insufficient\s+privilege/i.test(raw)
+      || /42501/.test(raw)
+      || /regional\s+solo\s+puede\s+modificar/i.test(raw)
+      || /rol\s+.+\s+no\s+puede\s+modificar/i.test(raw)) {
+    return { raw, family: 'permiso-denegado', fila }
+  }
+
+  // Postgres: duplicado.
+  if (/duplicate\s+key/i.test(raw) || /23505/.test(raw)) {
+    return { raw, family: 'duplicado', fila }
+  }
+
+  // Postgres: FK rota.
+  if (/violates\s+foreign\s+key/i.test(raw) || /23503/.test(raw)) {
+    return { raw, family: 'fk-faltante', fila }
+  }
+
+  // Postgres: invalid input syntax / formato (fechas, numeros).
+  if (/invalid\s+input\s+syntax/i.test(raw) || /22p02/i.test(raw) || /formato.*inválid/i.test(raw)) {
+    return { raw, family: 'formato', fila }
+  }
+
+  return { raw, family: 'otro', fila }
+}
+
+/**
+ * Resume una lista de strings de error. Devuelve un banner explicativo si
+ * detecta un patron dominante, mas la lista clasificada.
+ */
+export function summarizeImportErrors(errors: string[]): ImportErrorSummary {
+  const items = errors.map(classifyError)
+  const total = items.length
+
+  if (total === 0) {
+    return { total: 0, banner: null, items: [] }
+  }
+
+  // Conteo por familia para detectar patrones dominantes (>=70% de las filas).
+  const byFamily = new Map<ErrorFamily, number>()
+  for (const it of items) byFamily.set(it.family, (byFamily.get(it.family) ?? 0) + 1)
+
+  const dominant = [...byFamily.entries()].sort((a, b) => b[1] - a[1])[0]
+  const [topFamily, topCount] = dominant
+  const dominantRatio = topCount / total
+
+  const banner = bannerForDominant(topFamily, topCount, total, dominantRatio, items)
+
+  return { total, banner, items }
+}
+
+function bannerForDominant(
+  family: ErrorFamily,
+  count: number,
+  total: number,
+  ratio: number,
+  items: ClassifiedError[],
+): ImportErrorBanner | null {
+  // Solo emitimos banner cuando el patron es claramente dominante.
+  if (ratio < 0.7) return null
+
+  switch (family) {
+    case 'dato-requerido': {
+      // Distinguir cual columna esta faltando para guiar al usuario.
+      const sample = items.find(it => it.family === 'dato-requerido')?.raw ?? ''
+      const m = sample.match(/(nombre|región|region|eje|ministerio)\s+requerid/i)
+      const columna = m ? prettyColumna(m[1]) : 'una columna obligatoria'
+      const headerExacto = m ? exactHeaderHint(m[1]) : ''
+      return {
+        title: `${count} de ${total} filas marcan "${columna} requerid${columna === 'Nombre Iniciativa' ? 'o' : columna === 'Ministerio' ? 'o' : 'a'}"`,
+        body:
+          `Cuando todas las filas comparten el mismo error es casi seguro que la columna ${columna} ` +
+          `no se llama exactamente como el sistema espera. Tu archivo si trae el dato, pero el parser ` +
+          `no encuentra la columna por el nombre del header.`,
+        action:
+          `Abri el .xlsx y en la fila de encabezados verifica que ${headerExacto || `la columna se llame exactamente "${columna}"`}. ` +
+          `Tip: descarga el template oficial desde el boton "Bajar template" en este mismo panel y copia tus datos ahi — ` +
+          `evita escribir los headers a mano.`,
+      }
+    }
+
+    case 'region-invalida':
+      return {
+        title: `${count} filas con region no reconocida`,
+        body:
+          `El sistema mantiene un catalogo fijo de 16 regiones con nombre canonico. ` +
+          `Si tu archivo tiene "Region Metropolitana" en vez de "Metropolitana", o "Magallanes y la Antartica" ` +
+          `con typo, el parser no la matchea.`,
+        action:
+          `Revisa la columna "Región" y usa el nombre exacto del catalogo: ` +
+          `Arica y Parinacota · Tarapacá · Antofagasta · Atacama · Coquimbo · Valparaíso · Metropolitana · ` +
+          `O'Higgins · Maule · Ñuble · Biobío · La Araucanía · Los Ríos · Los Lagos · Aysén · Magallanes.`,
+      }
+
+    case 'eje-invalido':
+      return {
+        title: `${count} filas con eje invalido para su region`,
+        body:
+          `Cada region tiene su catalogo de ejes definido por DCI. El parser valida que el eje del Excel ` +
+          `exista en el catalogo de la region de esa fila — si la fila tiene un eje que no esta listado para esa region, falla.`,
+        action:
+          `Verifica que el numero y nombre del eje coincida con los ejes oficiales de esa region. ` +
+          `Si la region no tiene este eje aun en su catalogo, pidele a un admin que lo agregue antes de cargar.`,
+      }
+
+    case 'region-mismatch':
+      return {
+        title: `${count} filas con region inconsistente`,
+        body:
+          `Estas filas tienen un # de iniciativa que existe en otra region distinta a la que pone el archivo. ` +
+          `El # es la llave de update — no podes mover una iniciativa entre regiones via import.`,
+        action:
+          `Si queres actualizar iniciativas existentes, deja la region original. ` +
+          `Si queres crear iniciativas nuevas en una region, deja la columna # vacia.`,
+      }
+
+    case 'permiso-denegado':
+      return {
+        title: `${count} filas rechazadas por permisos`,
+        body:
+          `Tu rol no puede modificar los campos que estas intentando cambiar en estas iniciativas. ` +
+          `Si sos regional: solo podes editar semaforo, % avance, responsable, etapa, hito y foco — ` +
+          `el resto va canalizado como propuesta para que un admin la apruebe.`,
+        action:
+          `Sacar de tu Excel los campos fuera de la whitelist regional, o pedile a un admin que cargue ` +
+          `los cambios estructurales.`,
+      }
+
+    case 'duplicado':
+      return {
+        title: `${count} filas con valores duplicados`,
+        body:
+          `Estas filas intentan insertar valores que ya existen en una columna unica (n, id, ` +
+          `codigo_iniciativa). Puede pasar si dos filas del Excel comparten un identificador ` +
+          `o si la iniciativa ya estaba cargada.`,
+        action:
+          `Reviza si esas filas tienen identificadores repetidos entre si, o si ya existian en el ` +
+          `sistema desde antes — en ese caso pasalas a UPDATE rellenando la columna #.`,
+      }
+
+    case 'formato':
+      return {
+        title: `${count} filas con formato invalido`,
+        body:
+          `Hay celdas con valores que no calzan con el tipo esperado: una fecha sin formato DD-MM-AAAA, ` +
+          `un numero con letras, o un texto donde se esperaba un numero entero.`,
+        action:
+          `Verifica las columnas de fechas (Próximo Hito), numericas (% Avance, Inversión) y enums (Semáforo, RAT).`,
+      }
+
+    case 'fk-faltante':
+      return {
+        title: `${count} filas referencian datos inexistentes`,
+        body:
+          `Estas filas apuntan a un eje, region o catalogo que no esta en el sistema. Suele pasar al ` +
+          `cargar ejes nuevos antes de que el admin los registre.`,
+        action:
+          `Pedile al admin que registre el catalogo faltante antes de reintentar la carga.`,
+      }
+
+    case 'valor-invalido':
+      return {
+        title: `${count} filas con valores fuera de las opciones permitidas`,
+        body:
+          `Hay celdas con valores que no estan en la lista oficial (RAT, Semáforo, Prioridad, etc.).`,
+        action:
+          `Revisa que cada celda use uno de los valores listados en la fila de "descripcion" del template oficial.`,
+      }
+
+    case 'otro':
+    default:
+      return null
+  }
+}
+
+function prettyColumna(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower === 'nombre')     return 'Nombre Iniciativa'
+  if (lower === 'región' || lower === 'region') return 'Región'
+  if (lower === 'eje')        return 'Eje'
+  if (lower === 'ministerio') return 'Ministerio'
+  return raw
+}
+
+function exactHeaderHint(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower === 'nombre')
+    return 'el header sea EXACTAMENTE "Nombre Iniciativa" (con N y I en mayuscula, separadas por un espacio, sin tilde)'
+  if (lower === 'región' || lower === 'region')
+    return 'el header sea EXACTAMENTE "Región" (con tilde en la o)'
+  if (lower === 'eje')
+    return 'el header sea EXACTAMENTE "Eje"'
+  if (lower === 'ministerio')
+    return 'el header sea EXACTAMENTE "Ministerio"'
+  return ''
+}

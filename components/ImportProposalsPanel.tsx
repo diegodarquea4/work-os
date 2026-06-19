@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import ImportErrorReport from './ImportErrorReport'
 
 /**
  * Panel para que admin/editor revise propuestas de actualización.
@@ -456,14 +457,9 @@ function SolicitudDetailModal({
             </p>
           )}
           {p.applied_errors && p.applied_errors.length > 0 && (
-            <details className="mt-2">
-              <summary className="text-xs font-medium text-amber-700 cursor-pointer">
-                Ver {p.applied_errors.length} error{p.applied_errors.length === 1 ? '' : 'es'}
-              </summary>
-              <ul className="mt-1.5 text-xs text-amber-700 list-disc list-inside space-y-0.5">
-                {p.applied_errors.map((e, i) => <li key={i}>{e}</li>)}
-              </ul>
-            </details>
+            <div className="mt-2">
+              <ImportErrorReport errors={p.applied_errors} variant="compact" />
+            </div>
           )}
         </div>
       ),

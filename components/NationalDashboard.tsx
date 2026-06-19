@@ -20,6 +20,7 @@ import { CapaBadge } from './CapaBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
 import { formatResponsableDisplay } from '@/lib/responsable'
+import ImportErrorReport from './ImportErrorReport'
 
 const SEMAFORO_CONFIG = {
   verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
@@ -1168,8 +1169,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )}
 
                 {hasFile && importParseErrors.length > 0 && (
-                  <div className="p-3 bg-red-100 border border-red-200 rounded-lg text-xs text-red-800 space-y-0.5">
-                    {importParseErrors.map((e, i) => <div key={i}>⚠ {e}</div>)}
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <ImportErrorReport errors={importParseErrors} variant="full" />
                   </div>
                 )}
 
@@ -1258,10 +1259,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
               {importResult && importResult.errors.length > 0 && (
                 <div className="mx-6 mb-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-xs font-semibold text-red-700 mb-1">Error al guardar — revisa los detalles en la consola del navegador (F12)</p>
-                  {importResult.errors.map((e, i) => (
-                    <p key={i} className="text-xs text-red-600 mt-0.5">{e}</p>
-                  ))}
+                  <p className="text-xs font-semibold text-red-700 mb-2">Error al guardar algunas filas</p>
+                  <ImportErrorReport errors={importResult.errors} variant="full" />
                 </div>
               )}
 
