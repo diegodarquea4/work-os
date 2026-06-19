@@ -49,6 +49,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [savingPct, setSavingPct]     = useState(false)
 
   const [prioridadLocal, setPrioridadLocal] = useState<'Alta' | 'Media' | 'Baja'>(prioridad.prioridad)
+  const [nombreLocal, setNombreLocal]       = useState<string>(prioridad.nombre)
+  const [editingNombre, setEditingNombre]   = useState(false)
+  const [savingNombre, setSavingNombre]     = useState(false)
   const [responsable, setResponsable]       = useState<string>(prioridad.responsable ?? '')
   const [usuarios, setUsuarios]             = useState<{email: string; name: string}[]>([])
 
@@ -408,7 +411,48 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </select>
                 </label>
               </div>
-              <p className="text-base font-semibold text-gray-900 leading-snug">{prioridad.nombre}</p>
+              {editingNombre && canEditAny ? (
+                <input
+                  autoFocus
+                  value={nombreLocal}
+                  disabled={savingNombre}
+                  onChange={e => setNombreLocal(e.target.value)}
+                  onBlur={async () => {
+                    const val = nombreLocal.trim()
+                    setEditingNombre(false)
+                    if (!val || val === prioridad.nombre) {
+                      setNombreLocal(prioridad.nombre)
+                      return
+                    }
+                    setSavingNombre(true)
+                    try {
+                      await safeWrite(
+                        getSupabase().from('prioridades_territoriales').update({ nombre: val }).eq('id', prioridad.id),
+                        `nombre n=${prioridad.n}`,
+                      )
+                      onUpdatePrioridad(prioridad.n, { nombre: val })
+                    } catch (err) {
+                      setNombreLocal(prioridad.nombre)
+                      window.alert((err as Error).message)
+                    } finally {
+                      setSavingNombre(false)
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur() }
+                    if (e.key === 'Escape') { setNombreLocal(prioridad.nombre); setEditingNombre(false) }
+                  }}
+                  className="text-base font-semibold text-gray-900 leading-snug w-full rounded px-1 -mx-1 bg-white ring-1 ring-blue-300 focus:ring-blue-500 focus:outline-none"
+                />
+              ) : (
+                <p
+                  onClick={() => canEditAny && setEditingNombre(true)}
+                  title={canEditAny ? 'Click para editar el nombre' : undefined}
+                  className={`text-base font-semibold text-gray-900 leading-snug ${canEditAny ? 'cursor-text hover:bg-gray-50 rounded px-1 -mx-1' : ''}`}
+                >
+                  {nombreLocal}
+                </p>
+              )}
               {prioridad.descripcion && (
                 <p className="text-xs text-gray-500 leading-relaxed mt-1 line-clamp-2">{prioridad.descripcion}</p>
               )}
