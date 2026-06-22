@@ -48,7 +48,7 @@ type Props = {
   documentos:      DesalojoDocumento[]
   selectedCapaId:  number | null
   onSelectCapa:    (capaId: number) => void
-  onPatchCapa:     (capaId: number, patch: Partial<DesalojoCapa>) => Promise<void>
+  onPatchCapa:     (capaId: number, patch: Partial<DesalojoCapa> & { justificacion_avance?: string }) => Promise<void>
   onPatchFase:     (capaId: number, fase: DesalojoFaseConSemaforo, patch: { semaforo?: SemaforoDimension; notas?: string | null; checklist_patch?: DesalojoChecklistEstado }) => Promise<void>
   onAddSeguimiento:(capaId: number, dimension: DesalojoDimension, tipo: DesalojoSeguimientoTipo, descripcion: string) => Promise<void>
   onUploadDoc:     (capaId: number, dimension: DesalojoDimension | null, file: File) => Promise<void>
@@ -272,7 +272,11 @@ export default function DesalojoAvanceTab({
         <DesalojoFaseStepper
           capa={capa}
           fasesEstado={fasesCapa}
-          onSetFase={async (fase: DesalojoFase) => { await onPatchCapa(capa.id, { fase_actual: fase }) }}
+          onSetFase={async (fase: DesalojoFase, justificacion?: string) => {
+            const patch: Record<string, unknown> = { fase_actual: fase }
+            if (justificacion) patch.justificacion_avance = justificacion
+            await onPatchCapa(capa.id, patch)
+          }}
         />
       </section>
 

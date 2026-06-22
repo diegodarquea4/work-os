@@ -1,19 +1,28 @@
 /**
  * GET  /api/desalojos/[n]/documentos — lista de documentos del caso.
- * POST /api/desalojos/[n]/documentos — sube un documento.
+ * POST /api/desalojos/[n]/documentos — registra un documento.
  *
  * Ambas admin-only.
  *
  * Filtros GET: ?capa_id=<id|general>  ?dimension=<juridico|seguridad|social|financiamiento>
  *   capa_id=general → solo documentos del caso (capa_id IS NULL).
  *
- * POST: multipart/form-data con campos:
- *   file:       File (requerido)
- *   capa_id:    number opcional (NULL = doc del caso)
- *   dimension:  string opcional (juridico|seguridad|social|financiamiento)
+ * POST acepta dos shapes:
+ *
+ *  A) JSON (flujo nuevo, direct-to-Storage):
+ *     Cliente ya subió el archivo a Storage vía signed upload URL del
+ *     endpoint /upload-url. Acá solo recibimos metadata para crear la fila.
+ *     Body: { path, nombre, tipo_archivo?, tamano_bytes?, capa_id?,
+ *             dimension?, fase?, item_key? }
+ *
+ *  B) multipart/form-data (legacy, server-side upload):
+ *     Cliente envía el archivo. El server lo sube a Storage y luego inserta.
+ *     Sujeto al límite de 4.5MB de body de Vercel — usar solo para archivos
+ *     chicos o como fallback.
+ *     Campos: file (File), capa_id?, dimension?, fase?, item_key?
  *
  * Storage: bucket privado `desalojos-docs` con paths
- *   {prioridad_id}/{capa_id|'general'}/{Date.now()}_{file.name}
+ *   {prioridad_id}/{capa_id|'general'}/{fase|''}/{Date.now()}_{file.name}
  *
  * El campo `url` de desalojo_documentos guarda el path RELATIVO (no signed
  * URL); el GET firma con TTL al servir.
@@ -79,6 +88,52 @@ export async function GET(
   return NextResponse.json({ documentos })
 }
 
+type ParsedMeta = {
+  capaId:    number | null
+  dimension: string | null
+  fase:      DesalojoFaseConSemaforo | null
+  itemKey:   string | null
+}
+
+function parseMeta(raw: {
+  capa_id?:   unknown
+  dimension?: unknown
+  fase?:      unknown
+  item_key?:  unknown
+}): ParsedMeta | NextResponse {
+  let capaId: number | null = null
+  if (raw.capa_id !== undefined && raw.capa_id !== null && raw.capa_id !== '' && raw.capa_id !== 'null') {
+    const v = Number(raw.capa_id)
+    if (!Number.isFinite(v) || v <= 0) return NextResponse.json({ error: 'capa_id inválido' }, { status: 400 })
+    capaId = v
+  }
+  let dimension: string | null = null
+  if (raw.dimension !== undefined && raw.dimension !== null && raw.dimension !== '') {
+    if (typeof raw.dimension !== 'string' || !DIMENSIONS.has(raw.dimension)) {
+      return NextResponse.json({ error: 'dimension inválida' }, { status: 400 })
+    }
+    dimension = raw.dimension
+  }
+  let fase: DesalojoFaseConSemaforo | null = null
+  if (raw.fase !== undefined && raw.fase !== null && raw.fase !== '') {
+    if (typeof raw.fase !== 'string' || !FASES_VALID.has(raw.fase as DesalojoFaseConSemaforo)) {
+      return NextResponse.json({ error: 'fase inválida' }, { status: 400 })
+    }
+    fase = raw.fase as DesalojoFaseConSemaforo
+  }
+  let itemKey: string | null = null
+  if (raw.item_key !== undefined && raw.item_key !== null && raw.item_key !== '') {
+    if (typeof raw.item_key !== 'string' || !/^[a-z0-9_]+$/.test(raw.item_key)) {
+      return NextResponse.json({ error: 'item_key inválido' }, { status: 400 })
+    }
+    if (fase === null) {
+      return NextResponse.json({ error: 'item_key requiere fase' }, { status: 400 })
+    }
+    itemKey = raw.item_key
+  }
+  return { capaId, dimension, fase, itemKey }
+}
+
 export async function POST(
   req: Request,
   context: { params: Promise<{ n: string }> },
@@ -91,128 +146,162 @@ export async function POST(
   const n = Number(nStr)
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
-  let form: FormData
-  try { form = await req.formData() }
-  catch { return NextResponse.json({ error: 'Body inválido (multipart/form-data esperado)' }, { status: 400 }) }
+  const contentType = req.headers.get('content-type') ?? ''
+  const isJson      = contentType.includes('application/json')
 
-  const file = form.get('file')
-  if (!(file instanceof File))    return NextResponse.json({ error: 'file requerido' },        { status: 400 })
-  if (file.size === 0)            return NextResponse.json({ error: 'archivo vacío' },         { status: 400 })
-
-  const capaRaw = form.get('capa_id')
-  let capaId: number | null = null
-  if (capaRaw !== null && capaRaw !== '' && capaRaw !== 'null') {
-    const v = Number(capaRaw)
-    if (!Number.isFinite(v) || v <= 0) return NextResponse.json({ error: 'capa_id inválido' }, { status: 400 })
-    capaId = v
-  }
-
-  const dimRaw = form.get('dimension')
-  let dimension: string | null = null
-  if (dimRaw !== null && dimRaw !== '') {
-    if (typeof dimRaw !== 'string' || !DIMENSIONS.has(dimRaw)) {
-      return NextResponse.json({ error: 'dimension inválida' }, { status: 400 })
-    }
-    dimension = dimRaw
-  }
-
-  // Vinculación opcional a un item del checklist: fase + item_key.
-  const faseRaw = form.get('fase')
-  let fase: DesalojoFaseConSemaforo | null = null
-  if (faseRaw !== null && faseRaw !== '') {
-    if (typeof faseRaw !== 'string' || !FASES_VALID.has(faseRaw as DesalojoFaseConSemaforo)) {
-      return NextResponse.json({ error: 'fase inválida' }, { status: 400 })
-    }
-    fase = faseRaw as DesalojoFaseConSemaforo
-  }
-  const itemKeyRaw = form.get('item_key')
-  let itemKey: string | null = null
-  if (itemKeyRaw !== null && itemKeyRaw !== '') {
-    if (typeof itemKeyRaw !== 'string' || !/^[a-z0-9_]+$/.test(itemKeyRaw)) {
-      return NextResponse.json({ error: 'item_key inválido' }, { status: 400 })
-    }
-    if (fase === null) {
-      return NextResponse.json({ error: 'item_key requiere fase' }, { status: 400 })
-    }
-    itemKey = itemKeyRaw
-  }
+  // ── Variables comunes a ambos flujos ──────────────────────────────────
+  let nombre:       string
+  let tipoArchivo:  string | null
+  let tamanoBytes:  number | null
+  let path:         string
+  let storageUploadedHere = false  // si lo subimos server-side, lo limpiamos en caso de error
+  let meta: ParsedMeta
 
   const db = getSupabaseAdmin()
 
-  // Si viene capa_id, validar que pertenezca al caso.
+  if (isJson) {
+    // ── Flujo A: JSON (direct-to-Storage) ────────────────────────────────
+    let body: {
+      path?:         unknown
+      nombre?:       unknown
+      tipo_archivo?: unknown
+      tamano_bytes?: unknown
+      capa_id?:      unknown
+      dimension?:    unknown
+      fase?:         unknown
+      item_key?:     unknown
+    }
+    try { body = await req.json() }
+    catch { return NextResponse.json({ error: 'Body inválido (JSON)' }, { status: 400 }) }
+
+    if (typeof body.path !== 'string' || body.path.trim() === '') {
+      return NextResponse.json({ error: 'path requerido' }, { status: 400 })
+    }
+    if (typeof body.nombre !== 'string' || body.nombre.trim() === '') {
+      return NextResponse.json({ error: 'nombre requerido' }, { status: 400 })
+    }
+    path        = body.path
+    nombre      = body.nombre
+    tipoArchivo = typeof body.tipo_archivo === 'string' && body.tipo_archivo ? body.tipo_archivo : null
+    tamanoBytes = typeof body.tamano_bytes === 'number' && Number.isFinite(body.tamano_bytes) ? body.tamano_bytes : null
+
+    // El path debe arrancar con el prioridad_id del caso (lo arma el endpoint
+    // /upload-url, no el cliente). Esto cierra la puerta a que un admin del
+    // caso A registre un archivo subido al folder del caso B.
+    if (!path.startsWith(`${n}/`)) {
+      return NextResponse.json({ error: 'path no pertenece al caso' }, { status: 400 })
+    }
+
+    // Verificar que el archivo exista en Storage antes de crear la fila.
+    const folder   = path.substring(0, path.lastIndexOf('/'))
+    const filename = path.substring(path.lastIndexOf('/') + 1)
+    const { data: listed } = await db.storage.from('desalojos-docs').list(folder, { limit: 100, search: filename })
+    if (!listed?.some(f => f.name === filename)) {
+      return NextResponse.json({ error: 'archivo no encontrado en Storage' }, { status: 400 })
+    }
+
+    const parsed = parseMeta(body)
+    if (parsed instanceof NextResponse) return parsed
+    meta = parsed
+  } else {
+    // ── Flujo B: multipart legacy ───────────────────────────────────────
+    let form: FormData
+    try { form = await req.formData() }
+    catch { return NextResponse.json({ error: 'Body inválido (multipart/form-data o JSON esperado)' }, { status: 400 }) }
+
+    const file = form.get('file')
+    if (!(file instanceof File))    return NextResponse.json({ error: 'file requerido' }, { status: 400 })
+    if (file.size === 0)            return NextResponse.json({ error: 'archivo vacío' },  { status: 400 })
+
+    const parsed = parseMeta({
+      capa_id:   form.get('capa_id'),
+      dimension: form.get('dimension'),
+      fase:      form.get('fase'),
+      item_key:  form.get('item_key'),
+    })
+    if (parsed instanceof NextResponse) return parsed
+    meta = parsed
+
+    const safeName = sanitizeFilename(file.name)
+    const pathSegments = [String(n), meta.capaId === null ? 'general' : String(meta.capaId)]
+    if (meta.fase) pathSegments.push(meta.fase)
+    pathSegments.push(`${Date.now()}_${safeName}`)
+    path = pathSegments.join('/')
+
+    const buf  = Buffer.from(await file.arrayBuffer())
+    const { error: upErr } = await db.storage
+      .from('desalojos-docs')
+      .upload(path, buf, { contentType: file.type || 'application/octet-stream', upsert: false })
+    if (upErr) {
+      return NextResponse.json({ error: `Storage: ${upErr.message}` }, { status: 500 })
+    }
+    storageUploadedHere = true
+
+    nombre      = file.name
+    tipoArchivo = file.type || null
+    tamanoBytes = file.size
+  }
+
+  // ── Validar capa_id pertenece al caso ─────────────────────────────────
   let capaTipologia: DesalojoTipologia | null = null
-  if (capaId !== null) {
+  if (meta.capaId !== null) {
     const { data: capa } = await db
       .from('desalojo_capas')
       .select('id, prioridad_id, tipologia')
-      .eq('id', capaId)
+      .eq('id', meta.capaId)
       .maybeSingle()
     if (!capa || capa.prioridad_id !== n) {
+      if (storageUploadedHere) await db.storage.from('desalojos-docs').remove([path])
       return NextResponse.json({ error: 'capa_id no pertenece al caso' }, { status: 400 })
     }
     capaTipologia = (capa.tipologia ?? null) as DesalojoTipologia | null
   }
 
-  // Si viene item_key, validar que exista en el config vigente para la
-  // tipología de la capa (evita orphans desde el cliente).
-  if (itemKey !== null && fase !== null) {
-    if (capaId === null) {
+  // ── Validar item_key contra catálogo vigente ──────────────────────────
+  if (meta.itemKey !== null && meta.fase !== null) {
+    if (meta.capaId === null) {
+      if (storageUploadedHere) await db.storage.from('desalojos-docs').remove([path])
       return NextResponse.json({ error: 'item_key requiere capa_id' }, { status: 400 })
     }
-    const items = checklistItems(capaTipologia, fase)
-    if (!items.some(i => i.key === itemKey)) {
-      return NextResponse.json({ error: `item_key '${itemKey}' no pertenece al checklist ${fase} de la tipología` }, { status: 400 })
+    const items = checklistItems(capaTipologia, meta.fase)
+    if (!items.some(i => i.key === meta.itemKey)) {
+      if (storageUploadedHere) await db.storage.from('desalojos-docs').remove([path])
+      return NextResponse.json({ error: `item_key '${meta.itemKey}' no pertenece al checklist ${meta.fase} de la tipología` }, { status: 400 })
     }
   }
 
-  // Subir a Storage. Path: {n}/{capa_id|'general'}/{fase|''}/{Date.now()}_{file.name}
-  const safeName = sanitizeFilename(file.name)
-  const pathSegments = [String(n), capaId === null ? 'general' : String(capaId)]
-  if (fase) pathSegments.push(fase)
-  pathSegments.push(`${Date.now()}_${safeName}`)
-  const path = pathSegments.join('/')
-  const buf  = Buffer.from(await file.arrayBuffer())
-  const { error: upErr } = await db.storage
-    .from('desalojos-docs')
-    .upload(path, buf, { contentType: file.type || 'application/octet-stream', upsert: false })
-  if (upErr) {
-    return NextResponse.json({ error: `Storage: ${upErr.message}` }, { status: 500 })
-  }
-
-  // Insertar fila. `url` guarda el path; el GET firma al servir.
+  // ── Insertar fila ──────────────────────────────────────────────────────
   const { data: doc, error: insErr } = await db
     .from('desalojo_documentos')
     .insert({
       prioridad_id: n,
-      capa_id:      capaId,
-      dimension,
-      fase,
-      item_key:     itemKey,
-      nombre:       file.name,
+      capa_id:      meta.capaId,
+      dimension:    meta.dimension,
+      fase:         meta.fase,
+      item_key:     meta.itemKey,
+      nombre,
       url:          path,
-      tipo_archivo: file.type || null,
-      tamano_bytes: file.size,
+      tipo_archivo: tipoArchivo,
+      tamano_bytes: tamanoBytes,
       subido_por:   profile.email || null,
     })
     .select('*')
     .single()
   if (insErr || !doc) {
-    // Storage ya tiene el archivo. Intento limpiar para no dejar huérfano.
-    await db.storage.from('desalojos-docs').remove([path])
+    if (storageUploadedHere) await db.storage.from('desalojos-docs').remove([path])
     return NextResponse.json({ error: insErr?.message ?? 'Insert falló' }, { status: 500 })
   }
 
-  // Firmar URL para la respuesta inmediata.
   const { data: signed } = await db.storage.from('desalojos-docs').createSignedUrl(path, SIGNED_URL_TTL_SEC)
   const documento: DesalojoDocumento = { ...(doc as DesalojoDocumento), url: signed?.signedUrl ?? path }
 
   await db.from('desalojo_log').insert({
     prioridad_id:   n,
-    capa_id:        capaId,
-    fase:           fase ?? null,
-    campo:          itemKey ? `documento.${fase}.${itemKey}` : dimension ? `documento.${dimension}` : 'documento',
+    capa_id:        meta.capaId,
+    fase:           meta.fase ?? null,
+    campo:          meta.itemKey ? `documento.${meta.fase}.${meta.itemKey}` : meta.dimension ? `documento.${meta.dimension}` : 'documento',
     valor_anterior: null,
-    valor_nuevo:    file.name,
+    valor_nuevo:    nombre,
     cambiado_por:   profile.email || null,
   })
 

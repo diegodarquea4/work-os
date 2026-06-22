@@ -110,9 +110,16 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   // ── Mutaciones capa ─────────────────────────────────────────────────────
 
-  async function handlePatchCapa(capaId: number, patch: Partial<DesalojoCapa>) {
+  async function handlePatchCapa(
+    capaId: number,
+    patch:  Partial<DesalojoCapa> & { justificacion_avance?: string },
+  ) {
     const prev = capas
-    setCapas(prev.map(c => c.id === capaId ? { ...c, ...patch } : c))
+    // El optimistic update aplica solo los campos de la tabla, no metadatos
+    // del PATCH como `justificacion_avance`.
+    const { justificacion_avance: _justOpt, ...optimisticPatch } = patch
+    void _justOpt
+    setCapas(prev.map(c => c.id === capaId ? { ...c, ...optimisticPatch } : c))
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/capas/${capaId}`, {
         method:  'PATCH',
@@ -122,6 +129,16 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
       const json = await res.json()
       if (!res.ok) {
         setCapas(prev)
+        // Si el server pide justificación (soft-override), el modal del stepper
+        // ya está en pantalla pidiéndola — no se vuelve a llamar al PATCH sin
+        // justificación. Llegar acá implica desincronía cliente/server.
+        if (json?.requires_justification) {
+          const reasons = (json?.reasons as string[] | undefined)?.join('\n• ') ?? ''
+          window.alert(
+            `El servidor pide justificación para avanzar:\n• ${reasons}\n\nRecarga la página para reintentar.`,
+          )
+          return
+        }
         const reasons = (json?.reasons as string[] | undefined)?.join(' · ')
         const msg = reasons
           ? `${json.error}\n• ${reasons}`
@@ -300,28 +317,79 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   // ── Documentos ──────────────────────────────────────────────────────────
 
+  // Upload direct-to-Storage: pide signed URL, sube file directo al bucket,
+  // luego registra metadata en el server. Esto evita el límite de 4.5MB del
+  // body de las API routes en Vercel.
+  async function uploadDirectAndRegister(
+    file:    File,
+    extras: {
+      capa_id?:   number | null
+      dimension?: DesalojoDimension | null
+      fase?:      DesalojoFaseConSemaforo | null
+      item_key?:  string | null
+    },
+  ) {
+    // 1. Pedir signed upload URL al server.
+    const urlRes = await fetch(`/api/desalojos/${iniciativa.n}/documentos/upload-url`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        filename: file.name,
+        capa_id:  extras.capa_id ?? null,
+        fase:     extras.fase    ?? null,
+      }),
+    })
+    const urlJson = await urlRes.json().catch(() => ({}))
+    if (!urlRes.ok) {
+      window.alert(urlJson?.error ?? `Error HTTP ${urlRes.status} pidiendo URL de subida`)
+      return
+    }
+    const { uploadUrl, path } = urlJson as { uploadUrl: string; path: string }
+
+    // 2. Subir el archivo directo a Storage.
+    const upRes = await fetch(uploadUrl, {
+      method:  'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body:    file,
+    })
+    if (!upRes.ok) {
+      const text = await upRes.text().catch(() => '')
+      window.alert(`Error subiendo a Storage: HTTP ${upRes.status} ${text.slice(0, 200)}`)
+      return
+    }
+
+    // 3. Registrar la fila en desalojo_documentos con metadata.
+    const regRes = await fetch(`/api/desalojos/${iniciativa.n}/documentos`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        path,
+        nombre:       file.name,
+        tipo_archivo: file.type || null,
+        tamano_bytes: file.size,
+        capa_id:      extras.capa_id   ?? null,
+        dimension:    extras.dimension ?? null,
+        fase:         extras.fase      ?? null,
+        item_key:     extras.item_key  ?? null,
+      }),
+    })
+    const regJson = await regRes.json().catch(() => ({}))
+    if (!regRes.ok) {
+      window.alert(regJson?.error ?? `Error HTTP ${regRes.status} registrando documento`)
+      return
+    }
+    if (regJson.documento) {
+      setDocumentos(prev => [regJson.documento, ...prev])
+    }
+  }
+
   async function handleUploadDoc(
     capaId:    number | null,
     dimension: DesalojoDimension | null,
     file:      File,
   ) {
-    const form = new FormData()
-    form.set('file', file)
-    if (capaId    !== null) form.set('capa_id',  String(capaId))
-    if (dimension !== null) form.set('dimension', dimension)
     try {
-      const res = await fetch(`/api/desalojos/${iniciativa.n}/documentos`, {
-        method: 'POST',
-        body:   form,
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        window.alert(json?.error ?? `Error HTTP ${res.status}`)
-        return
-      }
-      if (json.documento) {
-        setDocumentos(prev => [json.documento, ...prev])
-      }
+      await uploadDirectAndRegister(file, { capa_id: capaId, dimension })
     } catch (err) {
       window.alert(`Error de red: ${String(err)}`)
     }
@@ -334,24 +402,8 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     itemKey: string,
     file:    File,
   ) {
-    const form = new FormData()
-    form.set('file', file)
-    form.set('capa_id',  String(capaId))
-    form.set('fase',     fase)
-    form.set('item_key', itemKey)
     try {
-      const res = await fetch(`/api/desalojos/${iniciativa.n}/documentos`, {
-        method: 'POST',
-        body:   form,
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        window.alert(json?.error ?? `Error HTTP ${res.status}`)
-        return
-      }
-      if (json.documento) {
-        setDocumentos(prev => [json.documento, ...prev])
-      }
+      await uploadDirectAndRegister(file, { capa_id: capaId, fase, item_key: itemKey })
     } catch (err) {
       window.alert(`Error de red: ${String(err)}`)
     }

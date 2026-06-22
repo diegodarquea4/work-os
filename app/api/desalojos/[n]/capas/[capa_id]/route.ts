@@ -240,7 +240,30 @@ export async function PATCH(
     }
   }
 
-  // ── Fase: bloqueo duro PR → F1 ────────────────────────────────────────
+  // ── Fase: avance con bloqueo PR → F1, con soft-override por justificación ──
+  // Política (decisión 2026-06-22): el avance PR → F1 ya no es bloqueante duro.
+  // Si faltan ítems, el server devuelve `requires_justification: true` con los
+  // motivos. El cliente abre un modal pidiendo una justificación obligatoria; si
+  // se reintenta el PATCH con `justificacion_avance: '<texto>'`, el avance se
+  // ejecuta y se loggea como `fase_actual_override` en el audit log.
+  let overrideJustificacion: string | null = null
+  if ('justificacion_avance' in body) {
+    const raw = body.justificacion_avance
+    if (raw !== null && raw !== undefined && raw !== '') {
+      if (typeof raw !== 'string') {
+        errors.push('justificacion_avance debe ser string')
+      } else {
+        const trimmed = raw.trim()
+        if (trimmed.length < 10) {
+          errors.push('justificacion_avance debe tener al menos 10 caracteres')
+        } else {
+          overrideJustificacion = trimmed.slice(0, 1000)
+        }
+      }
+    }
+  }
+
+  let advanceMissingReasons: string[] | null = null
   if ('fase_actual' in body) {
     const raw = body.fase_actual
     if (typeof raw !== 'string' || !FASES_ALL.has(raw as DesalojoFase)) {
@@ -248,8 +271,6 @@ export async function PATCH(
     } else {
       const nueva = raw as DesalojoFase
       if (nueva !== prev.fase_actual) {
-        // Solo avanzar PR → F1 requiere validación. El resto (incluido el
-        // retroceso) queda permitido — el audit log lo registra.
         if (prev.fase_actual === 'pr' && nueva === 'f1') {
           const [{ data: fasesEstado }, { data: docs }] = await Promise.all([
             db.from('desalojo_fase_estado').select('*').eq('capa_id', capaId),
@@ -262,10 +283,17 @@ export async function PATCH(
             (docs ?? []) as Array<{ capa_id: number | null; fase: 'pr' | 'f1' | 'f2' | 'f3' | 'f4' | 'f5' | null; item_key: string | null }>,
           )
           if (!check.ok) {
-            return NextResponse.json(
-              { error: 'No se puede avanzar a F1', reasons: check.reasons },
-              { status: 400 },
-            )
+            if (!overrideJustificacion) {
+              return NextResponse.json(
+                {
+                  error:                   'Avance requiere justificación',
+                  reasons:                 check.reasons,
+                  requires_justification:  true,
+                },
+                { status: 400 },
+              )
+            }
+            advanceMissingReasons = check.reasons
           }
         }
         patch.fase_actual = nueva
@@ -324,6 +352,25 @@ export async function PATCH(
   if (logRows.length > 0) {
     const { error: logErr } = await db.from('desalojo_log').insert(logRows)
     if (logErr) console.error('[desalojos.capa.patch] log insert falló:', logErr)
+  }
+
+  // Audit extra cuando el avance se hizo con justificación (soft-override).
+  if (overrideJustificacion && advanceMissingReasons && patch.fase_actual) {
+    const payload = JSON.stringify({
+      destino:         patch.fase_actual,
+      justificacion:   overrideJustificacion,
+      items_faltantes: advanceMissingReasons,
+    })
+    const { error: ovErr } = await db.from('desalojo_log').insert({
+      prioridad_id:   n,
+      capa_id:        capaId,
+      fase:           prev.fase_actual === 'pr' ? 'pr' : null,
+      campo:          'fase_actual_override',
+      valor_anterior: prev.fase_actual,
+      valor_nuevo:    payload,
+      cambiado_por:   profile.email || null,
+    })
+    if (ovErr) console.error('[desalojos.capa.patch] override log insert falló:', ovErr)
   }
 
   return NextResponse.json({ ok: true, capa: updated })

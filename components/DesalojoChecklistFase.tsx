@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   DesalojoChecklistEstado,
   DesalojoChecklistItemEstado,
@@ -295,6 +295,57 @@ function ExtraRow({
     )
   }
 
+  // Texto / número / fecha: draft local + commit on Enter o blur. Cada keystroke
+  // ya no dispara un PATCH al server (era un bug de performance: tipear "12710"
+  // ejecutaba 5 escrituras y 5 re-renders del modal completo).
+  return (
+    <ExtraInputDraft
+      extra={extra}
+      value={value}
+      labelEl={labelEl}
+      saving={saving}
+      onCommit={onChange}
+    />
+  )
+}
+
+function ExtraInputDraft({
+  extra, value, labelEl, saving, onCommit,
+}: {
+  extra:    ExtraSpec
+  value:    string | number | null
+  labelEl:  React.ReactNode
+  saving:   boolean
+  onCommit: (v: string | number | null) => void
+}) {
+  // El draft refleja el valor persistido cuando llega desde el server, pero
+  // entre commits es el usuario quien manda. Re-sincronizamos cuando `value`
+  // cambia desde afuera (otro usuario, refetch, etc.).
+  const valueStr = value === null || value === undefined ? '' : String(value)
+  const [draft, setDraft] = useState<string>(valueStr)
+  useEffect(() => { setDraft(valueStr) }, [valueStr])
+
+  function commit() {
+    if (draft === valueStr) return
+    if (extra.kind === 'num') {
+      onCommit(draft === '' ? null : Number(draft))
+      return
+    }
+    onCommit(draft === '' ? null : draft)
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      ;(e.target as HTMLInputElement).blur()
+    } else if (e.key === 'Escape') {
+      setDraft(valueStr)
+      ;(e.target as HTMLInputElement).blur()
+    }
+  }
+
+  const dirty = draft !== valueStr
+
   if (extra.kind === 'num') {
     return (
       <div className="space-y-0.5">
@@ -302,13 +353,18 @@ function ExtraRow({
         <div className="flex items-center gap-2">
           <input
             type="number"
-            value={value === null || value === undefined ? '' : String(value)}
-            onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={onKeyDown}
             disabled={saving}
-            className="flex-1 text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 disabled:opacity-50"
+            className={`flex-1 text-sm px-2 py-1 border rounded text-gray-800 disabled:opacity-50 ${
+              dirty ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
+            }`}
           />
           {extra.unit && <span className="text-[11px] text-gray-500">{extra.unit}</span>}
         </div>
+        {dirty && <p className="text-[10px] text-amber-700">Enter o salir del campo para guardar.</p>}
       </div>
     )
   }
@@ -319,27 +375,38 @@ function ExtraRow({
         {labelEl}
         <input
           type="date"
-          value={value === null || value === undefined ? '' : String(value)}
-          onChange={e => onChange(e.target.value || null)}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
           disabled={saving}
-          className="text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 disabled:opacity-50"
+          className={`text-sm px-2 py-1 border rounded text-gray-800 disabled:opacity-50 ${
+            dirty ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
+          }`}
         />
+        {dirty && <p className="text-[10px] text-amber-700">Enter o salir del campo para guardar.</p>}
       </div>
     )
   }
 
   // texto
+  const placeholder = extra.kind === 'texto' ? extra.placeholder : undefined
   return (
     <div className="space-y-0.5">
       {labelEl}
       <input
         type="text"
-        value={value === null || value === undefined ? '' : String(value)}
-        onChange={e => onChange(e.target.value || null)}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
         disabled={saving}
-        placeholder={extra.placeholder}
-        className="w-full text-sm px-2 py-1 border border-gray-200 rounded text-gray-800 placeholder:text-gray-400 disabled:opacity-50"
+        placeholder={placeholder}
+        className={`w-full text-sm px-2 py-1 border rounded text-gray-800 placeholder:text-gray-400 disabled:opacity-50 ${
+          dirty ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
+        }`}
       />
+      {dirty && <p className="text-[10px] text-amber-700">Enter o salir del campo para guardar.</p>}
     </div>
   )
 }
