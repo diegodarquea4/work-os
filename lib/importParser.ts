@@ -21,6 +21,7 @@ import type { Iniciativa } from './projects'
 import type { RegionEje } from './types'
 import { parseEjeString, composeEjeLabel } from './ejes'
 import { TEMPLATE_COLS } from './templateExcel'
+import { canonizeMinisterio } from './ministeriosCanon'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 
@@ -389,10 +390,27 @@ export function parseImportWorkbook(
     // trim, filtra vacíos, dedup case-sensitive, y reune con `;`. Si el
     // usuario escribió un solo valor sin separador, el resultado es ese
     // mismo valor — la función es idempotente para single-value.
-    function normalizeMultiValueString(raw: string): string {
-      return Array.from(new Set(
-        raw.split(/\s*[;·]\s*/).map(s => s.trim()).filter(Boolean)
-      )).join(';')
+    //
+    // `mapToken` opcional: se aplica a cada token después del split y antes
+    // del dedup. Lo usamos para canonizar Ministerio (MINVU → Ministerio de
+    // Vivienda y Urbanismo, etc.). Para comuna pasamos identity.
+    function normalizeMultiValueString(raw: string, mapToken?: (s: string) => string): string {
+      const tokens = raw.split(/\s*[;·]\s*/).map(s => s.trim()).filter(Boolean)
+      const mapped = mapToken ? tokens.map(mapToken) : tokens
+      return Array.from(new Set(mapped)).join(';')
+    }
+    // Heurística para detectar multi-ministerio mal separado. La fragmentación
+    // histórica del catálogo (2382 filas con " y ", 311 con ",") existe porque
+    // el delegado escribe "Ministerio X y Ministerio Y" como un solo string.
+    // Si la celda menciona "Ministerio" 2 veces o más y no usa ; / ·, casi
+    // seguro intentó separar varios — exigir el separador canónico.
+    // Mensaje claro para que el delegado entienda y corrija. Edge case "Ministerio
+    // de Economía, Fomento y Turismo" tiene solo 1 "Ministerio" → no dispara.
+    function detectMinisterioMalSeparado(raw: string): string | null {
+      if (!raw || raw.includes(';') || raw.includes('·')) return null
+      const matches = raw.match(/\bministerio\b/gi)
+      if (!matches || matches.length < 2) return null
+      return `Multi-ministerio mal separado: usa ; (punto y coma) entre ministerios. Ej: "Ministerio de Vivienda y Urbanismo;Ministerio de Obras Públicas". NO uses " y " ni ",". Valor recibido: "${raw}"`
     }
     const multiValueCols = new Set(['ministerio', 'comuna'])
     for (const [label, dbCol] of [
@@ -405,8 +423,15 @@ export function parseImportWorkbook(
     ] as [string, string][]) {
       const val = col(row, label)
       if (val === undefined) continue
+      if (dbCol === 'ministerio' && val !== '') {
+        const err = detectMinisterioMalSeparado(val)
+        if (err) {
+          rowErrors.push(err)
+          continue
+        }
+      }
       const normalized = multiValueCols.has(dbCol) && val !== ''
-        ? normalizeMultiValueString(val)
+        ? normalizeMultiValueString(val, dbCol === 'ministerio' ? canonizeMinisterio : undefined)
         : val
       if (isUpdate) {
         // skip-si-vacío en UPDATE: no se incluye en el patch.
