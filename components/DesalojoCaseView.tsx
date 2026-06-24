@@ -10,6 +10,7 @@ import type {
   DesalojoDocumento,
   DesalojoFaseConSemaforo,
   DesalojoFaseEstado,
+  DesalojoPlanificacion,
   DesalojoResponsable,
   DesalojoSeguimiento,
   DesalojoSeguimientoTipo,
@@ -19,6 +20,7 @@ import DesalojoAvanceTab from './DesalojoAvanceTab'
 import DesalojoBadge from './DesalojoBadge'
 import DesalojoCalendarioDrawer from './DesalojoCalendarioDrawer'
 import DesalojoContextoTab from './DesalojoContextoTab'
+import DesalojoPlanificacionTab from './DesalojoPlanificacionTab'
 import DesalojoResponsablesTab from './DesalojoResponsablesTab'
 
 /**
@@ -45,7 +47,7 @@ type Props = {
   iniciativa: Iniciativa
 }
 
-type Tab = 'contexto' | 'avance' | 'responsables'
+type Tab = 'contexto' | 'avance' | 'planificacion' | 'responsables'
 
 export default function DesalojoCaseView({ iniciativa }: Props) {
   const [loading, setLoading]           = useState(true)
@@ -56,8 +58,16 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   const [fasesEstado, setFasesEstado]   = useState<DesalojoFaseEstado[]>([])
   const [seguimientos, setSeguimientos] = useState<DesalojoSeguimiento[]>([])
   const [documentos, setDocumentos]     = useState<DesalojoDocumento[]>([])
+  const [planificacion, setPlanificacion] = useState<DesalojoPlanificacion[]>([])
   const [selectedCapaId, setSelectedCapaId] = useState<number | null>(null)
   const [calOpen, setCalOpen]               = useState(false)
+
+  // En la tab Planificación el drawer del calendario no tiene sentido (el
+  // Gantt ya ocupa el lado derecho). Lo cerramos al entrar; el user lo
+  // re-abre manualmente al volver a otra tab si quiere.
+  useEffect(() => {
+    if (tab === 'planificacion' && calOpen) setCalOpen(false)
+  }, [tab, calOpen])
 
   const loadCase = useCallback(async () => {
     setLoading(true)
@@ -73,6 +83,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
         setFasesEstado(json.fases_estado ?? [])
         setSeguimientos(json.seguimientos ?? [])
         setDocumentos(json.documentos ?? [])
+        setPlanificacion(json.planificacion ?? [])
       }
     } catch (err) {
       setError(`Error de red: ${String(err)}`)
@@ -426,6 +437,82 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     }
   }
 
+  // ── Planificación ───────────────────────────────────────────────────────
+
+  function sortEventos(arr: DesalojoPlanificacion[]): DesalojoPlanificacion[] {
+    return [...arr].sort((a, b) => {
+      if (a.fecha_inicio !== b.fecha_inicio) return a.fecha_inicio.localeCompare(b.fecha_inicio)
+      if (a.orden !== b.orden)               return a.orden - b.orden
+      return a.id - b.id
+    })
+  }
+
+  async function handleAddEvento(input: {
+    capa_id?:     number | null
+    titulo:       string
+    descripcion?: string | null
+    fecha_inicio: string
+    fecha_fin?:   string | null
+  }) {
+    try {
+      const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(input),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        window.alert(json?.error ?? `Error HTTP ${res.status}`)
+        return
+      }
+      if (json.evento) {
+        setPlanificacion(prev => sortEventos([json.evento, ...prev]))
+      }
+    } catch (err) {
+      window.alert(`Error de red: ${String(err)}`)
+    }
+  }
+
+  async function handlePatchEvento(id: number, patch: Partial<DesalojoPlanificacion>) {
+    const prev = planificacion
+    setPlanificacion(sortEventos(prev.map(e => e.id === id ? { ...e, ...patch } : e)))
+    try {
+      const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion/${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(patch),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setPlanificacion(prev)
+        window.alert(json?.error ?? `Error HTTP ${res.status}`)
+        return
+      }
+      if (json.evento) {
+        setPlanificacion(p => sortEventos(p.map(e => e.id === id ? json.evento : e)))
+      }
+    } catch (err) {
+      setPlanificacion(prev)
+      window.alert(`Error de red: ${String(err)}`)
+    }
+  }
+
+  async function handleDeleteEvento(id: number) {
+    const prev = planificacion
+    setPlanificacion(prev.filter(e => e.id !== id))
+    try {
+      const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) {
+        setPlanificacion(prev)
+        window.alert(json?.error ?? `Error HTTP ${res.status}`)
+      }
+    } catch (err) {
+      setPlanificacion(prev)
+      window.alert(`Error de red: ${String(err)}`)
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -475,11 +562,17 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     // contenido (o viceversa).
     <div className="h-full overflow-hidden">
       {/* Contenedor centrado.
-          - Cerrado: max-w-5xl (1024px) mx-auto.
-          - Abierto: max-w-[1500px] flex → contenido + calendario adyacentes,
-            el bloque entero sigue mx-auto centrado. */}
-      <div className={`mx-auto h-full ${calOpen ? 'max-w-[1500px] flex gap-6' : 'max-w-5xl'}`}>
-        <div className="flex-1 min-w-0 max-w-5xl h-full overflow-y-auto">
+          - Cerrado normal: max-w-5xl (1024px) mx-auto.
+          - Cerrado en Planificación: max-w-[1500px] (Gantt necesita espacio).
+          - Abierto (calOpen): max-w-[1500px] flex → contenido + calendario adyacentes. */}
+      <div className={`mx-auto h-full ${
+        calOpen
+          ? 'max-w-[1500px] flex gap-6'
+          : tab === 'planificacion'
+            ? 'max-w-[1500px]'
+            : 'max-w-5xl'
+      }`}>
+        <div className={`flex-1 min-w-0 h-full overflow-y-auto ${tab === 'planificacion' ? 'max-w-[1500px]' : 'max-w-5xl'}`}>
         <div className="px-6 py-6 space-y-4">
 
         {/* Header del caso */}
@@ -526,6 +619,15 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
           </button>
           <button
             type="button"
+            onClick={() => setTab('planificacion')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              tab === 'planificacion' ? 'border-slate-900 text-slate-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            Planificación{planificacion.length > 0 && <span className="ml-1 text-gray-400 font-normal">({planificacion.length})</span>}
+          </button>
+          <button
+            type="button"
             onClick={() => setTab('responsables')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
               tab === 'responsables' ? 'border-slate-900 text-slate-900' : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -536,16 +638,24 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
           {/* Trigger del calendario — pestaña derecha. Visualmente distinta de
               las tabs de contenido: no cambia el contenido del pane, abre el
-              panel lateral del calendario. */}
+              panel lateral del calendario. En la tab Planificación queda
+              deshabilitado: el Gantt ya cumple ese rol en su lado derecho. */}
           <button
             type="button"
             onClick={() => setCalOpen(o => !o)}
+            disabled={tab === 'planificacion'}
             className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              calOpen
-                ? 'bg-slate-900 text-white hover:bg-slate-700'
-                : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
+              tab === 'planificacion'
+                ? 'text-gray-300 cursor-not-allowed'
+                : calOpen
+                  ? 'bg-slate-900 text-white hover:bg-slate-700'
+                  : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
             }`}
-            title={calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'}
+            title={
+              tab === 'planificacion'
+                ? 'El Gantt de Planificación reemplaza el calendario en esta tab'
+                : calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'
+            }
             aria-label={calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'}
             aria-pressed={calOpen}
           >
@@ -554,7 +664,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
               <path d="M2 6h12M5.5 1.5v3M10.5 1.5v3"/>
             </svg>
             <span>Hitos</span>
-            {totalHitos > 0 && !calOpen && (
+            {totalHitos > 0 && !calOpen && tab !== 'planificacion' && (
               <span className="ml-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
                 {totalHitos > 9 ? '9+' : totalHitos}
               </span>
@@ -593,6 +703,15 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onUploadDocItem={handleUploadDocItem}
             onDeleteDoc={handleDeleteDoc}
             regionCaso={iniciativa.region}
+          />
+        )}
+        {tab === 'planificacion' && (
+          <DesalojoPlanificacionTab
+            eventos={planificacion}
+            capas={capas}
+            onCreate={handleAddEvento}
+            onPatch={handlePatchEvento}
+            onDelete={handleDeleteEvento}
           />
         )}
         {tab === 'responsables' && (

@@ -261,6 +261,27 @@ export type DesalojoSeguimiento = {
   created_by:   string | null
 }
 
+// Evento del timeline de Planificación. Tabla `desalojo_planificacion` (mig 029).
+// Independiente de DesalojoSeguimiento: modelo prospectivo con rango opcional
+// de fechas, sin tipo/dimensión obligatorios.
+export type DesalojoPlanificacion = {
+  id:           number
+  prioridad_id: number
+  capa_id:      number | null              // NULL = evento del caso global
+  titulo:       string
+  descripcion:  string | null
+  fecha_inicio: string                     // ISO date YYYY-MM-DD
+  fecha_fin:    string | null              // NULL = evento puntual; con valor = rango
+  orden:        number                     // tie-breaker para misma fecha_inicio
+  archivado_at: string | null              // soft delete
+  created_at:   string
+  updated_at:   string
+  created_by:   string | null
+}
+
+// Estado calculado en UI (no persistido). Derivado de fecha_inicio/fecha_fin vs hoy.
+export type DesalojoPlanificacionEstado = 'hecho' | 'en_curso' | 'planificado'
+
 // Audit log de cambios. v2 suma capa_id para diferenciar cambios de la capa vs
 // del toggle del caso (capa_id NULL para el toggle de es_desalojo). v3 suma
 // fase para trazar cambios por fase (NULL para cambios a nivel capa o caso).

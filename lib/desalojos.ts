@@ -981,6 +981,37 @@ export function checklistProgreso(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Planificación — estado calculado de eventos del timeline
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Estado de un evento del timeline de Planificación, derivado de su fecha
+ * de inicio y fin opcional vs hoy.
+ *
+ *   hoyISO < fecha_inicio              → 'planificado'
+ *   fecha_inicio ≤ hoyISO ≤ fecha_fin  → 'en_curso'
+ *   hoyISO > fecha_fin                 → 'hecho'
+ *
+ * Para evento puntual (`fecha_fin === null`), fin = fecha_inicio.
+ *
+ * Comparación con strings YYYY-MM-DD para evitar drift de zona horaria.
+ * Usar `new Date()` aquí daría estados distintos según TZ del browser:
+ * un user con TZ=UTC vería "hoy" desplazado vs uno con TZ=America/Santiago.
+ * `toLocaleDateString('sv-SE')` devuelve formato ISO en la TZ local sin parsear.
+ */
+import type { DesalojoPlanificacion, DesalojoPlanificacionEstado } from '@/lib/types'
+
+export function estadoEventoPlanificacion(
+  e:       Pick<DesalojoPlanificacion, 'fecha_inicio' | 'fecha_fin'>,
+  hoyISO:  string = new Date().toLocaleDateString('sv-SE'),  // 'sv-SE' = YYYY-MM-DD en TZ local
+): DesalojoPlanificacionEstado {
+  const fin = e.fecha_fin ?? e.fecha_inicio
+  if (hoyISO > fin)            return 'hecho'
+  if (hoyISO < e.fecha_inicio) return 'planificado'
+  return 'en_curso'
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Paleta de colores por capa
 // ─────────────────────────────────────────────────────────────────────────
 // Distinta de la paleta de tipología (indigo/cyan/violet/orange) y distinta

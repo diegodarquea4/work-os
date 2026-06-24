@@ -42,25 +42,30 @@ export async function GET(
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
   const db = getSupabaseAdmin()
-  const [detalleRes, capasRes, fasesRes, segRes, docsRes] = await Promise.all([
-    db.from('desalojo_detalle')     .select('*').eq('prioridad_id', n).maybeSingle(),
-    db.from('desalojo_capas')       .select('*').eq('prioridad_id', n).order('orden', { ascending: true }),
-    db.from('desalojo_fase_estado') .select('*').eq('prioridad_id', n),
-    db.from('desalojo_seguimientos').select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),
-    db.from('desalojo_documentos')  .select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),
+  const [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes] = await Promise.all([
+    db.from('desalojo_detalle')      .select('*').eq('prioridad_id', n).maybeSingle(),
+    db.from('desalojo_capas')        .select('*').eq('prioridad_id', n).order('orden', { ascending: true }),
+    db.from('desalojo_fase_estado')  .select('*').eq('prioridad_id', n),
+    db.from('desalojo_seguimientos') .select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),
+    db.from('desalojo_documentos')   .select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),
+    db.from('desalojo_planificacion').select('*').eq('prioridad_id', n).is('archivado_at', null)
+      .order('fecha_inicio', { ascending: true })
+      .order('orden',        { ascending: true })
+      .order('id',           { ascending: true }),
   ])
-  for (const r of [detalleRes, capasRes, fasesRes, segRes, docsRes]) {
+  for (const r of [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes]) {
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 })
   }
 
   const documentos = await withSignedUrls(db, (docsRes.data ?? []) as DesalojoDocumento[])
 
   return NextResponse.json({
-    detalle:      detalleRes.data ?? null,
-    capas:        capasRes.data   ?? [],
-    fases_estado: fasesRes.data   ?? [],
-    seguimientos: segRes.data     ?? [],
+    detalle:       detalleRes.data ?? null,
+    capas:         capasRes.data   ?? [],
+    fases_estado:  fasesRes.data   ?? [],
+    seguimientos:  segRes.data     ?? [],
     documentos,
+    planificacion: planRes.data    ?? [],
   })
 }
 
