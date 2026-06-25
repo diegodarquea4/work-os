@@ -22,6 +22,12 @@ import { estadoEventoPlanificacion } from '@/lib/desalojos'
 type Props = {
   eventos:         DesalojoPlanificacion[]
   onSelectEvento?: (id: number) => void
+  title?:          string                 // titulo del card (default: "Carta Gantt")
+  subtitle?:       string                 // p.ej. "Caso completo" o nombre de capa
+  /** Modo foco: render del padre + sus hitos como filas separadas. */
+  focusedParent?:  DesalojoPlanificacion | null
+  focusedHitos?:   DesalojoPlanificacion[]
+  onExitFocus?:    () => void
 }
 
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -64,17 +70,36 @@ function formatFecha(s: string): string {
   return `${d} ${MESES_CORTO[m - 1]} ${y}`
 }
 
-export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
+export default function DesalojoGantt({
+  eventos, onSelectEvento, title, subtitle, focusedParent, focusedHitos, onExitFocus,
+}: Props) {
+  // En modo foco, las filas son [parent, ...hitos]. El parent va primero con
+  // estilo distinto (background bar que abarca todo su rango); los hitos
+  // van debajo. Ignoramos `eventos` prop entonces.
+  const focusMode = focusedParent != null
+  const rows: DesalojoPlanificacion[] = focusMode
+    ? [focusedParent, ...(focusedHitos ?? [])]
+    : eventos
+
   const { minDate, maxDate, daysTotal } = useMemo(() => {
-    if (eventos.length === 0) {
+    // Modo foco: zoom apretado al rango del padre con padding chico
+    // (2-3 días) para que el detalle de los hitos se lea cómodo.
+    if (focusMode && focusedParent) {
+      const ini = parseDateISO(focusedParent.fecha_inicio)
+      const fin = parseDateISO(focusedParent.fecha_fin ?? focusedParent.fecha_inicio)
+      const min = addDays(ini, -2)
+      const max = addDays(fin, 2)
+      return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
+    }
+    if (rows.length === 0) {
       const hoy = new Date()
       const min = addDays(hoy, -30)
       const max = addDays(hoy, 30)
       return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
     }
-    let min = parseDateISO(eventos[0].fecha_inicio)
-    let max = parseDateISO(eventos[0].fecha_fin ?? eventos[0].fecha_inicio)
-    for (const e of eventos) {
+    let min = parseDateISO(rows[0].fecha_inicio)
+    let max = parseDateISO(rows[0].fecha_fin ?? rows[0].fecha_inicio)
+    for (const e of rows) {
       const ini = parseDateISO(e.fecha_inicio)
       const fin = parseDateISO(e.fecha_fin ?? e.fecha_inicio)
       if (ini < min) min = ini
@@ -87,21 +112,30 @@ export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
     min = addDays(min, -7)
     max = addDays(max, 7)
     return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
-  }, [eventos])
+  }, [rows, focusMode, focusedParent])
 
   // Layout dims
   const ROW_H        = 28
-  const HEADER_H     = 48
+  const HEADER_H     = 70
   const LABEL_W      = 200
   const CHART_W_MIN  = 600
   const PADDING_R    = 16
 
-  // Cada día = 1 unidad. Cálculo dinámico: si el rango es muy chico, expandir
-  // a min 600px de área de chart; si es muy grande, dejarlo crecer (scroll).
-  const dayPx = Math.max(2, Math.min(20, CHART_W_MIN / daysTotal))
+  // Posiciones Y dentro del header (de arriba abajo: mes, hoy, ticks, día).
+  const MONTH_LABEL_Y = 14
+  const TODAY_LABEL_Y = 30
+  const DAY_TICK_TOP  = 44
+  const DAY_TICK_BOT  = 50
+  const DAY_LABEL_Y   = 62
+
+  // Cada día = 1 unidad. Floor de 22px por día para que el número DD quepa
+  // sin colisión (showall: no skipeamos ningún día). Si el rango es muy chico,
+  // expandimos dayPx para que el chart llene al menos CHART_W_MIN; si es muy
+  // grande, dejamos que crezca y el contenedor hace scroll horizontal.
+  const dayPx = Math.max(22, CHART_W_MIN / daysTotal)
   const chartW = Math.max(CHART_W_MIN, daysTotal * dayPx)
   const totalW = LABEL_W + chartW + PADDING_R
-  const totalH = HEADER_H + Math.max(ROW_H, eventos.length * ROW_H) + 16
+  const totalH = HEADER_H + Math.max(ROW_H, rows.length * ROW_H) + 16
 
   // Marcadores de mes
   const monthMarkers = useMemo(() => {
@@ -121,13 +155,27 @@ export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
     return out
   }, [minDate, maxDate, dayPx])
 
+  // Marcadores de día — TODOS los días del rango, sin step. El día 1 de mes
+  // va con tipografía reforzada para marcar el límite del mes.
+  const dayMarkers = useMemo(() => {
+    const out: { x: number; day: number; isMonthStart: boolean }[] = []
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+    while (cur <= maxDate) {
+      const day = cur.getDate()
+      const x = LABEL_W + daysBetween(minDate, cur) * dayPx + dayPx / 2
+      out.push({ x, day, isMonthStart: day === 1 })
+      cur.setDate(cur.getDate() + 1)
+    }
+    return out
+  }, [minDate, maxDate, dayPx])
+
   // Línea de hoy
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const todayX = LABEL_W + daysBetween(minDate, hoy) * dayPx
   const todayVisible = hoy >= minDate && hoy <= maxDate
 
-  if (eventos.length === 0) {
+  if (rows.length === 0) {
     return (
       <div className="border border-gray-200 rounded-lg bg-white p-6 text-center">
         <p className="text-sm text-gray-500 mb-1">Sin eventos para graficar</p>
@@ -139,23 +187,46 @@ export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
   return (
     <div className="border border-gray-200 rounded-lg bg-white overflow-auto">
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10">
-        <h3 className="text-sm font-semibold text-gray-900">Carta Gantt — {eventos.length} evento{eventos.length === 1 ? '' : 's'}</h3>
-        <div className="flex items-center gap-3 text-[11px] text-gray-600">
+        <div className="flex items-baseline gap-2 min-w-0">
+          {focusMode && onExitFocus && (
+            <button
+              type="button"
+              onClick={onExitFocus}
+              className="text-xs text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1 mr-2 shrink-0"
+              title="Volver a todos los eventos"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="10,4 6,8 10,12" />
+              </svg>
+              Volver
+            </button>
+          )}
+          <h3 className="text-sm font-semibold text-gray-900 truncate">
+            {focusMode ? 'Foco: ' : ''}{title ?? 'Carta Gantt'}
+          </h3>
+          {subtitle && <span className="text-xs text-gray-500 truncate">{subtitle}</span>}
+          {!focusMode && (
+            <span className="text-xs text-gray-400 shrink-0">· {rows.length} evento{rows.length === 1 ? '' : 's'}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-gray-600 shrink-0 ml-3">
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-900" />Hecho</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />En curso</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Planificado</span>
         </div>
       </div>
       <svg width={totalW} height={totalH} className="block">
-        {/* Fondo de filas alternadas */}
-        {eventos.map((_, i) => (
+        {/* Fondo de filas alternadas. En modo foco, la primera fila (parent)
+            tiene un fondo amber muy tenue para distinguir el "container" de
+            los hitos hijos. */}
+        {rows.map((_, i) => (
           <rect
             key={`bg-${i}`}
             x={0}
             y={HEADER_H + i * ROW_H}
             width={totalW}
             height={ROW_H}
-            fill={i % 2 === 0 ? '#fafafa' : '#ffffff'}
+            fill={focusMode && i === 0 ? '#fef3c7' : i % 2 === 0 ? '#fafafa' : '#ffffff'}
           />
         ))}
 
@@ -170,40 +241,67 @@ export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
             />
             <text
               x={m.x + 4}
-              y={HEADER_H - 8}
+              y={MONTH_LABEL_Y}
               fontSize={11}
               fill="#475569"
-              fontWeight={500}
+              fontWeight={600}
             >
-              {m.label}{i === 0 || monthMarkers[i - 1]?.year !== m.year ? ` ${m.year}` : ''}
+              {m.label} {m.year}
             </text>
           </g>
         ))}
 
-        {/* Línea de hoy */}
+        {/* Línea vertical de hoy — se dibuja antes de los day markers
+            para que los números del día queden por encima y legibles. */}
         {todayVisible && (
-          <g>
-            <line
-              x1={todayX} x2={todayX}
-              y1={HEADER_H - 12} y2={totalH - 8}
-              stroke="#dc2626"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-            />
-            <text
-              x={todayX + 4}
-              y={HEADER_H - 16}
-              fontSize={10}
-              fill="#dc2626"
-              fontWeight={600}
-            >
-              hoy
-            </text>
-          </g>
+          <line
+            x1={todayX} x2={todayX}
+            y1={TODAY_LABEL_Y + 4} y2={totalH - 8}
+            stroke="#dc2626"
+            strokeWidth={1.5}
+            strokeDasharray="3 3"
+          />
         )}
 
-        {/* Eventos */}
-        {eventos.map((ev, i) => {
+        {/* Marcadores de día — tick + número en el borde inferior del header */}
+        {dayMarkers.map((d, i) => (
+          <g key={`d-${i}`}>
+            <line
+              x1={d.x} x2={d.x}
+              y1={DAY_TICK_TOP} y2={DAY_TICK_BOT}
+              stroke={d.isMonthStart ? '#94a3b8' : '#cbd5e1'}
+              strokeWidth={1}
+            />
+            <text
+              x={d.x}
+              y={DAY_LABEL_Y}
+              fontSize={9.5}
+              fill={d.isMonthStart ? '#334155' : '#64748b'}
+              fontWeight={d.isMonthStart ? 600 : 400}
+              textAnchor="middle"
+            >
+              {d.day}
+            </text>
+          </g>
+        ))}
+
+        {/* Label "hoy" — al final del header, encima de cualquier número */}
+        {todayVisible && (
+          <text
+            x={todayX + 4}
+            y={TODAY_LABEL_Y}
+            fontSize={10}
+            fill="#dc2626"
+            fontWeight={700}
+          >
+            hoy
+          </text>
+        )}
+
+        {/* Eventos (en modo foco, la primera fila es el parent: misma fill
+            que la barra pero con stroke más marcado para señalar el container). */}
+        {rows.map((ev, i) => {
+          const isParentRow = focusMode && i === 0
           const y = HEADER_H + i * ROW_H
           const iniDate = parseDateISO(ev.fecha_inicio)
           const finDate = parseDateISO(ev.fecha_fin ?? ev.fecha_inicio)
@@ -224,15 +322,16 @@ export default function DesalojoGantt({ eventos, onSelectEvento }: Props) {
               style={{ cursor: onSelectEvento ? 'pointer' : 'default' }}
               className="hover:[&>rect]:fill-current"
             >
-              {/* Label izquierda */}
+              {/* Label izquierda — en modo foco, el parent va en bold + prefijo */}
               <text
                 x={12}
                 y={y + ROW_H / 2 + 4}
                 fontSize={12}
-                fill="#1e293b"
+                fill={isParentRow ? '#0f172a' : '#1e293b'}
+                fontWeight={isParentRow ? 700 : 400}
                 className="select-none"
               >
-                {ev.titulo.length > 28 ? ev.titulo.slice(0, 27) + '…' : ev.titulo}
+                {(isParentRow ? '◆ ' : '') + (ev.titulo.length > 26 ? ev.titulo.slice(0, 25) + '…' : ev.titulo)}
               </text>
 
               {/* Barra o círculo */}

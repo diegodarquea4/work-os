@@ -19,23 +19,30 @@ export type TimelineFlashRef = {
 }
 
 type Props = {
-  eventos:    DesalojoPlanificacion[]
-  capas:      DesalojoCapa[]                 // todas las capas del caso (activas + archivadas para badge)
-  onCreate:   (input: {
+  eventos:        DesalojoPlanificacion[]      // SOLO eventos top-level (parent_id === null)
+  hitosByParent:  Map<number, DesalojoPlanificacion[]>  // hitos agrupados por parent_id
+  capas:          DesalojoCapa[]               // todas las capas del caso (activas + archivadas para badge)
+  onCreate:       (input: {
     capa_id?:     number | null
+    parent_id?:   number | null
     titulo:       string
     descripcion?: string | null
     fecha_inicio: string
     fecha_fin?:   string | null
   }) => Promise<void>
-  onPatch:    (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
-  onDelete:   (id: number) => Promise<void>
+  onPatch:        (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+  onDelete:       (id: number) => Promise<void>
   /** ID del evento a flashear (lo setea el Gantt al hacer click). */
-  flashId?:   number | null
+  flashId?:       number | null
+  /** ID del evento en foco del Gantt (highlight visual en su card). */
+  focusedEventId?: number | null
+  /** Callback al apretar el botón Foco — el padre setea el id en su estado. */
+  onSelectFocus?: (id: number | null) => void
 }
 
 export default function DesalojoTimelineList({
-  eventos, capas, onCreate, onPatch, onDelete, flashId,
+  eventos, hitosByParent, capas, onCreate, onPatch, onDelete, flashId,
+  focusedEventId, onSelectFocus,
 }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const capasById = new Map(capas.map(c => [c.id, c] as const))
@@ -82,8 +89,12 @@ export default function DesalojoTimelineList({
               key={ev.id}
               evento={ev}
               capa={ev.capa_id !== null ? capasById.get(ev.capa_id) ?? null : null}
+              hitos={hitosByParent.get(ev.id) ?? []}
               onPatch={onPatch}
               onDelete={onDelete}
+              onAddHito={async input => { await onCreate(input) }}
+              onSelectFocus={onSelectFocus ? () => onSelectFocus(focusedEventId === ev.id ? null : ev.id) : undefined}
+              focused={focusedEventId === ev.id}
               cardRef={getRef(ev.id)}
               flash={flashId === ev.id}
             />

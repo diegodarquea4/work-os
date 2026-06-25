@@ -14,6 +14,7 @@ import {
   prevFaseAplicable,
 } from '@/lib/desalojos'
 import { SEMAFORO_CONFIG } from '@/lib/config'
+import RichTextEditor, { plainTextLength } from './RichTextEditor'
 
 /**
  * Stepper horizontal bidireccional. Cada fase es un círculo con su sigla,
@@ -196,13 +197,13 @@ function OverrideAvanceModal({
 }) {
   const [text, setText]       = useState('')
   const [saving, setSaving]   = useState(false)
-  const trimmed = text.trim()
-  const validLen = trimmed.length >= 10
+  const plainLen = plainTextLength(text)
+  const validLen = plainLen >= 10 && plainLen <= 1000
 
   async function submit() {
     if (!validLen || saving) return
     setSaving(true)
-    try { await onConfirm(trimmed) }
+    try { await onConfirm(text) }
     finally { setSaving(false) }
   }
 
@@ -230,15 +231,15 @@ function OverrideAvanceModal({
           <label className="text-xs font-semibold text-gray-700">
             Justificación <span className="text-rose-500">*</span>
           </label>
-          <textarea
+          <RichTextEditor
             value={text}
-            onChange={e => setText(e.target.value)}
-            rows={4}
+            onUpdate={setText}
             placeholder="Ej. La resolución del Servicio propietario ya fue dictada pero no está aún publicada en el DO. El operativo no puede esperar la publicación."
-            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            disabled={saving}
+            minHeight="min-h-[96px]"
           />
           <p className={`text-[11px] ${validLen ? 'text-gray-400' : 'text-amber-700'}`}>
-            Mínimo 10 caracteres. {trimmed.length} / 1000.
+            Mínimo 10 caracteres. {plainLen} / 1000.
           </p>
         </div>
 

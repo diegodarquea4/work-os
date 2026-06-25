@@ -130,6 +130,52 @@ export async function PATCH(
     return NextResponse.json({ error: 'fecha_fin debe ser >= fecha_inicio' }, { status: 400 })
   }
 
+  // Si es un hito (parent_id NOT NULL), las nuevas fechas deben caer dentro
+  // del rango del padre — un hito que se sale del padre rompe la semántica
+  // de "milestone dentro del evento".
+  if (prev.parent_id !== null && ('fecha_inicio' in patch || 'fecha_fin' in patch)) {
+    const { data: parent } = await db
+      .from('desalojo_planificacion')
+      .select('fecha_inicio, fecha_fin')
+      .eq('id', prev.parent_id)
+      .maybeSingle()
+    if (parent) {
+      const parentFin = parent.fecha_fin ?? parent.fecha_inicio
+      if (finalInicio < parent.fecha_inicio || finalInicio > parentFin) {
+        return NextResponse.json({
+          error: `fecha_inicio del hito debe estar entre ${parent.fecha_inicio} y ${parentFin}`,
+        }, { status: 400 })
+      }
+      if (finalFin !== null && (finalFin < parent.fecha_inicio || finalFin > parentFin)) {
+        return NextResponse.json({
+          error: `fecha_fin del hito debe estar entre ${parent.fecha_inicio} y ${parentFin}`,
+        }, { status: 400 })
+      }
+    }
+  }
+
+  // Si es un evento top-level (parent_id NULL) y se mueven las fechas, los
+  // hitos hijos podrían quedar fuera del nuevo rango. Bloqueamos el patch
+  // si eso pasaría — el user debe primero ajustar los hitos.
+  if (prev.parent_id === null && ('fecha_inicio' in patch || 'fecha_fin' in patch)) {
+    const nuevoFinPadre = finalFin ?? finalInicio
+    const { data: hitos } = await db
+      .from('desalojo_planificacion')
+      .select('id, titulo, fecha_inicio, fecha_fin')
+      .eq('parent_id', id)
+      .is('archivado_at', null)
+    const fueraDeRango = (hitos ?? []).filter(h => {
+      const hFin = h.fecha_fin ?? h.fecha_inicio
+      return h.fecha_inicio < finalInicio || h.fecha_inicio > nuevoFinPadre
+          || hFin            < finalInicio || hFin            > nuevoFinPadre
+    })
+    if (fueraDeRango.length > 0) {
+      return NextResponse.json({
+        error: `No se puede mover el rango: ${fueraDeRango.length} hito(s) quedarían fuera. Ajusta primero "${fueraDeRango[0].titulo}".`,
+      }, { status: 400 })
+    }
+  }
+
   const { data: updated, error: updErr } = await db
     .from('desalojo_planificacion')
     .update(patch)
@@ -171,10 +217,13 @@ export async function DELETE(
     return NextResponse.json({ ok: true, noop: true })
   }
 
+  const archivadoAt = new Date().toISOString()
+  // Soft-delete del evento padre + cascada manual a los hitos. Sin esto,
+  // los hitos quedarían huérfanos visibles solo via query directa.
   const { error: delErr } = await db
     .from('desalojo_planificacion')
-    .update({ archivado_at: new Date().toISOString() })
-    .eq('id', id)
+    .update({ archivado_at: archivadoAt })
+    .or(`id.eq.${id},parent_id.eq.${id}`)
   if (delErr) {
     return NextResponse.json({ error: delErr.message }, { status: 500 })
   }

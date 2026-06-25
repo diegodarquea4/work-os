@@ -268,6 +268,7 @@ export type DesalojoPlanificacion = {
   id:           number
   prioridad_id: number
   capa_id:      number | null              // NULL = evento del caso global
+  parent_id:    number | null              // NULL = evento top-level; NOT NULL = hito de un evento
   titulo:       string
   descripcion:  string | null
   fecha_inicio: string                     // ISO date YYYY-MM-DD

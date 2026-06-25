@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { DesalojoCapa, DesalojoPlanificacion } from '@/lib/types'
+import RichTextEditor, { isHtmlEmpty } from './RichTextEditor'
 
 /**
  * Form inline para agregar un evento al timeline de Planificación.
@@ -46,7 +47,7 @@ export default function DesalojoTimelineEditor({ capas, onCreate, onCancel }: Pr
       await onCreate({
         capa_id:      capaId,
         titulo:       t,
-        descripcion:  descripcion.trim() || null,
+        descripcion:  isHtmlEmpty(descripcion) ? null : descripcion,
         fecha_inicio: fechaInicio,
         fecha_fin:    isRango ? (fechaFin || null) : null,
       })
@@ -72,12 +73,11 @@ export default function DesalojoTimelineEditor({ capas, onCreate, onCancel }: Pr
           placeholder="Título del evento (ej: Convocatoria Comité Caso)"
           className="w-full text-sm font-medium px-2 py-1 border border-gray-200 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
         />
-        <textarea
+        <RichTextEditor
           value={descripcion}
-          onChange={e => setDescripcion(e.target.value)}
-          rows={2}
+          onUpdate={setDescripcion}
           placeholder="Descripción (opcional)"
-          className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+          minHeight="min-h-[64px]"
         />
         <div className="grid grid-cols-2 gap-2">
           <label className="text-[11px] font-semibold text-gray-600">

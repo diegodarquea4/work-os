@@ -23,6 +23,7 @@ import {
 import DesalojoCapaSelector from './DesalojoCapaSelector'
 import DesalojoFaseCard from './DesalojoFaseCard'
 import DesalojoFaseStepper from './DesalojoFaseStepper'
+import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
 import DesalojoVinculoMinvu from './DesalojoVinculoMinvu'
 
@@ -109,7 +110,7 @@ export default function DesalojoAvanceTab({
     try {
       await onPatchCapa(capa.id, {
         tipologia:      tipoDraft,
-        tipologia_nota: tipoNotaDraft.trim() || null,
+        tipologia_nota: isHtmlEmpty(tipoNotaDraft) ? null : tipoNotaDraft,
       })
       setAssigningTipo(false)
     } finally { setSavingTipo(false) }
@@ -168,10 +169,10 @@ export default function DesalojoAvanceTab({
               <p className="font-semibold text-gray-700">Rol DPR</p>
               <p className="text-gray-600 leading-snug">{TIPOLOGIA_CFG[capa.tipologia].rol_dpr}</p>
             </div>
-            {capa.tipologia_nota && (
+            {!isHtmlEmpty(capa.tipologia_nota) && (
               <div className="md:col-span-3 pt-1">
                 <p className="font-semibold text-gray-700">Nota</p>
-                <p className="text-gray-600 leading-snug">{capa.tipologia_nota}</p>
+                <RichTextView html={capa.tipologia_nota} className="text-gray-600 leading-snug" />
               </div>
             )}
           </div>
@@ -227,13 +228,15 @@ export default function DesalojoAvanceTab({
               Sin tipología
             </button>
           </div>
-          <textarea
-            value={tipoNotaDraft}
-            onChange={e => setTipoNotaDraft(e.target.value)}
-            placeholder="Nota (opcional, ej. razón del cambio)"
-            rows={2}
-            className="w-full text-sm px-2.5 py-1.5 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400 mb-2"
-          />
+          <div className="mb-2">
+            <RichTextEditor
+              value={tipoNotaDraft}
+              onUpdate={setTipoNotaDraft}
+              placeholder="Nota (opcional, ej. razón del cambio)"
+              disabled={savingTipo}
+              minHeight="min-h-[64px]"
+            />
+          </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setAssigningTipo(false)} disabled={savingTipo}
               className="text-xs px-3 py-1.5 rounded text-gray-600 hover:bg-gray-100">

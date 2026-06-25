@@ -449,6 +449,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   async function handleAddEvento(input: {
     capa_id?:     number | null
+    parent_id?:   number | null
     titulo:       string
     descripcion?: string | null
     fecha_inicio: string
@@ -499,7 +500,9 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   async function handleDeleteEvento(id: number) {
     const prev = planificacion
-    setPlanificacion(prev.filter(e => e.id !== id))
+    // Cascada local: si borramos un evento top-level, sus hitos también
+    // desaparecen (espejo del soft-delete server-side).
+    setPlanificacion(prev.filter(e => e.id !== id && e.parent_id !== id))
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion/${id}`, { method: 'DELETE' })
       const json = await res.json()

@@ -36,6 +36,7 @@ export async function POST(
 
   let body: {
     capa_id?:      unknown
+    parent_id?:    unknown
     titulo?:       unknown
     descripcion?:  unknown
     fecha_inicio?: unknown
@@ -74,6 +75,13 @@ export async function POST(
     ? body.descripcion.trim()
     : null
 
+  let parentId: number | null = null
+  if (body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== '') {
+    const v = Number(body.parent_id)
+    if (!Number.isFinite(v) || v <= 0) return NextResponse.json({ error: 'parent_id inválido' }, { status: 400 })
+    parentId = v
+  }
+
   const db = getSupabaseAdmin()
 
   if (capaId !== null) {
@@ -86,6 +94,38 @@ export async function POST(
     if (!capa || capa.prioridad_id !== n) {
       return NextResponse.json({ error: 'capa_id no pertenece al caso' }, { status: 400 })
     }
+  }
+
+  // Si es un hito (parent_id != null), validar: padre existe, mismo caso,
+  // padre no es a su vez un hito (solo 2 niveles), y fechas dentro del rango
+  // del padre. capa_id del hito se fuerza al del padre — un hito no puede
+  // vivir en otra capa distinta a la de su evento padre.
+  if (parentId !== null) {
+    const { data: parent, error: parentErr } = await db
+      .from('desalojo_planificacion')
+      .select('id, prioridad_id, parent_id, capa_id, fecha_inicio, fecha_fin, archivado_at')
+      .eq('id', parentId)
+      .maybeSingle()
+    if (parentErr) return NextResponse.json({ error: parentErr.message }, { status: 500 })
+    if (!parent || parent.prioridad_id !== n || parent.archivado_at !== null) {
+      return NextResponse.json({ error: 'Evento padre no encontrado en este caso' }, { status: 400 })
+    }
+    if (parent.parent_id !== null) {
+      return NextResponse.json({ error: 'No se permiten hitos anidados' }, { status: 400 })
+    }
+    const parentFin = parent.fecha_fin ?? parent.fecha_inicio
+    if (fechaInicio < parent.fecha_inicio || fechaInicio > parentFin) {
+      return NextResponse.json({
+        error: `fecha_inicio del hito debe estar entre ${parent.fecha_inicio} y ${parentFin} (rango del evento padre)`,
+      }, { status: 400 })
+    }
+    if (fechaFin !== null && (fechaFin < parent.fecha_inicio || fechaFin > parentFin)) {
+      return NextResponse.json({
+        error: `fecha_fin del hito debe estar entre ${parent.fecha_inicio} y ${parentFin} (rango del evento padre)`,
+      }, { status: 400 })
+    }
+    // Heredar capa del padre — los hitos siempre comparten capa con su evento.
+    capaId = parent.capa_id
   }
 
   // Asignar orden = max+1 dentro de (prioridad, fecha_inicio). El SELECT y
@@ -110,6 +150,7 @@ export async function POST(
     .insert({
       prioridad_id: n,
       capa_id:      capaId,
+      parent_id:    parentId,
       titulo,
       descripcion,
       fecha_inicio: fechaInicio,

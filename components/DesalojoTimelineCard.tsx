@@ -7,6 +7,7 @@ import type {
   DesalojoPlanificacionEstado,
 } from '@/lib/types'
 import { estadoEventoPlanificacion } from '@/lib/desalojos'
+import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
 
 /**
  * Card individual del timeline de Planificación.
@@ -28,8 +29,19 @@ import { estadoEventoPlanificacion } from '@/lib/desalojos'
 type Props = {
   evento:     DesalojoPlanificacion
   capa:       DesalojoCapa | null              // null si capa_id está null o si la capa fue archivada/eliminada
+  hitos:      DesalojoPlanificacion[]          // hitos hijos (parent_id === evento.id), ya ordenados
   onPatch:    (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
   onDelete:   (id: number) => Promise<void>
+  onAddHito:  (input: {
+    parent_id:    number
+    titulo:       string
+    fecha_inicio: string
+    fecha_fin?:   string | null
+  }) => Promise<void>
+  /** Entra al modo foco del Gantt para este evento. */
+  onSelectFocus?: () => void
+  /** Cuando true, la card se destaca visualmente (evento en foco del Gantt). */
+  focused?:   boolean
   /** Ref para que el Gantt pueda scrollear hasta acá al click. */
   cardRef?:   React.RefObject<HTMLLIElement | null>
   /** Activa flash visual 600ms cuando se invoca desde el Gantt. */
@@ -62,7 +74,9 @@ function formatFecha(inicio: string, fin: string | null): string {
   return `${id} ${MESES[im - 1]} ${iy} – ${fd} ${MESES[fm - 1]} ${fy}`
 }
 
-export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, cardRef, flash }: Props) {
+export default function DesalojoTimelineCard({
+  evento, capa, hitos, onPatch, onDelete, onAddHito, onSelectFocus, focused, cardRef, flash,
+}: Props) {
   const estado = estadoEventoPlanificacion(evento)
   const colors = ESTADO_COLORS[estado]
 
@@ -92,10 +106,12 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
   }
 
   async function commitDescripcion() {
-    const trimmed = descripcionDraft.trim() || null
-    if (trimmed === (evento.descripcion ?? null)) return
+    // Tiptap devuelve '<p></p>' para contenido vacío — lo normalizamos a null
+    // para no llenar la DB con HTML inútil.
+    const normalized = isHtmlEmpty(descripcionDraft) ? null : descripcionDraft
+    if (normalized === (evento.descripcion ?? null)) return
     setSaving(true)
-    try { await onPatch(evento.id, { descripcion: trimmed }) }
+    try { await onPatch(evento.id, { descripcion: normalized }) }
     finally { setSaving(false) }
   }
 
@@ -119,10 +135,16 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
     finally { setSaving(false) }
   }
 
+  // Padre del evento: rango efectivo para validar fechas de hitos.
+  const padreFin = evento.fecha_fin ?? evento.fecha_inicio
+
   return (
     <li
       ref={cardRef}
-      className={`relative pl-6 pb-5 group transition-colors duration-200 ${flash ? 'bg-amber-50/60 rounded-lg -mx-2 px-2' : ''}`}
+      className={`relative pl-6 pb-5 group transition-colors duration-200 ${
+        flash ? 'bg-amber-50/60 rounded-lg -mx-2 px-2' :
+        focused ? 'bg-slate-50 rounded-lg -mx-2 px-2 ring-1 ring-slate-300' : ''
+      }`}
     >
       {/* Círculo del timeline */}
       <span
@@ -146,16 +168,42 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
             {capa.nombre}{!capa.activa && ' (archivada)'}
           </span>
         )}
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={saving}
-          className="ml-auto opacity-0 group-hover:opacity-100 text-[11px] text-gray-400 hover:text-red-600 transition-opacity disabled:opacity-30"
-          aria-label="Eliminar evento"
-          title="Eliminar"
-        >
-          ✕
-        </button>
+        {hitos.length > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-50 ring-1 ring-slate-200 text-slate-600 tabular-nums">
+            {hitos.length} hito{hitos.length === 1 ? '' : 's'}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          {onSelectFocus && (
+            <button
+              type="button"
+              onClick={onSelectFocus}
+              className={`text-[11px] px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                focused
+                  ? 'bg-slate-900 text-white'
+                  : 'text-gray-500 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+              aria-label={focused ? 'Salir del foco' : 'Ver en Gantt con detalle de hitos'}
+              title={focused ? 'Salir del foco' : 'Ver desglose en Gantt'}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="5" />
+                <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+              </svg>
+              <span className="font-medium">{focused ? 'En foco' : 'Foco'}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={saving}
+            className="opacity-0 group-hover:opacity-100 text-[11px] text-gray-400 hover:text-red-600 transition-opacity disabled:opacity-30 px-1"
+            aria-label="Eliminar evento"
+            title="Eliminar"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Título editable inline */}
@@ -174,25 +222,25 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
       />
 
       {/* Descripción truncada o expandida */}
-      {!expanded && evento.descripcion && (
-        <button
-          type="button"
+      {!expanded && !isHtmlEmpty(evento.descripcion) && (
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setExpanded(true)}
-          className="text-xs text-gray-600 mt-1 text-left line-clamp-2 hover:text-gray-900"
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true) } }}
+          className="text-xs text-gray-600 mt-1 line-clamp-2 hover:text-gray-900 cursor-pointer"
         >
-          {evento.descripcion}
-        </button>
+          <RichTextView html={evento.descripcion} />
+        </div>
       )}
       {expanded && (
         <div className="mt-2 space-y-2">
-          <textarea
+          <RichTextEditor
             value={descripcionDraft}
-            onChange={e => setDescripcionDraft(e.target.value)}
-            onBlur={commitDescripcion}
-            rows={3}
+            onUpdate={setDescripcionDraft}
             disabled={saving}
             placeholder="Descripción del evento…"
-            className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded text-gray-800 placeholder:text-gray-400 disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            minHeight="min-h-[72px]"
           />
           <div className="grid grid-cols-2 gap-2">
             <label className="text-[11px] font-semibold text-gray-600">
@@ -239,13 +287,27 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
               />
             </label>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="text-[11px] text-gray-500 hover:text-gray-800"
-          >
-            Colapsar
-          </button>
+          <div className="flex items-center gap-2 justify-end pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setDescripcionDraft(evento.descripcion ?? '')
+                setExpanded(false)
+              }}
+              disabled={saving}
+              className="text-[11px] px-2.5 py-1 rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={async () => { await commitDescripcion(); setExpanded(false) }}
+              disabled={saving}
+              className="text-[11px] px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -259,6 +321,329 @@ export default function DesalojoTimelineCard({ evento, capa, onPatch, onDelete, 
           + agregar descripción
         </button>
       )}
+
+      {/* Hitos del evento — siempre visibles abajo de la descripción.
+          Cada hito es una mini-card con fecha + título; click → editar.
+          El form de "agregar hito" valida que las fechas caigan dentro
+          del rango del padre con min/max en los inputs date. */}
+      <HitosSection
+        evento={evento}
+        hitos={hitos}
+        padreFin={padreFin}
+        onPatch={onPatch}
+        onDelete={onDelete}
+        onAddHito={onAddHito}
+      />
     </li>
+  )
+}
+
+/**
+ * Sub-sección de hitos dentro de una card de evento.
+ *
+ * Maneja: lista de hitos (compactos, edit inline) + form para agregar.
+ * Las fechas del form usan min/max derivados del rango del padre para que
+ * el usuario no pueda físicamente elegir fechas fuera (el server además
+ * re-valida, esto es solo UX).
+ */
+function HitosSection({
+  evento, hitos, padreFin, onPatch, onDelete, onAddHito,
+}: {
+  evento:    DesalojoPlanificacion
+  hitos:     DesalojoPlanificacion[]
+  padreFin:  string
+  onPatch:   (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+  onDelete:  (id: number) => Promise<void>
+  onAddHito: (input: {
+    parent_id:    number
+    titulo:       string
+    fecha_inicio: string
+    fecha_fin?:   string | null
+  }) => Promise<void>
+}) {
+  const [adding, setAdding] = useState(false)
+
+  return (
+    <div className="mt-2 pl-3 border-l-2 border-slate-100">
+      {hitos.length > 0 && (
+        <ul className="space-y-1">
+          {hitos.map(h => (
+            <HitoMini
+              key={h.id}
+              hito={h}
+              padreInicio={evento.fecha_inicio}
+              padreFin={padreFin}
+              onPatch={onPatch}
+              onDelete={onDelete}
+            />
+          ))}
+        </ul>
+      )}
+      {adding ? (
+        <HitoAddForm
+          parentId={evento.id}
+          padreInicio={evento.fecha_inicio}
+          padreFin={padreFin}
+          onAdd={async input => { await onAddHito(input); setAdding(false) }}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="text-[11px] text-gray-400 hover:text-slate-700 mt-1.5 flex items-center gap-1"
+        >
+          + agregar hito
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Hito individual — vista compact + edit inline.
+ *
+ * Estado calculado vs hoy (mismo helper que el evento). Click sobre el
+ * título o el chip de fecha entra en modo edit. El edit acepta titulo +
+ * fechas con min/max al rango del padre.
+ */
+function HitoMini({
+  hito, padreInicio, padreFin, onPatch, onDelete,
+}: {
+  hito:        DesalojoPlanificacion
+  padreInicio: string
+  padreFin:    string
+  onPatch:     (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+  onDelete:    (id: number) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const [tit, setTit]         = useState(hito.titulo)
+  const [ini, setIni]         = useState(hito.fecha_inicio)
+  const [fin, setFin]         = useState(hito.fecha_fin ?? '')
+  const [isRango, setIsRango] = useState(hito.fecha_fin !== null)
+
+  useEffect(() => { setTit(hito.titulo) },                  [hito.titulo])
+  useEffect(() => { setIni(hito.fecha_inicio) },            [hito.fecha_inicio])
+  useEffect(() => { setFin(hito.fecha_fin ?? '') },         [hito.fecha_fin])
+  useEffect(() => { setIsRango(hito.fecha_fin !== null) },  [hito.fecha_fin])
+
+  const estado = estadoEventoPlanificacion(hito)
+  const colors = ESTADO_COLORS[estado]
+
+  async function commit() {
+    const finFinal = isRango ? (fin || null) : null
+    if (!tit.trim()) { window.alert('Título del hito requerido'); return }
+    // Doble check cliente — el server también valida.
+    if (ini < padreInicio || ini > padreFin) {
+      window.alert(`La fecha debe estar entre ${padreInicio} y ${padreFin}`)
+      return
+    }
+    if (finFinal !== null && (finFinal < padreInicio || finFinal > padreFin)) {
+      window.alert(`La fecha de fin debe estar entre ${padreInicio} y ${padreFin}`)
+      return
+    }
+    setSaving(true)
+    try {
+      await onPatch(hito.id, {
+        titulo:       tit.trim(),
+        fecha_inicio: ini,
+        fecha_fin:    finFinal,
+      })
+      setEditing(false)
+    } finally { setSaving(false) }
+  }
+
+  async function handleDeleteHito() {
+    if (!window.confirm(`¿Eliminar el hito "${hito.titulo}"?`)) return
+    setSaving(true)
+    try { await onDelete(hito.id) }
+    finally { setSaving(false) }
+  }
+
+  if (!editing) {
+    return (
+      <li className="group flex items-center gap-2 text-xs">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`} />
+        <span className={`text-[10px] px-1 py-0 rounded ring-1 font-medium tabular-nums flex-shrink-0 ${colors.chip}`}>
+          {formatFecha(hito.fecha_inicio, hito.fecha_fin)}
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-gray-700 hover:text-slate-900 text-left truncate flex-1 min-w-0"
+          title={hito.titulo}
+        >
+          {hito.titulo}
+        </button>
+        <button
+          type="button"
+          onClick={handleDeleteHito}
+          disabled={saving}
+          className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-red-600 transition-opacity"
+          aria-label="Eliminar hito"
+        >
+          ✕
+        </button>
+      </li>
+    )
+  }
+
+  return (
+    <li className="bg-slate-50 border border-slate-200 rounded p-2 space-y-1.5">
+      <input
+        type="text"
+        value={tit}
+        onChange={e => setTit(e.target.value)}
+        placeholder="Título del hito"
+        className="w-full text-xs font-medium px-2 py-1 border border-slate-200 rounded text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="text-[10px] font-semibold text-gray-600">
+          Inicio
+          <input
+            type="date"
+            value={ini}
+            min={padreInicio}
+            max={padreFin}
+            onChange={e => setIni(e.target.value)}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded text-gray-800 bg-white mt-0.5"
+          />
+        </label>
+        <label className="text-[10px] font-semibold text-gray-600 flex flex-col">
+          <span className="flex items-center gap-1">
+            Fin
+            <label className="text-[9px] text-gray-500 font-normal flex items-center gap-0.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isRango}
+                onChange={e => { setIsRango(e.target.checked); if (!e.target.checked) setFin('') }}
+                className="w-2.5 h-2.5"
+              />
+              rango
+            </label>
+          </span>
+          <input
+            type="date"
+            value={fin}
+            min={ini || padreInicio}
+            max={padreFin}
+            onChange={e => setFin(e.target.value)}
+            disabled={!isRango}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded text-gray-800 bg-white disabled:bg-gray-50 disabled:opacity-50 mt-0.5"
+          />
+        </label>
+      </div>
+      <div className="flex items-center justify-end gap-1.5 pt-0.5">
+        <button type="button" onClick={() => setEditing(false)} disabled={saving}
+          className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">
+          Cancelar
+        </button>
+        <button type="button" onClick={commit} disabled={saving}
+          className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+          {saving ? 'Guardando…' : 'Guardar'}
+        </button>
+      </div>
+    </li>
+  )
+}
+
+/**
+ * Form atómico para agregar un hito. Submit con título + fechas dentro del
+ * rango del padre. Misma forma que el editor de eventos pero más compacto.
+ */
+function HitoAddForm({
+  parentId, padreInicio, padreFin, onAdd, onCancel,
+}: {
+  parentId:    number
+  padreInicio: string
+  padreFin:    string
+  onAdd:       (input: { parent_id: number; titulo: string; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
+  onCancel:    () => void
+}) {
+  const [tit,       setTit]      = useState('')
+  const [ini,       setIni]      = useState(padreInicio)
+  const [isRango,   setIsRango]  = useState(false)
+  const [fin,       setFin]      = useState('')
+  const [saving,    setSaving]   = useState(false)
+  const [err,       setErr]      = useState<string | null>(null)
+
+  async function submit() {
+    const t = tit.trim()
+    if (!t) { setErr('Título requerido'); return }
+    if (ini < padreInicio || ini > padreFin) { setErr(`Fecha fuera del rango del evento (${padreInicio} – ${padreFin})`); return }
+    if (isRango && fin && (fin < padreInicio || fin > padreFin)) { setErr(`Fecha de fin fuera del rango del evento`); return }
+    setSaving(true)
+    setErr(null)
+    try {
+      await onAdd({ parent_id: parentId, titulo: t, fecha_inicio: ini, fecha_fin: isRango ? (fin || null) : null })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-1.5 bg-slate-50 border border-slate-200 rounded p-2 space-y-1.5">
+      <input
+        type="text"
+        value={tit}
+        onChange={e => setTit(e.target.value)}
+        autoFocus
+        placeholder="Título del hito (ej: Acta firmada)"
+        className="w-full text-xs font-medium px-2 py-1 border border-slate-200 rounded text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="text-[10px] font-semibold text-gray-600">
+          Inicio
+          <input
+            type="date"
+            value={ini}
+            min={padreInicio}
+            max={padreFin}
+            onChange={e => setIni(e.target.value)}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded text-gray-800 bg-white mt-0.5"
+          />
+        </label>
+        <label className="text-[10px] font-semibold text-gray-600 flex flex-col">
+          <span className="flex items-center gap-1">
+            Fin
+            <label className="text-[9px] text-gray-500 font-normal flex items-center gap-0.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isRango}
+                onChange={e => { setIsRango(e.target.checked); if (!e.target.checked) setFin('') }}
+                className="w-2.5 h-2.5"
+              />
+              rango
+            </label>
+          </span>
+          <input
+            type="date"
+            value={fin}
+            min={ini || padreInicio}
+            max={padreFin}
+            onChange={e => setFin(e.target.value)}
+            disabled={!isRango}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded text-gray-800 bg-white disabled:bg-gray-50 disabled:opacity-50 mt-0.5"
+          />
+        </label>
+      </div>
+      {err && <p className="text-[10px] text-rose-700">{err}</p>}
+      <p className="text-[10px] text-gray-500">
+        Rango permitido: <span className="tabular-nums">{padreInicio} – {padreFin}</span>
+      </p>
+      <div className="flex items-center justify-end gap-1.5 pt-0.5">
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">
+          Cancelar
+        </button>
+        <button type="button" onClick={submit} disabled={saving || !tit.trim()}
+          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          {saving ? 'Creando…' : 'Crear hito'}
+        </button>
+      </div>
+    </div>
   )
 }

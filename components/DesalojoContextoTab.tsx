@@ -8,6 +8,7 @@ import type {
   DesalojoFaseEstado,
 } from '@/lib/types'
 import DesalojoCapasMiniTable from './DesalojoCapasMiniTable'
+import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
 
 /**
  * Tab Contexto: lo que pertenece al CASO (no a una capa específica).
@@ -68,7 +69,7 @@ export default function DesalojoContextoTab({
   const docsGenerales = documentos.filter(d => d.capa_id === null)
 
   async function commitResumen() {
-    const valor = draftResumen.trim() || null
+    const valor = isHtmlEmpty(draftResumen) ? null : draftResumen
     if (valor === (detalle.resumen_narrativo ?? null)) {
       setEditingResumen(false)
       return
@@ -114,13 +115,13 @@ export default function DesalojoContextoTab({
         </div>
         {editingResumen ? (
           <div className="space-y-2">
-            <textarea
-              autoFocus
+            <RichTextEditor
               value={draftResumen}
-              onChange={e => setDraftResumen(e.target.value)}
-              rows={5}
+              onUpdate={setDraftResumen}
+              autofocus
+              disabled={savingResumen}
               placeholder="Antecedentes, historia del caso, particularidades a tener en cuenta."
-              className="w-full text-sm px-3 py-2 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              minHeight="min-h-[120px]"
             />
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setEditingResumen(false)} disabled={savingResumen}
@@ -134,9 +135,11 @@ export default function DesalojoContextoTab({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {detalle.resumen_narrativo || <span className="text-gray-400 italic">Sin detalle. Edita para sumar contexto del caso.</span>}
-          </p>
+          isHtmlEmpty(detalle.resumen_narrativo) ? (
+            <p className="text-sm text-gray-400 italic">Sin detalle. Edita para sumar contexto del caso.</p>
+          ) : (
+            <RichTextView html={detalle.resumen_narrativo ?? null} className="text-sm text-gray-700 leading-relaxed" />
+          )
         )}
       </section>
 

@@ -46,6 +46,19 @@ export default function DesalojosView({ projects }: Props) {
   const [casosByN, setCasosByN]               = useState<Map<number, Caso>>(new Map())
   const [loading, setLoading]                 = useState(true)
   const [loadError, setLoadError]             = useState<string | null>(null)
+  // Sidebar minimizable — persiste preferencia en localStorage para que
+  // el user no tenga que volver a minimizarla cada vez que entra al módulo.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('desalojos:sidebar-collapsed')
+      if (stored === '1') setSidebarCollapsed(true)
+    } catch { /* SSR / privacy mode */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('desalojos:sidebar-collapsed', sidebarCollapsed ? '1' : '0') }
+    catch { /* SSR / privacy mode */ }
+  }, [sidebarCollapsed])
 
   // Fetch bulk de casos + capas (single round-trip) — evita N+1.
   useEffect(() => {
@@ -136,12 +149,39 @@ export default function DesalojosView({ projects }: Props) {
   return (
     <div className="h-full flex bg-gray-50">
 
-      {/* Lista de casos */}
-      <aside className="w-[340px] flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+      {/* Lista de casos — colapsable */}
+      <aside
+        className={`flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto transition-[width] duration-200 ease-out ${
+          sidebarCollapsed ? 'w-[44px]' : 'w-[340px]'
+        }`}
+      >
+        {sidebarCollapsed ? (
+          <CollapsedSidebar
+            cases={cases}
+            casosByN={casosByN}
+            selectedN={selectedN}
+            setSelectedN={setSelectedN}
+            onExpand={() => setSidebarCollapsed(false)}
+          />
+        ) : (
+        <>
         <header className="px-4 py-3 border-b border-gray-100">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-gray-900">Casos de desalojo</h2>
-            <ModoToggle modo={modo} setModo={setModo} compact />
+            <div className="flex items-center gap-1">
+              <ModoToggle modo={modo} setModo={setModo} compact />
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="Minimizar barra lateral"
+                title="Minimizar"
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="10,4 6,8 10,12" />
+                </svg>
+              </button>
+            </div>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">{cases.length} {cases.length === 1 ? 'caso etiquetado' : 'casos etiquetados'}</p>
         </header>
@@ -222,6 +262,8 @@ export default function DesalojosView({ projects }: Props) {
             Mesa Interministerial de Desalojos · DCI · Ministerio del Interior
           </p>
         </header>
+        </>
+        )}
       </aside>
 
       {/* Ficha del caso seleccionado */}
@@ -239,6 +281,81 @@ export default function DesalojosView({ projects }: Props) {
 }
 
 // ── Toggle Lista/Tablero ────────────────────────────────────────────────────
+
+/**
+ * Versión colapsada de la sidebar. Muestra una columna delgada (44px) con
+ * un botón para expandir y un mini-rail de dots de semáforo por caso —
+ * permite ubicar visualmente el caso seleccionado sin ocupar 340px.
+ * Click en un dot navega al caso (sin expandir; útil para barridos rápidos).
+ */
+function CollapsedSidebar({
+  cases, casosByN, selectedN, setSelectedN, onExpand,
+}: {
+  cases:        Iniciativa[]
+  casosByN:     Map<number, Caso>
+  selectedN:    number | null
+  setSelectedN: (n: number) => void
+  onExpand:     () => void
+}) {
+  return (
+    <div className="flex flex-col items-center pt-2 pb-3 gap-1">
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-label="Expandir barra lateral"
+        title="Expandir lista de casos"
+        className="w-8 h-8 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800 flex items-center justify-center"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6,4 10,8 6,12" />
+        </svg>
+      </button>
+      <div className="w-full border-t border-gray-100 my-1" />
+      <ul className="flex flex-col items-center gap-1 w-full px-1">
+        {cases.map(c => {
+          const caso     = casosByN.get(c.n)
+          const capas    = caso?.capas ?? []
+          const fases    = caso?.fases_estado ?? []
+          const idsAplic = new Set(capas.filter(k => k.activa).map(k => k.id))
+          // Peor semáforo entre fases aplicables (mismo rollup que la versión expandida)
+          let worst: SemaforoDimension = 'gris'
+          const sevOrder: SemaforoDimension[] = ['gris', 'verde', 'ambar', 'rojo']
+          for (const f of FASES_CON_SEMAFORO) {
+            const aplic = new Set(capas.filter(k => k.activa && aplicaFase(k, f)).map(k => k.id))
+            if (aplic.size === 0) continue
+            const s = rollupSemaforoFase(fases, aplic, f)
+            if (sevOrder.indexOf(s) > sevOrder.indexOf(worst)) worst = s
+          }
+          // Fallback al estado del caso si no se pudo computar.
+          const sem = SEMAFORO_CONFIG[worst] ?? SEMAFORO_CONFIG[c.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+          const isActive = c.n === selectedN
+          // Cantidad de capas activas (badge visual)
+          const numActivas = idsAplic.size
+          return (
+            <li key={c.n} className="w-full flex justify-center">
+              <button
+                type="button"
+                onClick={() => setSelectedN(c.n)}
+                title={`${c.nombre}\n${c.region}${c.comuna ? ' · ' + c.comuna.replace(/;/g, ', ') : ''}\n${sem.label}`}
+                className={`relative w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                  isActive ? 'bg-slate-100 ring-1 ring-slate-300' : 'hover:bg-gray-50'
+                }`}
+                aria-label={c.nombre}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${sem.dot}`} />
+                {numActivas > 1 && (
+                  <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold text-gray-500 bg-white rounded-full w-3 h-3 flex items-center justify-center border border-gray-200">
+                    {numActivas}
+                  </span>
+                )}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
 
 function ModoToggle({
   modo, setModo, compact = false,

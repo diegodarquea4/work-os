@@ -17,6 +17,7 @@ import { formatResponsableDisplay } from '@/lib/responsable'
 import DesalojoChecklistFase from './DesalojoChecklistFase'
 import DesalojoMatrizJuridica from './DesalojoMatrizJuridica'
 import DesalojoProtocoloFinanciamiento from './DesalojoProtocoloFinanciamiento'
+import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
 
 /**
  * Card de una fase. Es la pieza central del tab Avance v3 — reemplaza al
@@ -186,6 +187,10 @@ export default function DesalojoFaseCard({
     } else if (field.type === 'date') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(draftValue)) { window.alert('Formato de fecha inválido (YYYY-MM-DD)'); return }
       parsed = draftValue
+    } else if (field.type === 'textarea') {
+      // textarea ahora es rich text — draftValue es HTML. isHtmlEmpty filtra
+      // '<p></p>' (Tiptap empty) y whitespace-only.
+      parsed = isHtmlEmpty(draftValue) ? null : draftValue
     } else {
       parsed = draftValue.trim() || null
     }
@@ -200,7 +205,7 @@ export default function DesalojoFaseCard({
     }
   }
 
-  function renderFieldValue(field: FieldCfg): string {
+  function renderFieldValue(field: FieldCfg): React.ReactNode {
     const v = capa[field.key]
     if (v === null || v === undefined || v === '') return '—'
     if (field.type === 'bool') return v ? 'Sí' : 'No'
@@ -209,15 +214,18 @@ export default function DesalojoFaseCard({
       return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v)
     }
     if (field.type === 'num' && typeof v === 'number') return `${v.toLocaleString('es-CL')} MM$`
+    if (field.type === 'textarea' && typeof v === 'string') {
+      return isHtmlEmpty(v) ? '—' : <RichTextView html={v} />
+    }
     return String(v)
   }
 
   async function handleSubmitSeguimiento(e: React.FormEvent) {
     e.preventDefault()
-    if (!formDesc.trim()) return
+    if (isHtmlEmpty(formDesc)) return
     setSavingForm(true)
     try {
-      await onAddSeguimiento(dimEquiv, formTipo, formDesc.trim())
+      await onAddSeguimiento(dimEquiv, formTipo, formDesc)
       setFormDesc('')
       setFormTipo('avance')
       setShowForm(false)
@@ -234,7 +242,7 @@ export default function DesalojoFaseCard({
   }
 
   async function commitNotas() {
-    const valor = notasDraft.trim() || null
+    const valor = isHtmlEmpty(notasDraft) ? null : notasDraft
     if (valor === (estado.notas ?? null)) { setEditingNotas(false); return }
     setSavingNotas(true)
     try {
@@ -364,13 +372,15 @@ export default function DesalojoFaseCard({
                       {isEditing ? (
                         <div className="flex items-start gap-2">
                           {field.type === 'textarea' ? (
-                            <textarea
-                              autoFocus
-                              value={draftValue}
-                              onChange={e => setDraftValue(e.target.value)}
-                              rows={3}
-                              className="flex-1 text-sm px-2.5 py-1.5 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                            />
+                            <div className="flex-1 min-w-0">
+                              <RichTextEditor
+                                value={draftValue}
+                                onUpdate={setDraftValue}
+                                autofocus
+                                disabled={saving}
+                                minHeight="min-h-[80px]"
+                              />
+                            </div>
                           ) : field.type === 'bool' ? (
                             <select
                               autoFocus
@@ -437,12 +447,12 @@ export default function DesalojoFaseCard({
             </div>
             {editingNotas ? (
               <div className="space-y-2">
-                <textarea
-                  autoFocus
+                <RichTextEditor
                   value={notasDraft}
-                  onChange={e => setNotasDraft(e.target.value)}
-                  rows={3}
-                  className="w-full text-sm px-2.5 py-1.5 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  onUpdate={setNotasDraft}
+                  autofocus
+                  disabled={savingNotas}
+                  minHeight="min-h-[80px]"
                 />
                 <div className="flex gap-2 justify-end">
                   <button onClick={() => setEditingNotas(false)} disabled={savingNotas}
@@ -456,9 +466,11 @@ export default function DesalojoFaseCard({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-gray-700 leading-snug whitespace-pre-wrap">
-                {estado.notas || <span className="text-gray-400 italic">Sin notas en esta fase.</span>}
-              </p>
+              isHtmlEmpty(estado.notas) ? (
+                <span className="text-gray-400 italic text-xs">Sin notas en esta fase.</span>
+              ) : (
+                <RichTextView html={estado.notas ?? null} className="text-xs text-gray-700" />
+              )
             )}
           </div>
 
@@ -531,20 +543,19 @@ export default function DesalojoFaseCard({
                     </button>
                   ))}
                 </div>
-                <textarea
+                <RichTextEditor
                   value={formDesc}
-                  onChange={e => setFormDesc(e.target.value)}
+                  onUpdate={setFormDesc}
                   placeholder="Describe el seguimiento..."
-                  rows={2}
-                  required
-                  className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  disabled={savingForm}
+                  minHeight="min-h-[64px]"
                 />
                 <div className="flex gap-2">
                   <button type="button" onClick={() => { setShowForm(false); setFormDesc('') }} disabled={savingForm}
                     className="text-xs px-3 py-1.5 rounded bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 font-medium">
                     Cancelar
                   </button>
-                  <button type="submit" disabled={savingForm || !formDesc.trim()}
+                  <button type="submit" disabled={savingForm || isHtmlEmpty(formDesc)}
                     className="text-xs px-3 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 font-semibold">
                     {savingForm ? 'Guardando…' : 'Guardar'}
                   </button>
@@ -564,7 +575,7 @@ export default function DesalojoFaseCard({
                         {tipoOpt?.label ?? s.tipo}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-800 leading-snug whitespace-pre-wrap">{s.descripcion}</p>
+                        <RichTextView html={s.descripcion ?? null} className="text-xs text-gray-800" />
                         <p className="text-[10px] text-gray-400 mt-0.5">
                           {fecha}
                           {s.created_by && <> · {formatResponsableDisplay(s.created_by)}</>}

@@ -8,6 +8,7 @@ import type {
 import { TIPOLOGIA_CFG, getCapaColor, getRoles, type RolCfg } from '@/lib/desalojos'
 import DesalojoCapaSelector from './DesalojoCapaSelector'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
+import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
 
 /**
  * Tab Responsables: una ficha por rol vigente de la tipología de la capa.
@@ -193,7 +194,7 @@ function RolCard({
         institucion: draft.institucion?.trim() || null,
         email:       draft.email?.trim()       || null,
         telefono:    draft.telefono?.trim()    || null,
-        notas:       draft.notas?.trim()       || null,
+        notas:       isHtmlEmpty(draft.notas) ? null : draft.notas,
       })
       setEditing(false)
     } finally { setBusy(false) }
@@ -273,12 +274,12 @@ function RolCard({
             </Field>
           </div>
           <Field label="Notas">
-            <textarea
+            <RichTextEditor
               value={draft.notas ?? ''}
-              onChange={e => setDraft({ ...draft, notas: e.target.value })}
-              rows={2}
+              onUpdate={html => setDraft({ ...draft, notas: html })}
               placeholder="Notas internas (opcional)"
-              className="w-full text-sm px-2.5 py-1.5 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              disabled={busy}
+              minHeight="min-h-[64px]"
             />
           </Field>
           <div className="flex gap-2 justify-end pt-1">
@@ -304,10 +305,12 @@ function RolCard({
           <ReadField label="Institución" value={value.institucion} />
           <ReadField label="Email"       value={value.email} mono />
           <ReadField label="Teléfono"    value={value.telefono} mono />
-          {value.notas && (
+          {!isHtmlEmpty(value.notas) && (
             <div className="md:col-span-2 pt-1">
               <dt className="text-gray-500">Notas</dt>
-              <dd className="text-gray-700 whitespace-pre-wrap leading-snug mt-0.5">{value.notas}</dd>
+              <dd className="text-gray-700 leading-snug mt-0.5">
+                <RichTextView html={value.notas} />
+              </dd>
             </div>
           )}
         </dl>
