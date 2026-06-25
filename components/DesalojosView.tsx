@@ -138,7 +138,6 @@ export default function DesalojosView({ projects }: Props) {
           casosByN={casosByN}
           loading={loading}
           loadError={loadError}
-          onSelectCaso={n => { setSelectedN(n); setModo('lista') }}
         />
       </div>
     )

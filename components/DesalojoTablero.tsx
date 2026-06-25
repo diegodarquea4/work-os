@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
 import type { Iniciativa } from '@/lib/projects'
 import type {
   DesalojoCapa,
@@ -21,14 +20,6 @@ import {
 } from '@/lib/desalojos'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
-
-// Leaflet no soporta SSR — dynamic import del mapa sin ssr.
-const DesalojoMapaCasos = dynamic(() => import('./DesalojoMapaCasos'), {
-  ssr:     false,
-  loading: () => (
-    <div className="px-6 py-16 text-center text-sm text-gray-400">Cargando mapa…</div>
-  ),
-})
 
 /**
  * Vista de matriz para la sesión de la Mesa. Solo lectura.
@@ -50,10 +41,6 @@ type Props = {
   casosByN:     Map<number, Caso>
   loading:      boolean
   loadError:    string | null
-  /** Click en un pin del mapa abre la ficha del caso. El padre decide cómo
-   *  responder (cambiar a modo Lista + seleccionar). Opcional para no romper
-   *  callers existentes. */
-  onSelectCaso?: (n: number) => void
 }
 
 type Row = {
@@ -79,10 +66,9 @@ function diasAOperativo(capa: DesalojoCapa): number | null {
   return Math.floor((t - Date.now()) / (1000 * 60 * 60 * 24))
 }
 
-export default function DesalojoTablero({ cases, casosByN, loading, loadError, onSelectCaso }: Props) {
+export default function DesalojoTablero({ cases, casosByN, loading, loadError }: Props) {
   const [filtroTipo, setFiltroTipo] = useState<Set<DesalojoTipologia | 'sin'>>(new Set())
   const [filtroReg, setFiltroReg]   = useState<Set<string>>(new Set())
-  const [vista, setVista]           = useState<'matriz' | 'mapa'>('matriz')
 
   // Filas: 1 por capa activa.
   const allRows: Row[] = useMemo(() => {
@@ -239,38 +225,6 @@ export default function DesalojoTablero({ cases, casosByN, loading, loadError, o
             Limpiar filtros
           </button>
         )}
-        {/* Sub-toggle Matriz | Mapa */}
-        <div className="ml-auto inline-flex bg-gray-100 rounded-full p-0.5">
-          <button
-            type="button"
-            onClick={() => setVista('matriz')}
-            className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors inline-flex items-center gap-1.5 ${
-              vista === 'matriz' ? 'bg-slate-900 text-white' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            title="Matriz de capas y semáforos"
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <rect x="2" y="1.5" width="12" height="3.5" rx="0.5"/>
-              <rect x="2" y="6.25" width="12" height="3.5" rx="0.5"/>
-              <rect x="2" y="11" width="12" height="3.5" rx="0.5"/>
-            </svg>
-            Matriz
-          </button>
-          <button
-            type="button"
-            onClick={() => setVista('mapa')}
-            className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors inline-flex items-center gap-1.5 ${
-              vista === 'mapa' ? 'bg-slate-900 text-white' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            title="Mapa geográfico de los casos"
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 14s-5-4.5-5-8a5 5 0 0 1 10 0c0 3.5-5 8-5 8z"/>
-              <circle cx="8" cy="6" r="1.7"/>
-            </svg>
-            Mapa
-          </button>
-        </div>
       </div>
 
       {loadError && (
@@ -279,17 +233,6 @@ export default function DesalojoTablero({ cases, casosByN, loading, loadError, o
         </div>
       )}
 
-      {/* Mapa (cuando vista === 'mapa') */}
-      {vista === 'mapa' && (
-        <DesalojoMapaCasos
-          cases={cases}
-          casosByN={casosByN}
-          onSelectCaso={onSelectCaso ?? (() => { /* sin handler, click no abre la ficha */ })}
-        />
-      )}
-
-      {/* Matriz (cuando vista === 'matriz') */}
-      {vista === 'matriz' && (
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full border-collapse">
           <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
@@ -384,7 +327,6 @@ export default function DesalojoTablero({ cases, casosByN, loading, loadError, o
           </tbody>
         </table>
       </div>
-      )}
     </div>
   )
 }
