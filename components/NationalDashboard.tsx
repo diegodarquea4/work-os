@@ -20,6 +20,7 @@ import { CapaBadge } from './CapaBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
 import { formatResponsableDisplay } from '@/lib/responsable'
+import { normalizeMinisterio, splitMinisterio } from '@/lib/ministerios'
 import ImportErrorReport from './ImportErrorReport'
 
 const SEMAFORO_CONFIG = {
@@ -134,6 +135,11 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // porque la marca es admin-only y filtrar por algo que no puedes ver es
   // confuso). La lógica del filtro funciona aunque el chip esté oculto.
   const [filterDesalojo, setFilterDesalojo]       = useState<boolean>(false)
+  // Multi-select Ministerio. Sube a fila primaria (decisión jun 2026).
+  // Cada valor del Set es un canon de LISTA_CANONICA (lib/ministerios.ts).
+  // La columna en BD es TEXT libre con `;` separator → split + normalize en
+  // el filtro y en availableMinisterios.
+  const [filterMinisterio, setFilterMinisterio]   = useState<Set<string>>(new Set())
   const [sortCol, setSortCol]                 = useState<SortCol>('semaforo')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [selected, setSelected]               = useState<Iniciativa | null>(null)
@@ -239,6 +245,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterFoco     && p.en_foco     !== true) return false
       if (filterDesalojo && p.es_desalojo !== true) return false
       if (filterCapa.size > 0 && !filterCapa.has(p.capa)) return false
+      if (filterMinisterio.size > 0
+          && !splitMinisterio(p.ministerio).map(normalizeMinisterio).some(m => filterMinisterio.has(m))) return false
       return true
     })
 
@@ -259,7 +267,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, sortCol, sortDir, actividad])
+  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, filterMinisterio, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -290,7 +298,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   type FilterKey =
     | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'prioridad'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
-    | 'tags'   | 'responsable' | 'foco' | 'desalojo' | 'capa' | null
+    | 'tags'   | 'responsable' | 'foco' | 'desalojo' | 'capa'
+    | 'ministerio' | null
 
   function basePool(excluding: FilterKey) {
     // D1-03: usa deferredSearch igual que filtered. Los counts en los popovers
@@ -317,6 +326,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (excluding !== 'foco'         && filterFoco              && p.en_foco     !== true)                                                               return false
       if (excluding !== 'desalojo'     && filterDesalojo          && p.es_desalojo !== true)                                                               return false
       if (excluding !== 'capa'         && filterCapa.size > 0     && !filterCapa.has(p.capa))                                                              return false
+      if (excluding !== 'ministerio'   && filterMinisterio.size > 0
+          && !splitMinisterio(p.ministerio).map(normalizeMinisterio).some(m => filterMinisterio.has(m)))                                                  return false
       return true
     })
   }
@@ -349,6 +360,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
     filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa,
+    filterMinisterio,
   ]
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -368,6 +380,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [...baseDeps, availableEjesLabels])
   const availableEjesGob      = useMemo(() => countByField(basePool('ejeGobierno'), p => p.eje_gobierno),                                            baseDeps)
+  const availableMinisterios  = useMemo(
+    () => countByField(basePool('ministerio'), p => splitMinisterio(p.ministerio).map(normalizeMinisterio)),
+    baseDeps,
+  )
   const availableEtapas       = useMemo(() => countByField(basePool('etapa'),       p => p.etapa_actual),                                            baseDeps)
   const availableRats         = useMemo(() => countByField(basePool('rat'),         p => p.rat),                                                     baseDeps)
   const availableFuentes      = useMemo(() => countByField(basePool('fuente'),      p => p.fuente_financiamiento),                                   baseDeps)
@@ -431,6 +447,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setFilterFoco(false)
     setFilterDesalojo(false)
     setFilterCapa(new Set())
+    setFilterMinisterio(new Set())
   }
 
   // ── Template & Import ────────────────────────────────────────────────────
@@ -594,11 +611,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
     filterComuna.size > 0 || filterOrigen.size > 0 ||
     filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo ||
-    filterCapa.size > 0
+    filterCapa.size > 0 || filterMinisterio.size > 0
 
   // Conteo de filtros del bloque secundario activos. Sirve para mostrar el
   // badge "Más filtros (3)" en lugar de un dot abstracto.
+  // Semáforo y Capa bajaron a secundaria (jun 2026) → cuentan acá.
+  // Ministerio subió a primaria → NO cuenta.
   const secondaryFilterCount =
+    (filterSemaforo.size > 0      ? 1 : 0) +
+    (filterCapa.size > 0          ? 1 : 0) +
     (filterEje.size > 0           ? 1 : 0) +
     (filterEjeGobierno.size > 0   ? 1 : 0) +
     (filterPrioridad.size > 0     ? 1 : 0) +
@@ -776,6 +797,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           const chips: ActiveChip[] = [
             deferredSearch ? { key: 'search', label: 'Búsqueda', value: deferredSearch, onClear: () => setSearch('') } : null,
             setChip('Región',       filterRegion,      () => setFilterRegion(empty())),
+            setChip('Ministerio',   filterMinisterio,  () => setFilterMinisterio(empty())),
             setChip('Eje Regional', filterEje,         () => setFilterEje(empty())),
             setChip('Eje Gobierno', filterEjeGobierno, () => setFilterEjeGobierno(empty())),
             setChip('Semáforo',     filterSemaforo,    () => setFilterSemaforo(empty())),
@@ -819,7 +841,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar meta, región, ministerio..."
+              placeholder="Buscar iniciativa o región..."
               className="pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-56"
             />
           </div>
@@ -832,33 +854,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             onChange={setFilterRegion}
           />
 
-          {/* Semáforo chips inline — son solo 4 estados con dot de color,
-              chips se leen más rápido que un popover. */}
-          <div className="flex items-center gap-1">
-            {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
-              const active = filterSemaforo.has(s)
-              const activeClass =
-                s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
-                s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' :
-                s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
-                                'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
-              return (
-                <button
-                  key={s}
-                  onClick={() => toggleSemaforo(s)}
-                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                    active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>
-                  {SEMAFORO_CONFIG[s].label}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* En Foco chip — toggle. Sube a primaria porque es el "ver lo
-              importante hoy" — el delegado lo usa seguido. */}
+          {/* En Foco chip — toggle. "Ver lo importante hoy", uso frecuente. */}
           <button
             onClick={() => setFilterFoco(v => !v)}
             className={`text-xs px-2 py-1 rounded-full transition-colors font-medium flex items-center gap-1 ${
@@ -872,13 +868,15 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             En foco
           </button>
 
-          {/* Capa de importancia — popover multi-select. I/II destacan visualmente
-              porque son las que ordenan la atención; III queda como "default". */}
+          {/* Ministerio — popover multi-select. La columna en BD es TEXT con
+              `;` para multi-ministerio (post commit 0f076e1). Las opciones
+              vienen normalizadas vía lib/ministerios.ts (24 canónicos + 3
+              buckets: Municipalidades, SUBDERE, Sin asignar). */}
           <FilterPopover
-            label="Capa"
-            options={availableCapas}
-            selected={filterCapa as Set<string>}
-            onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
+            label="Ministerio"
+            options={availableMinisterios}
+            selected={filterMinisterio}
+            onChange={setFilterMinisterio}
           />
 
           {/* Solo desalojos — admin only. Filtra casos de la Mesa
@@ -923,6 +921,41 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             inline (3 opciones, idéntico patrón de Semáforo). */}
         {showSecondaryFilters && (
           <div className="flex items-center gap-2 flex-wrap pt-1">
+
+            {/* Semáforo chips inline — 4 estados con dot de color. Bajaron de
+                primaria a secundaria (jun 2026): el header tiene el stacked bar
+                clickable como atajo visual. */}
+            <div className="flex items-center gap-1">
+              {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
+                const active = filterSemaforo.has(s)
+                const activeClass =
+                  s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
+                  s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' :
+                  s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
+                                  'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
+                return (
+                  <button
+                    key={s}
+                    onClick={() => toggleSemaforo(s)}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                      active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`}/>
+                    {SEMAFORO_CONFIG[s].label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Capa de importancia — popover multi-select. Bajó a secundaria. */}
+            <FilterPopover
+              label="Capa"
+              options={availableCapas}
+              selected={filterCapa as Set<string>}
+              onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
+            />
+
             {/* Eje regional. Si hay UNA región filtrada con catálogo, sus
                 opciones canónicas; si no, unión derivada. */}
             <FilterPopover
