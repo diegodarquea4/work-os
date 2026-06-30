@@ -34,6 +34,7 @@ export async function GET(
     .from('desalojo_capas')
     .select('*')
     .eq('prioridad_id', n)
+    .eq('activa', true)
     .order('orden', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

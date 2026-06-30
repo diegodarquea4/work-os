@@ -285,7 +285,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   async function handleArchivarCapa(capaId: number) {
     const prev = capas
-    setCapas(prev.map(c => c.id === capaId ? { ...c, activa: false } : c))
+    setCapas(prev.filter(c => c.id !== capaId))
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/capas/${capaId}`, { method: 'DELETE' })
       const json = await res.json()

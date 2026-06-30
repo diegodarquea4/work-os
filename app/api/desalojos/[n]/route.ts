@@ -44,7 +44,7 @@ export async function GET(
   const db = getSupabaseAdmin()
   const [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes] = await Promise.all([
     db.from('desalojo_detalle')      .select('*').eq('prioridad_id', n).maybeSingle(),
-    db.from('desalojo_capas')        .select('*').eq('prioridad_id', n).order('orden', { ascending: true }),
+    db.from('desalojo_capas')        .select('*').eq('prioridad_id', n).eq('activa', true).order('orden', { ascending: true }),
     db.from('desalojo_fase_estado')  .select('*').eq('prioridad_id', n),
     db.from('desalojo_seguimientos') .select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),
     db.from('desalojo_documentos')   .select('*').eq('prioridad_id', n).order('created_at', { ascending: false }),

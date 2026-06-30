@@ -112,11 +112,10 @@ export default function DesalojoCapasMiniTable({
 
       <ul className="divide-y divide-gray-100">
         {capas.map(c => {
-          const archivada = !c.activa
           return (
             <li
               key={c.id}
-              className={`px-4 py-3 flex items-center gap-3 ${archivada ? 'opacity-60' : ''}`}
+              className="px-4 py-3 flex items-center gap-3"
             >
               {/* Nombre + tipología + fase */}
               <div className="flex-1 min-w-0">
@@ -152,7 +151,6 @@ export default function DesalojoCapasMiniTable({
                     <span className="text-[10px] text-gray-500 px-1.5 py-0.5 rounded bg-gray-100">
                       {FASE_CFG[c.fase_actual].label.split('·')[0].trim()}
                     </span>
-                    {archivada && <span className="text-[10px] text-gray-400 italic">archivada</span>}
                   </div>
                 )}
               </div>
@@ -203,21 +201,19 @@ export default function DesalojoCapasMiniTable({
                     <path d="M9 2l3 3-8 8H1v-3z"/>
                   </svg>
                 </button>
-                {!archivada && (
-                  <button
-                    type="button"
-                    onClick={() => handleArchivar(c)}
-                    className="text-gray-400 hover:text-red-600 p-1"
-                    title="Archivar"
-                    aria-label="Archivar capa"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="1.5" y="2.5" width="11" height="2.5" rx="0.5"/>
-                      <path d="M2.5 5v6.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V5"/>
-                      <path d="M5.5 7.5h3"/>
-                    </svg>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleArchivar(c)}
+                  className="text-gray-400 hover:text-red-600 p-1"
+                  title="Archivar"
+                  aria-label="Archivar capa"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1.5" y="2.5" width="11" height="2.5" rx="0.5"/>
+                    <path d="M2.5 5v6.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V5"/>
+                    <path d="M5.5 7.5h3"/>
+                  </svg>
+                </button>
               </div>
             </li>
           )
