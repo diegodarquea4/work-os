@@ -70,8 +70,10 @@ export default function DesalojoAvanceTab({
   const activas = capas.filter(c => c.activa)
   const capa    = activas.find(c => c.id === selectedCapaId) ?? activas[0] ?? null
 
+  // Todas las fases arrancan minimizadas. El efecto siguiente abre solo la
+  // fase actual de la capa visible — sin abrir PR por default.
   const [openFases, setOpenFases] = useState<Record<DesalojoFaseConSemaforo, boolean>>({
-    pr: true, f1: false, f2: false, f3: false, f4: false, f5: false,
+    pr: false, f1: false, f2: false, f3: false, f4: false, f5: false,
   })
 
   const [assigningTipo, setAssigningTipo] = useState(false)
@@ -85,14 +87,31 @@ export default function DesalojoAvanceTab({
     }
   }, [activas, selectedCapaId, onSelectCapa])
 
-  // Abrir automáticamente el card de la fase actual cuando cambia la capa
-  // o cuando cambia la fase actual de la capa visible.
+  // Al cambiar de capa (o de caso, porque también cambia capa.id): cerrar
+  // todas las fases y abrir solo la fase_actual. Si la capa está cerrada
+  // (fase_actual='cerrado'), quedan todas minimizadas.
+  useEffect(() => {
+    if (!capa) return
+    const allClosed: Record<DesalojoFaseConSemaforo, boolean> = {
+      pr: false, f1: false, f2: false, f3: false, f4: false, f5: false,
+    }
+    if (capa.fase_actual === 'cerrado') {
+      setOpenFases(allClosed)
+      return
+    }
+    const f = capa.fase_actual as DesalojoFaseConSemaforo
+    setOpenFases({ ...allClosed, [f]: true })
+  }, [capa?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Avance dentro de la misma capa: cuando la fase_actual cambia sin cambiar
+  // capa.id (el usuario apretó "Avanzar"), abrir la nueva fase actual sin
+  // tocar el resto. Si cerró la capa, no auto-abrir nada.
   useEffect(() => {
     if (!capa) return
     if (capa.fase_actual === 'cerrado') return
     const f = capa.fase_actual as DesalojoFaseConSemaforo
-    setOpenFases(prev => ({ ...prev, [f]: true }))
-  }, [capa?.id, capa?.fase_actual]) // eslint-disable-line react-hooks/exhaustive-deps
+    setOpenFases(prev => prev[f] ? prev : { ...prev, [f]: true })
+  }, [capa?.fase_actual]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (activas.length === 0) {
     return (
