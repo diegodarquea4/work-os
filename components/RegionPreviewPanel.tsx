@@ -376,7 +376,7 @@ export default function RegionPreviewPanel({
           onClick={onGoToKanban}
           className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
         >
-          <span>Ver {regionIniciativas.length} {regionIniciativas.length === 1 ? 'iniciativa' : 'iniciativas'} en Kanban</span>
+          <span>Ver {regionIniciativas.length} {regionIniciativas.length === 1 ? 'iniciativa' : 'iniciativas'} en Gabinete</span>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <path d="M5 3l4 4-4 4"/>
           </svg>

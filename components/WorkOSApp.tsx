@@ -159,7 +159,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const GROUPED_VIEWS: { key: View; label: string; adminOnly?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
     { key: 'atencion',       label: 'Atención'  },
-    { key: 'kanban',         label: 'Kanban'    },
+    { key: 'kanban',         label: 'Gabinete'  },
     { key: 'vista-regional', label: 'Mi Región' },
     { key: 'desalojos',      label: 'Desalojos', adminOnly: true },
   ]

@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState, useTransition, useLayoutEffect, useRef, useEffect } from 'react'
+import { useMemo, useState, useTransition, useRef, useEffect } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import { SEMAFORO_CONFIG, prioridadColor, ejeGobHeaderColor, splitMinisterios } from '@/lib/config'
+import { SEMAFORO_CONFIG, prioridadColor, splitMinisterios } from '@/lib/config'
+import FilterPopover, { type FilterOption } from './FilterPopover'
 import { getSupabase } from '@/lib/supabase'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -11,32 +12,15 @@ import { FlagIcon } from './icons/FlagIcon'
 import DesalojoBadge from './DesalojoBadge'
 import { CapaBadge } from './CapaBadge'
 import { useCanEditOperational } from '@/lib/context/UserContext'
+import { normalizeMinisterio } from '@/lib/ministerios'
+import { compareCarteras } from '@/lib/cartera'
 
-// ── Mosaic helpers ────────────────────────────────────────────────────────────
-
-const MOSAIC_BG: Record<string, string> = {
-  verde: 'bg-green-500',
-  ambar: 'bg-amber-400',
-  rojo:  'bg-red-500',
-  gris:  'bg-slate-400',
-}
-
-function mosaicBg(sem: string | null) {
-  return MOSAIC_BG[sem ?? 'gris'] ?? MOSAIC_BG.gris
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function daysUntil(isoDate: string | null): number | null {
   if (!isoDate) return null
   const diff = new Date(isoDate).getTime() - Date.now()
   return Math.ceil(diff / 86_400_000)
-}
-
-// estado_termino_gobierno → icon type
-function terminoIcon(val: string | null): 'check' | 'warn' | null {
-  if (!val) return null
-  const lower = val.toLowerCase()
-  if (lower.includes('seguro') || lower.includes('probable') && !lower.includes('poco')) return 'check'
-  return 'warn'
 }
 
 // "Eje 3: Salud y Servicios Básicos" → 3. Acepta "Eje", "EJE", "eje" — la data
@@ -48,61 +32,14 @@ function ejeNumber(eje: string): number {
   return m ? parseInt(m[1], 10) : 999
 }
 
-// Helper local que envuelve splitMinisterios para dar el fallback 'Sin ministerio'
-// cuando el campo es null. La lógica canónica de split vive en lib/config.ts.
-function ministeriosOrFallback(raw: string | null | undefined): string[] {
-  const list = splitMinisterios(raw)
-  return list.length > 0 ? list : ['Sin ministerio']
+// Envuelve splitMinisterios + normalizeMinisterio para agrupar por cartera
+// canónica (consolida variantes: 'Min. Salud' + 'MINSAL' + 'Ministerio de
+// Salud' caen en la misma cartera). Fallback 'Sin asignar' cuando el campo
+// está vacío — coherente con el bucket de lib/ministerios.
+function carterasNormalizadas(raw: string | null | undefined): string[] {
+  const list = splitMinisterios(raw).map(normalizeMinisterio)
+  return list.length > 0 ? list : ['Sin asignar']
 }
-
-// ── SVG icons (inline, no dep) ────────────────────────────────────────────────
-
-function IconKanban() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="1" y="1" width="4" height="14" rx="1"/>
-      <rect x="6" y="1" width="4" height="10" rx="1"/>
-      <rect x="11" y="1" width="4" height="12" rx="1"/>
-    </svg>
-  )
-}
-
-function IconMosaic() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="1" y="1" width="8" height="8" rx="1"/>
-      <rect x="10" y="1" width="5" height="8" rx="1"/>
-      <rect x="1" y="10" width="5" height="5" rx="1"/>
-      <rect x="7" y="10" width="8" height="5" rx="1"/>
-    </svg>
-  )
-}
-
-function IconCheck() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="1.5,5 4,7.5 8.5,2.5"/>
-    </svg>
-  )
-}
-
-function IconWarn() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="5" y1="2" x2="5" y2="6"/>
-      <circle cx="5" cy="8.2" r="0.8" fill="currentColor" strokeWidth="0"/>
-    </svg>
-  )
-}
-
-// ── Estado mode: 4 fixed semáforo columns ────────────────────────────────────
-
-const COLUMNS = [
-  { key: 'rojo',  label: 'Bloqueadas',   bg: 'bg-red-50',    border: 'border-red-200',   dot: 'bg-red-500',   header: 'bg-red-100 text-red-800'   },
-  { key: 'ambar', label: 'En revisión',  bg: 'bg-amber-50',  border: 'border-amber-200', dot: 'bg-amber-400', header: 'bg-amber-100 text-amber-800' },
-  { key: 'verde', label: 'En verde',     bg: 'bg-green-50',  border: 'border-green-200', dot: 'bg-green-500', header: 'bg-green-100 text-green-800' },
-  { key: 'gris',  label: 'Sin evaluar',  bg: 'bg-gray-50',   border: 'border-gray-200',  dot: 'bg-gray-300',  header: 'bg-gray-100 text-gray-600'   },
-] as const
 
 function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, val: T) {
   setter(prev => { const next = new Set(prev); next.has(val) ? next.delete(val) : next.add(val); return next })
@@ -309,20 +246,28 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     return sorted[0] ?? 'todas'
   }, [activeRegionName, projects])
   const setFilterRegion = onActiveRegionChange
-  const [filterEjeGob, setFilterEjeGob] = useState<Set<string>>(new Set())
+  // Filtros del panel "Filtros" — solo los que tienen uso real en la mesa
+  // de Gabinete: estado del compromiso (semáforo), prioridad, capa de
+  // importancia, etapa actual, etiquetas y "en foco". Eliminados respecto
+  // de versión anterior: eje gobierno (Economía/Social/Seguridad) — el
+  // SEREMI piensa por cartera, no por eje gobierno transversal.
+  const [filterSemaforo,  setFilterSemaforo]  = useState<Set<string>>(new Set())
+  const [filterPrioridad, setFilterPrioridad] = useState<Set<string>>(new Set())
+  const [filterCapa,      setFilterCapa]      = useState<Set<Capa>>(new Set())
+  const [filterEtapa,     setFilterEtapa]     = useState<Set<string>>(new Set())
+  const [filterTags,      setFilterTags]      = useState<Set<string>>(new Set())
+  const [filterFoco,      setFilterFoco]      = useState<boolean>(false)
+  const [showFilters,     setShowFilters]     = useState<boolean>(false)
   const [isPending, startTransition]    = useTransition()
-  const [viewMode, setViewMode]         = useState<'kanban' | 'mosaico'>('kanban')
-  // Default 'ministerio': es la vista que se usa más en reuniones (cartera por
-  // SEREMI). 'eje' y 'tag' quedan disponibles vía el toggle de la filter bar.
+  // Default 'ministerio': es la vista que se usa más en reuniones de Gabinete
+  // (DPR recorre cartera por SEREMI). 'eje', 'tag' y 'capa' son agrupaciones
+  // alternativas disponibles vía el toggle de la filter bar.
   // 'tag' (migración 016): una columna por tag único entre las iniciativas
   // filtradas. Una iniciativa con N tags aparece en N columnas (decisión del
   // usuario, igual que ya pasaba con multi-ministerio).
   // 'capa' (migración 024): tres columnas fijas (Capa I / II / III) por nivel
-  // de importancia. Pensado para la vista "qué hay en mi cartera de prioridades".
+  // de importancia.
   const [groupBy, setGroupBy]           = useState<'eje' | 'ministerio' | 'tag' | 'capa'>('ministerio')
-  const [showSmall, setShowSmall]       = useState(false)
-  const [cellSize, setCellSize]         = useState(56)
-  const gridRef                         = useRef<HTMLDivElement>(null)
   const ministerioContainerRef          = useRef<HTMLDivElement>(null)
 
   // Expandir/colapsar todas las secciones <details> del modo ministerio.
@@ -412,25 +357,12 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     }
   }
 
-  // Make grid cells square: measure actual px width of 1 column unit
-  useLayoutEffect(() => {
-    const el = gridRef.current
-    if (!el || viewMode !== 'mosaico') return
-    const COLS = 12, GAP = 6, PAD = 48
-    const update = () => {
-      const colW = Math.floor((el.clientWidth - PAD - GAP * (COLS - 1)) / COLS)
-      setCellSize(Math.max(28, Math.floor(colW * 0.5)))
-    }
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [viewMode])
-
-  // Modo "agrupado": kanban con una región filtrada. Sub-modos por `groupBy`:
-  //   - 'eje'        → columnas planas 1→6
-  //   - 'ministerio' → secciones verticales estilo Monday
-  const isGroupedMode = viewMode === 'kanban' && filterRegion !== 'todas'
+  // El modo "agrupado" es el único modo de la vista Gabinete: una región
+  // filtrada con sub-modos por `groupBy` ('eje', 'ministerio', 'tag', 'capa').
+  // Si filterRegion === 'todas' (caso técnico cuando projects está vacío al
+  // arranque), se muestra un empty state — no hay vista "todas las regiones"
+  // mezcladas porque rompe la metáfora de la mesa por SEREMI.
+  const isGroupedMode = filterRegion !== 'todas'
 
   // Selector: TODAS las regiones visibles para el usuario (no solo las que tienen
   // iniciativas). Si llega allowedRegionNames, se restringe a esas; si es null
@@ -443,9 +375,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
 
   const filtered = useMemo(() => projects.filter(p => {
     if (filterRegion !== 'todas' && p.region !== filterRegion) return false
-    if (filterEjeGob.size > 0 && !filterEjeGob.has(p.eje_gobierno ?? '')) return false
+    if (filterSemaforo.size  > 0 && !filterSemaforo.has(p.estado_semaforo))                       return false
+    if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad))                            return false
+    if (filterCapa.size      > 0 && !filterCapa.has(p.capa))                                      return false
+    if (filterEtapa.size     > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))         return false
+    if (filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                 return false
+    if (filterFoco && p.en_foco !== true)                                                         return false
     return true
-  }), [projects, filterRegion, filterEjeGob])
+  }), [projects, filterRegion, filterSemaforo, filterPrioridad, filterCapa, filterEtapa, filterTags, filterFoco])
 
   // ── Modo "por eje": columnas planas ordenadas 1→6 ──────────────────────────
   const ejeColumns = useMemo(() => {
@@ -463,15 +400,22 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     }))
   }, [filtered, isGroupedMode, groupBy])
 
-  // ── Modo "por ministerio": secciones verticales (Monday) ──────────────────
-  // Una iniciativa con multi-ministerio aparece en cada grupo (decisión del usuario).
-  // Por eso no mostramos contadores en los headers.
+  // ── Modo "por cartera": secciones verticales (estilo Monday) ─────────────
+  // Una iniciativa con multi-ministerio aparece en cada grupo (decisión del
+  // usuario). Por eso no mostramos contadores en los headers.
+  //
+  // Las variantes raw de BD ('Min. Salud', 'MINSAL', 'Ministerio de Salud')
+  // se colapsan al canon vía `normalizeMinisterio`, así no salen 3 grupos
+  // distintos para la misma cartera.
+  //
+  // Orden = institucional (Interior → MOP → MINVU → ...) según `compareCarteras`.
+  // El DPR conduce la mesa por ese orden; alfabético no refleja la conducción real.
   const ministerioGroups = useMemo(() => {
     if (!isGroupedMode || groupBy !== 'ministerio') return null
     const expanded = filtered.flatMap(p =>
-      ministeriosOrFallback(p.ministerio).map(min => ({ p, min }))
+      carterasNormalizadas(p.ministerio).map(min => ({ p, min }))
     )
-    const allMin = Array.from(new Set(expanded.map(e => e.min))).sort()
+    const allMin = Array.from(new Set(expanded.map(e => e.min))).sort(compareCarteras)
     return allMin.map(min => ({
       nombre: min,
       iniciativas: expanded.filter(e => e.min === min).map(e => e.p),
@@ -509,67 +453,61 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     ]
   }, [filtered, isGroupedMode, groupBy])
 
-  // ── Estado mode byCol ──────────────────────────────────────────────────────
-  const byCol: Record<string, Iniciativa[]> = { rojo: [], ambar: [], verde: [], gris: [] }
-  if (!isGroupedMode && viewMode === 'kanban') {
-    for (const p of filtered) byCol[p.estado_semaforo]?.push(p)
-  }
+  // Opciones del panel de Filtros — derivadas de las iniciativas de la región
+  // activa (sin aplicar otros filtros, para que el usuario vea el universo
+  // completo de opciones aunque ya tenga algún chip activo).
+  const regionPool = useMemo(() => {
+    if (filterRegion === 'todas') return [] as Iniciativa[]
+    return projects.filter(p => p.region === filterRegion)
+  }, [projects, filterRegion])
 
-  // ── Mosaic items ───────────────────────────────────────────────────────────
-  // [B] Aspect ratio: pick variant whose raw area is closest to target (within 30-200%),
-  //     then use p.n for variety among similarly-sized items.
-  // [3] Urgency: dias_al_hito computed here for pulse border.
-  const mosaicItems = useMemo(() => {
-    if (viewMode !== 'mosaico') return []
-    const sorted = [...filtered].sort((a, b) => (b.inversion_mm ?? 0) - (a.inversion_mm ?? 0))
-    const maxInv = sorted[0]?.inversion_mm ?? 1
+  const availableEtapas = useMemo<FilterOption[]>(() => {
+    const counts = new Map<string, number>()
+    for (const p of regionPool) {
+      if (!p.etapa_actual) continue
+      counts.set(p.etapa_actual, (counts.get(p.etapa_actual) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [regionPool])
 
-    const VARIANTS: [number, number][] = [
-      [1, 1],  [2, 1],  [1, 2],  [3, 1],  [1, 3],
-      [3, 2],  [2, 3],  [4, 1],  [1, 4],  [4, 2],
-      [2, 4],  [5, 2],  [2, 5],  [6, 2],  [2, 6],
-      [4, 3],  [3, 4],  [5, 3],  [3, 5],  [6, 3],
+  const availableTags = useMemo<FilterOption[]>(() => {
+    const counts = new Map<string, number>()
+    for (const p of regionPool) {
+      for (const t of p.tags ?? []) counts.set(t, (counts.get(t) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [regionPool])
+
+  const availableCapas = useMemo<FilterOption[]>(() => {
+    const counts: Record<Capa, number> = { l: 0, ll: 0, lll: 0 }
+    for (const p of regionPool) counts[p.capa] += 1
+    return [
+      { value: 'l',   label: 'Capa I',   sublabel: 'Las prioridades', count: counts.l   },
+      { value: 'll',  label: 'Capa II',  sublabel: 'Más importante',  count: counts.ll  },
+      { value: 'lll', label: 'Capa III', sublabel: 'Cartera regular', count: counts.lll },
     ]
+  }, [regionPool])
 
-    return sorted.map(p => {
-      const inv  = p.inversion_mm ?? 0
-      const area = inv > 0 ? Math.max(4, Math.round((inv / maxInv) * 18)) : 4
+  const activeFilterCount =
+    (filterSemaforo.size  > 0 ? 1 : 0) +
+    (filterPrioridad.size > 0 ? 1 : 0) +
+    (filterCapa.size      > 0 ? 1 : 0) +
+    (filterEtapa.size     > 0 ? 1 : 0) +
+    (filterTags.size      > 0 ? 1 : 0) +
+    (filterFoco                ? 1 : 0)
 
-      // Pick variants whose raw area is within 30–200% of target, then vary by p.n
-      const eligible = VARIANTS.filter(([rw, rh]) => {
-        const raw = rw * rh
-        return raw >= area * 0.3 && raw <= area * 2
-      })
-      const pool    = eligible.length > 0 ? eligible : VARIANTS
-      const [rw, rh] = pool[p.n % pool.length]
-      const scale   = Math.sqrt(area / (rw * rh))
-      const colSpan = Math.min(12, Math.max(2, Math.round(rw * scale)))
-      const rowSpan = Math.min(6,  Math.max(1, Math.round(rh * scale)))
-      const isSmall = inv === 0 || (colSpan * rowSpan) <= 4
-
-      // [3] Urgency: hito within 30 days AND semáforo is rojo/ambar
-      const dias        = daysUntil(p.fecha_proximo_hito)
-      const isUrgent    = dias !== null && dias <= 30 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
-      const isCritical  = dias !== null && dias <= 7  && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
-
-      return { ...p, colSpan, rowSpan, isSmall, isUrgent, isCritical }
-    })
-  }, [filtered, viewMode])
-
-  const mainItems  = useMemo(() => mosaicItems.filter(i => !i.isSmall), [mosaicItems])
-  const smallItems = useMemo(() => mosaicItems.filter(i =>  i.isSmall), [mosaicItems])
-
-  // [2] Mosaic summary: MM$ and count per semáforo
-  const mosaicSummary = useMemo(() => {
-    if (viewMode !== 'mosaico') return null
-    const total = filtered.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
-    return (['rojo', 'ambar', 'verde', 'gris'] as const).map(sem => {
-      const items = filtered.filter(p => (p.estado_semaforo ?? 'gris') === sem)
-      const inv   = items.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
-      const pct   = total > 0 ? Math.round(inv / total * 100) : 0
-      return { sem, count: items.length, inv, pct }
-    }).filter(s => s.count > 0)
-  }, [filtered, viewMode])
+  function clearAllFilters() {
+    setFilterSemaforo(new Set())
+    setFilterPrioridad(new Set())
+    setFilterCapa(new Set())
+    setFilterEtapa(new Set())
+    setFilterTags(new Set())
+    setFilterFoco(false)
+  }
 
   const selectedSynced = selected ? (projects.find(p => p.n === selected.n) ?? selected) : null
 
@@ -582,27 +520,32 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white flex items-center gap-3 flex-wrap min-w-0">
         <select
           value={filterRegion}
-          onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v); setFilterEjeGob(new Set()) }) }}
+          onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v) }) }}
           className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-300 min-w-0 max-w-full"
         >
           {regions.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
 
-        {/* [A] Eje gobierno toggles — visible cuando no hay agrupación (mosaico o "todas las regiones") */}
-        {(viewMode === 'mosaico' || !isGroupedMode) && (
-          <div className="flex items-center gap-1">
-            {(['Economía', 'Social', 'Seguridad'] as const).map(eg => {
-              const active = filterEjeGob.has(eg)
-              return (
-                <button key={eg} onClick={() => toggleSet(setFilterEjeGob, eg as string)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                    active ? ejeGobHeaderColor(eg) + ' ring-1' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}>
-                  {eg}
-                </button>
-              )
-            })}
-          </div>
+        {/* Botón único "Filtros" — abre panel inline con Semáforo, Foco,
+            Prioridad, Capa, Etapa y Etiquetas. Sin eje gobierno: el SEREMI
+            piensa por cartera, no por eje gobierno transversal. */}
+        {isGroupedMode && (
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+              showFilters || activeFilterCount > 0
+                ? 'bg-slate-100 border-slate-300 text-slate-700'
+                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <span>Filtros</span>
+            {activeFilterCount > 0 && (
+              <span className="bg-slate-600 text-white text-[10px] font-semibold rounded-full px-1.5 py-px min-w-[18px] text-center leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+            <span className="text-gray-400 text-[10px]">{showFilters ? '▴' : '▾'}</span>
+          </button>
         )}
 
         {/* Toggle "Ejes / Ministerios / Tags" — solo visible con región filtrada en Kanban */}
@@ -738,33 +681,111 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           )
         })()}
 
-        {/* Region chip in mosaico mode */}
-        {viewMode === 'mosaico' && filterRegion !== 'todas' && (
-          <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
-            {filterRegion}
-          </span>
+        {!isGroupedMode && (
+          <span className="text-xs text-gray-400 ml-auto">{filtered.length} iniciativas</span>
         )}
-
-        {/* View mode toggle */}
-        <div className="flex items-center gap-1 ml-auto border border-gray-200 rounded-lg p-0.5">
-          <button
-            onClick={() => setViewMode('kanban')}
-            title="Vista Kanban"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'kanban' ? 'bg-slate-200 text-slate-800' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            <IconKanban />
-          </button>
-          <button
-            onClick={() => setViewMode('mosaico')}
-            title="Vista Mosaico"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'mosaico' ? 'bg-slate-200 text-slate-800' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            <IconMosaic />
-          </button>
-        </div>
-
-        <span className="text-xs text-gray-400">{filtered.length} iniciativas</span>
       </div>
+
+      {/* Panel inline de Filtros — solo se muestra con región seleccionada y
+          cuando el botón Filtros está expandido. Mismo patrón que "Más filtros"
+          del Dashboard (expand inline, sin overlay). */}
+      {isGroupedMode && showFilters && (
+        <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-slate-50/60 flex items-center gap-2 flex-wrap min-w-0">
+          {/* Semáforo: chips inline (4 estados, el patrón del Dashboard). */}
+          <div className="flex items-center gap-1">
+            {(['rojo', 'ambar', 'verde', 'gris'] as const).map(s => {
+              const active = filterSemaforo.has(s)
+              const activeClass =
+                s === 'rojo'  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'       :
+                s === 'ambar' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' :
+                s === 'verde' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
+                                'bg-gray-200 text-gray-700 ring-1 ring-gray-400'
+              return (
+                <button
+                  key={s}
+                  onClick={() => toggleSet(setFilterSemaforo, s as string)}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                    active ? activeClass : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${SEMAFORO_CONFIG[s].dot}`} />
+                  {SEMAFORO_CONFIG[s].label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* En foco */}
+          <button
+            onClick={() => setFilterFoco(v => !v)}
+            className={`text-xs px-2 py-1 rounded-full transition-colors font-medium flex items-center gap-1 ${
+              filterFoco
+                ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-300'
+                : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+            }`}
+            title="Filtrar solo iniciativas en foco"
+          >
+            <span className="text-[10px]">⚑</span>
+            En foco
+          </button>
+
+          {/* Prioridad: chips inline (3 opciones). */}
+          <div className="flex items-center gap-1">
+            {(['Alta', 'Media', 'Baja'] as const).map(p => {
+              const active = filterPrioridad.has(p)
+              const activeClass =
+                p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'       :
+                p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' :
+                                'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
+              return (
+                <button
+                  key={p}
+                  onClick={() => toggleSet(setFilterPrioridad, p as string)}
+                  className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                    active ? activeClass : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            })}
+          </div>
+
+          <FilterPopover
+            label="Capa"
+            options={availableCapas}
+            selected={filterCapa as Set<string>}
+            onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
+          />
+
+          {availableEtapas.length > 0 && (
+            <FilterPopover
+              label="Etapa"
+              options={availableEtapas}
+              selected={filterEtapa}
+              onChange={setFilterEtapa}
+            />
+          )}
+
+          {availableTags.length > 0 && (
+            <FilterPopover
+              label="Etiquetas"
+              options={availableTags}
+              selected={filterTags}
+              onChange={setFilterTags}
+            />
+          )}
+
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs px-2 py-1 rounded text-gray-500 hover:text-slate-800 hover:bg-white/80 ml-auto transition-colors"
+            >
+              Limpiar todo
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Eje mode ──────────────────────────────────────────────────────────── */}
       {isPending && (
@@ -966,191 +987,18 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         </div>
       )}
 
-      {/* ── Estado mode: 4 semáforo columns ──────────────────────────────────── */}
-      {viewMode === 'kanban' && !isGroupedMode && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex h-full gap-fluid-md px-6 py-4 min-w-max">
-            {COLUMNS.map(col => {
-              const cards = byCol[col.key] ?? []
-              return (
-                <div key={col.key} className="flex flex-col w-[clamp(280px,18vw,360px)] flex-shrink-0">
-                  <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3 ${col.header}`}>
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${col.dot}`} />
-                    <span className="text-sm font-semibold flex-1">{col.label}</span>
-                    <span className="text-xs font-bold bg-white/60 px-2 py-0.5 rounded-full">{cards.length}</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                    {cards.length === 0 && (
-                      <div className={`border-2 border-dashed ${col.border} rounded-xl p-4 text-center text-xs text-gray-400`}>
-                        Sin iniciativas
-                      </div>
-                    )}
-                    {cards.map(p => (
-                      <button
-                        key={p.n}
-                        onClick={() => setSelected(p)}
-                        className={`w-full text-left border ${col.border} ${col.bg} rounded-xl p-3 hover:shadow-md transition-all group`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full truncate max-w-[160px] bg-gray-100 text-gray-600">
-                            {p.eje}
-                          </span>
-                          <span className={`text-xs font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
-                            {p.prioridad}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-800 leading-snug line-clamp-3 mb-2 group-hover:text-slate-900">
-                          {p.nombre}
-                        </p>
-                        <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/60">
-                          <span className="text-xs text-gray-500 truncate max-w-[140px]">{p.region}</span>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <div className="w-10 h-1 bg-white/80 rounded-full overflow-hidden">
-                              <div
-                                className={`h-1 rounded-full ${
-                                  col.key === 'rojo' ? 'bg-red-400' :
-                                  col.key === 'ambar' ? 'bg-amber-400' :
-                                  col.key === 'verde' ? 'bg-green-500' : 'bg-gray-300'
-                                }`}
-                                style={{ width: `${p.pct_avance}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-gray-600">{p.pct_avance}%</span>
-                          </div>
-                        </div>
-                        {p.responsable && (
-                          <p className="text-xs text-gray-400 mt-1 truncate">{p.responsable}</p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+      {/* Caso técnico edge: sin región seleccionada (projects vacío al arranque).
+          La vista Gabinete siempre opera con una región — no hay vista "todas
+          las regiones mezcladas" porque rompe la metáfora de la mesa por SEREMI. */}
+      {!isGroupedMode && (
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-md text-center space-y-2">
+            <p className="text-sm text-gray-600 font-medium">Sin región seleccionada</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Elige una región desde el selector de arriba para ver las iniciativas
+              agrupadas por cartera.
+            </p>
           </div>
-        </div>
-      )}
-
-      {/* ── Mosaico mode ──────────────────────────────────────────────────────── */}
-      {viewMode === 'mosaico' && (
-        <div className="flex-1 overflow-y-auto pb-12">
-          {mosaicItems.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-sm text-gray-400">
-              Sin iniciativas para mostrar
-            </div>
-          ) : (
-            <div
-              ref={gridRef}
-              className="grid gap-1.5 px-6 py-4"
-              style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: `${cellSize}px`, gridAutoFlow: 'dense' }}
-            >
-              {/* Main items — significant investment */}
-              {mainItems.map(item => {
-                const icon = terminoIcon(item.estado_termino_gobierno ?? null)
-                return (
-                  <button
-                    key={item.n}
-                    style={{ gridColumn: `span ${item.colSpan}`, gridRow: `span ${item.rowSpan}` }}
-                    onClick={() => setSelected(item)}
-                    className={[
-                      mosaicBg(item.estado_semaforo),
-                      'rounded-xl p-3 text-white text-left hover:brightness-110 transition-all',
-                      'flex flex-col justify-between overflow-hidden relative',
-                      // [3] Urgency border
-                      item.isCritical ? 'ring-2 ring-white animate-pulse' :
-                      item.isUrgent  ? 'ring-2 ring-white/70' : '',
-                    ].join(' ')}
-                  >
-                    {/* [4] Estado término gobierno icon */}
-                    {icon && (
-                      <span className={`absolute top-1.5 right-1.5 opacity-80 ${icon === 'warn' ? 'text-white' : 'text-white/70'}`}>
-                        {icon === 'check' ? <IconCheck /> : <IconWarn />}
-                      </span>
-                    )}
-
-                    <p className="text-xs font-bold line-clamp-2 leading-snug pr-4">{item.nombre}</p>
-
-                    {/* [D] Footer: region + prioridad + inversión */}
-                    <div>
-                      <p className="text-xs opacity-75 truncate mb-1">{item.region}</p>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold opacity-90">
-                          {item.inversion_mm ? `MM$ ${item.inversion_mm.toLocaleString('es-CL')}` : '—'}
-                        </span>
-                        <span className="text-xs font-semibold bg-white/20 px-1 py-0.5 rounded">
-                          {item.prioridad}
-                        </span>
-                      </div>
-                      {/* [1] Micro-barra de avance */}
-                      <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-                        <div className="h-1 bg-white/70 rounded-full transition-all" style={{ width: `${item.pct_avance ?? 0}%` }} />
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-
-              {/* [C] Group card for small/no-investment items — contained, not exploded */}
-              {smallItems.length > 0 && (
-                <div
-                  style={{
-                    gridColumn: showSmall ? 'span 4' : 'span 3',
-                    gridRow: showSmall ? `span ${Math.min(8, Math.ceil(smallItems.length / 2) + 2)}` : 'span 2',
-                  }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col overflow-hidden"
-                >
-                  <button
-                    onClick={() => setShowSmall(s => !s)}
-                    className="flex items-center justify-between mb-2 hover:bg-slate-100 rounded-lg px-1 py-0.5 transition-colors w-full text-left"
-                  >
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {(['rojo','ambar','verde','gris'] as const).map(s => {
-                        const count = smallItems.filter(i => (i.estado_semaforo ?? 'gris') === s).length
-                        if (!count) return null
-                        return (
-                          <span key={s} className="flex items-center gap-0.5">
-                            <span className={`w-2 h-2 rounded-full ${MOSAIC_BG[s]}`} />
-                            <span className="text-xs font-semibold text-slate-600">{count}</span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                    <span className="text-xs font-bold text-slate-500 ml-1 flex-shrink-0">
-                      {smallItems.length} sin inv. {showSmall ? '−' : '+'}
-                    </span>
-                  </button>
-                  {showSmall && (
-                    <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-1">
-                      {smallItems.map(item => (
-                        <button
-                          key={item.n}
-                          onClick={() => setSelected(item)}
-                          className={`${mosaicBg(item.estado_semaforo)} rounded-lg px-2 py-1.5 text-white text-left text-xs font-medium line-clamp-2 hover:brightness-110 transition-all`}
-                        >
-                          {item.nombre}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* [2] Mosaic summary sticky bar */}
-      {viewMode === 'mosaico' && mosaicSummary && mosaicSummary.length > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-100 px-6 py-2 flex items-center gap-3 flex-wrap z-10">
-          {mosaicSummary.map(({ sem, count, inv, pct }) => (
-            <span key={sem} className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${MOSAIC_BG[sem]}`} />
-              <span className="font-semibold text-gray-700">
-                {pct}% · MM$ {inv.toLocaleString('es-CL')}
-              </span>
-              <span className="text-gray-400">{count} iniciativas</span>
-            </span>
-          ))}
         </div>
       )}
 
