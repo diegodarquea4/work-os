@@ -73,6 +73,51 @@ describe('minutaPostSchema', () => {
     expect(r.success).toBe(true)
   })
 
+  it('acepta tipo "kit_viaje" (canónico Fase A)', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'VIII', nombre: 'Biobío' },
+      fecha: 'Julio 2026',
+      tipo: 'kit_viaje',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('acepta tipo "ficha" como alias legacy', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'VIII', nombre: 'Biobío' },
+      fecha: 'Julio 2026',
+      tipo: 'ficha',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('format default es "pdf"', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'RM', nombre: 'Metropolitana' },
+      fecha: '2026-06-11',
+    })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.format).toBe('pdf')
+  })
+
+  it('acepta format "docx"', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'RM', nombre: 'Metropolitana' },
+      fecha: '2026-06-11',
+      format: 'docx',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('rechaza format desconocido', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'RM', nombre: 'Metropolitana' },
+      fecha: '2026-06-11',
+      format: 'html',
+    })
+    expect(r.success).toBe(false)
+  })
+
   // Regresión — la fecha en minuta es un string de display para el header del
   // PDF ("Julio 2026"), NO una fecha ISO. Apretarla a YYYY-MM-DD rompe el
   // handler del cliente (bug reportado 2026-07-01, "Solicitud inválida" 400).

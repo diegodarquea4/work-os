@@ -84,14 +84,27 @@ export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
 
 // ── /api/minuta POST ─────────────────────────────────────────────────────────
 
+/**
+ * `tipo` acepta 'kit_viaje' como valor canónico (Fase A rediseño) y mantiene
+ * 'ficha' como alias legacy durante el rollout — cualquier caller externo o
+ * llamada cacheada sigue funcionando. En Fase B el dispatch trata a ambos como
+ * el mismo path. Retiro definitivo del alias TBD según analítica en
+ * v2_minutas_log.tipo.
+ *
+ * `format` selecciona el renderer en Fase C. Default 'pdf' preserva el
+ * comportamiento actual (respuesta binaria application/pdf).
+ */
 export const minutaPostSchema = z.object({
   region: regionFullSchema,
   fecha:  fechaDisplaySchema,
-  tipo:   z.enum(['ejecutiva', 'ficha']).default('ejecutiva'),
+  tipo:   z.enum(['ejecutiva', 'ficha', 'kit_viaje']).default('ejecutiva'),
+  format: z.enum(['pdf', 'docx']).default('pdf'),
   force:  z.boolean().default(false),
 })
 
 export type MinutaPostBody = z.infer<typeof minutaPostSchema>
+export type MinutaFormat   = z.infer<typeof minutaPostSchema>['format']
+export type MinutaTipoZod  = z.infer<typeof minutaPostSchema>['tipo']
 
 // ── /api/admin/users POST ────────────────────────────────────────────────────
 
