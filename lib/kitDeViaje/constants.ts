@@ -11,12 +11,15 @@ export const MINISTERIO = 'Ministerio del Interior'
 export const DIVISION   = 'División de Coordinación Interministerial'
 
 // ── Sección: títulos ───────────────────────────────────────────────────────
+// Los títulos NO incluyen el número romano — el renderer lo agrega en la
+// columna de índice y en el header de sección. Duplicarlo acá causaba
+// "I. I. Caracterización general" en el índice.
 
 export const TITULO_SECCIONES = {
-  I:   'I. Caracterización general',
-  II:  'II. Indicadores socioeconómicos clave',
-  III: 'III. Plan Regional de Gobierno (PREGO)',
-  IV:  'IV. Autoridades regionales',
+  I:   'Caracterización general',
+  II:  'Indicadores socioeconómicos clave',
+  III: 'Plan Regional de Gobierno (PREGO)',
+  IV:  'Autoridades regionales',
 } as const
 
 // ── Copy: PDF PREGO no disponible ──────────────────────────────────────────

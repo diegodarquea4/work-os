@@ -30,8 +30,11 @@ import type {
   Bullet as TBullet,
   IndicadorFila,
   EjePrego,
+  AutoridadGrupo,
+  Autoridad,
 } from '@/lib/kitDeViaje/types'
 import { TITULO_SECCIONES } from '@/lib/kitDeViaje/constants'
+import { samplePreviewAutoridades } from '@/lib/kitDeViaje/sampleAutoridades'
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -52,11 +55,11 @@ const COLORS = {
 const s = StyleSheet.create({
   // Page shell
   page: {
-    fontFamily: 'Carlito', fontSize: 10, color: COLORS.ink,
+    fontFamily: 'Helvetica', fontSize: 10, color: COLORS.ink,
     paddingTop: 60, paddingBottom: 50, paddingHorizontal: 56,
   },
   pageCover: {
-    fontFamily: 'Carlito', color: COLORS.onCover,
+    fontFamily: 'Helvetica', color: COLORS.onCover,
     backgroundColor: COLORS.bgCover,
     padding: 0,
   },
@@ -156,6 +159,43 @@ const s = StyleSheet.create({
 
   // Provincias (Sec I)
   provinciasTitle: { fontSize: 10, fontWeight: 'bold', marginTop: 6, marginBottom: 4 },
+
+  // Sección IV — Autoridades
+  previewNote: {
+    fontSize: 8, color: COLORS.muted, fontStyle: 'italic',
+    marginBottom: 12, letterSpacing: 0.3,
+  },
+  grupoBlock: { marginBottom: 16 },
+  grupoTitle: {
+    fontSize: 9, fontWeight: 'bold', letterSpacing: 1.5, color: COLORS.inkSoft,
+    paddingBottom: 4, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
+    marginBottom: 8,
+  },
+  // Grid de tarjetas: 3 por fila con gap
+  cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cardSingle: {
+    width: '100%', padding: 10,
+    borderWidth: 0.5, borderColor: COLORS.hairline, borderRadius: 2,
+    marginBottom: 8, backgroundColor: '#fafafa',
+  },
+  card: {
+    width: '32%', padding: 8,
+    borderWidth: 0.5, borderColor: COLORS.hairline, borderRadius: 2,
+    marginBottom: 8, backgroundColor: '#fafafa',
+    minHeight: 78,
+  },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
+  cardNombre: { fontSize: 9, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 4, lineHeight: 1.2 },
+  cardNombreSingle: { fontSize: 11, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 6, lineHeight: 1.2 },
+  partidoChip: {
+    fontSize: 7, paddingVertical: 1, paddingHorizontal: 4,
+    borderRadius: 2, backgroundColor: COLORS.bgAccent, color: COLORS.inkSoft,
+    fontWeight: 'bold', letterSpacing: 0.3,
+  },
+  cardCargo: { fontSize: 8, color: COLORS.inkSoft, marginBottom: 4, lineHeight: 1.3 },
+  cardCargoSingle: { fontSize: 10, color: COLORS.inkSoft, marginBottom: 6, lineHeight: 1.3 },
+  cardContactLine: { fontSize: 7.5, color: COLORS.muted, marginBottom: 1, lineHeight: 1.25 },
+  cardContactLabel: { fontWeight: 'bold', color: COLORS.inkSoft },
 })
 
 // ── Primitives ─────────────────────────────────────────────────────────────
@@ -215,8 +255,8 @@ function Disclaimer({ text }: { text: string }) {
   )
 }
 
-function SectionTitle({ children }: { children: string }) {
-  return <Text style={s.sectionTitle}>{children}</Text>
+function SectionTitle({ numeral, children }: { numeral: 'I' | 'II' | 'III' | 'IV'; children: string }) {
+  return <Text style={s.sectionTitle}>{numeral}. {children}</Text>
 }
 
 // ── Header / Footer fijos ───────────────────────────────────────────────────
@@ -305,7 +345,7 @@ function SeccionI({ data }: { data: KitDeViajeData }) {
       <PageHeader data={data} />
       <PageFooter data={data} />
 
-      <SectionTitle>{TITULO_SECCIONES.I}</SectionTitle>
+      <SectionTitle numeral="I">{TITULO_SECCIONES.I}</SectionTitle>
 
       {caracterizacion.parrafos.map((p, i) => (
         <Text key={i} style={i === caracterizacion.parrafos.length - 1 ? s.paraLast : s.para}>
@@ -352,7 +392,7 @@ function SeccionII({ data }: { data: KitDeViajeData }) {
       <PageHeader data={data} />
       <PageFooter data={data} />
 
-      <SectionTitle>{TITULO_SECCIONES.II}</SectionTitle>
+      <SectionTitle numeral="II">{TITULO_SECCIONES.II}</SectionTitle>
 
       {indicadores.tendencia_general && (
         <Text style={s.para}>{indicadores.tendencia_general}</Text>
@@ -465,7 +505,7 @@ function SeccionIII({ data }: { data: KitDeViajeData }) {
       <PageHeader data={data} />
       <PageFooter data={data} />
 
-      <SectionTitle>{TITULO_SECCIONES.III}</SectionTitle>
+      <SectionTitle numeral="III">{TITULO_SECCIONES.III}</SectionTitle>
 
       {prego.disclaimer && <Disclaimer text={prego.disclaimer} />}
 
@@ -494,21 +534,74 @@ function SeccionIII({ data }: { data: KitDeViajeData }) {
 
 // ── Sección IV — Autoridades ────────────────────────────────────────────────
 
+function AutoridadCard({ a, single }: { a: Autoridad; single: boolean }) {
+  return (
+    <View style={single ? s.cardSingle : s.card} wrap={false}>
+      <View style={s.cardHeaderRow}>
+        <Text style={single ? s.cardNombreSingle : s.cardNombre}>{a.nombre}</Text>
+        {a.partido && <Text style={s.partidoChip}>{a.partido}</Text>}
+      </View>
+      <Text style={single ? s.cardCargoSingle : s.cardCargo}>{a.cargo}</Text>
+      {a.telefono && (
+        <Text style={s.cardContactLine}>
+          <Text style={s.cardContactLabel}>T: </Text>{a.telefono}
+        </Text>
+      )}
+      {a.correo && (
+        <Text style={s.cardContactLine}>
+          <Text style={s.cardContactLabel}>M: </Text>{a.correo}
+        </Text>
+      )}
+    </View>
+  )
+}
+
+function GrupoBlock({ grupo }: { grupo: AutoridadGrupo }) {
+  const isSingle = grupo.layout === 'single'
+  return (
+    <View style={s.grupoBlock}>
+      <Text style={s.grupoTitle}>{grupo.titulo}</Text>
+      {isSingle ? (
+        <View>
+          {grupo.autoridades.map((a, i) => (
+            <AutoridadCard key={i} a={a} single />
+          ))}
+        </View>
+      ) : (
+        <View style={s.cardGrid}>
+          {grupo.autoridades.map((a, i) => (
+            <AutoridadCard key={i} a={a} single={false} />
+          ))}
+        </View>
+      )}
+    </View>
+  )
+}
+
 function SeccionIV({ data }: { data: KitDeViajeData }) {
   const { autoridades } = data
+  // Preview mode Fase B: cuando la sección no está disponible (Fase D pendiente),
+  // renderizamos sample data para que Diego revise el layout. Cleanup: cuando
+  // Fase D publique datos reales, esta rama se borra y el bloque else corre solo.
+  const isPreview = !autoridades.disponible
+  const grupos = isPreview ? samplePreviewAutoridades(data.region.nombre) : autoridades.grupos
+
   return (
-    <Page size="A4" style={s.page}>
+    <Page size="A4" style={s.page} wrap>
       <PageHeader data={data} />
       <PageFooter data={data} />
 
-      <SectionTitle>{TITULO_SECCIONES.IV}</SectionTitle>
+      <SectionTitle numeral="IV">{TITULO_SECCIONES.IV}</SectionTitle>
 
-      {!autoridades.disponible && autoridades.disclaimer && (
-        <Disclaimer text={autoridades.disclaimer} />
+      {isPreview && (
+        <Text style={s.previewNote}>
+          VISTA DE DISEÑO — DATOS DE EJEMPLO. La fuente de datos real se conecta en la próxima fase.
+        </Text>
       )}
 
-      {/* Fase D: renderizar autoridades.grupos con tarjetas agrupadas.
-          Por ahora solo skeleton — disponible=false pinta el disclaimer. */}
+      {grupos.map((g, i) => (
+        <GrupoBlock key={i} grupo={g} />
+      ))}
     </Page>
   )
 }

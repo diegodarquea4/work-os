@@ -707,14 +707,48 @@ import {
 } from '@/lib/kitDeViaje/prompts'
 import { AI_MAX_TOKENS_KIT_VIAJE, AI_MODEL_KIT_VIAJE } from '@/lib/kitDeViaje/constants'
 
-/** Extrae text del ContentBlock, tira ```json fences y parsea. Retorna null si falla. */
-function parseAiJson<T>(response: Anthropic.Messages.Message): T | null {
+/**
+ * Extrae JSON del ContentBlock de Anthropic de forma robusta:
+ *   1) Toma el text del primer block type='text'.
+ *   2) Si viene envuelto en ``` (con o sin `json`), extrae el contenido.
+ *   3) Recorta desde el primer `{` hasta el último `}` para tolerar preámbulo
+ *      ("Aquí está el JSON:") o postámbulo ("Espero que sea útil.") que Claude
+ *      a veces agrega aunque el prompt lo prohiba.
+ *   4) JSON.parse.
+ *
+ * Si falla, logea el response text COMPLETO (primeros 800 chars) para
+ * diagnóstico. Retorna null.
+ */
+function parseAiJson<T>(response: Anthropic.Messages.Message, label = 'unknown'): T | null {
   const text = response.content.find(b => b.type === 'text')?.text ?? ''
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
+  if (!text) {
+    console.error(`[minutaAI/kitViaje] empty response text for ${label}`)
+    return null
+  }
+
+  let cleaned = text.trim()
+
+  // (2) Fences ```json ... ``` o ``` ... ```
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenceMatch) cleaned = fenceMatch[1].trim()
+
+  // (3) Recortar preámbulo/postámbulo — quedarse solo con el objeto JSON.
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace  = cleaned.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1)
+  }
+
   try {
     return JSON.parse(cleaned) as T
   } catch (err) {
-    console.error('[minutaAI/kitViaje] JSON parse failed. Text preview:', cleaned.slice(0, 300), err)
+    console.error(
+      `[minutaAI/kitViaje] JSON parse failed for ${label}. Response text (first 800 chars):`,
+      text.slice(0, 800),
+      'Cleaned attempt (first 400):',
+      cleaned.slice(0, 400),
+      'Error:', err instanceof Error ? err.message : String(err),
+    )
     return null
   }
 }
@@ -738,7 +772,7 @@ export async function generateKitViajeContext(input: ContextPromptInput): Promis
       system,
       messages: [{ role: 'user', content: [{ type: 'text', text: user }] }],
     })
-    const parsed = parseAiJson<ContextAiOutput>(response)
+    const parsed = parseAiJson<ContextAiOutput>(response, `context:${input.region.cod}`)
     if (!parsed) return null
     console.log(`[minutaAI/kitViaje] context for ${input.region.nombre} in ${Date.now() - t0}ms`)
     return parsed
@@ -778,7 +812,7 @@ export async function generateKitViajePrego(input: PregoPromptInput): Promise<Pr
         ],
       }],
     })
-    const parsed = parseAiJson<PregoAiOutput>(response)
+    const parsed = parseAiJson<PregoAiOutput>(response, `prego:${input.region.cod}`)
     if (!parsed) return null
     console.log(`[minutaAI/kitViaje] prego for ${input.region.nombre} in ${Date.now() - t0}ms (${parsed.ejes?.length ?? 0} ejes)`)
     return parsed
