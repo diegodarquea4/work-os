@@ -678,3 +678,140 @@ function runQA(content: unknown): { pass: boolean; issues: string[] } {
 
   return { pass: issues.length === 0, issues }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Kit de Viaje (Fase A del rediseño Biobío-style)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Estas funciones reemplazan progresivamente al path `tipo='ficha'` de
+// `generateMinutaContent()`. Diferencias clave:
+//
+//   - Split en dos llamados AI: contexto (siempre) + PREGO (solo si hay PDF ok).
+//     El path viejo tenía UN prompt gigante que, cuando faltaba PDF, fabricaba
+//     ejes genéricos (lib/minutaAI.ts:494) — bug real que Diego marcó como
+//     inaceptable. Con el split la pregunta simplemente no se hace y el
+//     assembler pinta el disclaimer estático.
+//
+//   - Output tipado con `KitDeViajeAIContent` (definido en lib/kitDeViaje/types.ts).
+//
+//   - Guardarraíles de estilo centralizados en `lib/kitDeViaje/prompts.ts`.
+//
+// La integración desde route.ts vive en Fase A.3.
+
+import type { KitDeViajeAIContent } from '@/lib/kitDeViaje/types'
+import {
+  buildContextPrompt,
+  buildPregoPrompt,
+  type PregoPromptInput,
+  type ContextPromptInput,
+} from '@/lib/kitDeViaje/prompts'
+import { AI_MAX_TOKENS_KIT_VIAJE, AI_MODEL_KIT_VIAJE } from '@/lib/kitDeViaje/constants'
+
+/** Extrae text del ContentBlock, tira ```json fences y parsea. Retorna null si falla. */
+function parseAiJson<T>(response: Anthropic.Messages.Message): T | null {
+  const text = response.content.find(b => b.type === 'text')?.text ?? ''
+  const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
+  try {
+    return JSON.parse(cleaned) as T
+  } catch (err) {
+    console.error('[minutaAI/kitViaje] JSON parse failed. Text preview:', cleaned.slice(0, 300), err)
+    return null
+  }
+}
+
+type ContextAiOutput = Pick<KitDeViajeAIContent, 'caracterizacion_parrafos' | 'indicadores_narrativa'>
+
+/**
+ * Sección I + II del Kit de Viaje. Siempre corre — el contexto socioeconómico
+ * NO depende del PDF PREGO.
+ */
+export async function generateKitViajeContext(input: ContextPromptInput): Promise<ContextAiOutput | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const { system, user } = buildContextPrompt(input)
+
+  const t0 = Date.now()
+  try {
+    const response = await client.messages.create({
+      model: AI_MODEL_KIT_VIAJE,
+      max_tokens: AI_MAX_TOKENS_KIT_VIAJE,
+      system,
+      messages: [{ role: 'user', content: [{ type: 'text', text: user }] }],
+    })
+    const parsed = parseAiJson<ContextAiOutput>(response)
+    if (!parsed) return null
+    console.log(`[minutaAI/kitViaje] context for ${input.region.nombre} in ${Date.now() - t0}ms`)
+    return parsed
+  } catch (err) {
+    console.error(`[minutaAI/kitViaje] context call failed for ${input.region.nombre}:`, err)
+    return null
+  }
+}
+
+type PregoAiOutput = KitDeViajeAIContent['prego']
+
+/**
+ * Sección III del Kit de Viaje. El caller debe garantizar
+ * `planPdfState === 'ok'` — si no, ni siquiera se llama y el assembler pinta
+ * el disclaimer estático desde constants.
+ *
+ * Devuelve `{ intro, ejes }` con exactamente los ejes canónicos que se pasan
+ * en `input.regionEjes`, en el mismo orden.
+ */
+export async function generateKitViajePrego(input: PregoPromptInput): Promise<PregoAiOutput | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!input.planPdfBase64) return null
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const { system, userTextBlock, documentBlock } = buildPregoPrompt(input)
+
+  const t0 = Date.now()
+  try {
+    const response = await client.messages.create({
+      model: AI_MODEL_KIT_VIAJE,
+      max_tokens: AI_MAX_TOKENS_KIT_VIAJE,
+      system,
+      messages: [{
+        role: 'user',
+        content: [
+          documentBlock as unknown as Anthropic.Messages.ContentBlockParam,
+          { type: 'text', text: userTextBlock },
+        ],
+      }],
+    })
+    const parsed = parseAiJson<PregoAiOutput>(response)
+    if (!parsed) return null
+    console.log(`[minutaAI/kitViaje] prego for ${input.region.nombre} in ${Date.now() - t0}ms (${parsed.ejes?.length ?? 0} ejes)`)
+    return parsed
+  } catch (err) {
+    console.error(`[minutaAI/kitViaje] prego call failed for ${input.region.nombre}:`, err)
+    return null
+  }
+}
+
+/**
+ * Envuelve context + prego en un solo `KitDeViajeAIContent`. Los dos llamados
+ * corren en paralelo cuando ambos aplican. Cualquier fallo individual degrada
+ * a `null` en el campo correspondiente y el assembler decide qué hacer (mostrar
+ * disclaimer, dejar en blanco, etc.).
+ *
+ * ATENCIÓN: `planPdfState === 'ok'` implica `planPdfBase64` presente. Si es
+ * 'missing' o 'invalid', el bloque PREGO no se llama y sale con ejes vacío —
+ * el assembler pinta el disclaimer.
+ */
+export async function generateKitViajeContent(params: {
+  contextInput: ContextPromptInput
+  pregoInput: PregoPromptInput | null      // null cuando planPdfState !== 'ok'
+}): Promise<KitDeViajeAIContent | null> {
+  const [ctx, prego] = await Promise.all([
+    generateKitViajeContext(params.contextInput),
+    params.pregoInput ? generateKitViajePrego(params.pregoInput) : Promise.resolve(null),
+  ])
+
+  if (!ctx && !prego) return null
+
+  return {
+    caracterizacion_parrafos: ctx?.caracterizacion_parrafos ?? [],
+    indicadores_narrativa:    ctx?.indicadores_narrativa    ?? {},
+    prego: prego ?? { ejes: [] },
+  }
+}
