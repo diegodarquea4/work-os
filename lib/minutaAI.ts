@@ -756,6 +756,52 @@ function parseAiJson<T>(response: Anthropic.Messages.Message, label = 'unknown')
 type ContextAiOutput = Pick<KitDeViajeAIContent, 'caracterizacion_parrafos' | 'indicadores_narrativa'>
 
 /**
+ * Error tipado para fallas de AI que requieren acción humana explícita
+ * (top-up de créditos, API key rota). El route.ts lo captura y devuelve
+ * 503 con mensaje claro, en vez de generar un PDF vacío-sospechoso.
+ *
+ * Cualquier otra falla (timeout, 5xx, parse error) sigue siendo un "soft
+ * fail" — el AI devuelve null y el assembler pinta lo estructural.
+ */
+export class KitViajeAiHardError extends Error {
+  public readonly code: 'no_credits' | 'auth'
+  public readonly detail: string
+  constructor(code: 'no_credits' | 'auth', userMessage: string, detail: string) {
+    super(userMessage)
+    this.name = 'KitViajeAiHardError'
+    this.code = code
+    this.detail = detail
+  }
+}
+
+/**
+ * Inspecciona un error de Anthropic. Si es "sin créditos" o "auth", devuelve
+ * el objeto tipado; si no, retorna null y el caller degrada a soft-fail.
+ */
+function categorizeAnthropicError(err: unknown): KitViajeAiHardError | null {
+  if (!err || typeof err !== 'object') return null
+  const e = err as { status?: number; message?: string; error?: { error?: { message?: string; type?: string } } }
+  const status = e.status
+  const detail = e.error?.error?.message ?? e.message ?? ''
+
+  if (status === 400 && /credit balance is too low/i.test(detail)) {
+    return new KitViajeAiHardError(
+      'no_credits',
+      'La cuenta de Anthropic no tiene créditos disponibles. El equipo debe hacer top-up en https://console.anthropic.com/settings/billing antes de regenerar el Kit de Viaje.',
+      detail,
+    )
+  }
+  if (status === 401 || status === 403) {
+    return new KitViajeAiHardError(
+      'auth',
+      'La autenticación con Anthropic falló. Verificar la variable ANTHROPIC_API_KEY en Vercel.',
+      detail,
+    )
+  }
+  return null
+}
+
+/**
  * Sección I + II del Kit de Viaje. Siempre corre — el contexto socioeconómico
  * NO depende del PDF PREGO.
  */
@@ -777,6 +823,8 @@ export async function generateKitViajeContext(input: ContextPromptInput): Promis
     console.log(`[minutaAI/kitViaje] context for ${input.region.nombre} in ${Date.now() - t0}ms`)
     return parsed
   } catch (err) {
+    const hard = categorizeAnthropicError(err)
+    if (hard) throw hard
     console.error(`[minutaAI/kitViaje] context call failed for ${input.region.nombre}:`, err)
     return null
   }
@@ -817,6 +865,8 @@ export async function generateKitViajePrego(input: PregoPromptInput): Promise<Pr
     console.log(`[minutaAI/kitViaje] prego for ${input.region.nombre} in ${Date.now() - t0}ms (${parsed.ejes?.length ?? 0} ejes)`)
     return parsed
   } catch (err) {
+    const hard = categorizeAnthropicError(err)
+    if (hard) throw hard
     console.error(`[minutaAI/kitViaje] prego call failed for ${input.region.nombre}:`, err)
     return null
   }

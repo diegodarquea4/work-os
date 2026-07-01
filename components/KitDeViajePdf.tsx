@@ -143,11 +143,24 @@ const s = StyleSheet.create({
   semaforoAmbar:  { backgroundColor: '#ffe0b2' },
   semaforoRojo:   { backgroundColor: '#ffcdd2' },
   semaforoGris:   { backgroundColor: '#e0e0e0' },
-  destacadaRow: { flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 0.25, borderBottomColor: COLORS.hairline },
-  destacadaSemaforo: { width: 12, fontSize: 12, lineHeight: 1 },
-  destacadaNombre: { flex: 1, fontSize: 9, lineHeight: 1.3 },
-  destacadaMinisterio: { fontSize: 8, color: COLORS.muted, marginTop: 1 },
-  destacadaPct: { width: 44, fontSize: 9, textAlign: 'right' },
+  destacadaRow: {
+    flexDirection: 'row', paddingVertical: 4,
+    borderBottomWidth: 0.25, borderBottomColor: COLORS.hairline,
+    alignItems: 'flex-start',
+  },
+  // Círculo real (View) — Helvetica no soporta ○ (U+25CB) y lo renderiza como Ë.
+  // Este View se dibuja con color según semáforo.
+  destacadaCirculo: {
+    width: 8, height: 8, borderRadius: 4,
+    marginRight: 8, marginTop: 3,
+  },
+  // Contenedor nombre+ministerio — flexDirection column explícito. Sin esto,
+  // react-pdf a veces colapsa ambos Text en la misma línea baseline y
+  // ministerio se pinta encima de nombre.
+  destacadaBody: { flex: 1, flexDirection: 'column' },
+  destacadaNombre: { fontSize: 9, lineHeight: 1.3, color: COLORS.ink },
+  destacadaMinisterio: { fontSize: 8, color: COLORS.muted, marginTop: 1, lineHeight: 1.2 },
+  destacadaPct: { width: 44, fontSize: 9, textAlign: 'right', color: COLORS.inkSoft },
 
   // Disclaimer callout
   disclaimerBox: {
@@ -187,6 +200,22 @@ const s = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
   cardNombre: { fontSize: 9, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 4, lineHeight: 1.2 },
   cardNombreSingle: { fontSize: 11, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 6, lineHeight: 1.2 },
+  // Card con avatar: layout row [avatar] [content]
+  cardBodyRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  cardContent: { flex: 1 },
+  avatar: {
+    borderRadius: 999,
+    marginRight: 8,
+    backgroundColor: COLORS.bgAccent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarGrid: { width: 28, height: 28 },
+  avatarSingle: { width: 44, height: 44 },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarInitials:       { fontSize: 10, fontWeight: 'bold', color: COLORS.bgCover, letterSpacing: 0.3 },
+  avatarInitialsSingle: { fontSize: 14, fontWeight: 'bold', color: COLORS.bgCover, letterSpacing: 0.5 },
   partidoChip: {
     fontSize: 7, paddingVertical: 1, paddingHorizontal: 4,
     borderRadius: 2, backgroundColor: COLORS.bgAccent, color: COLORS.inkSoft,
@@ -474,24 +503,27 @@ function EjeBlock({ eje }: { eje: EjePrego }) {
       {resumen.iniciativas_destacadas.length > 0 && (
         <>
           <Text style={s.subSectionTitle}>Iniciativas destacadas</Text>
-          {resumen.iniciativas_destacadas.map((ini, i) => (
-            <View key={i} style={s.destacadaRow}>
-              <Text style={s.destacadaSemaforo}>
-                {ini.estado_semaforo === 'verde' ? '●' :
-                 ini.estado_semaforo === 'ambar' ? '●' :
-                 ini.estado_semaforo === 'rojo'  ? '●' : '○'}
-              </Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.destacadaNombre}>{ini.nombre}</Text>
-                {ini.ministerio && (
-                  <Text style={s.destacadaMinisterio}>{ini.ministerio}</Text>
-                )}
+          {resumen.iniciativas_destacadas.map((ini, i) => {
+            const circuloColor =
+              ini.estado_semaforo === 'verde' ? '#4caf50' :
+              ini.estado_semaforo === 'ambar' ? '#ff9800' :
+              ini.estado_semaforo === 'rojo'  ? '#e53935' :
+              '#bdbdbd'
+            return (
+              <View key={i} style={s.destacadaRow}>
+                <View style={[s.destacadaCirculo, { backgroundColor: circuloColor }]} />
+                <View style={s.destacadaBody}>
+                  <Text style={s.destacadaNombre}>{ini.nombre}</Text>
+                  {ini.ministerio && (
+                    <Text style={s.destacadaMinisterio}>{ini.ministerio}</Text>
+                  )}
+                </View>
+                <Text style={s.destacadaPct}>
+                  {ini.pct_avance != null ? `${ini.pct_avance}%` : '—'}
+                </Text>
               </View>
-              <Text style={s.destacadaPct}>
-                {ini.pct_avance != null ? `${ini.pct_avance}%` : '—'}
-              </Text>
-            </View>
-          ))}
+            )
+          })}
         </>
       )}
     </View>
@@ -534,24 +566,50 @@ function SeccionIII({ data }: { data: KitDeViajeData }) {
 
 // ── Sección IV — Autoridades ────────────────────────────────────────────────
 
+/** Iniciales para el placeholder: primera letra del primer nombre + primera del último apellido. */
+function computeInitials(nombre: string): string {
+  const parts = nombre.trim().split(/\s+/).filter(p => p.length > 0)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function Avatar({ fotoUrl, initials, single }: { fotoUrl?: string; initials: string; single: boolean }) {
+  const sizeStyle = single ? s.avatarSingle : s.avatarGrid
+  const initialStyle = single ? s.avatarInitialsSingle : s.avatarInitials
+  return (
+    <View style={[s.avatar, sizeStyle]}>
+      {fotoUrl
+        ? <Image src={fotoUrl} style={s.avatarImage} />
+        : <Text style={initialStyle}>{initials}</Text>}
+    </View>
+  )
+}
+
 function AutoridadCard({ a, single }: { a: Autoridad; single: boolean }) {
+  const initials = computeInitials(a.nombre)
   return (
     <View style={single ? s.cardSingle : s.card} wrap={false}>
-      <View style={s.cardHeaderRow}>
-        <Text style={single ? s.cardNombreSingle : s.cardNombre}>{a.nombre}</Text>
-        {a.partido && <Text style={s.partidoChip}>{a.partido}</Text>}
+      <View style={s.cardBodyRow}>
+        <Avatar fotoUrl={a.foto_url} initials={initials} single={single} />
+        <View style={s.cardContent}>
+          <View style={s.cardHeaderRow}>
+            <Text style={single ? s.cardNombreSingle : s.cardNombre}>{a.nombre}</Text>
+            {a.partido && <Text style={s.partidoChip}>{a.partido}</Text>}
+          </View>
+          <Text style={single ? s.cardCargoSingle : s.cardCargo}>{a.cargo}</Text>
+          {a.telefono && (
+            <Text style={s.cardContactLine}>
+              <Text style={s.cardContactLabel}>T: </Text>{a.telefono}
+            </Text>
+          )}
+          {a.correo && (
+            <Text style={s.cardContactLine}>
+              <Text style={s.cardContactLabel}>M: </Text>{a.correo}
+            </Text>
+          )}
+        </View>
       </View>
-      <Text style={single ? s.cardCargoSingle : s.cardCargo}>{a.cargo}</Text>
-      {a.telefono && (
-        <Text style={s.cardContactLine}>
-          <Text style={s.cardContactLabel}>T: </Text>{a.telefono}
-        </Text>
-      )}
-      {a.correo && (
-        <Text style={s.cardContactLine}>
-          <Text style={s.cardContactLabel}>M: </Text>{a.correo}
-        </Text>
-      )}
     </View>
   )
 }

@@ -13,6 +13,7 @@ import { minutaPostSchema } from '@/lib/schemas'
 import {
   generateMinutaContent,
   generateKitViajeContent,
+  KitViajeAiHardError,
   type LeystopMinuta, type SeguimientoMinuta,
   type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries,
   type FichaExtraData,
@@ -501,23 +502,40 @@ export async function POST(request: Request) {
     aiContent = cachedAiContent
   } else if (canonTipo === 'kit_viaje') {
     console.log(`[minuta] kit_viaje for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, planPdfState: ${planPdfState}, ejes_catalogo: ${regionEjes.length}`)
-    aiContent = await generateKitViajeContent({
-      contextInput: {
-        region: { cod: body.region.cod, nombre: body.region.nombre },
-        metrics,
-        fichaExtra,
-        trendSummaries,
-      },
-      pregoInput: planPdfState === 'ok' && planPdfBase64
-        ? {
-            region: { cod: body.region.cod, nombre: body.region.nombre },
-            fecha: body.fecha,
-            planPdfBase64,
-            regionEjes,
-            projects,
-          }
-        : null,
-    })
+    try {
+      aiContent = await generateKitViajeContent({
+        contextInput: {
+          region: { cod: body.region.cod, nombre: body.region.nombre },
+          metrics,
+          fichaExtra,
+          trendSummaries,
+        },
+        pregoInput: planPdfState === 'ok' && planPdfBase64
+          ? {
+              region: { cod: body.region.cod, nombre: body.region.nombre },
+              fecha: body.fecha,
+              planPdfBase64,
+              regionEjes,
+              projects,
+            }
+          : null,
+      })
+    } catch (err) {
+      if (err instanceof KitViajeAiHardError) {
+        // Créditos agotados o auth rota — corta acá con 503 + mensaje humano
+        // en vez de generar un PDF vacío-sospechoso.
+        console.error(`[minuta] AI hard error (${err.code}): ${err.detail}`)
+        return new Response(
+          JSON.stringify({
+            error: err.message,
+            code: `ai_${err.code}`,
+            hint: 'Regenerar el Kit de Viaje una vez que se restablezca el servicio de AI.',
+          }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      throw err
+    }
     if (sbRef && aiContent) {
       const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
         region_cod:   body.region.cod,
