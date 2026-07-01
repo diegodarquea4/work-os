@@ -469,16 +469,18 @@ export async function POST(request: Request) {
       trendSummaries,
       fichaExtra,
     )
-    // Store in cache (fire-and-forget — don't delay the PDF response)
+    // Store in cache. Awaited: en serverless, escrituras fire-and-forget se
+    // pierden cuando el contenedor se congela tras Response (ver O-04 en
+    // CLAUDE.md — mismo síntoma que dejó a SEIA 53 días sin telemetría).
     if (sbRef) {
-      sbRef.from('minuta_cache').upsert({
+      const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
         region_cod:   body.region.cod,
         tipo,
         cache_date:   today,
         ai_content:   aiContent as Record<string, unknown>,
         generated_by: authProfile.id,
       }, { onConflict: 'region_cod,tipo,cache_date' })
-        .then(({ error }) => { if (error) console.error('[minuta] cache store:', error.message) })
+      if (cacheErr) console.error('[minuta] cache store:', cacheErr.message)
     }
   }
 
@@ -540,17 +542,19 @@ export async function POST(request: Request) {
   }
   const suffix = tipo === 'ficha' ? '-kit-viaje' : '-ejecutiva'
 
-  // Log to v2_minutas_log (no content stored — just metadata + hash)
+  // Log to v2_minutas_log. Awaited por el mismo motivo que el cache upsert
+  // — fire-and-forget en serverless se pierde tras Response.
   if (sbRef) {
     const regionId = INE_CODE[body.region.cod]
     const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 16)
-    sbRef.from('v2_minutas_log').insert({
+    const { error: logErr } = await sbRef.from('v2_minutas_log').insert({
       region_id: regionId,
       tipo,
       generado_por: authProfile.id,
       hash_pdf: hash,
       parametros: { fecha: body.fecha, force, ai: !!aiContent },
-    }).then(({ error }) => { if (error) console.error('[minuta] v2_minutas_log:', error.message) })
+    })
+    if (logErr) console.error('[minuta] v2_minutas_log:', logErr.message)
   }
 
   return new Response(new Uint8Array(buffer), {
