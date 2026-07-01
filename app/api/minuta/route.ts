@@ -5,15 +5,28 @@ import fs from 'fs'
 import { createHash } from 'crypto'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog } from '@/lib/types'
+import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog, RegionEje } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { minutaPostSchema } from '@/lib/schemas'
-import { generateMinutaContent, type MinutaTipo, type LeystopMinuta, type SeguimientoMinuta, type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries, type FichaRegionalContent, type FichaExtraData } from '@/lib/minutaAI'
+import {
+  generateMinutaContent,
+  generateKitViajeContent,
+  type LeystopMinuta, type SeguimientoMinuta,
+  type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries,
+  type FichaExtraData,
+} from '@/lib/minutaAI'
 import provinciasData from '@/data/provincias-comunas.json'
 import { getSupabaseColega } from '@/lib/supabaseColega'
 import { registerPdfFonts } from '@/lib/pdfFonts'
+import {
+  buildKitDeViajeData,
+  renderKitDeViajePdf,
+  validatePlanPdfBuffer,
+  type KitDeViajeAIContent,
+  type PlanPdfState,
+} from '@/lib/kitDeViaje'
 
 // Cap a 300s: 7+ queries Supabase en serie + Anthropic AI con PDF + render react-pdf.
 // Sin esto Vercel mata el handler a ~60s y el usuario ve "no se generó la minuta"
@@ -42,10 +55,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const region_cod = url.searchParams.get('region_cod')
   const rawTipo = url.searchParams.get('tipo') ?? 'ejecutiva'
-  if (rawTipo !== 'ejecutiva' && rawTipo !== 'ficha') {
-    return Response.json({ error: `tipo inválido: ${rawTipo}. Valores válidos: 'ejecutiva' | 'ficha'` }, { status: 400 })
+  if (rawTipo !== 'ejecutiva' && rawTipo !== 'ficha' && rawTipo !== 'kit_viaje') {
+    return Response.json({ error: `tipo inválido: ${rawTipo}. Valores válidos: 'ejecutiva' | 'kit_viaje' | 'ficha' (legacy)` }, { status: 400 })
   }
-  const tipo: MinutaTipo = rawTipo
+  // Canonicalización Fase A.3: 'ficha' es alias legacy del Kit de Viaje.
+  // Consultamos el cache con la clave canónica 'kit_viaje' para que ambas
+  // formas de invocar devuelvan lo mismo.
+  const cacheTipo = rawTipo === 'ficha' ? 'kit_viaje' : rawTipo
 
   if (!region_cod || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return Response.json({ cached: false, generated_at: null })
@@ -56,7 +72,7 @@ export async function GET(request: Request) {
   const { data } = await sb.from('minuta_cache')
     .select('generated_at')
     .eq('region_cod', region_cod)
-    .eq('tipo', tipo)
+    .eq('tipo', cacheTipo)
     .eq('cache_date', today)
     .maybeSingle()
 
@@ -80,9 +96,9 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
-  // El schema valida cod + nombre + fecha + tipo + force. El passthrough()
+  // El schema valida cod + nombre + fecha + tipo + format + force. El passthrough()
   // deja pasar el resto de Region (capital, zona) que el PDF puede usar.
-  const body = parse.data as typeof parse.data & { region: Region; tipo: MinutaTipo }
+  const body = parse.data as typeof parse.data & { region: Region }
 
   // regional / filtered-viewer can only generate minutas for their assigned regions
   const isRestricted = authProfile.role === 'regional' ||
@@ -90,7 +106,11 @@ export async function POST(request: Request) {
   if (isRestricted && !authProfile.region_cods.includes(body.region.cod)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   }
-  const tipo: MinutaTipo = body.tipo
+  // Canonicalización Fase A.3: 'ficha' es alias legacy del nuevo 'kit_viaje'.
+  // Downstream (cache key, v2_minutas_log, dispatch) usa canonTipo, no body.tipo.
+  // El schema sigue aceptando 'ficha' para no romper callers externos.
+  const canonTipo: 'ejecutiva' | 'kit_viaje' =
+    body.tipo === 'ficha' ? 'kit_viaje' : body.tipo
   const force = body.force
   const today = new Date().toISOString().slice(0, 10)
 
@@ -100,6 +120,8 @@ export async function POST(request: Request) {
   let mopProjects:  MopProject[]  | null = null
   let leystopData: LeystopMinuta | null = null
   let planPdfBase64: string | null = null
+  let planPdfState:  PlanPdfState = 'missing'
+  let regionEjes: RegionEje[] = []
   let cachedAiContent: unknown = null
   let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
   // Enriched context data (fase 2)
@@ -148,10 +170,21 @@ export async function POST(request: Request) {
         : sb.from('minuta_cache')
             .select('ai_content')
             .eq('region_cod', body.region.cod)
-            .eq('tipo', tipo)
+            .eq('tipo', canonTipo)
             .eq('cache_date', today)
             .maybeSingle(),
     ])
+
+    // region_ejes catálogo (Sección III del Kit de Viaje). Consulta liviana
+    // — se hace después del Promise.all para no meter otro slot y porque
+    // no se usa en tipo='ejecutiva'.
+    if (canonTipo === 'kit_viaje') {
+      const { data: ejesRes } = await sb.from('region_ejes')
+        .select('*')
+        .eq('region_cod', body.region.cod)
+        .order('numero', { ascending: true })
+      regionEjes = (ejesRes ?? []) as RegionEje[]
+    }
 
     projects     = prioridades
     metrics      = metricas
@@ -160,17 +193,27 @@ export async function POST(request: Request) {
     leystopData  = (leystopRes.data as LeystopMinuta | null)
     cachedAiContent = (cacheRes.data as { ai_content: unknown } | null)?.ai_content ?? null
 
-    // Fetch Plan Regional PDF from Storage for AI context
+    // Fetch Plan Regional PDF from Storage. Computamos planPdfState desde el
+    // buffer crudo (magic bytes + threshold) ANTES de convertir a base64,
+    // así detectamos el caso Ñuble XVI.pdf (328 bytes, corrupto en prod) y
+    // el nuevo pipeline muestra el disclaimer estático en vez de fabricar
+    // ejes falsos.
     try {
       const { data: pdfData, error: pdfError } = await sb.storage
         .from('plan-regional')
         .download(`${body.region.cod}.pdf`)
       if (!pdfError && pdfData) {
         const arrayBuf = await pdfData.arrayBuffer()
-        planPdfBase64 = Buffer.from(arrayBuf).toString('base64')
+        const buf = Buffer.from(arrayBuf)
+        planPdfState = validatePlanPdfBuffer(buf)
+        if (planPdfState === 'ok') {
+          planPdfBase64 = buf.toString('base64')
+        }
+      } else {
+        planPdfState = 'missing'
       }
     } catch {
-      // No plan regional uploaded — AI will work with panel data only
+      planPdfState = 'missing'
     }
 
     // ── FASE 2: Enriched context (needs initiative IDs from fase 1) ──────────
@@ -366,7 +409,7 @@ export async function POST(request: Request) {
     }
 
     // ── Kit de Viaje extra data (PIB all regions, sectorial, history) ────────
-    if (tipo === 'ficha' && regionId !== undefined) {
+    if (canonTipo === 'kit_viaje' && regionId !== undefined) {
       const [allPibRes, sectorRes, nacBenchRes, pibHistoryRes] = await Promise.all([
         sb.from('v2_indicadores_ultimo')
           .select('codigo_indicador, region_id, valor')
@@ -446,15 +489,50 @@ export async function POST(request: Request) {
     projects = all.filter(p => p.cod === body.region.cod)
   }
 
-  // Use cached AI content or generate fresh
+  // Use cached AI content or generate fresh.
+  // El shape del ai_content depende de canonTipo:
+  //   - 'ejecutiva'  → MinutaEjecutivaContent (path legacy)
+  //   - 'kit_viaje'  → KitDeViajeAIContent    (Fase A del rediseño)
+  // Rows del cache guardadas con tipo='ficha' quedan huérfanas y no se leen
+  // más — el lookup usa canonTipo='kit_viaje'. Se pueden borrar en cleanup.
   let aiContent: unknown
   if (cachedAiContent) {
-    console.log(`[minuta] cache HIT ${body.region.cod}/${tipo}`)
+    console.log(`[minuta] cache HIT ${body.region.cod}/${canonTipo}`)
     aiContent = cachedAiContent
+  } else if (canonTipo === 'kit_viaje') {
+    console.log(`[minuta] kit_viaje for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, planPdfState: ${planPdfState}, ejes_catalogo: ${regionEjes.length}`)
+    aiContent = await generateKitViajeContent({
+      contextInput: {
+        region: { cod: body.region.cod, nombre: body.region.nombre },
+        metrics,
+        fichaExtra,
+        trendSummaries,
+      },
+      pregoInput: planPdfState === 'ok' && planPdfBase64
+        ? {
+            region: { cod: body.region.cod, nombre: body.region.nombre },
+            fecha: body.fecha,
+            planPdfBase64,
+            regionEjes,
+            projects,
+          }
+        : null,
+    })
+    if (sbRef && aiContent) {
+      const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
+        region_cod:   body.region.cod,
+        tipo:         canonTipo,
+        cache_date:   today,
+        ai_content:   aiContent as Record<string, unknown>,
+        generated_by: authProfile.id,
+      }, { onConflict: 'region_cod,tipo,cache_date' })
+      if (cacheErr) console.error('[minuta] cache store:', cacheErr.message)
+    }
   } else {
-    console.log(`[minuta] ${tipo} for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}, seguimientos: ${seguimientosMinuta.length}, trends: ${!!trendSummaries}`)
+    // canonTipo === 'ejecutiva' — path legacy sin cambios.
+    console.log(`[minuta] ejecutiva for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}, seguimientos: ${seguimientosMinuta.length}, trends: ${!!trendSummaries}`)
     aiContent = await generateMinutaContent(
-      tipo,
+      'ejecutiva',
       body.region.nombre,
       body.fecha,
       projects,
@@ -475,7 +553,7 @@ export async function POST(request: Request) {
     if (sbRef) {
       const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
         region_cod:   body.region.cod,
-        tipo,
+        tipo:         canonTipo,
         cache_date:   today,
         ai_content:   aiContent as Record<string, unknown>,
         generated_by: authProfile.id,
@@ -494,53 +572,53 @@ export async function POST(request: Request) {
   // Register Carlito font for all PDF renders
   registerPdfFonts()
 
-  let element: React.ReactElement
-
-  if (tipo === 'ficha') {
-    const FichaRegional = (await import('@/components/FichaRegional')).default
-    const regionProvs = (provinciasData as Record<string, { provincias: { nombre: string; comunas: string }[] }>)[body.region.cod]?.provincias ?? []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    element = React.createElement(FichaRegional as any, {
-      region: body.region,
-      metrics,
-      leystopData,
-      fecha: body.fecha,
-      aiContent,
-      provinciasData: regionProvs,
-      allRegionsPib: fichaExtra?.allRegionsPib ?? [],
-      pibSectorial: fichaExtra?.pibSectorial ?? [],
-      trendSummaries,
-      logoSrc: LOGO_DATA_URL,
-    })
-  } else {
-    // tipo === 'ejecutiva' (único caso restante — el schema zod ya lo garantiza)
-    const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    element = React.createElement(MinutaEjecutiva as any, {
-      region: body.region,
-      projects,
-      metrics,
-      seiaProjects,
-      mopProjects,
-      fecha: body.fecha,
-      aiContent,
-      logoSrc: LOGO_DATA_URL,
-    })
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let buffer: Buffer
   try {
-    buffer = await renderToBuffer(element as any)
+    if (canonTipo === 'kit_viaje') {
+      // Nuevo pipeline Fase B. renderKitDeViajePdf hace el renderToBuffer
+      // internamente.
+      const regionProvs = (provinciasData as Record<string, { provincias: { nombre: string; comunas: string }[] }>)[body.region.cod]?.provincias ?? []
+      const kitData = buildKitDeViajeData({
+        region: body.region,
+        fecha: body.fecha,
+        metrics,
+        projects,
+        regionEjes,
+        planPdfState,
+        aiContent: aiContent as KitDeViajeAIContent | null,
+        fichaExtra,
+        trendSummaries,
+        provincias: regionProvs.map(p => ({ provincia: p.nombre, comunas: p.comunas })),
+        logoDataUrl: LOGO_DATA_URL ?? '',
+        aiFresh: !cachedAiContent,
+      })
+      buffer = await renderKitDeViajePdf(kitData)
+    } else {
+      // canonTipo === 'ejecutiva' — path legacy.
+      const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const element = React.createElement(MinutaEjecutiva as any, {
+        region: body.region,
+        projects,
+        metrics,
+        seiaProjects,
+        mopProjects,
+        fecha: body.fecha,
+        aiContent,
+        logoSrc: LOGO_DATA_URL,
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      buffer = await renderToBuffer(element as any)
+    }
   } catch (err) {
-    console.error('[minuta] renderToBuffer error:', err)
+    console.error('[minuta] render error:', err)
     const msg = err instanceof Error ? err.message : String(err)
     return new Response(
       JSON.stringify({ error: `No se pudo renderizar el PDF: ${msg}` }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     )
   }
-  const suffix = tipo === 'ficha' ? '-kit-viaje' : '-ejecutiva'
+  const suffix = canonTipo === 'kit_viaje' ? '-kit-viaje' : '-ejecutiva'
 
   // Log to v2_minutas_log. Awaited por el mismo motivo que el cache upsert
   // — fire-and-forget en serverless se pierde tras Response.
@@ -549,10 +627,10 @@ export async function POST(request: Request) {
     const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 16)
     const { error: logErr } = await sbRef.from('v2_minutas_log').insert({
       region_id: regionId,
-      tipo,
+      tipo: canonTipo,
       generado_por: authProfile.id,
       hash_pdf: hash,
-      parametros: { fecha: body.fecha, force, ai: !!aiContent },
+      parametros: { fecha: body.fecha, force, ai: !!aiContent, planPdfState },
     })
     if (logErr) console.error('[minuta] v2_minutas_log:', logErr.message)
   }

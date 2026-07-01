@@ -45,13 +45,6 @@ Reglas de estilo (obligatorias en cada respuesta):
 - No inventes cifras. Si un dato no está en el input, NO lo menciones.
 `.trim()
 
-/** Etiqueta un valor numérico o "s/d" para que el prompt no invente. */
-function labelValue(n: number | null | undefined, suffix?: string): string {
-  if (n == null) return 's/d'
-  const s = typeof n === 'number' ? n.toString() : String(n)
-  return suffix ? `${s} ${suffix}` : s
-}
-
 // ── (1) Contexto socioeconómico — Secciones I y II ─────────────────────────
 
 export interface ContextPromptInput {

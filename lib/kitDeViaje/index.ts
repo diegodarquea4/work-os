@@ -20,3 +20,4 @@ export {
   type PregoPromptInput,
   type PregoPromptOutput,
 } from './prompts'
+export { renderKitDeViajePdf } from './renderPdf'
