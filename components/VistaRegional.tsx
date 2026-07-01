@@ -161,11 +161,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   const canEditAny      = useCanEditAny()
   const canPropose      = useCanEditOperational()
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
-  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'completo' | 'ficha' | null>(null)
+  const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
-  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'completo' | 'ficha', { cached: boolean; generated_at: string | null }>>({
+  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'ficha', { cached: boolean; generated_at: string | null }>>({
     ejecutiva: { cached: false, generated_at: null },
-    completo:  { cached: false, generated_at: null },
     ficha:     { cached: false, generated_at: null },
   })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -193,12 +192,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     if (!selectedCod) return
     Promise.all([
       fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ejecutiva`).then(r => r.ok ? r.json() : null),
-      fetch(`/api/minuta?region_cod=${selectedCod}&tipo=completo`).then(r => r.ok ? r.json() : null),
       fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ficha`).then(r => r.ok ? r.json() : null),
-    ]).then(([ej, comp, ficha]) => {
+    ]).then(([ej, ficha]) => {
       setMinutaCache({
         ejecutiva: ej    ?? { cached: false, generated_at: null },
-        completo:  comp  ?? { cached: false, generated_at: null },
         ficha:     ficha ?? { cached: false, generated_at: null },
       })
     }).catch(() => {})
@@ -316,7 +313,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
   // ── Minuta handler ───────────────────────────────────────────────────────────
 
-  async function handleMinuta(tipo: 'ejecutiva' | 'completo' | 'ficha' = 'ejecutiva', force = false) {
+  async function handleMinuta(tipo: 'ejecutiva' | 'ficha' = 'ejecutiva', force = false) {
     if (!region || downloadingMinuta) return
     setDownloadingMinuta(true)
     setDownloadingTipo(tipo)
@@ -331,7 +328,17 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ region, fecha, tipo, ...(force ? { force: true } : {}) }),
       })
-      if (!res.ok) throw new Error('Error generando minuta')
+      if (!res.ok) {
+        // El server devuelve JSON {error, detalle?} en 4xx/5xx. Leerlo para
+        // mostrar el mensaje real en lugar del "Error genérico" que oculta
+        // la causa (RLS, AI timeout, PDF render fallido, etc).
+        let detalle = ''
+        try {
+          const err = await res.json()
+          detalle = err?.error ?? err?.detalle ?? ''
+        } catch { /* body no era JSON */ }
+        throw new Error(detalle ? `${res.status}: ${detalle}` : `HTTP ${res.status}`)
+      }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
@@ -341,9 +348,11 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
       URL.revokeObjectURL(url)
       // Update local cache state so buttons reflect new status immediately
       setMinutaCache(prev => ({ ...prev, [tipo]: { cached: true, generated_at: new Date().toISOString() } }))
-    } catch {
-      setToastMsg('Error al generar la minuta. Inténtalo de nuevo.')
-      setTimeout(() => setToastMsg(null), 4000)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[VistaRegional] handleMinuta error:', err)
+      setToastMsg(`No se pudo generar la minuta: ${msg}`)
+      setTimeout(() => setToastMsg(null), 8000)
     } finally {
       setDownloadingMinuta(false)
       setDownloadingTipo(null)
@@ -574,39 +583,6 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                   </div>
                   {minutaMenuOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-max py-1">
-                      <button
-                        onClick={() => handleMinuta('completo')}
-                        className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        {downloadingMinuta && downloadingTipo === 'completo' ? (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                              <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
-                            </svg>
-                            {minutaCache.completo.cached ? 'Descargando...' : 'Generando...'}
-                          </>
-                        ) : (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="2" y="1" width="8" height="10" rx="1"/><line x1="4" y1="4" x2="8" y2="4"/><line x1="4" y1="6" x2="8" y2="6"/><line x1="4" y1="8" x2="6" y2="8"/>
-                            </svg>
-                            {minutaCache.completo.cached ? 'Descargar Reporte Completo' : 'Generar Reporte Completo'}
-                          </>
-                        )}
-                      </button>
-                      {(profile?.role === 'admin' || profile?.role === 'editor') && minutaCache.completo.cached && (
-                        <button
-                          onClick={() => handleMinuta('completo', true)}
-                          className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1 6a5 5 0 1 0 1-3"/>
-                            <path d="M1 1v3h3"/>
-                          </svg>
-                          Regenerar con IA
-                        </button>
-                      )}
-                      <div className="border-t border-gray-100 my-1" />
                       <button
                         onClick={() => handleMinuta('ficha')}
                         className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
@@ -971,11 +947,9 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             <p className="text-xs text-gray-500">
               {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
                 ? 'Usando versión en cache de hoy.'
-                : downloadingTipo === 'completo'
-                  ? 'Analizando plan regional, iniciativas, indicadores y tendencias. Esto puede tomar hasta 40 segundos.'
-                  : downloadingTipo === 'ficha'
-                    ? 'Compilando datos regionales para la ficha. Esto toma unos segundos.'
-                    : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
+                : downloadingTipo === 'ficha'
+                  ? 'Compilando datos regionales para el Kit de Viaje. Esto toma unos segundos.'
+                  : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
             </p>
           </div>
         </div>

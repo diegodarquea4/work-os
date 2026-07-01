@@ -59,7 +59,7 @@ describe('minutaPostSchema', () => {
     })
     expect(r.success).toBe(true)
     if (r.success) {
-      expect(r.data.tipo).toBe('completo')
+      expect(r.data.tipo).toBe('ejecutiva')
       expect(r.data.force).toBe(false)
     }
   })

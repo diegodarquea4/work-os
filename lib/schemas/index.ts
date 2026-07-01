@@ -78,7 +78,7 @@ export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
 export const minutaPostSchema = z.object({
   region: regionFullSchema,
   fecha:  fechaISOSchema,
-  tipo:   z.enum(['ejecutiva', 'completo', 'ficha']).default('completo'),
+  tipo:   z.enum(['ejecutiva', 'ficha']).default('ejecutiva'),
   force:  z.boolean().default(false),
 })
 

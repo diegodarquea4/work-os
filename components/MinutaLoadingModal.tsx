@@ -8,15 +8,6 @@ const MESSAGES: Record<string, string[]> = {
     'Redactando síntesis ejecutiva...',
     'Generando documento PDF...',
   ],
-  completo: [
-    'Conectando con el agente IA...',
-    'Leyendo el Plan Regional de Gobierno...',
-    'Analizando iniciativas y semáforos...',
-    'Calculando indicadores regionales...',
-    'Redactando análisis por eje estratégico...',
-    'Compilando el informe completo...',
-    'Generando documento PDF...',
-  ],
   ficha: [
     'Compilando indicadores regionales...',
     'Generando Kit de Viaje PDF...',
@@ -25,7 +16,6 @@ const MESSAGES: Record<string, string[]> = {
 
 const TIPO_LABEL: Record<string, string> = {
   ejecutiva: 'Minuta Ejecutiva',
-  completo: 'Reporte Completo',
   ficha: 'Kit de Viaje',
 }
 
@@ -126,11 +116,9 @@ export default function MinutaLoadingModal({ tipo }: { tipo: string }) {
           {/* ── Footer ── */}
           <div className="px-6 pb-5">
             <p className="text-xs text-gray-400 text-center">
-              {tipo === 'completo'
-                ? 'El agente IA está analizando el Plan Regional — puede demorar hasta 40 seg.'
-                : tipo === 'ficha'
-                  ? 'Compilando datos regionales — unos segundos.'
-                  : 'Generando documento — puede demorar hasta 15 seg.'}
+              {tipo === 'ficha'
+                ? 'Compilando datos regionales — unos segundos.'
+                : 'Generando documento — puede demorar hasta 15 seg.'}
             </p>
           </div>
 

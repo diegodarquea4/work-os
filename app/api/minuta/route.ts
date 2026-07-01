@@ -3,7 +3,6 @@ import React from 'react'
 import path from 'path'
 import fs from 'fs'
 import { createHash } from 'crypto'
-import MinutaDocumentV2 from '@/components/MinutaDocumentV2'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog } from '@/lib/types'
@@ -42,7 +41,11 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const region_cod = url.searchParams.get('region_cod')
-  const tipo = (url.searchParams.get('tipo') ?? 'ejecutiva') as MinutaTipo
+  const rawTipo = url.searchParams.get('tipo') ?? 'ejecutiva'
+  if (rawTipo !== 'ejecutiva' && rawTipo !== 'ficha') {
+    return Response.json({ error: `tipo inválido: ${rawTipo}. Valores válidos: 'ejecutiva' | 'ficha'` }, { status: 400 })
+  }
+  const tipo: MinutaTipo = rawTipo
 
   if (!region_cod || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return Response.json({ cached: false, generated_at: null })
@@ -102,9 +105,6 @@ export async function POST(request: Request) {
   let semaforoTrends: SemaforoTrendSummary | null = null
   let nationalBenchmark: NationalBenchmark[] = []
   let trendSummaries: TrendSummaries | null = null
-  // V2 extras
-  let autoridades: { cargo: string; nombre: string; partido: string | null; territorio: string | null }[] = []
-  let periodMetrics: { metric_name: string; period_2018?: number | null; period_2022?: number | null; period_2026?: number | null; current?: number | null }[] = []
   let fichaExtra: FichaExtraData | null = null
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
@@ -169,69 +169,6 @@ export async function POST(request: Request) {
       }
     } catch {
       // No plan regional uploaded — AI will work with panel data only
-    }
-
-    // ── V2 extras: autoridades + period metrics for Reporte Completo ────────
-    if (tipo === 'completo') {
-      const [autoridadesRes, tsDesempleo, tsPib] = await Promise.all([
-        sb.from('autoridades_regionales')
-          .select('cargo, nombre, partido, territorio')
-          .eq('region_cod', body.region.cod)
-          .order('cargo'),
-        regionId !== undefined
-          ? sb.from('regional_metrics')
-              .select('value, period')
-              .eq('region_id', regionId)
-              .eq('metric_name', 'tasa_desocupacion')
-              .order('period', { ascending: true })
-          : Promise.resolve({ data: null }),
-        regionId !== undefined
-          ? sb.from('regional_metrics')
-              .select('value, period')
-              .eq('region_id', regionId)
-              .eq('metric_name', 'pib_regional_anual')
-              .order('period', { ascending: true })
-          : Promise.resolve({ data: null }),
-      ])
-
-      autoridades = (autoridadesRes.data ?? []) as typeof autoridades
-
-      // Build period comparison: closest value to 2018, 2022, 2025 (annual)
-      function closestTo(series: { value: number; period: string }[], target: string): number | null {
-        if (!series.length) return null
-        let best = series[0]
-        let bestDiff = Math.abs(new Date(series[0].period).getTime() - new Date(target).getTime())
-        for (const s of series) {
-          const diff = Math.abs(new Date(s.period).getTime() - new Date(target).getTime())
-          if (diff < bestDiff) { best = s; bestDiff = diff }
-        }
-        // Only use if within 6 months of target
-        return bestDiff < 180 * 86400000 ? best.value : null
-      }
-
-      const desSeries = (tsDesempleo.data ?? []) as { value: number; period: string }[]
-      const pibSeries = (tsPib.data ?? []) as { value: number; period: string }[]
-
-      const pmList: typeof periodMetrics = []
-      if (desSeries.length > 0) {
-        pmList.push({
-          metric_name: 'tasa_desocupacion',
-          period_2018: closestTo(desSeries, '2018-03-01'),
-          period_2022: closestTo(desSeries, '2022-03-01'),
-          period_2026: closestTo(desSeries, '2026-03-01'),
-          current: desSeries[desSeries.length - 1]?.value ?? null,
-        })
-      }
-      if (pibSeries.length > 0) {
-        pmList.push({
-          metric_name: 'pib_regional_anual',
-          period_2018: closestTo(pibSeries, '2018-01-01'),
-          period_2022: closestTo(pibSeries, '2022-01-01'),
-          period_2026: closestTo(pibSeries, '2025-01-01'),
-          current: pibSeries[pibSeries.length - 1]?.value ?? null,
-        })
-      }
-      periodMetrics = pmList
     }
 
     // ── FASE 2: Enriched context (needs initiative IDs from fase 1) ──────────
@@ -571,7 +508,8 @@ export async function POST(request: Request) {
       trendSummaries,
       logoSrc: LOGO_DATA_URL,
     })
-  } else if (tipo === 'ejecutiva') {
+  } else {
+    // tipo === 'ejecutiva' (único caso restante — el schema zod ya lo garantiza)
     const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     element = React.createElement(MinutaEjecutiva as any, {
@@ -584,19 +522,6 @@ export async function POST(request: Request) {
       aiContent,
       logoSrc: LOGO_DATA_URL,
     })
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    element = React.createElement(MinutaDocumentV2 as any, {
-      region: body.region,
-      projects,
-      metrics,
-      seiaProjects,
-      mopProjects,
-      fecha: body.fecha,
-      aiContent,
-      autoridades: [],      // Eliminado: decisión v2 — tabla vacía
-      periodMetrics: [],    // Eliminado: decisión v2 — no comparar gobiernos
-    })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -605,18 +530,21 @@ export async function POST(request: Request) {
     buffer = await renderToBuffer(element as any)
   } catch (err) {
     console.error('[minuta] renderToBuffer error:', err)
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    return new Response(
+      JSON.stringify({ error: `No se pudo renderizar el PDF: ${msg}` }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    )
   }
-  const suffix = tipo === 'ejecutiva' ? '-ejecutiva' : tipo === 'ficha' ? '-kit-viaje' : ''
+  const suffix = tipo === 'ficha' ? '-kit-viaje' : '-ejecutiva'
 
   // Log to v2_minutas_log (no content stored — just metadata + hash)
   if (sbRef) {
     const regionId = INE_CODE[body.region.cod]
-    const tipoLog = tipo === 'completo' ? 'kit_viaje' : tipo
     const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 16)
     sbRef.from('v2_minutas_log').insert({
       region_id: regionId,
-      tipo: tipoLog,
+      tipo,
       generado_por: authProfile.id,
       hash_pdf: hash,
       parametros: { fecha: body.fecha, force, ai: !!aiContent },

@@ -12,34 +12,7 @@ export type MinutaEjecutivaContent = {
   tendencia_general?: string        // 1 línea: "Mejora en empleo; deterioro en seguridad"
 }
 
-export type CifraSubseccion = {
-  titulo: string  // e.g. "Crecimiento económico"
-  texto: string   // párrafo de 3-4 oraciones con datos concretos
-}
-
-export type EjeAvanceCompleto = {
-  resumen: string   // 2-3 oraciones de estado general del eje
-  logros: string[]  // 4-6 bullets específicos con cifras y avances concretos
-}
-
-export type MinutaCompletaContent = {
-  contexto_rapido?: string                         // 1-2 oraciones posicionando la región para la portada
-  resumen_ejecutivo: string                        // 2-3 oraciones de síntesis del estado general
-  compromisos_plan: string[]                       // 5-7 compromisos/objetivos clave extraídos del Plan Regional PDF
-  cifras: CifraSubseccion[]                        // 3-4 subsecciones temáticas con párrafos
-  gps_narrativa: string                            // párrafo sobre inversión privada GPS
-  avances_ejes: Record<string, EjeAvanceCompleto>  // un entry por eje presente en los datos
-  alertas_criticas: string[]
-  // recomendaciones: ELIMINADO — decisión cerrada #6 del documento rector
-  tendencias?: {
-    titulo: string   // "Evolución de indicadores clave"
-    texto: string    // 3-4 oraciones sintetizando tendencias
-  }
-  posicion_nacional?: string   // 2-3 oraciones posicionando región vs país
-  cambios_periodo?: string[]   // 3-5 bullets de qué cambió en el último periodo
-}
-
-export type MinutaTipo = 'ejecutiva' | 'completo' | 'ficha'
+export type MinutaTipo = 'ejecutiva' | 'ficha'
 
 export type FichaRegionalContent = {
   introduccion: string           // I. párrafo contextual geográfico-político
@@ -364,7 +337,7 @@ export async function generateMinutaContent(
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
   fichaExtra?: FichaExtraData | null,
-): Promise<MinutaEjecutivaContent | MinutaCompletaContent | FichaRegionalContent | null> {
+): Promise<MinutaEjecutivaContent | FichaRegionalContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
@@ -603,64 +576,15 @@ REGLAS OBLIGATORIAS:
 8. Cada cifra debe tener fuente entre paréntesis: (INE-ENE), (CASEN 2024), (BCCh), (LeyStop).
 9. Si falta información, escribe con lo disponible sin fabricar datos.`
 
-  const systemPrompt = tipo === 'ejecutiva'
-    ? `Eres redactor técnico de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Redacta contenido para una minuta ejecutiva de 2 páginas sobre la Región de ${regionNombre}. Tono formal institucional, español de Chile.
-${AI_RULES}`
-    : `Eres analista senior de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Redacta el Kit de Viaje Regional de la Región de ${regionNombre} — un briefing de 15 minutos de lectura para una autoridad que viaja a la región.
-
-Si se adjunta el Plan Regional de Gobierno, extrae los compromisos y objetivos estratégicos clave.
-
-ORIENTACIÓN:
-- Escribe para quien NO conoce la región. Contextualiza cada dato.
-- Prioriza lo que la autoridad necesita saber: qué funciona, qué no, qué requiere atención.
-- Posiciona la región respecto al promedio nacional en cada indicador.
-- Describe dirección y magnitud de cambios, no solo valores estáticos.
+  const systemPrompt = `Eres redactor técnico de la División de Coordinación Interministerial (DCI) del Ministerio del Interior de Chile. Redacta contenido para una minuta ejecutiva de 2 páginas sobre la Región de ${regionNombre}. Tono formal institucional, español de Chile.
 ${AI_RULES}`
 
-  const jsonSchema = tipo === 'ejecutiva'
-    ? `{
+  const jsonSchema = `{
   "avances_relevantes": ["string (4-5 bullets, máx 120 chars c/u, con cifras concretas)"],
   "alertas": ["string (2-3 alertas críticas narrativas, máx 150 chars c/u)"],
   "contexto_region": "string (2-3 oraciones que sintetizan la situación regional actual)",
   "iniciativas_destacadas": ["string (3-4 iniciativas con su estado, máx 120 chars c/u)"],
   "tendencia_general": "string (1 oración que resume la dirección general: mejoras y deterioros clave)"
-}`
-    : `{
-  "contexto_rapido": "1-2 oraciones que posicionan la región respecto al país: su principal fortaleza, su principal desafío, y un dato de contexto geográfico/económico relevante. Va en la portada del documento.",
-  "resumen_ejecutivo": "2-3 oraciones que sintetizan el estado actual de la región y el avance de su Plan Regional de Gobierno. Incluye la cifra de avance promedio y los elementos más destacados.",
-  "compromisos_plan": [
-    "Compromiso o objetivo estratégico clave extraído del Plan Regional de Gobierno (si se adjuntó el PDF). Debe ser específico y atribuible al plan. Incluir meta o indicador si está disponible.",
-    "Compromiso 2 (total 5-7 compromisos, ordenados por relevancia o eje)"
-  ],
-  "cifras": [
-    {
-      "titulo": "Crecimiento económico",
-      "texto": "Párrafo de 3-4 oraciones con datos concretos del PIB regional, variación de actividad económica, sectores líderes y comparación con la media nacional."
-    },
-    {
-      "titulo": "Empleo y mercado laboral",
-      "texto": "Párrafo de 3-4 oraciones con datos de desocupación, participación laboral, ocupación informal y tendencias recientes. Incluir comparación con media nacional y dirección de la tendencia."
-    },
-    {
-      "titulo": "Pobreza y vulnerabilidad social",
-      "texto": "Párrafo de 3-4 oraciones con cifras de pobreza por ingresos, pobreza multidimensional, RSH y déficit habitacional."
-    },
-    {
-      "titulo": "Seguridad pública",
-      "texto": "Párrafo de 3-4 oraciones con datos de tasa delictual LeyStop/Carabineros, variación respecto al año anterior, tendencia reciente de casos semanales, principales tipos de delito y actividad operativa policial (controles, fiscalizaciones, incautaciones). Complementar con indicadores CASEN de victimización y percepción de inseguridad si están disponibles."
-    }
-  ],
-  "tendencias": {
-    "titulo": "Evolución de indicadores clave",
-    "texto": "Párrafo de 3-4 oraciones sintetizando las principales tendencias: dirección del desempleo, evolución de la actividad delictual, y posición de la región respecto al promedio nacional. Destacar mejoras y deterioros."
-  },
-  "posicion_nacional": "2-3 oraciones posicionando la región respecto al promedio país en indicadores clave (empleo, seguridad, etc.), mencionando las brechas más significativas.",
-  "gps_narrativa": "Párrafo de 3-4 oraciones que introduce los proyectos de inversión privada y obras públicas en la región, destacando montos totales, sectores predominantes y relevancia para el desarrollo regional.",
-  "avances_ejes": {
-    ${ejes.map(e => `"${e}": {\n      "resumen": "2-3 oraciones sobre el estado general de este eje, sus logros más relevantes y los principales desafíos pendientes. Integrar información de seguimiento reciente si está disponible.",\n      "logros": ["Bullet específico con cifra concreta o hito alcanzado", "Bullet específico", "Bullet específico", "Bullet específico"]\n    }`).join(',\n    ')}
-  },
-  "alertas_criticas": ["Observación cuantitativa factual basada en seguimiento y tendencia de semáforo (máx 180 chars). Sin recomendaciones.", "Alerta 2"],
-  "cambios_periodo": ["Cambio relevante del periodo: qué iniciativa cambió de estado, qué hito se alcanzó o qué bloqueo surgió (máx 150 chars)", "Cambio 2", "Cambio 3"]
 }`
 
   const userContent: Anthropic.MessageParam['content'] = []
@@ -677,23 +601,22 @@ ${AI_RULES}`
     } as Anthropic.DocumentBlockParam)
   }
 
-  const tipoLabel = tipo === 'ejecutiva' ? 'Minuta Ejecutiva (2 páginas)' : 'Informe de Avances del Plan Regional de Gobierno'
   userContent.push({
     type: 'text',
-    text: `Datos actuales del panel de seguimiento (${fecha}):\n\n${context}\n\nGenera el contenido para el documento "${tipoLabel}"${planPdfBase64 ? ', integrando la información del Plan Regional adjunto con los datos del panel' : ''}. Responde ÚNICAMENTE con un JSON válido que siga el schema exacto a continuación (sin markdown, sin explicaciones, sin texto fuera del JSON):\n${jsonSchema}`,
+    text: `Datos actuales del panel de seguimiento (${fecha}):\n\n${context}\n\nGenera el contenido para el documento "Minuta Ejecutiva (2 páginas)"${planPdfBase64 ? ', integrando la información del Plan Regional adjunto con los datos del panel' : ''}. Responde ÚNICAMENTE con un JSON válido que siga el schema exacto a continuación (sin markdown, sin explicaciones, sin texto fuera del JSON):\n${jsonSchema}`,
   })
 
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: tipo === 'completo' ? 8192 : 2048,
+      max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     })
 
     const text = response.content.find(b => b.type === 'text')?.text ?? ''
     const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
-    const parsed = JSON.parse(cleaned) as MinutaEjecutivaContent | MinutaCompletaContent
+    const parsed = JSON.parse(cleaned) as MinutaEjecutivaContent
     console.log(`[minutaAI] ${tipo} content generated for ${regionNombre} (stop_reason: ${response.stop_reason})`)
 
     // ── QA check ──
