@@ -44,6 +44,15 @@ const fechaISOSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'fecha en formato YYYY-MM-DD')
 
+/**
+ * Fecha en formato display para el header del PDF (ej: "Julio 2026").
+ * NO se parsea como Date — se pinta tal cual en el documento.
+ */
+const fechaDisplaySchema = z
+  .string()
+  .min(1, 'fecha no puede ser vacía')
+  .max(80, 'fecha demasiado larga')
+
 /** Email — validación liviana, solo presencia de '@'. */
 const emailSchema = z
   .string()
@@ -77,7 +86,7 @@ export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
 
 export const minutaPostSchema = z.object({
   region: regionFullSchema,
-  fecha:  fechaISOSchema,
+  fecha:  fechaDisplaySchema,
   tipo:   z.enum(['ejecutiva', 'ficha']).default('ejecutiva'),
   force:  z.boolean().default(false),
 })

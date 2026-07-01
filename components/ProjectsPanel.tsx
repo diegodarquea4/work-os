@@ -150,7 +150,8 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
         let detalle = ''
         try {
           const err = await res.json()
-          detalle = err?.error ?? err?.detalle ?? ''
+          const base = err?.error ?? ''
+          detalle = err?.hint ? `${base} (${err.hint})` : (base || '')
         } catch { /* body no era JSON */ }
         throw new Error(detalle ? `${res.status}: ${detalle}` : `HTTP ${res.status}`)
       }

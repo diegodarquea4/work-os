@@ -73,8 +73,10 @@ export async function POST(request: Request) {
 
   const parse = minutaPostSchema.safeParse(rawBody)
   if (!parse.success) {
+    const first = parse.error.issues[0]
+    const hint = first ? `${first.path.join('.') || '(root)'}: ${first.message}` : undefined
     return new Response(
-      JSON.stringify({ error: 'Solicitud inválida', detalle: parse.error.issues }),
+      JSON.stringify({ error: 'Solicitud inválida', hint, detalle: parse.error.issues }),
       { status: 400 },
     )
   }

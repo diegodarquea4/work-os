@@ -73,6 +73,25 @@ describe('minutaPostSchema', () => {
     expect(r.success).toBe(true)
   })
 
+  // Regresión — la fecha en minuta es un string de display para el header del
+  // PDF ("Julio 2026"), NO una fecha ISO. Apretarla a YYYY-MM-DD rompe el
+  // handler del cliente (bug reportado 2026-07-01, "Solicitud inválida" 400).
+  it('acepta fecha en formato display "Julio 2026"', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'RM', nombre: 'Metropolitana' },
+      fecha: 'Julio 2026',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('rechaza fecha vacía', () => {
+    const r = minutaPostSchema.safeParse({
+      region: { cod: 'RM', nombre: 'Metropolitana' },
+      fecha: '',
+    })
+    expect(r.success).toBe(false)
+  })
+
   it('rechaza tipo desconocido', () => {
     const r = minutaPostSchema.safeParse({
       region: { cod: 'RM', nombre: 'Metropolitana' },
