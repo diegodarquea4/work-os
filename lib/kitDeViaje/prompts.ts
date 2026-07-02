@@ -1,27 +1,15 @@
 /**
- * Prompts para el redactor del Kit de Viaje.
+ * Prompts para el redactor del Kit de Viaje ("Contexto Regional").
  *
- * Se dividen en DOS llamados AI, no uno:
- *
- *   1. `buildContextPrompt` — siempre corre. Toma `region_metrics` + `fichaExtra` +
- *      `trendSummaries` y devuelve narrativa para Sección I (caracterización) y
- *      Sección II (indicadores). No usa el PDF PREGO en absoluto — el context
- *      socioeconómico ES independiente del PDF plan-regional.
- *
- *   2. `buildPregoPrompt` — corre solo si `planPdfState === 'ok'`. Recibe el PDF
- *      como document input + JSON estructurado de iniciativas agrupadas por eje.
- *      Devuelve narrativa del eje (desde el PDF) + progreso cualitativo (desde
- *      las iniciativas). Cuando el PDF no está disponible, el assembler pinta el
- *      disclaimer estático (constants) — no se llama al AI.
- *
- * Esta separación evita el failure mode del prompt actual de `minutaAI.ts:494`:
- * "Si NO hay PDF adjunto, genera 3 ejes genéricos basados en los indicadores"
- * — fabrica narrativa PREGO cuando no hay fuente. Al separar, la pregunta a AI
- * simplemente no se hace y el usuario ve el disclaimer explícito.
+ * `buildContextPrompt` toma `region_metrics` + `fichaExtra` + `trendSummaries`
+ * y devuelve narrativa para Sección I (caracterización) y Sección II
+ * (indicadores). No usa el PDF PREGO — el contexto socioeconómico es
+ * independiente del Plan Regional. La justificación de ejes se genera en la
+ * minuta "Avance PREGO" con otro prompt (ver `generateJustificacionEjes` en
+ * `lib/minutaAI.ts`).
  */
 
-import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, RegionEje } from '@/lib/types'
+import type { RegionMetrics } from '@/lib/types'
 import type { FichaExtraData, TrendSummaries } from '@/lib/minutaAI'
 
 // ── Guardarraíles compartidos ──────────────────────────────────────────────
@@ -119,135 +107,4 @@ undefined, no lo menciones. No agregues campos fuera del schema.
 `.trim()
 
   return { system, user }
-}
-
-// ── (2) PREGO — Sección III ────────────────────────────────────────────────
-
-export interface PregoPromptInput {
-  region: { cod: string; nombre: string }
-  fecha: string
-  /** Base64 del PDF plan-regional. Caller garantiza state === 'ok'. */
-  planPdfBase64: string
-  regionEjes: RegionEje[]
-  projects: Iniciativa[]
-}
-
-export interface PregoPromptOutput {
-  system: string
-  /** Bloque de texto que va al primer content block del user message. */
-  userTextBlock: string
-  /**
-   * Bloque de documento (PDF) para el user message. Formato Anthropic:
-   *   { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-   * Devuelto como objeto listo para spreadear en el array de content.
-   */
-  documentBlock: {
-    type: 'document'
-    source: { type: 'base64'; media_type: 'application/pdf'; data: string }
-    cache_control?: { type: 'ephemeral' }
-  }
-}
-
-/**
- * Devuelve system prompt + user text + document block para la llamada PREGO.
- * El caller debe usar la SDK Anthropic con content:
- *   [documentBlock, { type: 'text', text: userTextBlock }]
- *
- * Salida esperada del AI (JSON):
- *   { intro: string, ejes: [{numero, nombre, narrativa, progreso_cualitativo}] }
- */
-export function buildPregoPrompt(input: PregoPromptInput): PregoPromptOutput {
-  const { region, fecha, planPdfBase64, regionEjes, projects } = input
-
-  // Agrupar iniciativas por eje_id, tomar solo campos que la IA necesita.
-  const porEjeId = new Map<number, Iniciativa[]>()
-  for (const p of projects) {
-    if (p.eje_id == null) continue
-    const arr = porEjeId.get(p.eje_id) ?? []
-    arr.push(p)
-    porEjeId.set(p.eje_id, arr)
-  }
-
-  const ejesCanonicos = [...regionEjes]
-    .sort((a, b) => a.numero - b.numero)
-    .map(cat => ({
-      numero: cat.numero,
-      nombre: cat.nombre,
-      iniciativas: (porEjeId.get(cat.id) ?? []).slice(0, 30).map(p => ({
-        nombre: p.nombre,
-        ministerio: p.ministerio,
-        estado_semaforo: p.estado_semaforo,
-        pct_avance: p.pct_avance,
-        etapa: p.etapa_actual,
-        proximo_hito: p.proximo_hito,
-        prioritaria_prego: (p.tags ?? []).includes('Prioritaria PREGO'),
-      })),
-    }))
-
-  const system = `
-Sos un redactor técnico del Ministerio del Interior de Chile, División de
-Coordinación Interministerial. Redactás la Sección III (Plan Regional de
-Gobierno) del "Kit de Viaje" para la Región ${region.nombre}, fecha
-${fecha}.
-
-Tenés DOS fuentes:
-  1. El PDF del PREGO regional adjunto (documento). De ahí sacás la
-     narrativa cualitativa de cada eje: qué es, qué contiene, qué compromete.
-  2. El JSON estructurado más abajo, con las iniciativas cargadas en el panel
-     agrupadas por eje. De ahí sacás el "progreso cualitativo": referís
-     cuántas iniciativas hay, distribución de semáforo, hitos próximos.
-
-${REGLAS_ESTILO}
-
-Reglas específicas de esta sección:
-- Los ejes canónicos son los que te doy en el array "ejes". Devolvé EXACTAMENTE
-  esos, mismo numero y mismo nombre. Si el PDF menciona un eje que no está
-  en la lista canónica, IGNORALO. Si un eje canónico no aparece explícitamente
-  en el PDF, devolvé narrativa mínima ("Sin desarrollo específico en el
-  documento del PREGO") y concentrate en el progreso cualitativo.
-- "narrativa" (por eje): 3-5 oraciones extraídas del PDF. No copies texto
-  literal — sintetizá con vocabulario propio.
-- "progreso_cualitativo" (por eje): 2-3 oraciones referenciando las
-  iniciativas del panel. Podés decir "de las N iniciativas asociadas, X
-  presentan avance sostenido; Y están detenidas" — pero NUNCA inventes
-  porcentajes. Si más del 95% del eje está en semáforo gris o pct_avance=0,
-  decí explícitamente "El panel aún no registra avances cargados para estas
-  iniciativas".
-- "intro" (top-level): 2-3 oraciones marco sobre el PREGO en su conjunto,
-  extraídas del PDF. Sin listar los ejes.
-
-Devolvés SOLO un objeto JSON válido con exactamente esta forma (sin texto
-adicional, sin backticks, sin comentarios):
-
-{
-  "intro": "",
-  "ejes": [
-    { "numero": 1, "nombre": "...", "narrativa": "...", "progreso_cualitativo": "..." }
-  ]
-}
-`.trim()
-
-  const userTextBlock = `
-Ejes canónicos del panel (autoritativos — usá estos, no los que aparezcan en el PDF):
-
-${JSON.stringify(ejesCanonicos, null, 2)}
-
-Redactá el JSON del schema anterior. El array "ejes" debe tener exactamente
-${ejesCanonicos.length} elementos, en el mismo orden por numero. No agregues
-ni omitas ejes.
-`.trim()
-
-  return {
-    system,
-    userTextBlock,
-    documentBlock: {
-      type: 'document',
-      source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: planPdfBase64,
-      },
-      cache_control: { type: 'ephemeral' },
-    },
-  }
 }

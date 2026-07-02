@@ -553,7 +553,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                               <path d="M2 2h5l3 3v5H2V2z"/><path d="M6 2v4h4"/>
                             </svg>
-                            {minutaCache.ejecutiva.cached ? 'Descargar ejecutiva' : 'Generar ejecutiva'}
+                            {minutaCache.ejecutiva.cached ? 'Descargar Avance PREGO' : 'Generar Avance PREGO'}
                           </>
                         )}
                       </button>
@@ -600,7 +600,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                               <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="6"/><line x1="6" y1="6" x2="8" y2="7"/>
                             </svg>
-                            {minutaCache.ficha.cached ? 'Descargar Kit de Viaje' : 'Generar Kit de Viaje'}
+                            {minutaCache.ficha.cached ? 'Descargar Contexto Regional' : 'Generar Contexto Regional'}
                           </>
                         )}
                       </button>
@@ -949,8 +949,8 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
               {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
                 ? 'Usando versión en cache de hoy.'
                 : downloadingTipo === 'ficha'
-                  ? 'Compilando datos regionales para el Kit de Viaje. Esto toma unos segundos.'
-                  : 'Analizando datos regionales y generando resumen ejecutivo. Esto puede tomar hasta 20 segundos.'}
+                  ? 'Compilando datos regionales para el Contexto Regional. Esto toma unos segundos.'
+                  : 'Analizando datos regionales y generando el Avance PREGO. Esto puede tomar hasta 20 segundos.'}
             </p>
           </div>
         </div>

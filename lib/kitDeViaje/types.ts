@@ -1,26 +1,23 @@
 /**
  * KitDeViajeData — contrato compartido entre el assembler, el AI redactor,
- * y (en Fase B/C) los renderers PDF y Word.
+ * y (en Fase C) el renderer Word.
  *
- * Reemplaza a `FichaRegionalContent` de lib/minutaAI.ts. La forma es más
- * rica: agrega estado explícito del PDF PREGO (ok/missing/invalid), resumen
- * cuantitativo por eje derivado de prioridades_territoriales, y sección
- * Autoridades. Todo snake_case para que serializar/cachear a
- * minuta_cache.ai_content sea idempotente y para que la salida del AI matchee
- * el shape sin translación intermedia.
+ * Producto vigente: "Contexto Regional" (Secciones I + II + IV). La Sección
+ * III (PREGO) migró a la minuta "Avance PREGO" (`MinutaEjecutiva.tsx`), donde
+ * se convierte en un bloque "Del diagnóstico a la priorización". El tipo
+ * canónico interno sigue siendo `kit_viaje` para no invalidar `minuta_cache`.
  *
  * Escalable por diseño: cuando una métrica no está en region_metrics para
  * una región, el bullet correspondiente se omite en lugar de mostrar "N/A".
- * Cuando un PDF PREGO se corrija en Storage, la sección III pasa de
- * "problemas" a "ok" sin cambios de código.
  */
 
 // ── Estado del PDF PREGO ────────────────────────────────────────────────────
 
 /**
- * Estado del PDF plan-regional para la región solicitada.
+ * Estado del PDF plan-regional para una región. Se conserva en este módulo
+ * porque `validatePlanPdfBuffer` sigue viviendo acá (lo consume Avance PREGO).
  *
- * - `ok`      → PDF válido, se pasó al AI como document input.
+ * - `ok`      → PDF válido.
  * - `missing` → no hay objeto en el bucket `plan-regional` para esta región.
  * - `invalid` → hay objeto pero < 20 KB o sin magic bytes `%PDF-` (Ñuble).
  */
@@ -86,66 +83,6 @@ export interface SeccionIndicadores {
   tendencia_general?: string    // 1 línea, opcional
 }
 
-// ── Sección III. Plan Regional de Gobierno (PREGO) ─────────────────────────
-
-export interface EjeSemaforoResumen {
-  verde: number
-  ambar: number
-  rojo: number
-  gris: number
-}
-
-export interface IniciativaDestacada {
-  nombre: string
-  ministerio?: string
-  estado_semaforo?: 'verde' | 'ambar' | 'rojo' | 'gris'
-  pct_avance?: number | null
-}
-
-export interface EjeResumen {
-  total_iniciativas: number
-  semaforo: EjeSemaforoResumen
-  /** null cuando >95% de las iniciativas están en gris/pct_avance=0 (ej: Biobío en prod). */
-  pct_avance_promedio: number | null
-  /** Subset marcado con tag 'Prioritaria PREGO' (o top-5 por importancia si no hay tag). */
-  iniciativas_destacadas: IniciativaDestacada[]
-  /** Nota humana cuando la data cuantitativa no representa el estado real. */
-  nota_sin_datos?: string
-}
-
-export interface EjePrego {
-  numero: number                // desde region_ejes.numero
-  nombre: string                // desde region_ejes.nombre (sin prefijo "Eje N: ")
-  /** Narrativa extraída por AI del PDF PREGO. */
-  narrativa: string
-  /** Progreso cualitativo AI-redactado referenciando iniciativas. */
-  progreso_cualitativo: string
-  resumen: EjeResumen
-}
-
-export interface SeccionPrego {
-  estado: PlanPdfState
-  /**
-   * Copy visible en el renderer cuando `estado !== 'ok'`. Escalable:
-   * cuando el PDF se corrige, este campo desaparece y ejes[] se puebla,
-   * sin cambio de código.
-   */
-  disclaimer?: string
-  /** Párrafo introductorio AI-redactado. Vacío si estado !== 'ok'. */
-  intro?: string
-  ejes: EjePrego[]
-  /**
-   * Nota cuando la región no tiene iniciativas cargadas todavía (aunque
-   * el PDF esté ok). Ejemplo: nueva región en el sistema.
-   */
-  sin_iniciativas_nota?: string
-  /**
-   * Iniciativas con eje_id NULL que se agrupan en un bucket separado
-   * para no under-reportar el total. `null` cuando no hay ninguna.
-   */
-  sin_eje_asignado_count?: number | null
-}
-
 // ── Sección IV. Autoridades regionales ─────────────────────────────────────
 
 export type AutoridadTipo =
@@ -207,8 +144,8 @@ export interface KitDeViajeBranding {
 }
 
 /**
- * Contrato principal. Instanciado por `buildKitDeViajeData()` (Fase A.2),
- * consumido por `KitDeViajePdf` (Fase B) y `renderKitDeViajeDocx()` (Fase C).
+ * Contrato principal. Instanciado por `buildKitDeViajeData()`, consumido por
+ * `KitDeViajePdf` (Fase B) y `renderKitDeViajeDocx()` (Fase C).
  */
 export interface KitDeViajeData {
   meta: KitDeViajeMeta
@@ -217,7 +154,6 @@ export interface KitDeViajeData {
   branding: KitDeViajeBranding
   caracterizacion: SeccionCaracterizacion
   indicadores: SeccionIndicadores
-  prego: SeccionPrego
   autoridades: SeccionAutoridades
 }
 
@@ -225,11 +161,11 @@ export interface KitDeViajeData {
 
 /**
  * Lo que el AI devuelve para poblar campos narrativos. El assembler mezcla
- * esto con los datos cuantitativos (region_metrics, prioridades_territoriales)
- * para armar el KitDeViajeData final.
+ * esto con los datos cuantitativos (region_metrics) para armar el
+ * KitDeViajeData final.
  *
- * NOTA: la sección Autoridades NUNCA se genera por AI — viene de la tabla
- * autoridades_regionales (Fase D). Se omite acá.
+ * NOTA: la sección Autoridades NUNCA se genera por AI — se anexa desde el
+ * PDF oficial en el bucket `autoridades-fichas`.
  */
 export interface KitDeViajeAIContent {
   caracterizacion_parrafos: string[]
@@ -242,19 +178,5 @@ export interface KitDeViajeAIContent {
     vivienda_nota?: string
     seguridad_nota?: string
     tendencia_general?: string
-  }
-  prego: {
-    intro?: string
-    ejes: Array<{
-      numero: number
-      nombre: string
-      narrativa: string
-      progreso_cualitativo: string
-    }>
-    /**
-     * Copy exacto cuando el PDF no está disponible. Devuelto por el AI
-     * SOLO cuando el prompt indicó plan_pdf_state !== 'ok'.
-     */
-    sin_pdf_texto?: string
   }
 }

@@ -10,16 +10,15 @@
  *   - Índice (página 2): TOC estático.
  *   - Sección I — Caracterización general
  *   - Sección II — Indicadores socioeconómicos clave
- *   - Sección III — PREGO (o disclaimer si estado !== 'ok')
- *   - Sección IV — Autoridades regionales (skeleton Fase B, real en Fase D)
+ *   - Sección IV — Autoridades regionales
+ *       (anexada como PDF oficial vía pdf-lib en el route; el renderer solo
+ *       pinta preview + disclaimer cuando `disponible=false`)
  *
  * Header/footer fijos desde página 2 vía `<View fixed>`. Portada no tiene
  * header ni footer — es full-bleed institucional.
  *
- * Visual language heredado de components/FichaRegional.tsx (mismo Carlito,
- * mismos borders, mismos tonos) para que la transición no sea disruptiva.
- * Diferencias: portada, TOC, sección IV, y page-breaks explícitos entre
- * secciones (I → II → III → IV).
+ * La antigua Sección III (PREGO) migró al bloque "Del diagnóstico a la
+ * priorización" de la minuta "Avance PREGO" (`MinutaEjecutiva.tsx`).
  */
 
 import {
@@ -29,7 +28,6 @@ import type {
   KitDeViajeData,
   Bullet as TBullet,
   IndicadorFila,
-  EjePrego,
   AutoridadGrupo,
   Autoridad,
 } from '@/lib/kitDeViaje/types'
@@ -347,8 +345,7 @@ function Indice({ data }: { data: KitDeViajeData }) {
   const rows: { num: string; text: string }[] = [
     { num: 'I.',   text: TITULO_SECCIONES.I  },
     { num: 'II.',  text: TITULO_SECCIONES.II },
-    { num: 'III.', text: TITULO_SECCIONES.III },
-    { num: 'IV.',  text: TITULO_SECCIONES.IV },
+    { num: 'III.', text: TITULO_SECCIONES.IV },
   ]
   return (
     <Page size="A4" style={s.page}>
@@ -455,115 +452,6 @@ function SeccionII({ data }: { data: KitDeViajeData }) {
   )
 }
 
-// ── Sección III — PREGO ────────────────────────────────────────────────────
-
-function EjeBlock({ eje }: { eje: EjePrego }) {
-  const { resumen } = eje
-  const totalTxt = `${resumen.total_iniciativas} iniciativa${resumen.total_iniciativas === 1 ? '' : 's'}`
-  const semaforoChips: Array<{ label: string; bg: string }> = []
-  if (resumen.semaforo.verde > 0) semaforoChips.push({ label: `${resumen.semaforo.verde} verde`, bg: '#c8e6c9' })
-  if (resumen.semaforo.ambar > 0) semaforoChips.push({ label: `${resumen.semaforo.ambar} ámbar`, bg: '#ffe0b2' })
-  if (resumen.semaforo.rojo  > 0) semaforoChips.push({ label: `${resumen.semaforo.rojo} rojo`,   bg: '#ffcdd2' })
-  if (resumen.semaforo.gris  > 0) semaforoChips.push({ label: `${resumen.semaforo.gris} gris`,   bg: '#e0e0e0' })
-
-  return (
-    <View style={s.ejeBlock} wrap={false}>
-      <Text style={s.ejeTitle}>Eje {eje.numero}: {eje.nombre}</Text>
-
-      <View style={s.ejeMeta}>
-        <Text style={s.ejeChip}>{totalTxt}</Text>
-        {resumen.pct_avance_promedio != null && (
-          <Text style={s.ejeChip}>Avance promedio: {resumen.pct_avance_promedio}%</Text>
-        )}
-      </View>
-
-      {semaforoChips.length > 0 && (
-        <View style={s.ejeResumenRow}>
-          {semaforoChips.map((c, i) => (
-            <Text key={i} style={[s.semaforoChip, { backgroundColor: c.bg }]}>{c.label}</Text>
-          ))}
-        </View>
-      )}
-
-      {resumen.nota_sin_datos && (
-        <Text style={s.bulletNota}>{resumen.nota_sin_datos}</Text>
-      )}
-
-      {eje.narrativa && (
-        <Text style={s.para}>{eje.narrativa}</Text>
-      )}
-
-      {eje.progreso_cualitativo && (
-        <>
-          <Text style={s.subSectionTitle}>Estado de avance</Text>
-          <Text style={s.para}>{eje.progreso_cualitativo}</Text>
-        </>
-      )}
-
-      {resumen.iniciativas_destacadas.length > 0 && (
-        <>
-          <Text style={s.subSectionTitle}>Iniciativas destacadas</Text>
-          {resumen.iniciativas_destacadas.map((ini, i) => {
-            const circuloColor =
-              ini.estado_semaforo === 'verde' ? '#4caf50' :
-              ini.estado_semaforo === 'ambar' ? '#ff9800' :
-              ini.estado_semaforo === 'rojo'  ? '#e53935' :
-              '#bdbdbd'
-            return (
-              <View key={i} style={s.destacadaRow}>
-                <View style={[s.destacadaCirculo, { backgroundColor: circuloColor }]} />
-                <View style={s.destacadaBody}>
-                  <Text style={s.destacadaNombre}>{ini.nombre}</Text>
-                  {ini.ministerio && (
-                    <Text style={s.destacadaMinisterio}>{ini.ministerio}</Text>
-                  )}
-                </View>
-                <Text style={s.destacadaPct}>
-                  {ini.pct_avance != null ? `${ini.pct_avance}%` : '—'}
-                </Text>
-              </View>
-            )
-          })}
-        </>
-      )}
-    </View>
-  )
-}
-
-function SeccionIII({ data }: { data: KitDeViajeData }) {
-  const { prego } = data
-  return (
-    <Page size="A4" style={s.page}>
-      <PageHeader data={data} />
-      <PageFooter data={data} />
-
-      <SectionTitle numeral="III">{TITULO_SECCIONES.III}</SectionTitle>
-
-      {prego.disclaimer && <Disclaimer text={prego.disclaimer} />}
-
-      {prego.intro && !prego.disclaimer && (
-        <Text style={s.para}>{prego.intro}</Text>
-      )}
-
-      {prego.sin_iniciativas_nota && (
-        <Disclaimer text={prego.sin_iniciativas_nota} />
-      )}
-
-      {prego.ejes.map((eje) => (
-        <EjeBlock key={eje.numero} eje={eje} />
-      ))}
-
-      {prego.sin_eje_asignado_count != null && prego.sin_eje_asignado_count > 0 && (
-        <Text style={[s.para, { color: COLORS.muted, fontSize: 9 }]}>
-          Nota: {prego.sin_eje_asignado_count} iniciativa
-          {prego.sin_eje_asignado_count === 1 ? '' : 's'} sin eje asignado en el panel
-          {prego.sin_eje_asignado_count === 1 ? ' queda' : ' quedan'} fuera del desglose por eje.
-        </Text>
-      )}
-    </Page>
-  )
-}
-
 // ── Sección IV — Autoridades ────────────────────────────────────────────────
 
 /** Iniciales para el placeholder: primera letra del primer nombre + primera del último apellido. */
@@ -649,7 +537,7 @@ function SeccionIV({ data }: { data: KitDeViajeData }) {
       <PageHeader data={data} />
       <PageFooter data={data} />
 
-      <SectionTitle numeral="IV">{TITULO_SECCIONES.IV}</SectionTitle>
+      <SectionTitle numeral="III">{TITULO_SECCIONES.IV}</SectionTitle>
 
       {isPreview && (
         <Text style={s.previewNote}>
@@ -677,7 +565,6 @@ export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
       <Indice data={data} />
       <SeccionI data={data} />
       <SeccionII data={data} />
-      <SeccionIII data={data} />
       {/* Sección IV: cuando disponible=true el route anexa el ficha oficial
           por post-procesamiento con pdf-lib (el ficha ES la Sección IV,
           con su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando

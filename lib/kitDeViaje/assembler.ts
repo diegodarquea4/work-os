@@ -1,36 +1,24 @@
 /**
- * Assembler del Kit de Viaje. Pure function que compone `KitDeViajeData` a
- * partir de la data ya fetcheada por la ruta `/api/minuta` + el output del
- * AI (opcional en tiempo de test).
+ * Assembler del Kit de Viaje ("Contexto Regional"). Pure function que compone
+ * `KitDeViajeData` a partir de la data ya fetcheada por `/api/minuta` + el
+ * output del AI (opcional en tests).
  *
- * Diseño clave (per decisiones Diego 2026-07-01):
+ * Diseño clave:
  *
- * - Sección I y II son **dinámicas**: bullets se construyen desde
- *   `region_metrics`. Si una métrica falta en la fila de la región, el bullet
- *   NO se emite (nada de "N/A"). Cero fuentes de datos estáticas nuevas.
+ * - Sección I y II son dinámicas: bullets se construyen desde `region_metrics`.
+ *   Si una métrica falta en la fila de la región, el bullet NO se emite (nada
+ *   de "N/A"). Cero fuentes de datos estáticas nuevas.
  *
- * - Sección III agrupa iniciativas por `eje_id` (FK a `region_ejes`), usa
- *   `region_ejes.numero` para orden y `region_ejes.nombre` puro para etiquetas.
- *   Iniciativas con `eje_id === null` van a `sin_eje_asignado_count` para no
- *   under-reportar totales.
+ * - Sección III (PREGO) ya no vive en este producto: migró a la minuta
+ *   "Avance PREGO" (`MinutaEjecutiva.tsx`) como bloque diagnóstico.
  *
- * - Sección III maneja el caso Biobío-en-prod (567 iniciativas todas gris/pct=0):
- *   cuando >95% del bucket está en gris o pct_avance=0, `pct_avance_promedio`
- *   se emite como `null` y se agrega `nota_sin_datos` en lugar de mostrar "0%
- *   avance promedio" (que sería engañoso).
- *
- * - `PlanPdfState` es orquestado desde el route; el assembler solo lo consume
- *   y decide qué disclaimer poner. Escalable: cuando alguien re-sube el PDF
- *   corrupto, `estado` pasa a 'ok' y la sección se completa sin cambio de
- *   código.
- *
- * - Sección IV (Autoridades) queda como skeleton hasta Fase D. `disponible=
- *   false`, disclaimer visible, `grupos=[]`.
+ * - Sección IV (Autoridades): el bucket `autoridades-fichas` provee el PDF
+ *   oficial que el route anexa con pdf-lib. `disponible=true` → renderer
+ *   omite la sección. `disponible=false` → renderer pinta disclaimer + sample.
  */
 
 import type { Region } from '@/lib/regions'
-import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetrics, RegionEje } from '@/lib/types'
+import type { RegionMetrics } from '@/lib/types'
 import type {
   FichaExtraData,
   TrendSummaries,
@@ -40,15 +28,9 @@ import type {
   KitDeViajeData,
   KitDeViajeAIContent,
   KitDeViajeBranding,
-  PlanPdfState,
   SeccionCaracterizacion,
   SeccionIndicadores,
-  SeccionPrego,
   SeccionAutoridades,
-  EjePrego,
-  EjeResumen,
-  EjeSemaforoResumen,
-  IniciativaDestacada,
   Bullet,
   IndicadorFila,
 } from './types'
@@ -56,10 +38,6 @@ import type {
 import {
   MINISTERIO,
   DIVISION,
-  COPY_PREGO_INVALID,
-  COPY_PREGO_MISSING,
-  COPY_PREGO_SIN_INICIATIVAS,
-  COPY_EJE_SIN_DATOS,
   COPY_AUTORIDADES_PENDIENTE,
 } from './constants'
 
@@ -78,10 +56,7 @@ export interface AssemblerInputs {
   region: Region
   fecha: string
   metrics: RegionMetrics | null
-  projects: Iniciativa[]
-  regionEjes: RegionEje[]
-  planPdfState: PlanPdfState
-  /** Producido por Fase A.2 (generateKitViajeContent). null durante tests unitarios. */
+  /** Producido por `generateKitViajeContent`. null durante tests unitarios. */
   aiContent: KitDeViajeAIContent | null
   fichaExtra: FichaExtraData | null
   trendSummaries: TrendSummaries | null
@@ -115,15 +90,6 @@ function pushIf(list: Bullet[], label: string, value: string | null, nota?: stri
 function pushRowIf(list: IndicadorFila[], indicador: string, valor: string | null, nota?: string) {
   if (valor == null) return
   list.push({ indicador, valor, ...(nota ? { nota } : {}) })
-}
-
-/** Umbral: si >95% del bucket está en gris O tiene pct_avance=0, no computamos promedio. */
-const SIN_DATOS_THRESHOLD = 0.95
-
-/** Lookup nombre ministerio → sin sufijo, para tarjetas de destacadas. */
-function trimMinisterio(s: string | null): string | undefined {
-  if (!s) return undefined
-  return s.replace(/^Ministerio\s+(del|de\s+la|de\s+los|de|de\s+)?/i, '').trim() || s
 }
 
 // ── Sección I. Caracterización general ─────────────────────────────────────
@@ -225,126 +191,6 @@ function buildIndicadores(
   }
 }
 
-// ── Sección III. PREGO ─────────────────────────────────────────────────────
-
-/** Semáforo counts para un bucket de iniciativas. */
-function contarSemaforo(iniciativas: Iniciativa[]): EjeSemaforoResumen {
-  const acc: EjeSemaforoResumen = { verde: 0, ambar: 0, rojo: 0, gris: 0 }
-  for (const p of iniciativas) {
-    const s = p.estado_semaforo
-    if (s === 'verde' || s === 'ambar' || s === 'rojo' || s === 'gris') acc[s] += 1
-  }
-  return acc
-}
-
-/**
- * Resumen cuantitativo por eje. Aplica la regla Biobío-safe: si >95% del
- * bucket está en gris o pct_avance=0, `pct_avance_promedio = null` y se
- * emite `nota_sin_datos`. Sin esto, la sección III de Biobío mostraría
- * "0% avance promedio" y sería engañoso.
- */
-function resumirEje(iniciativas: Iniciativa[]): EjeResumen {
-  const total = iniciativas.length
-  const semaforo = contarSemaforo(iniciativas)
-
-  const sinDatos = total > 0 && iniciativas.filter(p => p.estado_semaforo === 'gris' || p.pct_avance === 0).length / total >= SIN_DATOS_THRESHOLD
-  const pctAvg = total > 0 && !sinDatos
-    ? Math.round(iniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / total)
-    : null
-
-  // Destacadas: primero las que tienen tag 'Prioritaria PREGO', luego
-  // completar hasta 5 con rojas + ámbar + verdes en pct_avance desc.
-  const withPregoTag = iniciativas.filter(p => (p.tags ?? []).includes('Prioritaria PREGO'))
-  const rest = iniciativas.filter(p => !withPregoTag.includes(p))
-  rest.sort((a, b) => {
-    const SEV: Record<string, number> = { rojo: 3, ambar: 2, verde: 1, gris: 0 }
-    const s = (SEV[b.estado_semaforo] ?? 0) - (SEV[a.estado_semaforo] ?? 0)
-    if (s !== 0) return s
-    return (b.pct_avance ?? 0) - (a.pct_avance ?? 0)
-  })
-
-  const destacadasSrc = [...withPregoTag, ...rest].slice(0, 5)
-  const iniciativas_destacadas: IniciativaDestacada[] = destacadasSrc.map(p => ({
-    nombre: p.nombre,
-    ministerio: trimMinisterio(p.ministerio),
-    estado_semaforo: p.estado_semaforo,
-    pct_avance: p.pct_avance ?? null,
-  }))
-
-  return {
-    total_iniciativas: total,
-    semaforo,
-    pct_avance_promedio: pctAvg,
-    iniciativas_destacadas,
-    ...(sinDatos ? { nota_sin_datos: COPY_EJE_SIN_DATOS } : {}),
-  }
-}
-
-function buildPrego(
-  projects: Iniciativa[],
-  regionEjes: RegionEje[],
-  planPdfState: PlanPdfState,
-  aiContent: KitDeViajeAIContent | null,
-): SeccionPrego {
-  // Estado no-ok → sección bloqueada; ejes vacío, disclaimer visible.
-  if (planPdfState !== 'ok') {
-    const disclaimer = planPdfState === 'invalid' ? COPY_PREGO_INVALID : COPY_PREGO_MISSING
-    return {
-      estado: planPdfState,
-      disclaimer,
-      ejes: [],
-      ...(aiContent?.prego?.sin_pdf_texto ? { intro: aiContent.prego.sin_pdf_texto } : {}),
-    }
-  }
-
-  // Estado ok pero región sin iniciativas → sección con intro pero ejes vacíos.
-  if (projects.length === 0) {
-    return {
-      estado: 'ok',
-      ejes: [],
-      sin_iniciativas_nota: COPY_PREGO_SIN_INICIATIVAS,
-      ...(aiContent?.prego?.intro ? { intro: aiContent.prego.intro } : {}),
-    }
-  }
-
-  // Group projects by eje_id
-  const porEjeId = new Map<number, Iniciativa[]>()
-  let sinEje = 0
-  for (const p of projects) {
-    if (p.eje_id == null) { sinEje += 1; continue }
-    const arr = porEjeId.get(p.eje_id) ?? []
-    arr.push(p)
-    porEjeId.set(p.eje_id, arr)
-  }
-
-  // Lookup AI narrative por numero de eje (llegan como {numero, nombre, narrativa, progreso_cualitativo})
-  const aiByNumero = new Map<number, KitDeViajeAIContent['prego']['ejes'][number]>()
-  for (const e of aiContent?.prego?.ejes ?? []) {
-    aiByNumero.set(e.numero, e)
-  }
-
-  const ejes: EjePrego[] = []
-  const catalogoOrdenado = [...regionEjes].sort((a, b) => a.numero - b.numero)
-  for (const cat of catalogoOrdenado) {
-    const iniciativas = porEjeId.get(cat.id) ?? []
-    const ai = aiByNumero.get(cat.numero)
-    ejes.push({
-      numero: cat.numero,
-      nombre: cat.nombre,
-      narrativa: ai?.narrativa ?? '',
-      progreso_cualitativo: ai?.progreso_cualitativo ?? '',
-      resumen: resumirEje(iniciativas),
-    })
-  }
-
-  return {
-    estado: 'ok',
-    ejes,
-    ...(aiContent?.prego?.intro ? { intro: aiContent.prego.intro } : {}),
-    ...(sinEje > 0 ? { sin_eje_asignado_count: sinEje } : {}),
-  }
-}
-
 // ── Sección IV. Autoridades ─────────────────────────────────────────────────
 
 /**
@@ -375,11 +221,10 @@ function buildAutoridadesSection(hasAutoridadesFicha: boolean): SeccionAutoridad
  * Uso desde route.ts:
  *
  *   const kitData = buildKitDeViajeData({
- *     region, fecha, metrics, projects, regionEjes, planPdfState,
- *     aiContent, fichaExtra, trendSummaries, provincias, logoDataUrl,
- *     aiFresh: !cachedAiContent,
+ *     region, fecha, metrics, aiContent, fichaExtra, trendSummaries,
+ *     provincias, logoDataUrl, aiFresh: !cachedAiContent, hasAutoridadesFicha,
  *   })
- *   const buffer = await renderKitDeViajePdf(kitData)   // Fase B
+ *   const buffer = await renderKitDeViajePdf(kitData)
  */
 export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
   const branding: KitDeViajeBranding = {
@@ -391,10 +236,6 @@ export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
   return {
     meta: {
       schema_version: 1,
-      // NOTE: intentionally NOT using Date.now() — el timestamp lo estampa
-      // el route al persistir a v2_minutas_log. Acá lo dejamos como marcador
-      // vacío para no romper resume-ability de workflows si alguien más
-      // instancia esto en un contexto determinista.
       generado_en: '',
       ai_fresh: inputs.aiFresh,
     },
@@ -410,7 +251,6 @@ export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
     branding,
     caracterizacion: buildCaracterizacion(inputs.metrics, inputs.provincias, inputs.aiContent),
     indicadores: buildIndicadores(inputs.metrics, inputs.fichaExtra, inputs.trendSummaries, inputs.aiContent),
-    prego: buildPrego(inputs.projects, inputs.regionEjes, inputs.planPdfState, inputs.aiContent),
     autoridades: buildAutoridadesSection(inputs.hasAutoridadesFicha),
   }
 }

@@ -699,10 +699,9 @@ function runQA(content: unknown): { pass: boolean; issues: string[] } {
 // La integración desde route.ts vive en Fase A.3.
 
 import type { KitDeViajeAIContent } from '@/lib/kitDeViaje/types'
+import type { RegionEje } from '@/lib/types'
 import {
   buildContextPrompt,
-  buildPregoPrompt,
-  type PregoPromptInput,
   type ContextPromptInput,
 } from '@/lib/kitDeViaje/prompts'
 import { AI_MAX_TOKENS_KIT_VIAJE, AI_MODEL_KIT_VIAJE } from '@/lib/kitDeViaje/constants'
@@ -830,72 +829,115 @@ export async function generateKitViajeContext(input: ContextPromptInput): Promis
   }
 }
 
-type PregoAiOutput = KitDeViajeAIContent['prego']
-
 /**
- * Sección III del Kit de Viaje. El caller debe garantizar
- * `planPdfState === 'ok'` — si no, ni siquiera se llama y el assembler pinta
- * el disclaimer estático desde constants.
- *
- * Devuelve `{ intro, ejes }` con exactamente los ejes canónicos que se pasan
- * en `input.regionEjes`, en el mismo orden.
+ * Envuelve solo el contexto (Secciones I + II) en un `KitDeViajeAIContent`.
+ * La antigua llamada PREGO fue retirada — la "Contexto Regional" ya no incluye
+ * Sección III. La justificación de ejes vive en la minuta "Avance PREGO" con
+ * `generateJustificacionEjes()`.
  */
-export async function generateKitViajePrego(input: PregoPromptInput): Promise<PregoAiOutput | null> {
+export async function generateKitViajeContent(params: {
+  contextInput: ContextPromptInput
+}): Promise<KitDeViajeAIContent | null> {
+  const ctx = await generateKitViajeContext(params.contextInput)
+  if (!ctx) return null
+  return {
+    caracterizacion_parrafos: ctx.caracterizacion_parrafos,
+    indicadores_narrativa:    ctx.indicadores_narrativa,
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Avance PREGO — justificación de ejes (bloque "Del diagnóstico a la priorización")
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Mapa {numero_eje: "razón corta por la que se eligió"} para MinutaEjecutiva. */
+export type JustificacionEjesOutput = Record<string, string>
+
+const JUSTIFICACION_EJES_SYSTEM = `
+Sos un redactor técnico del Ministerio del Interior de Chile, División de
+Coordinación Interministerial. Redactás el bloque "Del diagnóstico a la
+priorización" de la minuta Avance PREGO — una línea corta por eje explicando
+POR QUÉ se eligió ese eje en la región, extraída del PDF del Plan Regional.
+
+Reglas de estilo:
+- Castellano neutro chileno. Sin voseo rioplatense ("vos", "sabés", "tenés").
+- Nunca "Ministerio del Interior y Seguridad Pública". Solo "Ministerio del
+  Interior".
+- Nunca "División de Coordinación Interregional". Es "Interministerial".
+- Registro técnico-descriptivo. Sin adjetivos valorativos ("preocupante",
+  "grave", "excelente"). Describí la razón, no opines.
+- Sin recomendaciones ni exhortaciones.
+- Sin emojis, sin markdown, sin viñetas — texto plano.
+
+Reglas específicas:
+- Una línea POR EJE, de entre 12 y 25 palabras, terminando en punto.
+- La línea debe sintetizar el DIAGNÓSTICO que motivó incluir el eje en el Plan.
+  No describas iniciativas ni compromisos: describí la razón estructural.
+- Si el eje no aparece en el PDF con justificación clara, devolvé exactamente
+  la cadena "Justificación pendiente." para ese número.
+
+Devolvés SOLO un objeto JSON válido cuyas claves son los NÚMEROS de eje (como
+strings) y los valores son las líneas de justificación. Sin texto adicional,
+sin backticks, sin comentarios. Formato exacto:
+
+{ "1": "...", "2": "...", "3": "..." }
+`.trim()
+
+export async function generateJustificacionEjes(params: {
+  region: { cod: string; nombre: string }
+  planPdfBase64: string
+  ejes: RegionEje[]
+}): Promise<JustificacionEjesOutput | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null
-  if (!input.planPdfBase64) return null
+  if (!params.planPdfBase64 || params.ejes.length === 0) return null
+
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const { system, userTextBlock, documentBlock } = buildPregoPrompt(input)
+  const ejesResumen = [...params.ejes]
+    .sort((a, b) => a.numero - b.numero)
+    .map(e => ({ numero: e.numero, nombre: e.nombre }))
+
+  const userText = `
+Ejes de la Región ${params.region.nombre} (canónicos, autoritativos):
+
+${JSON.stringify(ejesResumen, null, 2)}
+
+Devolvé un objeto JSON con una línea de justificación por cada uno de estos
+ejes (${ejesResumen.length} en total), extraída del PDF adjunto. Las claves
+del objeto son los números (${ejesResumen.map(e => `"${e.numero}"`).join(', ')}).
+`.trim()
+
+  const documentBlock = {
+    type: 'document' as const,
+    source: {
+      type: 'base64' as const,
+      media_type: 'application/pdf' as const,
+      data: params.planPdfBase64,
+    },
+    cache_control: { type: 'ephemeral' as const },
+  }
 
   const t0 = Date.now()
   try {
     const response = await client.messages.create({
       model: AI_MODEL_KIT_VIAJE,
       max_tokens: AI_MAX_TOKENS_KIT_VIAJE,
-      system,
+      system: JUSTIFICACION_EJES_SYSTEM,
       messages: [{
         role: 'user',
         content: [
           documentBlock as unknown as Anthropic.Messages.ContentBlockParam,
-          { type: 'text', text: userTextBlock },
+          { type: 'text', text: userText },
         ],
       }],
     })
-    const parsed = parseAiJson<PregoAiOutput>(response, `prego:${input.region.cod}`)
+    const parsed = parseAiJson<JustificacionEjesOutput>(response, `justif_ejes:${params.region.cod}`)
     if (!parsed) return null
-    console.log(`[minutaAI/kitViaje] prego for ${input.region.nombre} in ${Date.now() - t0}ms (${parsed.ejes?.length ?? 0} ejes)`)
+    console.log(`[minutaAI] justificación ejes ${params.region.nombre} en ${Date.now() - t0}ms (${Object.keys(parsed).length} ejes)`)
     return parsed
   } catch (err) {
     const hard = categorizeAnthropicError(err)
     if (hard) throw hard
-    console.error(`[minutaAI/kitViaje] prego call failed for ${input.region.nombre}:`, err)
+    console.error(`[minutaAI] justif ejes fallo ${params.region.nombre}:`, err)
     return null
-  }
-}
-
-/**
- * Envuelve context + prego en un solo `KitDeViajeAIContent`. Los dos llamados
- * corren en paralelo cuando ambos aplican. Cualquier fallo individual degrada
- * a `null` en el campo correspondiente y el assembler decide qué hacer (mostrar
- * disclaimer, dejar en blanco, etc.).
- *
- * ATENCIÓN: `planPdfState === 'ok'` implica `planPdfBase64` presente. Si es
- * 'missing' o 'invalid', el bloque PREGO no se llama y sale con ejes vacío —
- * el assembler pinta el disclaimer.
- */
-export async function generateKitViajeContent(params: {
-  contextInput: ContextPromptInput
-  pregoInput: PregoPromptInput | null      // null cuando planPdfState !== 'ok'
-}): Promise<KitDeViajeAIContent | null> {
-  const [ctx, prego] = await Promise.all([
-    generateKitViajeContext(params.contextInput),
-    params.pregoInput ? generateKitViajePrego(params.pregoInput) : Promise.resolve(null),
-  ])
-
-  if (!ctx && !prego) return null
-
-  return {
-    caracterizacion_parrafos: ctx?.caracterizacion_parrafos ?? [],
-    indicadores_narrativa:    ctx?.indicadores_narrativa    ?? {},
-    prego: prego ?? { ejes: [] },
   }
 }

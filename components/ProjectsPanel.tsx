@@ -304,7 +304,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                       <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M6 1v7M3 5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      Minuta Ejecutiva
+                      Avance PREGO
                     </>
                   )}
                 </button>
@@ -336,7 +336,7 @@ export default function IniciativasPanel({ region, projects, panelWidth, onClose
                         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                           <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="6"/><line x1="6" y1="6" x2="8" y2="7"/>
                         </svg>
-                        Kit de Viaje
+                        Contexto Regional
                       </>
                     )}
                   </button>

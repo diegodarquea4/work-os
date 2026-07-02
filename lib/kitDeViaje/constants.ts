@@ -18,35 +18,25 @@ export const DIVISION   = 'División de Coordinación Interministerial'
 export const TITULO_SECCIONES = {
   I:   'Caracterización general',
   II:  'Indicadores socioeconómicos clave',
-  III: 'Plan Regional de Gobierno (PREGO)',
   IV:  'Autoridades regionales',
 } as const
 
 // ── Copy: PDF PREGO no disponible ──────────────────────────────────────────
 
 /**
- * Se muestra cuando el objeto Storage del PDF PREGO existe pero está
- * corrupto/incompleto (< 20 KB o sin magic bytes). Caso canónico hoy: Ñuble.
- * Escalable: cuando alguien re-suba el PDF corregido, la sección pasa a 'ok'
- * automáticamente sin cambio de código.
+ * Copy compartido con la minuta "Avance PREGO" cuando el PDF del plan regional
+ * está corrupto/incompleto (< 20 KB o sin magic bytes) o directamente ausente.
+ * Se aplica al bloque "Del diagnóstico a la priorización" en `MinutaEjecutiva`.
  */
 export const COPY_PREGO_INVALID =
-  'El PDF del Plan Regional de Gobierno para esta región presenta problemas de carga en el panel. La sección se completará automáticamente cuando el documento se corrija.'
+  'El PDF del Plan Regional de Gobierno para esta región presenta problemas de carga en el panel. La justificación de los ejes se completará automáticamente cuando el documento se corrija.'
 
-/**
- * Se muestra cuando NO existe objeto Storage para la región. Casos actuales:
- * Tarapacá (I), Antofagasta (II), Valparaíso (V), Maule (VII).
- */
 export const COPY_PREGO_MISSING =
-  'Aún no se ha cargado el PDF del Plan Regional de Gobierno para esta región. La sección se completará automáticamente cuando el documento esté disponible en el panel.'
+  'Aún no se ha cargado el PDF del Plan Regional de Gobierno para esta región. La justificación de los ejes se completará automáticamente cuando el documento esté disponible.'
 
-/** Nota bajo la sección III cuando la región no tiene iniciativas cargadas. */
-export const COPY_PREGO_SIN_INICIATIVAS =
-  'No hay iniciativas registradas en el panel para esta región. El detalle cuantitativo por eje se completará a medida que se ingresen.'
-
-/** Nota bajo un eje cuando el 95%+ de sus iniciativas están en gris/pct=0. */
-export const COPY_EJE_SIN_DATOS =
-  'Sin datos de avance registrados en el panel. El estado se actualizará cuando el equipo regional cargue avances.'
+/** Se muestra por eje cuando el AI no logró extraer una justificación específica. */
+export const COPY_EJE_SIN_JUSTIFICACION =
+  'Justificación pendiente.'
 
 // ── Copy: Sección IV Autoridades no disponibles ────────────────────────────
 

@@ -13,10 +13,12 @@ import { minutaPostSchema } from '@/lib/schemas'
 import {
   generateMinutaContent,
   generateKitViajeContent,
+  generateJustificacionEjes,
   KitViajeAiHardError,
   type LeystopMinuta, type SeguimientoMinuta,
   type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries,
   type FichaExtraData,
+  type JustificacionEjesOutput,
 } from '@/lib/minutaAI'
 import provinciasData from '@/data/provincias-comunas.json'
 import { getSupabaseColega } from '@/lib/supabaseColega'
@@ -177,19 +179,21 @@ export async function POST(request: Request) {
             .maybeSingle(),
     ])
 
-    // region_ejes catálogo (Sección III del Kit de Viaje). Consulta liviana
-    // — se hace después del Promise.all para no meter otro slot y porque
-    // no se usa en tipo='ejecutiva'.
-    if (canonTipo === 'kit_viaje') {
+    // region_ejes catálogo. Ahora lo usa la minuta 'ejecutiva' (bloque
+    // "Del diagnóstico a la priorización"). El Kit de Viaje ya no lo usa
+    // porque Sección III se retiró.
+    if (canonTipo === 'ejecutiva') {
       const { data: ejesRes } = await sb.from('region_ejes')
         .select('*')
         .eq('region_cod', body.region.cod)
         .order('numero', { ascending: true })
       regionEjes = (ejesRes ?? []) as RegionEje[]
+    }
 
-      // Ficha oficial de autoridades. Si existe en el bucket, el post-proceso
-      // con pdf-lib la anexa como Sección IV; si no, el renderer pinta
-      // disclaimer + sample data. Descarga barata (~200-500 KB).
+    // Ficha oficial de autoridades para el Kit de Viaje. Si existe en el
+    // bucket, el post-proceso con pdf-lib la anexa como Sección IV; si no,
+    // el renderer pinta disclaimer + sample data. Descarga barata (~200-500 KB).
+    if (canonTipo === 'kit_viaje') {
       try {
         const { data: fichaData, error: fichaErr } = await sb.storage
           .from('autoridades-fichas')
@@ -210,27 +214,32 @@ export async function POST(request: Request) {
     leystopData  = (leystopRes.data as LeystopMinuta | null)
     cachedAiContent = (cacheRes.data as { ai_content: unknown } | null)?.ai_content ?? null
 
-    // Fetch Plan Regional PDF from Storage. Computamos planPdfState desde el
-    // buffer crudo (magic bytes + threshold) ANTES de convertir a base64,
-    // así detectamos el caso Ñuble XVI.pdf (328 bytes, corrupto en prod) y
-    // el nuevo pipeline muestra el disclaimer estático en vez de fabricar
-    // ejes falsos.
-    try {
-      const { data: pdfData, error: pdfError } = await sb.storage
-        .from('plan-regional')
-        .download(`${body.region.cod}.pdf`)
-      if (!pdfError && pdfData) {
-        const arrayBuf = await pdfData.arrayBuffer()
-        const buf = Buffer.from(arrayBuf)
-        planPdfState = validatePlanPdfBuffer(buf)
-        if (planPdfState === 'ok') {
-          planPdfBase64 = buf.toString('base64')
+    // Fetch Plan Regional PDF from Storage. Solo lo consumen:
+    //   1. Minuta 'ejecutiva' — para el bloque "Del diagnóstico a la
+    //      priorización" (justificación de ejes con AI + PDF como document input).
+    //   2. Path legacy de `generateMinutaContent('ejecutiva', ...)` que también
+    //      usa el PDF como contexto para la narrativa.
+    // El Kit de Viaje ya no lo usa — Sección III fue retirada.
+    // `validatePlanPdfBuffer` detecta el caso Ñuble XVI.pdf (328 bytes,
+    // corrupto en prod) para no fabricar contenido cuando el PDF es basura.
+    if (canonTipo === 'ejecutiva') {
+      try {
+        const { data: pdfData, error: pdfError } = await sb.storage
+          .from('plan-regional')
+          .download(`${body.region.cod}.pdf`)
+        if (!pdfError && pdfData) {
+          const arrayBuf = await pdfData.arrayBuffer()
+          const buf = Buffer.from(arrayBuf)
+          planPdfState = validatePlanPdfBuffer(buf)
+          if (planPdfState === 'ok') {
+            planPdfBase64 = buf.toString('base64')
+          }
+        } else {
+          planPdfState = 'missing'
         }
-      } else {
+      } catch {
         planPdfState = 'missing'
       }
-    } catch {
-      planPdfState = 'missing'
     }
 
     // ── FASE 2: Enriched context (needs initiative IDs from fase 1) ──────────
@@ -517,7 +526,7 @@ export async function POST(request: Request) {
     console.log(`[minuta] cache HIT ${body.region.cod}/${canonTipo}`)
     aiContent = cachedAiContent
   } else if (canonTipo === 'kit_viaje') {
-    console.log(`[minuta] kit_viaje for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, planPdfState: ${planPdfState}, ejes_catalogo: ${regionEjes.length}`)
+    console.log(`[minuta] kit_viaje for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}`)
     try {
       aiContent = await generateKitViajeContent({
         contextInput: {
@@ -526,15 +535,6 @@ export async function POST(request: Request) {
           fichaExtra,
           trendSummaries,
         },
-        pregoInput: planPdfState === 'ok' && planPdfBase64
-          ? {
-              region: { cod: body.region.cod, nombre: body.region.nombre },
-              fecha: body.fecha,
-              planPdfBase64,
-              regionEjes,
-              projects,
-            }
-          : null,
       })
     } catch (err) {
       if (err instanceof KitViajeAiHardError) {
@@ -563,8 +563,8 @@ export async function POST(request: Request) {
       if (cacheErr) console.error('[minuta] cache store:', cacheErr.message)
     }
   } else {
-    // canonTipo === 'ejecutiva' — path legacy sin cambios.
-    console.log(`[minuta] ejecutiva for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}, seguimientos: ${seguimientosMinuta.length}, trends: ${!!trendSummaries}`)
+    // canonTipo === 'ejecutiva' — Avance PREGO.
+    console.log(`[minuta] ejecutiva for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}, seia: ${seiaProjects?.length ?? 0}, mop: ${mopProjects?.length ?? 0}, leystop: ${!!leystopData}, planPdf: ${!!planPdfBase64}, seguimientos: ${seguimientosMinuta.length}, trends: ${!!trendSummaries}, ejes: ${regionEjes.length}`)
     aiContent = await generateMinutaContent(
       'ejecutiva',
       body.region.nombre,
@@ -596,6 +596,34 @@ export async function POST(request: Request) {
     }
   }
 
+  // Justificación de ejes para el bloque "Del diagnóstico a la priorización".
+  // Solo se calcula para 'ejecutiva'. Requiere PDF ok + al menos 1 eje.
+  // Falla silenciosamente (devuelve {}) — el componente pinta disclaimer.
+  let justificacionesEjes: JustificacionEjesOutput = {}
+  if (canonTipo === 'ejecutiva' && planPdfState === 'ok' && planPdfBase64 && regionEjes.length > 0) {
+    try {
+      const j = await generateJustificacionEjes({
+        region: { cod: body.region.cod, nombre: body.region.nombre },
+        planPdfBase64,
+        ejes: regionEjes,
+      })
+      if (j) justificacionesEjes = j
+    } catch (err) {
+      if (err instanceof KitViajeAiHardError) {
+        console.error(`[minuta] justif ejes AI hard error (${err.code}): ${err.detail}`)
+        return new Response(
+          JSON.stringify({
+            error: err.message,
+            code: `ai_${err.code}`,
+            hint: 'Regenerar la minuta una vez que se restablezca el servicio de AI.',
+          }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      console.error('[minuta] justif ejes fallo suave:', err)
+    }
+  }
+
   const regionSlug = body.region.nombre
     .toLowerCase()
     .normalize('NFD')
@@ -609,16 +637,13 @@ export async function POST(request: Request) {
   let buffer: Buffer
   try {
     if (canonTipo === 'kit_viaje') {
-      // Nuevo pipeline Fase B. renderKitDeViajePdf hace el renderToBuffer
-      // internamente.
+      // Contexto Regional (Kit de Viaje). renderKitDeViajePdf hace el
+      // renderToBuffer internamente. Ya no incluye Sección III (PREGO).
       const regionProvs = (provinciasData as Record<string, { provincias: { nombre: string; comunas: string }[] }>)[body.region.cod]?.provincias ?? []
       const kitData = buildKitDeViajeData({
         region: body.region,
         fecha: body.fecha,
         metrics,
-        projects,
-        regionEjes,
-        planPdfState,
         aiContent: aiContent as KitDeViajeAIContent | null,
         fichaExtra,
         trendSummaries,
@@ -643,18 +668,20 @@ export async function POST(request: Request) {
         console.log(`[minuta] anexé ficha autoridades (${pages.length} páginas) en ${Date.now() - t0}ms`)
       }
     } else {
-      // canonTipo === 'ejecutiva' — path legacy.
+      // canonTipo === 'ejecutiva' — Avance PREGO.
       const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const element = React.createElement(MinutaEjecutiva as any, {
         region: body.region,
         projects,
-        metrics,
         seiaProjects,
         mopProjects,
         fecha: body.fecha,
         aiContent,
         logoSrc: LOGO_DATA_URL,
+        ejes: regionEjes,
+        justificacionesEjes,
+        planPdfState,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       buffer = await renderToBuffer(element as any)

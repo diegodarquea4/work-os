@@ -3,7 +3,7 @@ import {
 } from '@react-pdf/renderer'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import type { RegionMetrics, SeiaProject, MopProject } from '@/lib/types'
+import type { SeiaProject, MopProject, RegionEje } from '@/lib/types'
 import type { MinutaEjecutivaContent } from '@/lib/minutaAI'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -157,6 +157,17 @@ const s = StyleSheet.create({
   // Footer
   foot:    { position: 'absolute', bottom: 12, left: 22, right: 22, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 0.5, borderTopColor: '#bbbbbb', paddingTop: 4 },
   footTxt: { fontSize: 7, color: C.textLight },
+
+  // Bloque "Del diagnóstico a la priorización"
+  diagWrap:     { marginBottom: 10 },
+  diagIntro:    { fontSize: 8, color: C.textMid, fontFamily: 'Helvetica-Oblique', lineHeight: 1.4, marginBottom: 6 },
+  diagRow:      { flexDirection: 'row', gap: 7, marginBottom: 5, alignItems: 'flex-start' },
+  diagBadge:    { width: 16, height: 16, borderRadius: 8, backgroundColor: C.red, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  diagBadgeTxt: { fontSize: 8, color: C.white, fontFamily: 'Carlito', fontWeight: 'bold' },
+  diagBody:     { flex: 1 },
+  diagEjeName:  { fontSize: 8.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy },
+  diagJust:     { fontSize: 8, color: C.textDark, lineHeight: 1.35 },
+  diagDisclaimer: { fontSize: 7.5, color: C.textMid, fontFamily: 'Helvetica-Oblique', marginBottom: 6 },
 })
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -309,22 +320,78 @@ function EjeChart({ projects }: { projects: Iniciativa[] }) {
   )
 }
 
+// ── Bloque "Del diagnóstico a la priorización" ───────────────────────────────
+
+function BloqueDiagnostico({
+  ejes,
+  justificaciones,
+  planPdfState,
+}: {
+  ejes: RegionEje[]
+  justificaciones: Record<string, string>
+  planPdfState: 'ok' | 'missing' | 'invalid'
+}) {
+  if (ejes.length === 0) return null
+
+  const ordenados = [...ejes].sort((a, b) => a.numero - b.numero)
+  const pdfNoDisponible = planPdfState !== 'ok'
+  const disclaimer = planPdfState === 'invalid'
+    ? 'El PDF del Plan Regional presenta problemas de carga. La justificación por eje se completará cuando se corrija.'
+    : planPdfState === 'missing'
+    ? 'Aún no se ha cargado el PDF del Plan Regional. La justificación por eje se completará cuando esté disponible.'
+    : null
+
+  return (
+    <View style={s.diagWrap}>
+      <SH t="Del diagnóstico a la priorización" />
+      <Text style={s.diagIntro}>
+        Cada déficit, brecha u oportunidad identificada con la Delegación se traduce en un eje del Plan. La priorización responde al diagnóstico territorial.
+      </Text>
+      {disclaimer && <Text style={s.diagDisclaimer}>{disclaimer}</Text>}
+      {ordenados.map(eje => {
+        const just = justificaciones[String(eje.numero)] ?? justificaciones[eje.numero.toString()]
+        const linea = pdfNoDisponible
+          ? 'Justificación pendiente.'
+          : (just && just.trim().length > 0 ? just : 'Justificación pendiente.')
+        return (
+          <View style={s.diagRow} key={eje.numero} wrap={false}>
+            <View style={s.diagBadge}>
+              <Text style={s.diagBadgeTxt}>{eje.numero}</Text>
+            </View>
+            <View style={s.diagBody}>
+              <Text style={s.diagEjeName}>{eje.nombre}</Text>
+              <Text style={s.diagJust}>{linea}</Text>
+            </View>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 type Props = {
   region: Region
   projects: Iniciativa[]
-  metrics?: RegionMetrics | null
   seiaProjects?: SeiaProject[] | null
   mopProjects?: MopProject[] | null
   fecha: string
   aiContent?: MinutaEjecutivaContent | null | unknown
+  /** Ejes de la región (region_ejes). Usados en el bloque "Del diagnóstico a la priorización". */
+  ejes?: RegionEje[]
+  /** Mapa {numero_eje_como_string: justificación} extraída del PDF del PREGO por AI. */
+  justificacionesEjes?: Record<string, string>
+  /** Estado del PDF del plan regional — determina si el bloque diagnóstico muestra disclaimer. */
+  planPdfState?: 'ok' | 'missing' | 'invalid'
 }
 
-export default function MinutaEjecutiva({ region, projects, metrics, seiaProjects, mopProjects, fecha, aiContent }: Props) {
+export default function MinutaEjecutiva({
+  region, projects, seiaProjects, mopProjects, fecha, aiContent,
+  ejes = [], justificacionesEjes = {}, planPdfState = 'missing',
+}: Props) {
   const ai = (aiContent && typeof aiContent === 'object' && 'avances_relevantes' in aiContent)
     ? aiContent as MinutaEjecutivaContent : null
 
-  const m = metrics ?? null
   const total = projects.length
   const rojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
   const ambar = projects.filter(p => p.estado_semaforo === 'ambar').length
@@ -368,6 +435,12 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
         <PH region={region} fecha={fecha} />
 
         <View style={s.body}>
+          {/* Bloque "Del diagnóstico a la priorización" — arriba de todo,
+              ancho completo. Explica por qué se eligieron los ejes del PREGO
+              en esta región. Justificación extraída con AI del PDF del Plan
+              (o disclaimer si el PDF no está disponible). */}
+          <BloqueDiagnostico ejes={ejes} justificaciones={justificacionesEjes} planPdfState={planPdfState} />
+
           <View style={s.row}>
 
             {/* ── COLUMNA IZQUIERDA ── */}
@@ -434,21 +507,6 @@ export default function MinutaEjecutiva({ region, projects, metrics, seiaProject
                   <Text style={{ fontSize: 7.5, color: C.navy, fontFamily: 'Helvetica-Oblique', lineHeight: 1.4 }}>{ai.tendencia_general}</Text>
                 </View>
               ) : null}
-
-              {/* Métricas socioeconómicas */}
-              {m && (
-                <View>
-                  <Text style={s.mTitle}>Contexto Socioeconómico</Text>
-                  {m.poblacion_total         != null && <View style={s.mRow}><Text style={s.mLbl}>Población (Censo 2024)</Text><Text style={s.mVal}>{m.poblacion_total.toLocaleString('es-CL')} hab.</Text></View>}
-                  {m.tasa_desocupacion       != null && <View style={s.mRow}><Text style={s.mLbl}>Tasa desocupación</Text><Text style={s.mVal}>{Math.round(m.tasa_desocupacion * 10) / 10}%</Text></View>}
-                  {m.pct_pobreza_ingresos    != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza por ingresos</Text><Text style={s.mVal}>{Math.round(m.pct_pobreza_ingresos * 10) / 10}%</Text></View>}
-                  {m.pct_pobreza_multidimensional != null && <View style={s.mRow}><Text style={s.mLbl}>Pobreza multidimensional</Text><Text style={s.mVal}>{Math.round(m.pct_pobreza_multidimensional * 10) / 10}%</Text></View>}
-                  {m.pib_regional            != null && <View style={s.mRow}><Text style={s.mLbl}>PIB regional</Text><Text style={s.mVal}>{m.pib_regional.toLocaleString('es-CL', { maximumFractionDigits: 2 })} MM$</Text></View>}
-                  {m.pct_pib_nacional        != null && <View style={s.mRow}><Text style={s.mLbl}>% PIB nacional</Text><Text style={s.mVal}>{Math.round(m.pct_pib_nacional * 10) / 10}%</Text></View>}
-                  {m.pct_hogares_victimas_dmcs != null && <View style={s.mRow}><Text style={s.mLbl}>Hogares víctimas DMCS</Text><Text style={s.mVal}>{Math.round(m.pct_hogares_victimas_dmcs * 10) / 10}%</Text></View>}
-                  {m.pct_percepcion_inseguridad != null && <View style={s.mRow}><Text style={s.mLbl}>Percepción inseguridad</Text><Text style={s.mVal}>{Math.round(m.pct_percepcion_inseguridad * 10) / 10}%</Text></View>}
-                </View>
-              )}
             </View>
 
           </View>
