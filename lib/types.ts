@@ -283,6 +283,23 @@ export type DesalojoPlanificacion = {
 // Estado calculado en UI (no persistido). Derivado de fecha_inicio/fecha_fin vs hoy.
 export type DesalojoPlanificacionEstado = 'hecho' | 'en_curso' | 'planificado'
 
+// Polígono dibujado sobre el mapa del caso (tab Avance → botón "Mapa").
+// `coords` es el ring exterior en formato GeoJSON: [[lng, lat], ...], sin
+// duplicar el primer vértice al final. El renderer traduce a [lat, lng] para
+// Leaflet en el punto de dibujo — un solo borde de conversión.
+export type DesalojoPoligono = {
+  id:           number
+  prioridad_id: number
+  nombre:       string
+  color:        string                     // hex "#rrggbb"
+  coords:       [number, number][]         // [[lng, lat], ...] ring exterior
+  descripcion:  string | null
+  orden:        number
+  created_at:   string
+  updated_at:   string
+  created_by:   string | null
+}
+
 // Audit log de cambios. v2 suma capa_id para diferenciar cambios de la capa vs
 // del toggle del caso (capa_id NULL para el toggle de es_desalojo). v3 suma
 // fase para trazar cambios por fase (NULL para cambios a nivel capa o caso).

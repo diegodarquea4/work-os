@@ -142,3 +142,35 @@ export type DesalojoDetallePatchBody = z.infer<typeof desalojoDetallePatchSchema
 
 export const CAPA_VALUES = ['l', 'll', 'lll'] as const
 export const capaSchema = z.enum(CAPA_VALUES)
+
+// ── /api/desalojos/[n]/poligonos POST + PATCH ────────────────────────────────
+// Polígonos dibujados sobre el mapa del caso. Nombre + color + coords.
+// - `coords` es un array de tuplas [lng, lat] (formato GeoJSON canónico) —
+//   el drawing tool y el parser WKT convergen acá. Mínimo 3 vértices.
+// - `color` es hex `#rrggbb` para matchear la constraint SQL.
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+
+const lngLatSchema = z.tuple([
+  z.number().min(-180).max(180),
+  z.number().min(-90).max(90),
+])
+
+export const poligonoCoordsSchema = z.array(lngLatSchema).min(3)
+
+export const poligonoPostSchema = z.object({
+  nombre:      z.string().trim().min(1).max(120),
+  color:       z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb'),
+  coords:      poligonoCoordsSchema,
+  descripcion: z.string().trim().max(1000).nullable().optional(),
+})
+
+export const poligonoPatchSchema = z.object({
+  nombre:      z.string().trim().min(1).max(120).optional(),
+  color:       z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb').optional(),
+  coords:      poligonoCoordsSchema.optional(),
+  descripcion: z.string().trim().max(1000).nullable().optional(),
+})
+
+export type PoligonoPostBody  = z.infer<typeof poligonoPostSchema>
+export type PoligonoPatchBody = z.infer<typeof poligonoPatchSchema>

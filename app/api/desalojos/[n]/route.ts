@@ -42,7 +42,7 @@ export async function GET(
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
   const db = getSupabaseAdmin()
-  const [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes] = await Promise.all([
+  const [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes, polyRes] = await Promise.all([
     db.from('desalojo_detalle')      .select('*').eq('prioridad_id', n).maybeSingle(),
     db.from('desalojo_capas')        .select('*').eq('prioridad_id', n).eq('activa', true).order('orden', { ascending: true }),
     db.from('desalojo_fase_estado')  .select('*').eq('prioridad_id', n),
@@ -52,8 +52,11 @@ export async function GET(
       .order('fecha_inicio', { ascending: true })
       .order('orden',        { ascending: true })
       .order('id',           { ascending: true }),
+    db.from('desalojo_poligonos')    .select('*').eq('prioridad_id', n)
+      .order('orden', { ascending: true })
+      .order('id',    { ascending: true }),
   ])
-  for (const r of [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes]) {
+  for (const r of [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes, polyRes]) {
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 })
   }
 
@@ -66,6 +69,7 @@ export async function GET(
     seguimientos:  segRes.data     ?? [],
     documentos,
     planificacion: planRes.data    ?? [],
+    poligonos:     polyRes.data    ?? [],
   })
 }
 

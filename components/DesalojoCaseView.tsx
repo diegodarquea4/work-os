@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import type { Iniciativa } from '@/lib/projects'
 import type {
   DesalojoCapa,
@@ -11,6 +12,7 @@ import type {
   DesalojoFaseConSemaforo,
   DesalojoFaseEstado,
   DesalojoPlanificacion,
+  DesalojoPoligono,
   DesalojoResponsable,
   DesalojoSeguimiento,
   DesalojoSeguimientoTipo,
@@ -22,6 +24,10 @@ import DesalojoCalendarioDrawer from './DesalojoCalendarioDrawer'
 import DesalojoContextoTab from './DesalojoContextoTab'
 import DesalojoPlanificacionTab from './DesalojoPlanificacionTab'
 import DesalojoResponsablesTab from './DesalojoResponsablesTab'
+
+// Leaflet no soporta SSR (requiere `window`). Cargamos el drawer del mapa
+// solo cliente + lazy: no infla el bundle hasta que el usuario clickea "Mapa".
+const DesalojoMapaDrawer = dynamic(() => import('./DesalojoMapaDrawer'), { ssr: false })
 
 /**
  * Ficha del caso de desalojo seleccionado. v2: dos tabs (Contexto / Seguimiento)
@@ -59,15 +65,21 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   const [seguimientos, setSeguimientos] = useState<DesalojoSeguimiento[]>([])
   const [documentos, setDocumentos]     = useState<DesalojoDocumento[]>([])
   const [planificacion, setPlanificacion] = useState<DesalojoPlanificacion[]>([])
+  const [poligonos, setPoligonos]         = useState<DesalojoPoligono[]>([])
   const [selectedCapaId, setSelectedCapaId] = useState<number | null>(null)
-  const [calOpen, setCalOpen]               = useState(false)
+  const [calOpen,  setCalOpen]              = useState(false)
+  const [mapaOpen, setMapaOpen]             = useState(false)
 
   // En la tab Planificación el drawer del calendario no tiene sentido (el
   // Gantt ya ocupa el lado derecho). Lo cerramos al entrar; el user lo
-  // re-abre manualmente al volver a otra tab si quiere.
+  // re-abre manualmente al volver a otra tab si quiere. El Mapa aplica igual
+  // lógica por consistencia visual (no queremos aside coexistiendo con Gantt).
   useEffect(() => {
-    if (tab === 'planificacion' && calOpen) setCalOpen(false)
-  }, [tab, calOpen])
+    if (tab === 'planificacion') {
+      if (calOpen)  setCalOpen(false)
+      if (mapaOpen) setMapaOpen(false)
+    }
+  }, [tab, calOpen, mapaOpen])
 
   const loadCase = useCallback(async () => {
     setLoading(true)
@@ -84,6 +96,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
         setSeguimientos(json.seguimientos ?? [])
         setDocumentos(json.documentos ?? [])
         setPlanificacion(json.planificacion ?? [])
+        setPoligonos(json.poligonos ?? [])
       }
     } catch (err) {
       setError(`Error de red: ${String(err)}`)
@@ -567,9 +580,10 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
       {/* Contenedor centrado.
           - Cerrado normal: max-w-5xl (1024px) mx-auto.
           - Cerrado en Planificación: max-w-[1500px] (Gantt necesita espacio).
-          - Abierto (calOpen): max-w-[1500px] flex → contenido + calendario adyacentes. */}
+          - Abierto (calOpen o mapaOpen): max-w-[1500px] flex → contenido +
+            columna derecha (Hitos arriba, Mapa abajo cuando ambos abiertos). */}
       <div className={`mx-auto h-full ${
-        calOpen
+        (calOpen || mapaOpen)
           ? 'max-w-[1500px] flex gap-6'
           : tab === 'planificacion'
             ? 'max-w-[1500px]'
@@ -639,40 +653,72 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             Responsables
           </button>
 
-          {/* Trigger del calendario — pestaña derecha. Visualmente distinta de
-              las tabs de contenido: no cambia el contenido del pane, abre el
-              panel lateral del calendario. En la tab Planificación queda
-              deshabilitado: el Gantt ya cumple ese rol en su lado derecho. */}
-          <button
-            type="button"
-            onClick={() => setCalOpen(o => !o)}
-            disabled={tab === 'planificacion'}
-            className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              tab === 'planificacion'
-                ? 'text-gray-300 cursor-not-allowed'
-                : calOpen
-                  ? 'bg-slate-900 text-white hover:bg-slate-700'
-                  : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
-            }`}
-            title={
-              tab === 'planificacion'
-                ? 'El Gantt de Planificación reemplaza el calendario en esta tab'
-                : calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'
-            }
-            aria-label={calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'}
-            aria-pressed={calOpen}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="12" height="11" rx="1.5"/>
-              <path d="M2 6h12M5.5 1.5v3M10.5 1.5v3"/>
-            </svg>
-            <span>Hitos</span>
-            {totalHitos > 0 && !calOpen && tab !== 'planificacion' && (
-              <span className="ml-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
-                {totalHitos > 9 ? '9+' : totalHitos}
-              </span>
-            )}
-          </button>
+          {/* Triggers del calendario y del mapa — pestañas derechas. No
+              cambian el contenido del pane, abren paneles laterales. En la
+              tab Planificación quedan deshabilitados: el Gantt ocupa ese
+              lado derecho. */}
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setCalOpen(o => !o)}
+              disabled={tab === 'planificacion'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                tab === 'planificacion'
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : calOpen
+                    ? 'bg-slate-900 text-white hover:bg-slate-700'
+                    : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
+              }`}
+              title={
+                tab === 'planificacion'
+                  ? 'El Gantt de Planificación reemplaza el calendario en esta tab'
+                  : calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'
+              }
+              aria-label={calOpen ? 'Cerrar calendario' : 'Abrir calendario de hitos'}
+              aria-pressed={calOpen}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="12" height="11" rx="1.5"/>
+                <path d="M2 6h12M5.5 1.5v3M10.5 1.5v3"/>
+              </svg>
+              <span>Hitos</span>
+              {totalHitos > 0 && !calOpen && tab !== 'planificacion' && (
+                <span className="ml-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
+                  {totalHitos > 9 ? '9+' : totalHitos}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapaOpen(o => !o)}
+              disabled={tab === 'planificacion'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                tab === 'planificacion'
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : mapaOpen
+                    ? 'bg-slate-900 text-white hover:bg-slate-700'
+                    : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
+              }`}
+              title={
+                tab === 'planificacion'
+                  ? 'El Gantt de Planificación reemplaza este panel en esta tab'
+                  : mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'
+              }
+              aria-label={mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'}
+              aria-pressed={mapaOpen}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 4l4-1.5 4 1.5 4-1.5v10L10 14l-4-1.5L2 14z"/>
+                <path d="M6 2.5v10M10 4v10"/>
+              </svg>
+              <span>Mapa</span>
+              {poligonos.length > 0 && !mapaOpen && tab !== 'planificacion' && (
+                <span className="ml-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
+                  {poligonos.length > 9 ? '9+' : poligonos.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Cuerpo del tab activo */}
@@ -728,14 +774,38 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
         </div>
         </div>
 
-        {/* Calendario — sibling adyacente al contenido, con su propio
-            overflow-y-auto: scrollea independiente del contenido principal. */}
-        <DesalojoCalendarioDrawer
-          open={calOpen}
-          onClose={() => setCalOpen(false)}
-          capas={capas}
-          fasesEstado={fasesEstado}
-        />
+        {/* Columna derecha: cuando ambos paneles están abiertos se apilan
+            verticalmente — Hitos arriba, Mapa abajo. Si solo uno, ocupa
+            la columna solo. Cada drawer maneja su propia anchura, padding
+            y scroll (Calendario usa aside w-[440px] con padding, Mapa usa
+            card w-[440px] con borde). El wrapper solo compone la stack. */}
+        {(calOpen || mapaOpen) && (
+          <div className="flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto">
+            {calOpen && (
+              <DesalojoCalendarioDrawer
+                open={calOpen}
+                onClose={() => setCalOpen(false)}
+                capas={capas}
+                fasesEstado={fasesEstado}
+              />
+            )}
+            {mapaOpen && (
+              <div className="pr-6 pb-6">
+                <DesalojoMapaDrawer
+                  open={mapaOpen}
+                  onClose={() => setMapaOpen(false)}
+                  prioridadId={iniciativa.n}
+                  capas={capas}
+                  selectedCapaId={selectedCapaId}
+                  poligonos={poligonos}
+                  onCreated={(p) => setPoligonos(prev => [...prev, p])}
+                  onUpdated={(p) => setPoligonos(prev => prev.map(x => x.id === p.id ? p : x))}
+                  onDeleted={(id) => setPoligonos(prev => prev.filter(x => x.id !== id))}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
