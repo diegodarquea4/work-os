@@ -678,7 +678,11 @@ export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
       <SeccionI data={data} />
       <SeccionII data={data} />
       <SeccionIII data={data} />
-      <SeccionIV data={data} />
+      {/* Sección IV: cuando disponible=true el route anexa el ficha oficial
+          por post-procesamiento con pdf-lib (el ficha ES la Sección IV,
+          con su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando
+          disponible=false, pintamos disclaimer + sample data como preview. */}
+      {!data.autoridades.disponible && <SeccionIV data={data} />}
     </Document>
   )
 }

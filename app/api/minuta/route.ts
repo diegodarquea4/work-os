@@ -123,6 +123,7 @@ export async function POST(request: Request) {
   let planPdfBase64: string | null = null
   let planPdfState:  PlanPdfState = 'missing'
   let regionEjes: RegionEje[] = []
+  let autoridadesFichaBuffer: Buffer | null = null
   let cachedAiContent: unknown = null
   let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
   // Enriched context data (fase 2)
@@ -185,6 +186,21 @@ export async function POST(request: Request) {
         .eq('region_cod', body.region.cod)
         .order('numero', { ascending: true })
       regionEjes = (ejesRes ?? []) as RegionEje[]
+
+      // Ficha oficial de autoridades. Si existe en el bucket, el post-proceso
+      // con pdf-lib la anexa como Sección IV; si no, el renderer pinta
+      // disclaimer + sample data. Descarga barata (~200-500 KB).
+      try {
+        const { data: fichaData, error: fichaErr } = await sb.storage
+          .from('autoridades-fichas')
+          .download(`${body.region.cod}.pdf`)
+        if (!fichaErr && fichaData) {
+          const arrayBuf = await fichaData.arrayBuffer()
+          autoridadesFichaBuffer = Buffer.from(arrayBuf)
+        }
+      } catch {
+        // sin ficha para esta región — cae al fallback preview
+      }
     }
 
     projects     = prioridades
@@ -609,8 +625,23 @@ export async function POST(request: Request) {
         provincias: regionProvs.map(p => ({ provincia: p.nombre, comunas: p.comunas })),
         logoDataUrl: LOGO_DATA_URL ?? '',
         aiFresh: !cachedAiContent,
+        hasAutoridadesFicha: !!autoridadesFichaBuffer,
       })
       buffer = await renderKitDeViajePdf(kitData)
+
+      // Sección IV: si hay ficha oficial en el bucket, la anexamos al final
+      // con pdf-lib. El ficha ES la Sección IV — el renderer ya omitió esa
+      // página. Sus páginas preservan texto vectorial + fotos + layout 1:1.
+      if (autoridadesFichaBuffer) {
+        const t0 = Date.now()
+        const { PDFDocument } = await import('pdf-lib')
+        const kitDoc   = await PDFDocument.load(new Uint8Array(buffer))
+        const fichaDoc = await PDFDocument.load(new Uint8Array(autoridadesFichaBuffer))
+        const pages = await kitDoc.copyPages(fichaDoc, fichaDoc.getPageIndices())
+        for (const p of pages) kitDoc.addPage(p)
+        buffer = Buffer.from(await kitDoc.save())
+        console.log(`[minuta] anexé ficha autoridades (${pages.length} páginas) en ${Date.now() - t0}ms`)
+      }
     } else {
       // canonTipo === 'ejecutiva' — path legacy.
       const MinutaEjecutiva = (await import('@/components/MinutaEjecutiva')).default

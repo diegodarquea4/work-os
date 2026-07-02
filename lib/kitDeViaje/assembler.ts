@@ -93,6 +93,14 @@ export interface AssemblerInputs {
   provincias: Array<{ provincia: string; comunas: string; poblacion?: string }>
   logoDataUrl: string
   aiFresh: boolean
+  /**
+   * True cuando el bucket `autoridades-fichas` tiene el PDF oficial para la
+   * región. En ese caso el route post-procesa el Kit con pdf-lib y anexa las
+   * páginas del ficha al final; el renderer NO pinta Sección IV.
+   *
+   * False = fallback: el renderer pinta Sección IV con disclaimer + sample.
+   */
+  hasAutoridadesFicha: boolean
 }
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
@@ -337,9 +345,21 @@ function buildPrego(
   }
 }
 
-// ── Sección IV. Autoridades (skeleton hasta Fase D) ─────────────────────────
+// ── Sección IV. Autoridades ─────────────────────────────────────────────────
 
-function buildAutoridadesSkeleton(): SeccionAutoridades {
+/**
+ * Cuando el bucket `autoridades-fichas` tiene el PDF oficial:
+ *   - disponible = true, sin disclaimer, sin grupos
+ *   - El renderer omite Sección IV; el route la anexa via pdf-lib
+ *
+ * Cuando NO hay ficha (región sin subir todavía):
+ *   - disponible = false + disclaimer + grupos vacíos
+ *   - El renderer pinta Sección IV con disclaimer + sample data preview
+ */
+function buildAutoridadesSection(hasAutoridadesFicha: boolean): SeccionAutoridades {
+  if (hasAutoridadesFicha) {
+    return { disponible: true, grupos: [] }
+  }
   return {
     disponible: false,
     disclaimer: COPY_AUTORIDADES_PENDIENTE,
@@ -391,6 +411,6 @@ export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
     caracterizacion: buildCaracterizacion(inputs.metrics, inputs.provincias, inputs.aiContent),
     indicadores: buildIndicadores(inputs.metrics, inputs.fichaExtra, inputs.trendSummaries, inputs.aiContent),
     prego: buildPrego(inputs.projects, inputs.regionEjes, inputs.planPdfState, inputs.aiContent),
-    autoridades: buildAutoridadesSkeleton(),
+    autoridades: buildAutoridadesSection(inputs.hasAutoridadesFicha),
   }
 }

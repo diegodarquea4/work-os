@@ -55,6 +55,7 @@ function inputs(over: Partial<AssemblerInputs> = {}): AssemblerInputs {
     provincias: [],
     logoDataUrl: 'data:image/png;base64,ZZZ',
     aiFresh: true,
+    hasAutoridadesFicha: false,
     ...over,
   }
 }
@@ -219,11 +220,18 @@ describe('Sección III — PREGO', () => {
 
 // ── Sección IV: Autoridades skeleton ───────────────────────────────────────
 
-describe('Sección IV — Autoridades (skeleton Fase A/B)', () => {
-  it('disponible=false + disclaimer + grupos vacío', () => {
-    const d = buildKitDeViajeData(inputs())
+describe('Sección IV — Autoridades', () => {
+  it('sin ficha oficial → disponible=false + disclaimer + grupos vacío (fallback preview)', () => {
+    const d = buildKitDeViajeData(inputs({ hasAutoridadesFicha: false }))
     expect(d.autoridades.disponible).toBe(false)
     expect(d.autoridades.disclaimer).toBe(COPY_AUTORIDADES_PENDIENTE)
+    expect(d.autoridades.grupos).toEqual([])
+  })
+
+  it('con ficha oficial en bucket → disponible=true SIN disclaimer (renderer omite sección; route anexa PDF)', () => {
+    const d = buildKitDeViajeData(inputs({ hasAutoridadesFicha: true }))
+    expect(d.autoridades.disponible).toBe(true)
+    expect(d.autoridades.disclaimer).toBeUndefined()
     expect(d.autoridades.grupos).toEqual([])
   })
 })
