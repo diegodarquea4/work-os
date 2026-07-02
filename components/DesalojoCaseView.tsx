@@ -775,12 +775,11 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
         </div>
 
         {/* Columna derecha: cuando ambos paneles están abiertos se apilan
-            verticalmente — Hitos arriba, Mapa abajo. Si solo uno, ocupa
-            la columna solo. Cada drawer maneja su propia anchura, padding
-            y scroll (Calendario usa aside w-[440px] con padding, Mapa usa
-            card w-[440px] con borde). El wrapper solo compone la stack. */}
+            verticalmente — Hitos arriba, Mapa justo abajo. El wrapper es la
+            única superficie con scroll; los drawers hijos son "bare" (sin
+            h-full ni overflow) para que sus alturas fluyan naturalmente. */}
         {(calOpen || mapaOpen) && (
-          <div className="flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto">
+          <div className="flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto py-6 pr-6">
             {calOpen && (
               <DesalojoCalendarioDrawer
                 open={calOpen}
@@ -790,19 +789,17 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
               />
             )}
             {mapaOpen && (
-              <div className="pr-6 pb-6">
-                <DesalojoMapaDrawer
-                  open={mapaOpen}
-                  onClose={() => setMapaOpen(false)}
-                  prioridadId={iniciativa.n}
-                  capas={capas}
-                  selectedCapaId={selectedCapaId}
-                  poligonos={poligonos}
-                  onCreated={(p) => setPoligonos(prev => [...prev, p])}
-                  onUpdated={(p) => setPoligonos(prev => prev.map(x => x.id === p.id ? p : x))}
-                  onDeleted={(id) => setPoligonos(prev => prev.filter(x => x.id !== id))}
-                />
-              </div>
+              <DesalojoMapaDrawer
+                open={mapaOpen}
+                onClose={() => setMapaOpen(false)}
+                prioridadId={iniciativa.n}
+                capas={capas}
+                selectedCapaId={selectedCapaId}
+                poligonos={poligonos}
+                onCreated={(p) => setPoligonos(prev => [...prev, p])}
+                onUpdated={(p) => setPoligonos(prev => prev.map(x => x.id === p.id ? p : x))}
+                onDeleted={(id) => setPoligonos(prev => prev.filter(x => x.id !== id))}
+              />
             )}
           </div>
         )}
