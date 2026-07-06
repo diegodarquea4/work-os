@@ -74,14 +74,25 @@ export default function DesalojoGantt({
   eventos, onSelectEvento, title, subtitle, focusedParent, focusedHitos, onExitFocus,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  // Filtro por rango de fecha (solo aplica fuera del modo foco).
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
 
   // En modo foco, las filas son [parent, ...hitos]. El parent va primero con
   // estilo distinto (background bar que abarca todo su rango); los hitos
   // van debajo. Ignoramos `eventos` prop entonces.
   const focusMode = focusedParent != null
+  const filtroActivo = !focusMode && (!!desde || !!hasta)
   const rows: DesalojoPlanificacion[] = focusMode
     ? [focusedParent, ...(focusedHitos ?? [])]
-    : eventos
+    : eventos.filter(ev => {
+        if (!desde && !hasta) return true
+        const ini = ev.fecha_inicio
+        const fin = ev.fecha_fin ?? ev.fecha_inicio
+        if (desde && fin < desde) return false   // termina antes del rango
+        if (hasta && ini > hasta) return false   // empieza después del rango
+        return true
+      })
 
   const { minDate, maxDate, daysTotal } = useMemo(() => {
     // Modo foco: zoom apretado al rango del padre con padding chico
@@ -93,28 +104,34 @@ export default function DesalojoGantt({
       const max = addDays(fin, 2)
       return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
     }
+    let min: Date
+    let max: Date
     if (rows.length === 0) {
       const hoy = new Date()
-      const min = addDays(hoy, -30)
-      const max = addDays(hoy, 30)
-      return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
+      min = addDays(hoy, -30)
+      max = addDays(hoy, 30)
+    } else {
+      min = parseDateISO(rows[0].fecha_inicio)
+      max = parseDateISO(rows[0].fecha_fin ?? rows[0].fecha_inicio)
+      for (const e of rows) {
+        const ini = parseDateISO(e.fecha_inicio)
+        const fin = parseDateISO(e.fecha_fin ?? e.fecha_inicio)
+        if (ini < min) min = ini
+        if (fin > max) max = fin
+      }
+      const hoy = new Date()
+      hoy.setHours(0, 0, 0, 0)
+      if (hoy < min) min = hoy
+      if (hoy > max) max = hoy
+      min = addDays(min, -7)
+      max = addDays(max, 7)
     }
-    let min = parseDateISO(rows[0].fecha_inicio)
-    let max = parseDateISO(rows[0].fecha_fin ?? rows[0].fecha_inicio)
-    for (const e of rows) {
-      const ini = parseDateISO(e.fecha_inicio)
-      const fin = parseDateISO(e.fecha_fin ?? e.fecha_inicio)
-      if (ini < min) min = ini
-      if (fin > max) max = fin
-    }
-    const hoy = new Date()
-    hoy.setHours(0, 0, 0, 0)
-    if (hoy < min) min = hoy
-    if (hoy > max) max = hoy
-    min = addDays(min, -7)
-    max = addDays(max, 7)
+    // Con filtro de fecha activo, el eje se ciñe al rango pedido.
+    if (desde) min = parseDateISO(desde)
+    if (hasta) max = parseDateISO(hasta)
+    if (max < min) max = addDays(min, 1)
     return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
-  }, [rows, focusMode, focusedParent])
+  }, [rows, focusMode, focusedParent, desde, hasta])
 
   // Layout dims — al ampliar, filas más altas, más ancho mínimo por día y
   // labels más largos para aprovechar el fullscreen.
@@ -123,7 +140,6 @@ export default function DesalojoGantt({
   const LABEL_W      = expanded ? 280 : 200
   const CHART_W_MIN  = expanded ? 1100 : 600
   const MIN_DAY_PX   = expanded ? 34 : 22
-  const LABEL_MAX    = expanded ? 46 : 26
   const PADDING_R    = 16
 
   // Posiciones Y dentro del header (de arriba abajo: mes, hoy, ticks, día).
@@ -180,20 +196,11 @@ export default function DesalojoGantt({
   const todayX = LABEL_W + daysBetween(minDate, hoy) * dayPx
   const todayVisible = hoy >= minDate && hoy <= maxDate
 
-  if (rows.length === 0) {
-    return (
-      <div className="border border-gray-200 rounded-lg bg-white p-6 text-center">
-        <p className="text-sm text-gray-500 mb-1">Sin eventos para graficar</p>
-        <p className="text-xs text-gray-400">Cuando agregues eventos en el timeline, aparecerán acá como barras o círculos sobre el eje temporal.</p>
-      </div>
-    )
-  }
-
   return (
     <div className={expanded
       ? 'fixed inset-0 z-[7000] bg-white flex flex-col overflow-hidden'
-      : 'border border-gray-200 rounded-lg bg-white overflow-auto'}>
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10 shrink-0">
+      : 'border border-gray-200 rounded-lg bg-white flex flex-col'}>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 bg-white z-10 shrink-0">
         <div className="flex items-baseline gap-2 min-w-0">
           {focusMode && onExitFocus && (
             <button
@@ -216,10 +223,23 @@ export default function DesalojoGantt({
             <span className="text-xs text-gray-400 shrink-0">· {rows.length} evento{rows.length === 1 ? '' : 's'}</span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-gray-600 shrink-0 ml-3">
-          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-900" />Hecho</span>
-          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />En curso</span>
-          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Planificado</span>
+        <div className="flex items-center gap-2 text-[11px] text-gray-600 shrink-0">
+          {!focusMode && (
+            <div className="hidden md:flex items-center gap-1">
+              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} title="Desde"
+                className="border border-gray-200 rounded px-1 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+              <span className="text-gray-400">–</span>
+              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} title="Hasta"
+                className="border border-gray-200 rounded px-1 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+              {filtroActivo && (
+                <button type="button" onClick={() => { setDesde(''); setHasta('') }} title="Limpiar filtro de fecha"
+                  className="text-gray-400 hover:text-slate-800 px-0.5">✕</button>
+              )}
+            </div>
+          )}
+          <span className="hidden lg:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-900" />Hecho</span>
+          <span className="hidden lg:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />En curso</span>
+          <span className="hidden lg:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Planificado</span>
           <button
             type="button"
             onClick={() => setExpanded(v => !v)}
@@ -240,8 +260,43 @@ export default function DesalojoGantt({
           </button>
         </div>
       </div>
-      <div className={expanded ? 'flex-1 overflow-auto' : ''}>
-      <svg width={totalW} height={totalH} className="block">
+      {rows.length === 0 ? (
+        <div className="p-6 text-center">
+          <p className="text-sm text-gray-500 mb-1">{filtroActivo ? 'Sin eventos en el rango seleccionado' : 'Sin eventos para graficar'}</p>
+          <p className="text-xs text-gray-400">{filtroActivo ? 'Ajustá o limpiá el filtro de fecha.' : 'Cuando agregues eventos en el timeline, aparecerán acá como barras o círculos sobre el eje temporal.'}</p>
+        </div>
+      ) : (
+      <div className={expanded ? 'flex-1 overflow-auto' : 'overflow-auto'}>
+      <div className="relative flex" style={{ width: totalW, minWidth: totalW }}>
+        {/* Columna de etiquetas (HTML) — fija al scrollear horizontal */}
+        <div className="sticky left-0 z-20 shrink-0 bg-white" style={{ width: LABEL_W, height: totalH }}>
+          {rows.map((ev, i) => {
+            const isParentRow = focusMode && i === 0
+            return (
+              <button
+                key={ev.id}
+                type="button"
+                onClick={() => onSelectEvento?.(ev.id)}
+                title={ev.titulo}
+                className={`absolute left-0 flex items-center px-3 overflow-hidden ${onSelectEvento ? 'cursor-pointer hover:brightness-95' : 'cursor-default'}`}
+                style={{ top: HEADER_H + i * ROW_H, height: ROW_H, width: LABEL_W, backgroundColor: isParentRow ? '#fef3c7' : i % 2 === 0 ? '#fafafa' : '#ffffff' }}
+              >
+                <span className={`truncate text-[12px] ${isParentRow ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+                  {(isParentRow ? '◆ ' : '') + ev.titulo}
+                </span>
+              </button>
+            )
+          })}
+          <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
+        </div>
+        {/* Chart SVG — recortado (viewBox) para empezar en LABEL_W; las
+            etiquetas viven en la columna HTML sticky de al lado. */}
+        <svg
+          width={chartW + PADDING_R}
+          height={totalH}
+          viewBox={`${LABEL_W} 0 ${chartW + PADDING_R} ${totalH}`}
+          className="block shrink-0"
+        >
         {/* Fondo de filas alternadas. En modo foco, la primera fila (parent)
             tiene un fondo amber muy tenue para distinguir el "container" de
             los hitos hijos. */}
@@ -327,7 +382,6 @@ export default function DesalojoGantt({
         {/* Eventos (en modo foco, la primera fila es el parent: misma fill
             que la barra pero con stroke más marcado para señalar el container). */}
         {rows.map((ev, i) => {
-          const isParentRow = focusMode && i === 0
           const y = HEADER_H + i * ROW_H
           const iniDate = parseDateISO(ev.fecha_inicio)
           const finDate = parseDateISO(ev.fecha_fin ?? ev.fecha_inicio)
@@ -348,19 +402,7 @@ export default function DesalojoGantt({
               style={{ cursor: onSelectEvento ? 'pointer' : 'default' }}
               className="hover:[&>rect]:fill-current"
             >
-              {/* Label izquierda — en modo foco, el parent va en bold + prefijo */}
-              <text
-                x={12}
-                y={y + ROW_H / 2 + 4}
-                fontSize={12}
-                fill={isParentRow ? '#0f172a' : '#1e293b'}
-                fontWeight={isParentRow ? 700 : 400}
-                className="select-none"
-              >
-                {(isParentRow ? '◆ ' : '') + (ev.titulo.length > LABEL_MAX ? ev.titulo.slice(0, LABEL_MAX - 1) + '…' : ev.titulo)}
-              </text>
-
-              {/* Barra o círculo */}
+              {/* Barra o círculo (la etiqueta va en la columna HTML sticky) */}
               {esRango ? (
                 <rect
                   x={x1}
@@ -390,15 +432,10 @@ export default function DesalojoGantt({
           )
         })}
 
-        {/* Separador label/chart */}
-        <line
-          x1={LABEL_W} x2={LABEL_W}
-          y1={0} y2={totalH}
-          stroke="#e5e7eb"
-          strokeWidth={1}
-        />
       </svg>
       </div>
+      </div>
+      )}
     </div>
   )
 }

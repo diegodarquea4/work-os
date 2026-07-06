@@ -522,9 +522,9 @@ function MapHitoRow({
   hito: DesalojoPlanificacion
   onPatchEvento: (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
 }) {
-  const [open, setOpen]     = useState(false)
-  const [draft, setDraft]   = useState(hito.descripcion ?? '')
-  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(hito.descripcion ?? '')
+  const [saving, setSaving]   = useState(false)
   useEffect(() => { setDraft(hito.descripcion ?? '') }, [hito.descripcion])
 
   const estado = estadoEventoPlanificacion(hito)
@@ -532,9 +532,9 @@ function MapHitoRow({
 
   async function commit() {
     const normalized = isHtmlEmpty(draft) ? null : draft
-    if (normalized === (hito.descripcion ?? null)) { setOpen(false); return }
+    if (normalized === (hito.descripcion ?? null)) { setEditing(false); return }
     setSaving(true)
-    try { await onPatchEvento(hito.id, { descripcion: normalized }); setOpen(false) }
+    try { await onPatchEvento(hito.id, { descripcion: normalized }); setEditing(false) }
     finally { setSaving(false) }
   }
 
@@ -546,17 +546,23 @@ function MapHitoRow({
         <span className="text-gray-800 truncate flex-1 min-w-0" title={hito.titulo}>{hito.titulo}</span>
         <button
           type="button"
-          onClick={() => setOpen(o => !o)}
-          className={`text-[10px] flex-shrink-0 ${tiene ? 'text-slate-600 hover:text-slate-900 font-medium' : 'text-gray-400 hover:text-slate-700'}`}
+          onClick={() => setEditing(e => !e)}
+          className="text-[10px] flex-shrink-0 text-slate-500 hover:text-slate-900 font-medium"
         >
-          {tiene ? '• Detalle' : '+ Detalle'}
+          {editing ? 'Cerrar' : tiene ? 'Editar' : '+ Detalle'}
         </button>
       </div>
-      {open && (
+      {/* Detalle SIEMPRE visible cuando existe (lectura), salvo mientras se edita. */}
+      {tiene && !editing && (
+        <div className="mt-1 ml-3.5 pl-2 border-l-2 border-slate-100">
+          <RichTextView html={hito.descripcion} className="text-[11px] text-gray-600" />
+        </div>
+      )}
+      {editing && (
         <div className="mt-1.5 ml-3.5 pl-2 border-l-2 border-slate-100 space-y-1.5">
           <RichTextEditor value={draft} onUpdate={setDraft} placeholder="Detalle del hito…" minHeight="min-h-[48px]" />
           <div className="flex items-center justify-end gap-1.5">
-            <button type="button" onClick={() => { setDraft(hito.descripcion ?? ''); setOpen(false) }} disabled={saving}
+            <button type="button" onClick={() => { setDraft(hito.descripcion ?? ''); setEditing(false) }} disabled={saving}
               className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
             <button type="button" onClick={commit} disabled={saving}
               className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
@@ -806,10 +812,12 @@ export default function DesalojoMapaDrawer(props: Props) {
     return { key: `all-${poligonos.length}`, rings: poligonos.map(p => p.coords) }
   }, [selectedEtapaId, polygonsByEtapa, poligonos])
 
-  // "Ver en mapa" desde Planificación: enfoca la Etapa indicada una sola vez.
+  // "Ver en mapa" desde Planificación: abre el mapa AMPLIADO enfocando la
+  // Etapa indicada, una sola vez.
   useEffect(() => {
     if (focusEtapaId != null) {
       setSelectedEtapaId(focusEtapaId)
+      setExpanded(true)
       onFocusConsumed?.()
     }
   }, [focusEtapaId, onFocusConsumed])
@@ -819,6 +827,14 @@ export default function DesalojoMapaDrawer(props: Props) {
   const handleCancelPending = useCallback(() => { setPendingCoords(null); setDrawTargetEtapaId(null) }, [])
   const handleSearchSelect  = useCallback((lat: number, lng: number) => {
     mapRef.current?.flyTo([lat, lng], 17)
+  }, [])
+
+  // Ajusta el mapa al conjunto de anillos [[lng,lat],...] de forma inmediata.
+  const fitToRings = useCallback((rings: [number, number][][]) => {
+    const pts: [number, number][] = []
+    for (const ring of rings) for (const [lng, lat] of ring) pts.push([lat, lng])
+    if (pts.length === 0 || !mapRef.current) return
+    mapRef.current.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 18 })
   }, [])
 
   // Inicia el dibujo asociando el próximo polígono a `etapaId` (null = sin etapa).
@@ -845,15 +861,18 @@ export default function DesalojoMapaDrawer(props: Props) {
         window.alert(json?.error ?? `Error HTTP ${res.status}`)
         return
       }
-      onCreated(json.poligono as DesalojoPoligono)
+      const creado = json.poligono as DesalojoPoligono
+      onCreated(creado)
       setPendingCoords(null)
       setDrawTargetEtapaId(null)
+      // Ajuste inmediato al polígono recién dibujado (incluye el primero).
+      fitToRings([creado.coords])
     } catch (err) {
       window.alert(`Error de red: ${String(err)}`)
     } finally {
       setSaving(false)
     }
-  }, [pendingCoords, prioridadId, onCreated, drawTargetEtapaId])
+  }, [pendingCoords, prioridadId, onCreated, drawTargetEtapaId, fitToRings])
 
   async function handleRecolorEtapa(etapaId: number, color: string) {
     await onPatchEvento(etapaId, { color })
