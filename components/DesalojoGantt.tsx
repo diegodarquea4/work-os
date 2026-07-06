@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { DesalojoPlanificacion, DesalojoPlanificacionEstado } from '@/lib/types'
 import { estadoEventoPlanificacion } from '@/lib/desalojos'
 
@@ -73,6 +73,8 @@ function formatFecha(s: string): string {
 export default function DesalojoGantt({
   eventos, onSelectEvento, title, subtitle, focusedParent, focusedHitos, onExitFocus,
 }: Props) {
+  const [expanded, setExpanded] = useState(false)
+
   // En modo foco, las filas son [parent, ...hitos]. El parent va primero con
   // estilo distinto (background bar que abarca todo su rango); los hitos
   // van debajo. Ignoramos `eventos` prop entonces.
@@ -114,11 +116,14 @@ export default function DesalojoGantt({
     return { minDate: min, maxDate: max, daysTotal: daysBetween(min, max) }
   }, [rows, focusMode, focusedParent])
 
-  // Layout dims
-  const ROW_H        = 28
+  // Layout dims — al ampliar, filas más altas, más ancho mínimo por día y
+  // labels más largos para aprovechar el fullscreen.
+  const ROW_H        = expanded ? 36 : 28
   const HEADER_H     = 70
-  const LABEL_W      = 200
-  const CHART_W_MIN  = 600
+  const LABEL_W      = expanded ? 280 : 200
+  const CHART_W_MIN  = expanded ? 1100 : 600
+  const MIN_DAY_PX   = expanded ? 34 : 22
+  const LABEL_MAX    = expanded ? 46 : 26
   const PADDING_R    = 16
 
   // Posiciones Y dentro del header (de arriba abajo: mes, hoy, ticks, día).
@@ -132,7 +137,7 @@ export default function DesalojoGantt({
   // sin colisión (showall: no skipeamos ningún día). Si el rango es muy chico,
   // expandimos dayPx para que el chart llene al menos CHART_W_MIN; si es muy
   // grande, dejamos que crezca y el contenedor hace scroll horizontal.
-  const dayPx = Math.max(22, CHART_W_MIN / daysTotal)
+  const dayPx = Math.max(MIN_DAY_PX, CHART_W_MIN / daysTotal)
   const chartW = Math.max(CHART_W_MIN, daysTotal * dayPx)
   const totalW = LABEL_W + chartW + PADDING_R
   const totalH = HEADER_H + Math.max(ROW_H, rows.length * ROW_H) + 16
@@ -185,8 +190,10 @@ export default function DesalojoGantt({
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white overflow-auto">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10">
+    <div className={expanded
+      ? 'fixed inset-0 z-[7000] bg-white flex flex-col overflow-hidden'
+      : 'border border-gray-200 rounded-lg bg-white overflow-auto'}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10 shrink-0">
         <div className="flex items-baseline gap-2 min-w-0">
           {focusMode && onExitFocus && (
             <button
@@ -210,11 +217,30 @@ export default function DesalojoGantt({
           )}
         </div>
         <div className="flex items-center gap-3 text-[11px] text-gray-600 shrink-0 ml-3">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-900" />Hecho</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />En curso</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Planificado</span>
+          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-900" />Hecho</span>
+          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />En curso</span>
+          <span className="hidden sm:flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Planificado</span>
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-gray-500 hover:text-slate-900 hover:bg-gray-100"
+            title={expanded ? 'Reducir' : 'Ampliar carta Gantt'}
+            aria-label={expanded ? 'Reducir' : 'Ampliar'}
+          >
+            {expanded ? (
+              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H8V1M1 8h3v3M8 1l3 3M4 11L1 8"/>
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2H2v4M14 6V2h-4M2 10v4h4M10 14h4v-4"/>
+              </svg>
+            )}
+            <span className="hidden sm:inline">{expanded ? 'Reducir' : 'Ampliar'}</span>
+          </button>
         </div>
       </div>
+      <div className={expanded ? 'flex-1 overflow-auto' : ''}>
       <svg width={totalW} height={totalH} className="block">
         {/* Fondo de filas alternadas. En modo foco, la primera fila (parent)
             tiene un fondo amber muy tenue para distinguir el "container" de
@@ -331,7 +357,7 @@ export default function DesalojoGantt({
                 fontWeight={isParentRow ? 700 : 400}
                 className="select-none"
               >
-                {(isParentRow ? '◆ ' : '') + (ev.titulo.length > 26 ? ev.titulo.slice(0, 25) + '…' : ev.titulo)}
+                {(isParentRow ? '◆ ' : '') + (ev.titulo.length > LABEL_MAX ? ev.titulo.slice(0, LABEL_MAX - 1) + '…' : ev.titulo)}
               </text>
 
               {/* Barra o círculo */}
@@ -372,6 +398,7 @@ export default function DesalojoGantt({
           strokeWidth={1}
         />
       </svg>
+      </div>
     </div>
   )
 }

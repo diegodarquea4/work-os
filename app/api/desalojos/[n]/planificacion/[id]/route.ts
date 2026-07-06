@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { HEX_COLOR_RE } from '@/lib/schemas'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -19,6 +20,7 @@ type PatchableFields = {
   capa_id?:      number | null
   titulo?:       string
   descripcion?:  string | null
+  color?:        string | null
   fecha_inicio?: string
   fecha_fin?:    string | null
 }
@@ -73,6 +75,17 @@ export async function PATCH(
       errors.push('descripcion inválida')
     } else {
       patch.descripcion = body.descripcion.trim() || null
+    }
+  }
+
+  // Color solo aplica a Etapas (top-level). En hitos se ignora silenciosamente.
+  if ('color' in body && prev.parent_id === null) {
+    if (body.color === null || body.color === '') {
+      patch.color = null
+    } else if (typeof body.color !== 'string' || !HEX_COLOR_RE.test(body.color)) {
+      errors.push('color inválido (formato #rrggbb)')
+    } else {
+      patch.color = body.color
     }
   }
 
@@ -227,5 +240,16 @@ export async function DELETE(
   if (delErr) {
     return NextResponse.json({ error: delErr.message }, { status: 500 })
   }
+
+  // Desasociar los polígonos de la Etapa borrada — quedan como "Sin etapa"
+  // (conservando su color) en vez de apuntar a un evento archivado.
+  const { error: detachErr } = await db
+    .from('desalojo_poligonos')
+    .update({ planificacion_id: null })
+    .eq('planificacion_id', id)
+  if (detachErr) {
+    return NextResponse.json({ error: detachErr.message }, { status: 500 })
+  }
+
   return NextResponse.json({ ok: true })
 }

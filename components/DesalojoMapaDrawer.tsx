@@ -6,8 +6,10 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
 import 'leaflet-draw'
-import type { DesalojoCapa, DesalojoPoligono } from '@/lib/types'
-import { parseWktPolygon, toWktPolygon } from '@/lib/wkt'
+import type { DesalojoCapa, DesalojoPlanificacion, DesalojoPoligono } from '@/lib/types'
+import { parseWktPolygon } from '@/lib/wkt'
+import { estadoEventoPlanificacion } from '@/lib/desalojos'
+import RichTextEditor, { RichTextView, isHtmlEmpty, plainTextLength } from './RichTextEditor'
 
 /**
  * Panel lateral derecho con vista satelital del terreno del caso y
@@ -36,9 +38,16 @@ type Props = {
   capas:          DesalojoCapa[]
   selectedCapaId: number | null
   poligonos:      DesalojoPoligono[]
+  planificacion:  DesalojoPlanificacion[]
   onCreated:      (p: DesalojoPoligono) => void
   onUpdated:      (p: DesalojoPoligono) => void
   onDeleted:      (id: number) => void
+  onCreateEtapa:  (input: { titulo: string; descripcion?: string | null; color?: string | null; fecha_inicio: string; fecha_fin?: string | null }) => Promise<DesalojoPlanificacion | null>
+  onPatchEvento:  (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+  onAddHito:      (input: { parent_id: number; titulo: string; descripcion?: string | null; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
+  /** Enfoca una Etapa al abrir el mapa desde Planificación ("Ver en mapa"). */
+  focusEtapaId?:    number | null
+  onFocusConsumed?: () => void
 }
 
 const PALETTE = [
@@ -120,6 +129,26 @@ function DrawControl({
     }
   }, [map, bridgeRef, onCreatedRaw])
 
+  return null
+}
+
+/**
+ * Auto-centra el mapa (fitBounds) sobre un conjunto de anillos de polígonos.
+ * `rings` viene en formato BD [[lng, lat], ...] y se convierte a [lat, lng] acá
+ * (único borde de conversión). Solo re-ajusta cuando cambia `fitKey`, para no
+ * pelear con el zoom manual del usuario. Si no hay vértices, no hace nada
+ * (deja el center/zoom por defecto).
+ */
+function FitToPolygons({ fitKey, rings }: { fitKey: string; rings: [number, number][][] }) {
+  const map = useMap()
+  useEffect(() => {
+    const pts: [number, number][] = []
+    for (const ring of rings) for (const [lng, lat] of ring) pts.push([lat, lng])
+    if (pts.length === 0) return
+    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 18 })
+    // Depende solo de fitKey a propósito — rings cambia de identidad cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, fitKey])
   return null
 }
 
@@ -249,10 +278,14 @@ type PendingPoligono = {
 
 function NameColorModal({
   pending,
+  hideColor,
+  etapaNombre,
   onCancel,
   onConfirm,
 }: {
   pending: PendingPoligono
+  hideColor?: boolean
+  etapaNombre?: string
   onCancel: () => void
   onConfirm: (nombre: string, color: string) => void
 }) {
@@ -263,7 +296,13 @@ function NameColorModal({
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-bold text-gray-900">Nombre y color del polígono</h3>
+        <h3 className="text-base font-bold text-gray-900">Nombre del polígono</h3>
+        {hideColor && etapaNombre && (
+          <p className="text-xs text-gray-500 flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded ring-1 ring-gray-300" style={{ backgroundColor: color }} />
+            Etapa: <span className="font-medium text-gray-700">{etapaNombre}</span>
+          </p>
+        )}
         <div className="space-y-2">
           <label className="block text-xs font-medium text-gray-700">Nombre</label>
           <input
@@ -275,21 +314,23 @@ function NameColorModal({
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
           />
         </div>
-        <div className="space-y-2">
-          <label className="block text-xs font-medium text-gray-700">Color</label>
-          <div className="flex flex-wrap gap-2">
-            {PALETTE.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-lg border-2 transition-transform ${color === c ? 'border-slate-900 scale-110' : 'border-transparent'}`}
-                style={{ backgroundColor: c }}
-                aria-label={`Color ${c}`}
-              />
-            ))}
+        {!hideColor && (
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-700">Color</label>
+            <div className="flex flex-wrap gap-2">
+              {PALETTE.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={`w-8 h-8 rounded-lg border-2 transition-transform ${color === c ? 'border-slate-900 scale-110' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label={`Color ${c}`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
           <button
@@ -410,14 +451,278 @@ function centroid(coords: [number, number][]): [number, number] {
   return [sx / n, sy / n]
 }
 
+// ── Iconos compactos reutilizados en las listas ────────────────────────────
+
+function IconEye({ on }: { on: boolean }) {
+  return on ? (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/>
+    </svg>
+  ) : (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 8s2.5-5 7-5c1.5 0 2.8.5 3.9 1.2M15 8s-2.5 5-7 5c-1.5 0-2.8-.5-3.9-1.2"/><path d="M2 14L14 2"/>
+    </svg>
+  )
+}
+function IconCenter() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="7" r="4"/><circle cx="7" cy="7" r="1" fill="currentColor"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2"/>
+    </svg>
+  )
+}
+function IconTrash() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M2 3.5h10M5.5 3v-1a1 1 0 011-1h1a1 1 0 011 1v1M3.5 3.5v9a1 1 0 001 1h5a1 1 0 001-1v-9"/>
+    </svg>
+  )
+}
+
+const ESTADO_DOT: Record<string, string> = {
+  hecho: 'bg-slate-900', en_curso: 'bg-amber-500', planificado: 'bg-gray-300',
+}
+
+// Muestra texto rico acotado: si es largo, lo trunca a 4 líneas con toggle
+// "Ver más/menos". Evita que una descripción enorme desborde el panel del mapa.
+function ClampedRichText({ html }: { html: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  if (isHtmlEmpty(html)) return null
+  if (plainTextLength(html) <= 200) {
+    return <RichTextView html={html} className="text-xs text-gray-600" />
+  }
+  return (
+    <div>
+      <div className={expanded ? '' : 'line-clamp-4'}>
+        <RichTextView html={html} className="text-xs text-gray-600" />
+      </div>
+      <button type="button" onClick={() => setExpanded(e => !e)}
+        className="text-[10px] text-slate-500 hover:text-slate-800 font-medium mt-0.5">
+        {expanded ? 'Ver menos' : 'Ver más'}
+      </button>
+    </div>
+  )
+}
+
+const MESES_MAP = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+function fmtFecha(inicio: string, fin: string | null): string {
+  const [, im, id] = inicio.split('-').map(Number)
+  const li = `${id} ${MESES_MAP[im - 1]}`
+  if (!fin || fin === inicio) return li
+  const [, fm, fd] = fin.split('-').map(Number)
+  return `${li} – ${fd} ${MESES_MAP[fm - 1]}`
+}
+
+// ── Fila de hito en el detalle de Etapa (con "Detalle" editable) ────────────
+
+function MapHitoRow({
+  hito,
+  onPatchEvento,
+}: {
+  hito: DesalojoPlanificacion
+  onPatchEvento: (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+}) {
+  const [open, setOpen]     = useState(false)
+  const [draft, setDraft]   = useState(hito.descripcion ?? '')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { setDraft(hito.descripcion ?? '') }, [hito.descripcion])
+
+  const estado = estadoEventoPlanificacion(hito)
+  const tiene  = !isHtmlEmpty(hito.descripcion)
+
+  async function commit() {
+    const normalized = isHtmlEmpty(draft) ? null : draft
+    if (normalized === (hito.descripcion ?? null)) { setOpen(false); return }
+    setSaving(true)
+    try { await onPatchEvento(hito.id, { descripcion: normalized }); setOpen(false) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <li className="text-xs">
+      <div className="flex items-center gap-2">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ESTADO_DOT[estado]}`} />
+        <span className="text-[10px] text-gray-400 tabular-nums flex-shrink-0">{fmtFecha(hito.fecha_inicio, hito.fecha_fin)}</span>
+        <span className="text-gray-800 truncate flex-1 min-w-0" title={hito.titulo}>{hito.titulo}</span>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className={`text-[10px] flex-shrink-0 ${tiene ? 'text-slate-600 hover:text-slate-900 font-medium' : 'text-gray-400 hover:text-slate-700'}`}
+        >
+          {tiene ? '• Detalle' : '+ Detalle'}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-1.5 ml-3.5 pl-2 border-l-2 border-slate-100 space-y-1.5">
+          <RichTextEditor value={draft} onUpdate={setDraft} placeholder="Detalle del hito…" minHeight="min-h-[48px]" />
+          <div className="flex items-center justify-end gap-1.5">
+            <button type="button" onClick={() => { setDraft(hito.descripcion ?? ''); setOpen(false) }} disabled={saving}
+              className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
+            <button type="button" onClick={commit} disabled={saving}
+              className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+// ── Form para agregar un hito dentro del detalle de Etapa ───────────────────
+
+function AddHitoForm({
+  etapa,
+  onAddHito,
+}: {
+  etapa: DesalojoPlanificacion
+  onAddHito: (input: { parent_id: number; titulo: string; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
+}) {
+  const padreInicio = etapa.fecha_inicio
+  const padreFin    = etapa.fecha_fin ?? etapa.fecha_inicio
+  const [open, setOpen]     = useState(false)
+  const [tit, setTit]       = useState('')
+  const [ini, setIni]       = useState(padreInicio)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState<string | null>(null)
+
+  async function submit() {
+    const t = tit.trim()
+    if (!t) { setErr('Título requerido'); return }
+    if (ini < padreInicio || ini > padreFin) { setErr(`Fecha fuera del rango (${padreInicio} – ${padreFin})`); return }
+    setSaving(true); setErr(null)
+    try {
+      await onAddHito({ parent_id: etapa.id, titulo: t, fecha_inicio: ini, fecha_fin: null })
+      setTit(''); setIni(padreInicio); setOpen(false)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally { setSaving(false) }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-[11px] text-gray-400 hover:text-slate-700 mt-1">
+        + agregar hito
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 bg-slate-50 border border-slate-200 rounded p-2 space-y-1.5">
+      <input
+        type="text" value={tit} onChange={e => setTit(e.target.value)} autoFocus
+        placeholder="Título del hito"
+        className="w-full text-xs font-medium px-2 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      <label className="block text-[10px] font-semibold text-gray-600">
+        Fecha
+        <input
+          type="date" value={ini} min={padreInicio} max={padreFin}
+          onChange={e => setIni(e.target.value)}
+          className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded bg-white mt-0.5"
+        />
+      </label>
+      {err && <p className="text-[10px] text-rose-700">{err}</p>}
+      <div className="flex items-center justify-end gap-1.5">
+        <button type="button" onClick={() => { setOpen(false); setErr(null) }} disabled={saving}
+          className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
+        <button type="button" onClick={submit} disabled={saving || !tit.trim()}
+          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          {saving ? 'Creando…' : 'Crear hito'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Form para crear una Etapa nueva desde el mapa ───────────────────────────
+
+function NewEtapaForm({
+  nextColor,
+  onCreate,
+  onCancel,
+}: {
+  nextColor: string
+  onCreate: (input: { titulo: string; color?: string | null; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
+  onCancel: () => void
+}) {
+  const today = new Date().toLocaleDateString('sv-SE')   // YYYY-MM-DD en TZ local
+  const [tit, setTit]         = useState('')
+  const [ini, setIni]         = useState(today)
+  const [isRango, setIsRango] = useState(false)
+  const [fin, setFin]         = useState('')
+  const [color, setColor]     = useState(nextColor)
+  const [saving, setSaving]   = useState(false)
+  const [err, setErr]         = useState<string | null>(null)
+
+  async function submit() {
+    const t = tit.trim()
+    if (!t) { setErr('Título requerido'); return }
+    if (isRango && fin && fin < ini) { setErr('La fecha de fin debe ser posterior'); return }
+    setSaving(true); setErr(null)
+    try {
+      await onCreate({ titulo: t, color, fecha_inicio: ini, fecha_fin: isRango ? (fin || null) : null })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-2">
+      <input
+        type="text" value={tit} onChange={e => setTit(e.target.value)} autoFocus
+        placeholder="Título de la etapa"
+        className="w-full text-xs font-medium px-2 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="text-[10px] font-semibold text-gray-600">
+          Inicio
+          <input type="date" value={ini} onChange={e => setIni(e.target.value)}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded bg-white mt-0.5" />
+        </label>
+        <label className="text-[10px] font-semibold text-gray-600 flex flex-col">
+          <span className="flex items-center gap-1">
+            Fin
+            <label className="text-[9px] text-gray-500 font-normal flex items-center gap-0.5 cursor-pointer">
+              <input type="checkbox" checked={isRango} onChange={e => { setIsRango(e.target.checked); if (!e.target.checked) setFin('') }} className="w-2.5 h-2.5" />
+              rango
+            </label>
+          </span>
+          <input type="date" value={fin} min={ini} disabled={!isRango} onChange={e => setFin(e.target.value)}
+            className="w-full text-xs px-1.5 py-0.5 border border-slate-200 rounded bg-white disabled:bg-gray-50 disabled:opacity-50 mt-0.5" />
+        </label>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold text-gray-600">Color</span>
+        {PALETTE.map(c => (
+          <button key={c} type="button" onClick={() => setColor(c)}
+            className={`w-4 h-4 rounded ${c === color ? 'ring-2 ring-slate-900' : 'ring-1 ring-gray-200'}`}
+            style={{ backgroundColor: c }} aria-label={`Color ${c}`} />
+        ))}
+      </div>
+      {err && <p className="text-[10px] text-rose-700">{err}</p>}
+      <div className="flex items-center justify-end gap-1.5">
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
+        <button type="button" onClick={submit} disabled={saving || !tit.trim()}
+          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          {saving ? 'Creando…' : 'Crear etapa'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ───────────────────────────────────────────────────
 
 export default function DesalojoMapaDrawer(props: Props) {
   const {
     open, onClose,
     prioridadId, capas, selectedCapaId,
-    poligonos,
+    poligonos, planificacion,
     onCreated, onUpdated, onDeleted,
+    onCreateEtapa, onPatchEvento, onAddHito,
+    focusEtapaId, onFocusConsumed,
   } = props
 
   const { center, zoom } = useMemo(() => computeCenter(capas, selectedCapaId), [capas, selectedCapaId])
@@ -431,18 +736,99 @@ export default function DesalojoMapaDrawer(props: Props) {
   const [editingId, setEditingId]         = useState<number | null>(null)
   const [editingName, setEditingName]     = useState('')
   const [saving, setSaving]               = useState(false)
+  // Etapa cuyo detalle se muestra en el sidebar (null = lista de etapas).
+  const [selectedEtapaId, setSelectedEtapaId]     = useState<number | null>(null)
+  // Etapa a la que se asignará el próximo polígono dibujado (null = "Sin etapa").
+  const [drawTargetEtapaId, setDrawTargetEtapaId] = useState<number | null>(null)
+  const [newEtapaOpen, setNewEtapaOpen]           = useState(false)
 
   const visible = useCallback((id: number) => visibility[id] !== false, [visibility])
   const toggleVisible = useCallback((id: number) => {
     setVisibility(v => ({ ...v, [id]: v[id] === false ? true : false }))
   }, [])
 
-  const handleStartDrawing  = useCallback(() => bridgeRef.current?.startDrawing(), [])
+  // ── Derivados: etapas (eventos top-level), hitos, agrupación de polígonos ──
+  const etapas = useMemo(
+    () => planificacion
+      .filter(e => e.parent_id === null)
+      .sort((a, b) =>
+        a.fecha_inicio !== b.fecha_inicio ? a.fecha_inicio.localeCompare(b.fecha_inicio)
+        : a.orden !== b.orden             ? a.orden - b.orden
+        :                                   a.id - b.id),
+    [planificacion],
+  )
+  const etapaById = useMemo(() => new Map(etapas.map(e => [e.id, e])), [etapas])
+  const hitosByParent = useMemo(() => {
+    const m = new Map<number, DesalojoPlanificacion[]>()
+    for (const e of planificacion) {
+      if (e.parent_id !== null) {
+        const arr = m.get(e.parent_id) ?? []
+        arr.push(e)
+        m.set(e.parent_id, arr)
+      }
+    }
+    for (const arr of m.values()) {
+      arr.sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio) || (a.orden - b.orden) || (a.id - b.id))
+    }
+    return m
+  }, [planificacion])
+  const polygonsByEtapa = useMemo(() => {
+    const m = new Map<number | null, DesalojoPoligono[]>()
+    for (const p of poligonos) {
+      const k = p.planificacion_id ?? null
+      const arr = m.get(k) ?? []
+      arr.push(p)
+      m.set(k, arr)
+    }
+    return m
+  }, [poligonos])
+  const sinEtapa = polygonsByEtapa.get(null) ?? []
+
+  // Color efectivo de un polígono: el de su Etapa; si no tiene, el propio.
+  const colorOf = useCallback((p: DesalojoPoligono) => {
+    if (p.planificacion_id != null) {
+      const e = etapaById.get(p.planificacion_id)
+      if (e?.color) return e.color
+    }
+    return p.color
+  }, [etapaById])
+
+  const selectedEtapa = selectedEtapaId != null ? etapaById.get(selectedEtapaId) ?? null : null
+  const nextEtapaColor = PALETTE[etapas.length % PALETTE.length]
+
+  // Anillos a los que auto-centrar el mapa (fitBounds). Si hay una etapa
+  // enfocada con polígonos, sus vértices; si no, todos los del caso.
+  const fitInfo = useMemo(() => {
+    if (selectedEtapaId != null) {
+      const ps = polygonsByEtapa.get(selectedEtapaId) ?? []
+      if (ps.length > 0) return { key: `etapa-${selectedEtapaId}-${ps.length}`, rings: ps.map(p => p.coords) }
+    }
+    return { key: `all-${poligonos.length}`, rings: poligonos.map(p => p.coords) }
+  }, [selectedEtapaId, polygonsByEtapa, poligonos])
+
+  // "Ver en mapa" desde Planificación: enfoca la Etapa indicada una sola vez.
+  useEffect(() => {
+    if (focusEtapaId != null) {
+      setSelectedEtapaId(focusEtapaId)
+      onFocusConsumed?.()
+    }
+  }, [focusEtapaId, onFocusConsumed])
+
   const handleDrawCreated   = useCallback((coords: [number, number][]) => setPendingCoords(coords), [])
   const handleWktParsed     = useCallback((coords: [number, number][]) => { setWktModalOpen(false); setPendingCoords(coords) }, [])
-  const handleCancelPending = useCallback(() => setPendingCoords(null), [])
+  const handleCancelPending = useCallback(() => { setPendingCoords(null); setDrawTargetEtapaId(null) }, [])
   const handleSearchSelect  = useCallback((lat: number, lng: number) => {
     mapRef.current?.flyTo([lat, lng], 17)
+  }, [])
+
+  // Inicia el dibujo asociando el próximo polígono a `etapaId` (null = sin etapa).
+  const beginDraw = useCallback((etapaId: number | null) => {
+    setDrawTargetEtapaId(etapaId)
+    bridgeRef.current?.startDrawing()
+  }, [])
+  const beginWkt = useCallback((etapaId: number | null) => {
+    setDrawTargetEtapaId(etapaId)
+    setWktModalOpen(true)
   }, [])
 
   const handleConfirmPending = useCallback(async (nombre: string, color: string) => {
@@ -452,7 +838,7 @@ export default function DesalojoMapaDrawer(props: Props) {
       const res = await fetch(`/api/desalojos/${prioridadId}/poligonos`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ nombre, color, coords: pendingCoords }),
+        body:    JSON.stringify({ nombre, color, coords: pendingCoords, planificacion_id: drawTargetEtapaId }),
       })
       const json = await res.json()
       if (!res.ok || !json.poligono) {
@@ -461,12 +847,29 @@ export default function DesalojoMapaDrawer(props: Props) {
       }
       onCreated(json.poligono as DesalojoPoligono)
       setPendingCoords(null)
+      setDrawTargetEtapaId(null)
     } catch (err) {
       window.alert(`Error de red: ${String(err)}`)
     } finally {
       setSaving(false)
     }
-  }, [pendingCoords, prioridadId, onCreated])
+  }, [pendingCoords, prioridadId, onCreated, drawTargetEtapaId])
+
+  async function handleRecolorEtapa(etapaId: number, color: string) {
+    await onPatchEvento(etapaId, { color })
+  }
+  async function handleRenameEtapa(etapa: DesalojoPlanificacion, nuevo: string) {
+    const trimmed = nuevo.trim()
+    if (!trimmed || trimmed === etapa.titulo) return
+    await onPatchEvento(etapa.id, { titulo: trimmed })
+  }
+  async function handleCreateEtapa(input: { titulo: string; color?: string | null; fecha_inicio: string; fecha_fin?: string | null }) {
+    const created = await onCreateEtapa(input)
+    if (created) {
+      setNewEtapaOpen(false)
+      setSelectedEtapaId(created.id)
+    }
+  }
 
   async function handleRename(p: DesalojoPoligono, nuevoNombre: string) {
     const trimmed = nuevoNombre.trim()
@@ -494,23 +897,6 @@ export default function DesalojoMapaDrawer(props: Props) {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ color }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.poligono) { window.alert(json?.error ?? `Error HTTP ${res.status}`); return }
-      onUpdated(json.poligono as DesalojoPoligono)
-    } catch (err) {
-      window.alert(`Error de red: ${String(err)}`)
-    }
-  }
-
-  async function handleUpdateDescripcion(p: DesalojoPoligono, descripcion: string) {
-    const nueva = descripcion.trim()
-    if ((nueva || null) === p.descripcion) return
-    try {
-      const res = await fetch(`/api/desalojos/${prioridadId}/poligonos/${p.id}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ descripcion: nueva || null }),
       })
       const json = await res.json()
       if (!res.ok || !json.poligono) { window.alert(json?.error ?? `Error HTTP ${res.status}`); return }
@@ -551,19 +937,23 @@ export default function DesalojoMapaDrawer(props: Props) {
         maxZoom={19}
       />
       <MapInstanceCapture mapRef={mapRef} />
+      <FitToPolygons fitKey={fitInfo.key} rings={fitInfo.rings} />
       <DrawControl bridgeRef={bridgeRef} onCreatedRaw={handleDrawCreated} />
       {poligonos.filter(p => visible(p.id)).map(p => {
         const latlngs: [number, number][] = p.coords.map(([lng, lat]) => [lat, lng])
+        const etapa = p.planificacion_id != null ? etapaById.get(p.planificacion_id) : null
         return (
           <Polygon
             key={p.id}
             positions={latlngs}
-            pathOptions={{ color: p.color, fillOpacity: 0.35, weight: 2 }}
+            pathOptions={{ color: colorOf(p), fillOpacity: 0.35, weight: 2 }}
+            eventHandlers={{ click: () => setSelectedEtapaId(p.planificacion_id) }}
           >
             <Popup>
-              <div className="text-xs">
-                <p className="font-semibold text-gray-900">{p.nombre}</p>
-                {p.descripcion && <p className="text-gray-600 mt-1">{p.descripcion}</p>}
+              <div className="text-xs max-w-[220px]">
+                <p className="font-semibold text-gray-900 line-clamp-2">{p.nombre}</p>
+                {etapa && <p className="text-gray-500 mt-0.5 line-clamp-1">Etapa: {etapa.titulo}</p>}
+                {p.descripcion && <p className="text-gray-600 mt-1 line-clamp-3">{p.descripcion}</p>}
               </div>
             </Popup>
           </Polygon>
@@ -579,18 +969,21 @@ export default function DesalojoMapaDrawer(props: Props) {
   )
 
   // ── Modales compartidos ───────────────────────────────────────────────────
+  const drawEtapa = drawTargetEtapaId != null ? etapaById.get(drawTargetEtapaId) ?? null : null
   const modals = (
     <>
       {pendingCoords && (
         <NameColorModal
-          pending={{ coords: pendingCoords, nombre: '', color: PALETTE[0] }}
+          pending={{ coords: pendingCoords, nombre: '', color: drawEtapa?.color ?? PALETTE[0] }}
+          hideColor={drawTargetEtapaId != null}
+          etapaNombre={drawEtapa?.titulo}
           onCancel={handleCancelPending}
           onConfirm={handleConfirmPending}
         />
       )}
       {wktModalOpen && !pendingCoords && (
         <WktModal
-          onCancel={() => setWktModalOpen(false)}
+          onCancel={() => { setWktModalOpen(false); setDrawTargetEtapaId(null) }}
           onParsed={handleWktParsed}
         />
       )}
@@ -598,14 +991,16 @@ export default function DesalojoMapaDrawer(props: Props) {
   )
 
   // ── Botones de toolbar reutilizados ───────────────────────────────────────
-  function ToolbarActions({ inline = false }: { inline?: boolean }) {
+  function ToolbarActions() {
+    const label = selectedEtapa ? `Dibujar en "${selectedEtapa.titulo}"` : 'Dibujar'
     return (
       <>
         <button
           type="button"
-          onClick={handleStartDrawing}
+          onClick={() => beginDraw(selectedEtapaId)}
           disabled={!!pendingCoords || saving}
-          className={`inline-flex items-center gap-1.5 px-3 ${inline ? 'py-1.5' : 'py-1.5'} text-xs font-medium bg-slate-900 text-white rounded-md hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={label}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-md hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 10L10 2M2 10l3-1M2 10l1-3"/>
@@ -614,7 +1009,7 @@ export default function DesalojoMapaDrawer(props: Props) {
         </button>
         <button
           type="button"
-          onClick={() => setWktModalOpen(true)}
+          onClick={() => beginWkt(selectedEtapaId)}
           disabled={!!pendingCoords || saving}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-40"
         >
@@ -627,6 +1022,123 @@ export default function DesalojoMapaDrawer(props: Props) {
     )
   }
 
+  // ── Contenido del sidebar: lista de Etapas ↔ detalle de una Etapa ─────────
+  const sidebarBody = selectedEtapa ? (() => {
+    const etapaPolys = polygonsByEtapa.get(selectedEtapa.id) ?? []
+    const etapaHitos = hitosByParent.get(selectedEtapa.id) ?? []
+    const estado = estadoEventoPlanificacion(selectedEtapa)
+    return (
+      <div key={selectedEtapa.id} className="p-4 space-y-3">
+        <button type="button" onClick={() => setSelectedEtapaId(null)} className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1">
+          ← Volver a etapas
+        </button>
+        <div className="flex items-start gap-2">
+          <ColorSwatchPicker color={selectedEtapa.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(selectedEtapa.id, c)} />
+          <input
+            type="text"
+            defaultValue={selectedEtapa.titulo}
+            onBlur={e => handleRenameEtapa(selectedEtapa, e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            className="flex-1 min-w-0 text-sm font-semibold text-gray-900 border-b border-transparent hover:border-gray-200 focus:border-slate-900 focus:outline-none pb-0.5"
+          />
+        </div>
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className={`w-1.5 h-1.5 rounded-full ${ESTADO_DOT[estado]}`} />
+          <span className="text-gray-500 tabular-nums">{fmtFecha(selectedEtapa.fecha_inicio, selectedEtapa.fecha_fin)}</span>
+        </div>
+        <ClampedRichText html={selectedEtapa.descripcion} />
+        <div className="space-y-1.5 pt-1 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Polígonos ({etapaPolys.length})</h4>
+            <button type="button" onClick={() => beginDraw(selectedEtapa.id)} disabled={!!pendingCoords || saving}
+              className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">+ Dibujar</button>
+          </div>
+          {etapaPolys.length === 0 ? (
+            <p className="text-[11px] text-gray-400">Sin polígonos. Dibujá al menos uno para esta etapa.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {etapaPolys.map(p => (
+                <li key={p.id} className="flex items-center gap-2 text-xs px-1 py-1 rounded hover:bg-gray-50">
+                  <button type="button" onClick={() => toggleVisible(p.id)} className="text-gray-400 hover:text-gray-700" title={visible(p.id) ? 'Ocultar' : 'Mostrar'}><IconEye on={visible(p.id)} /></button>
+                  <span className="flex-1 min-w-0 truncate text-gray-900">{p.nombre}</span>
+                  <button type="button" onClick={() => handleCenterOn(p)} className="text-gray-400 hover:text-slate-900" title="Centrar en mapa"><IconCenter /></button>
+                  <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="space-y-1 pt-2 border-t border-gray-100">
+          <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Hitos ({etapaHitos.length})</h4>
+          {etapaHitos.length > 0 && (
+            <ul className="space-y-1">
+              {etapaHitos.map(h => <MapHitoRow key={h.id} hito={h} onPatchEvento={onPatchEvento} />)}
+            </ul>
+          )}
+          <AddHitoForm etapa={selectedEtapa} onAddHito={onAddHito} />
+        </div>
+      </div>
+    )
+  })() : (
+    <div className="p-3 space-y-3">
+      {newEtapaOpen ? (
+        <NewEtapaForm nextColor={nextEtapaColor} onCreate={handleCreateEtapa} onCancel={() => setNewEtapaOpen(false)} />
+      ) : (
+        <button type="button" onClick={() => setNewEtapaOpen(true)}
+          className="w-full text-xs font-medium text-slate-700 border border-dashed border-gray-300 rounded-lg py-1.5 hover:bg-gray-50">
+          + Nueva etapa
+        </button>
+      )}
+      {etapas.length === 0 && sinEtapa.length === 0 && (
+        <p className="text-xs text-gray-500 text-center py-4">Sin etapas todavía. Creá una etapa y dibujá sus polígonos.</p>
+      )}
+      {etapas.length > 0 && (
+        <ul className="space-y-1">
+          {etapas.map(e => {
+            const ps = polygonsByEtapa.get(e.id) ?? []
+            return (
+              <li key={e.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50">
+                <ColorSwatchPicker color={e.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(e.id, c)} />
+                <button type="button" onClick={() => setSelectedEtapaId(e.id)} className="flex-1 min-w-0 text-left">
+                  <span className="block text-xs text-gray-900 truncate">{e.titulo}</span>
+                  <span className="block text-[10px] text-gray-400">{ps.length} polígono{ps.length === 1 ? '' : 's'}</span>
+                </button>
+                <button type="button" onClick={() => { setSelectedEtapaId(e.id); beginDraw(e.id) }} disabled={!!pendingCoords || saving}
+                  className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">Dibujar</button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {sinEtapa.length > 0 && (
+        <div className="pt-2 border-t border-gray-100 space-y-1">
+          <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-2">Sin etapa</h4>
+          <ul className="space-y-1">
+            {sinEtapa.map(p => (
+              <li key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50">
+                <button type="button" onClick={() => toggleVisible(p.id)} className="text-gray-400 hover:text-gray-700" title={visible(p.id) ? 'Ocultar' : 'Mostrar'}><IconEye on={visible(p.id)} /></button>
+                <ColorSwatchPicker color={p.color} onChange={c => handleRecolor(p, c)} />
+                {editingId === p.id ? (
+                  <input type="text" value={editingName} onChange={e => setEditingName(e.target.value)}
+                    onBlur={() => handleRename(p, editingName)}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingId(null) }}
+                    autoFocus className="flex-1 min-w-0 px-2 py-0.5 text-xs border border-gray-300 rounded" />
+                ) : (
+                  <button type="button" onClick={() => { setEditingId(p.id); setEditingName(p.nombre) }}
+                    className="flex-1 min-w-0 text-left text-xs text-gray-900 hover:text-slate-700 truncate">{p.nombre}</button>
+                )}
+                <button type="button" onClick={() => handleCenterOn(p)} className="text-gray-400 hover:text-slate-900" title="Centrar en mapa"><IconCenter /></button>
+                <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+
+  const countLabel = `${etapas.length} etapa${etapas.length === 1 ? '' : 's'} · ${poligonos.length} polígono${poligonos.length === 1 ? '' : 's'}`
+
   // ── Modo Expanded (fullscreen overlay) ────────────────────────────────────
   if (expanded) {
     return (
@@ -636,9 +1148,7 @@ export default function DesalojoMapaDrawer(props: Props) {
           <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white">
             <div>
               <h2 className="text-base font-bold text-gray-900">Mapa del caso</h2>
-              <p className="text-[11px] text-gray-500 leading-tight">
-                {poligonos.length} polígono{poligonos.length === 1 ? '' : 's'}
-              </p>
+              <p className="text-[11px] text-gray-500 leading-tight">{countLabel}</p>
             </div>
             <div className="flex-1 max-w-md">
               <SearchBox onSelect={handleSearchSelect} />
@@ -673,83 +1183,9 @@ export default function DesalojoMapaDrawer(props: Props) {
                 {mapContent}
               </MapContainer>
             </div>
-            {/* Sidebar de detalle */}
+            {/* Sidebar: etapas ↔ detalle */}
             <aside className="w-[400px] border-l border-gray-200 bg-white overflow-y-auto">
-              {poligonos.length === 0 ? (
-                <p className="text-xs text-gray-500 px-4 py-6 text-center">
-                  Sin polígonos todavía. Dibujá el primero con la herramienta o pegá coordenadas WKT.
-                </p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {poligonos.map(p => (
-                    <li key={p.id} className="p-4 space-y-2.5">
-                      <div className="flex items-start gap-2">
-                        <ColorSwatchPicker color={p.color} onChange={c => handleRecolor(p, c)} />
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            defaultValue={p.nombre}
-                            onBlur={e => handleRename(p, e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                            className="w-full text-sm font-semibold text-gray-900 border-b border-transparent hover:border-gray-200 focus:border-slate-900 focus:outline-none pb-0.5"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => toggleVisible(p.id)}
-                            title={visible(p.id) ? 'Ocultar' : 'Mostrar'}
-                            className="text-gray-400 hover:text-gray-700 p-0.5"
-                          >
-                            {visible(p.id) ? (
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/>
-                              </svg>
-                            ) : (
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 8s2.5-5 7-5c1.5 0 2.8.5 3.9 1.2M15 8s-2.5 5-7 5c-1.5 0-2.8-.5-3.9-1.2"/><path d="M2 14L14 2"/>
-                              </svg>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(p)}
-                            className="text-gray-400 hover:text-rose-600 p-0.5"
-                            title="Borrar polígono"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M2 3.5h10M5.5 3v-1a1 1 0 011-1h1a1 1 0 011 1v1M3.5 3.5v9a1 1 0 001 1h5a1 1 0 001-1v-9"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <textarea
-                        defaultValue={p.descripcion ?? ''}
-                        onBlur={e => handleUpdateDescripcion(p, e.target.value)}
-                        placeholder="Sin descripción…"
-                        rows={2}
-                        className="w-full text-xs text-gray-700 border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-900 resize-none"
-                      />
-                      <div className="flex items-center justify-between text-[11px] text-gray-500">
-                        <span>{p.coords.length} vértices</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCenterOn(p)}
-                          className="text-slate-700 hover:text-slate-900 font-medium"
-                        >
-                          Centrar en mapa
-                        </button>
-                      </div>
-                      <details className="text-[10px] text-gray-500">
-                        <summary className="cursor-pointer hover:text-gray-700">WKT</summary>
-                        <pre className="mt-1 p-2 bg-gray-50 rounded font-mono text-[10px] leading-tight break-all whitespace-pre-wrap">
-                          {toWktPolygon(p.coords)}
-                        </pre>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {sidebarBody}
             </aside>
           </div>
         </div>
@@ -769,9 +1205,7 @@ export default function DesalojoMapaDrawer(props: Props) {
         <header className="flex items-start gap-3 px-4 py-3 border-b border-gray-200">
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-gray-900">Mapa del caso</h2>
-            <p className="text-xs text-gray-500 leading-tight mt-0.5">
-              {poligonos.length} polígono{poligonos.length === 1 ? '' : 's'}
-            </p>
+            <p className="text-xs text-gray-500 leading-tight mt-0.5">{countLabel}</p>
           </div>
           <button
             type="button"
@@ -820,86 +1254,9 @@ export default function DesalojoMapaDrawer(props: Props) {
           </MapContainer>
         </div>
 
-        {/* Lista */}
-        <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[220px]">
-          {poligonos.length === 0 ? (
-            <p className="text-xs text-gray-500 px-2 py-4 text-center">
-              Sin polígonos todavía. Dibujá el primero con la herramienta o pegá coordenadas WKT.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {poligonos.map(p => (
-                <li key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50">
-                  <button
-                    type="button"
-                    onClick={() => toggleVisible(p.id)}
-                    title={visible(p.id) ? 'Ocultar' : 'Mostrar'}
-                    className="text-gray-400 hover:text-gray-700"
-                    aria-label={visible(p.id) ? 'Ocultar polígono' : 'Mostrar polígono'}
-                  >
-                    {visible(p.id) ? (
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                        <circle cx="8" cy="8" r="2"/>
-                      </svg>
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 8s2.5-5 7-5c1.5 0 2.8.5 3.9 1.2M15 8s-2.5 5-7 5c-1.5 0-2.8-.5-3.9-1.2"/>
-                        <path d="M2 14L14 2"/>
-                      </svg>
-                    )}
-                  </button>
-                  <ColorSwatchPicker color={p.color} onChange={c => handleRecolor(p, c)} />
-                  {editingId === p.id ? (
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={e => setEditingName(e.target.value)}
-                      onBlur={() => handleRename(p, editingName)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter')   { e.currentTarget.blur() }
-                        if (e.key === 'Escape')  { setEditingId(null) }
-                      }}
-                      autoFocus
-                      className="flex-1 min-w-0 px-2 py-0.5 text-xs border border-gray-300 rounded"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => { setEditingId(p.id); setEditingName(p.nombre) }}
-                      className="flex-1 min-w-0 text-left text-xs text-gray-900 hover:text-slate-700 truncate"
-                    >
-                      {p.nombre}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleCenterOn(p)}
-                    className="text-gray-400 hover:text-slate-900"
-                    title="Centrar en mapa"
-                    aria-label="Centrar en mapa"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="7" cy="7" r="4"/>
-                      <circle cx="7" cy="7" r="1" fill="currentColor"/>
-                      <path d="M7 1v2M7 11v2M1 7h2M11 7h2"/>
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p)}
-                    className="text-gray-400 hover:text-rose-600"
-                    title="Borrar polígono"
-                    aria-label="Borrar polígono"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M2 3.5h10M5.5 3v-1a1 1 0 011-1h1a1 1 0 011 1v1M3.5 3.5v9a1 1 0 001 1h5a1 1 0 001-1v-9"/>
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        {/* Etapas ↔ detalle */}
+        <div className="flex-1 overflow-y-auto max-h-[320px]">
+          {sidebarBody}
         </div>
       </aside>
 

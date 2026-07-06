@@ -35,6 +35,7 @@ type Props = {
   onAddHito:  (input: {
     parent_id:    number
     titulo:       string
+    descripcion?: string | null
     fecha_inicio: string
     fecha_fin?:   string | null
   }) => Promise<void>
@@ -46,6 +47,10 @@ type Props = {
   cardRef?:   React.RefObject<HTMLLIElement | null>
   /** Activa flash visual 600ms cuando se invoca desde el Gantt. */
   flash?:     boolean
+  /** Salta al mapa enfocando esta Etapa. */
+  onVerEnMapa?: (etapaId: number) => void
+  /** Nº de polígonos asociados a esta Etapa en el mapa. */
+  poligonoCount?: number
 }
 
 const ESTADO_COLORS: Record<DesalojoPlanificacionEstado, { dot: string; chip: string; label: string }> = {
@@ -76,6 +81,7 @@ function formatFecha(inicio: string, fin: string | null): string {
 
 export default function DesalojoTimelineCard({
   evento, capa, hitos, onPatch, onDelete, onAddHito, onSelectFocus, focused, cardRef, flash,
+  onVerEnMapa, poligonoCount = 0,
 }: Props) {
   const estado = estadoEventoPlanificacion(evento)
   const colors = ESTADO_COLORS[estado]
@@ -173,7 +179,31 @@ export default function DesalojoTimelineCard({
             {hitos.length} hito{hitos.length === 1 ? '' : 's'}
           </span>
         )}
+        {onVerEnMapa && (
+          poligonoCount > 0 ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 tabular-nums flex items-center gap-0.5" title={`${poligonoCount} polígono(s) en el mapa`}>
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 1C3.8 1 2 2.8 2 5c0 2.6 4 6 4 6s4-3.4 4-6c0-2.2-1.8-4-4-4z"/><circle cx="6" cy="5" r="1.3"/></svg>
+              {poligonoCount}
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 ring-1 ring-amber-200 text-amber-700" title="Esta etapa aún no tiene polígonos en el mapa">
+              sin polígono
+            </span>
+          )
+        )}
         <div className="ml-auto flex items-center gap-1">
+          {onVerEnMapa && (
+            <button
+              type="button"
+              onClick={() => onVerEnMapa(evento.id)}
+              className="text-[11px] px-1.5 py-0.5 rounded text-gray-500 hover:bg-slate-100 hover:text-slate-900 transition-colors flex items-center gap-1"
+              aria-label="Ver esta etapa en el mapa"
+              title="Ver esta etapa en el mapa"
+            >
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 1C3.8 1 2 2.8 2 5c0 2.6 4 6 4 6s4-3.4 4-6c0-2.2-1.8-4-4-4z"/><circle cx="6" cy="5" r="1.3"/></svg>
+              <span className="font-medium">Mapa</span>
+            </button>
+          )}
           {onSelectFocus && (
             <button
               type="button"
@@ -357,6 +387,7 @@ function HitosSection({
   onAddHito: (input: {
     parent_id:    number
     titulo:       string
+    descripcion?: string | null
     fecha_inicio: string
     fecha_fin?:   string | null
   }) => Promise<void>
@@ -422,14 +453,29 @@ function HitoMini({
   const [ini, setIni]         = useState(hito.fecha_inicio)
   const [fin, setFin]         = useState(hito.fecha_fin ?? '')
   const [isRango, setIsRango] = useState(hito.fecha_fin !== null)
+  const [detalleOpen, setDetalleOpen] = useState(false)
+  const [descDraft, setDescDraft]     = useState(hito.descripcion ?? '')
+  const [savingDesc, setSavingDesc]   = useState(false)
 
   useEffect(() => { setTit(hito.titulo) },                  [hito.titulo])
   useEffect(() => { setIni(hito.fecha_inicio) },            [hito.fecha_inicio])
   useEffect(() => { setFin(hito.fecha_fin ?? '') },         [hito.fecha_fin])
   useEffect(() => { setIsRango(hito.fecha_fin !== null) },  [hito.fecha_fin])
+  useEffect(() => { setDescDraft(hito.descripcion ?? '') }, [hito.descripcion])
 
   const estado = estadoEventoPlanificacion(hito)
   const colors = ESTADO_COLORS[estado]
+  const tieneDetalle = !isHtmlEmpty(hito.descripcion)
+
+  async function commitDetalle() {
+    const normalized = isHtmlEmpty(descDraft) ? null : descDraft
+    if (normalized === (hito.descripcion ?? null)) { setDetalleOpen(false); return }
+    setSavingDesc(true)
+    try {
+      await onPatch(hito.id, { descripcion: normalized })
+      setDetalleOpen(false)
+    } finally { setSavingDesc(false) }
+  }
 
   async function commit() {
     const finFinal = isRango ? (fin || null) : null
@@ -463,28 +509,60 @@ function HitoMini({
 
   if (!editing) {
     return (
-      <li className="group flex items-center gap-2 text-xs">
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`} />
-        <span className={`text-[10px] px-1 py-0 rounded ring-1 font-medium tabular-nums flex-shrink-0 ${colors.chip}`}>
-          {formatFecha(hito.fecha_inicio, hito.fecha_fin)}
-        </span>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="text-gray-700 hover:text-slate-900 text-left truncate flex-1 min-w-0"
-          title={hito.titulo}
-        >
-          {hito.titulo}
-        </button>
-        <button
-          type="button"
-          onClick={handleDeleteHito}
-          disabled={saving}
-          className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-red-600 transition-opacity"
-          aria-label="Eliminar hito"
-        >
-          ✕
-        </button>
+      <li className="group text-xs">
+        <div className="flex items-center gap-2">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`} />
+          <span className={`text-[10px] px-1 py-0 rounded ring-1 font-medium tabular-nums flex-shrink-0 ${colors.chip}`}>
+            {formatFecha(hito.fecha_inicio, hito.fecha_fin)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-gray-700 hover:text-slate-900 text-left truncate flex-1 min-w-0"
+            title={hito.titulo}
+          >
+            {hito.titulo}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDetalleOpen(o => !o)}
+            className={`text-[10px] transition-colors flex-shrink-0 ${
+              tieneDetalle ? 'text-slate-600 hover:text-slate-900 font-medium' : 'text-gray-400 hover:text-slate-700 opacity-0 group-hover:opacity-100'
+            }`}
+            title={tieneDetalle ? 'Ver/editar detalle' : 'Agregar detalle'}
+          >
+            {tieneDetalle ? '• Detalle' : '+ Detalle'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteHito}
+            disabled={saving}
+            className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-red-600 transition-opacity flex-shrink-0"
+            aria-label="Eliminar hito"
+          >
+            ✕
+          </button>
+        </div>
+        {detalleOpen && (
+          <div className="mt-1.5 ml-3.5 pl-2 border-l-2 border-slate-100 space-y-1.5">
+            <RichTextEditor
+              value={descDraft}
+              onUpdate={setDescDraft}
+              placeholder="Detalle del hito…"
+              minHeight="min-h-[48px]"
+            />
+            <div className="flex items-center justify-end gap-1.5">
+              <button type="button" onClick={() => { setDescDraft(hito.descripcion ?? ''); setDetalleOpen(false) }} disabled={savingDesc}
+                className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">
+                Cancelar
+              </button>
+              <button type="button" onClick={commitDetalle} disabled={savingDesc}
+                className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+                {savingDesc ? 'Guardando…' : 'Guardar detalle'}
+              </button>
+            </div>
+          </div>
+        )}
       </li>
     )
   }
@@ -558,7 +636,7 @@ function HitoAddForm({
   parentId:    number
   padreInicio: string
   padreFin:    string
-  onAdd:       (input: { parent_id: number; titulo: string; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
+  onAdd:       (input: { parent_id: number; titulo: string; descripcion?: string | null; fecha_inicio: string; fecha_fin?: string | null }) => Promise<void>
   onCancel:    () => void
 }) {
   const [tit,       setTit]      = useState('')
@@ -567,6 +645,8 @@ function HitoAddForm({
   const [fin,       setFin]      = useState('')
   const [saving,    setSaving]   = useState(false)
   const [err,       setErr]      = useState<string | null>(null)
+  const [detalleOpen, setDetalleOpen] = useState(false)
+  const [desc,        setDesc]        = useState('')
 
   async function submit() {
     const t = tit.trim()
@@ -576,7 +656,7 @@ function HitoAddForm({
     setSaving(true)
     setErr(null)
     try {
-      await onAdd({ parent_id: parentId, titulo: t, fecha_inicio: ini, fecha_fin: isRango ? (fin || null) : null })
+      await onAdd({ parent_id: parentId, titulo: t, descripcion: isHtmlEmpty(desc) ? null : desc, fecha_inicio: ini, fecha_fin: isRango ? (fin || null) : null })
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -630,6 +710,21 @@ function HitoAddForm({
           />
         </label>
       </div>
+      {detalleOpen ? (
+        <div className="space-y-1">
+          <RichTextEditor
+            value={desc}
+            onUpdate={setDesc}
+            placeholder="Detalle del hito…"
+            minHeight="min-h-[48px]"
+          />
+        </div>
+      ) : (
+        <button type="button" onClick={() => setDetalleOpen(true)}
+          className="text-[10px] text-gray-400 hover:text-slate-700">
+          + Detalle
+        </button>
+      )}
       {err && <p className="text-[10px] text-rose-700">{err}</p>}
       <p className="text-[10px] text-gray-500">
         Rango permitido: <span className="tabular-nums">{padreInicio} – {padreFin}</span>

@@ -70,6 +70,21 @@ export async function POST(
 
   const db = getSupabaseAdmin()
 
+  // Si viene asociado a una Etapa, validar que sea un evento top-level del caso.
+  let color = body.color
+  if (body.planificacion_id != null) {
+    const { data: etapa } = await db
+      .from('desalojo_planificacion')
+      .select('id, prioridad_id, parent_id, archivado_at, color')
+      .eq('id', body.planificacion_id)
+      .maybeSingle()
+    if (!etapa || etapa.prioridad_id !== n || etapa.parent_id !== null || etapa.archivado_at !== null) {
+      return NextResponse.json({ error: 'Etapa inválida o no pertenece al caso' }, { status: 400 })
+    }
+    // El color efectivo lo dicta la Etapa; guardamos ese valor como fallback coherente.
+    color = etapa.color ?? body.color
+  }
+
   const { data: maxRow } = await db
     .from('desalojo_poligonos')
     .select('orden')
@@ -82,13 +97,14 @@ export async function POST(
   const { data: poligono, error: insErr } = await db
     .from('desalojo_poligonos')
     .insert({
-      prioridad_id: n,
-      nombre:       body.nombre,
-      color:        body.color,
-      coords:       body.coords,
-      descripcion:  body.descripcion ?? null,
-      orden:        ordenNuevo,
-      created_by:   profile.email || null,
+      prioridad_id:     n,
+      planificacion_id: body.planificacion_id ?? null,
+      nombre:           body.nombre,
+      color,
+      coords:           body.coords,
+      descripcion:      body.descripcion ?? null,
+      orden:            ordenNuevo,
+      created_by:       profile.email || null,
     })
     .select('*')
     .single()

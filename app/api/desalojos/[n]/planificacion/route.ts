@@ -19,8 +19,13 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { HEX_COLOR_RE } from '@/lib/schemas'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// Paleta de colores de Etapa (misma que el drawer del mapa). Se usa como
+// fallback cuando se crea una Etapa sin color explícito (ej. desde el mapa).
+const ETAPA_PALETTE = ['#e53935', '#f57c00', '#fbc02d', '#43a047', '#00acc1', '#3949ab', '#8e24aa', '#616161']
 
 export async function POST(
   req: Request,
@@ -39,6 +44,7 @@ export async function POST(
     parent_id?:    unknown
     titulo?:       unknown
     descripcion?:  unknown
+    color?:        unknown
     fecha_inicio?: unknown
     fecha_fin?:    unknown
   }
@@ -81,6 +87,16 @@ export async function POST(
     if (!Number.isFinite(v) || v <= 0) return NextResponse.json({ error: 'parent_id inválido' }, { status: 400 })
     parentId = v
   }
+
+  // Color: solo aplica a Etapas (top-level). Los hitos quedan NULL.
+  let color: string | null = null
+  if (typeof body.color === 'string' && body.color.trim()) {
+    if (!HEX_COLOR_RE.test(body.color.trim())) {
+      return NextResponse.json({ error: 'color inválido (formato #rrggbb)' }, { status: 400 })
+    }
+    color = body.color.trim()
+  }
+  if (parentId !== null) color = null   // los hitos nunca llevan color
 
   const db = getSupabaseAdmin()
 
@@ -145,6 +161,18 @@ export async function POST(
     .maybeSingle()
   const ordenNuevo = (maxRow?.orden ?? 0) + 1
 
+  // Red de seguridad: si es una Etapa sin color explícito (ej. creada desde el
+  // mapa), asignar un color de la paleta según cuántas Etapas ya tiene el caso.
+  if (parentId === null && color === null) {
+    const { count } = await db
+      .from('desalojo_planificacion')
+      .select('id', { count: 'exact', head: true })
+      .eq('prioridad_id', n)
+      .is('parent_id', null)
+      .is('archivado_at', null)
+    color = ETAPA_PALETTE[(count ?? 0) % ETAPA_PALETTE.length]
+  }
+
   const { data: evento, error: insErr } = await db
     .from('desalojo_planificacion')
     .insert({
@@ -153,6 +181,7 @@ export async function POST(
       parent_id:    parentId,
       titulo,
       descripcion,
+      color,
       fecha_inicio: fechaInicio,
       fecha_fin:    fechaFin,
       orden:        ordenNuevo,

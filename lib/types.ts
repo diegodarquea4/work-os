@@ -271,6 +271,7 @@ export type DesalojoPlanificacion = {
   parent_id:    number | null              // NULL = evento top-level; NOT NULL = hito de un evento
   titulo:       string
   descripcion:  string | null
+  color:        string | null              // hex "#rrggbb"; solo top-level (Etapa). NULL en hitos.
   fecha_inicio: string                     // ISO date YYYY-MM-DD
   fecha_fin:    string | null              // NULL = evento puntual; con valor = rango
   orden:        number                     // tie-breaker para misma fecha_inicio
@@ -288,8 +289,9 @@ export type DesalojoPlanificacionEstado = 'hecho' | 'en_curso' | 'planificado'
 // duplicar el primer vértice al final. El renderer traduce a [lat, lng] para
 // Leaflet en el punto de dibujo — un solo borde de conversión.
 export type DesalojoPoligono = {
-  id:           number
-  prioridad_id: number
+  id:               number
+  prioridad_id:     number
+  planificacion_id: number | null          // FK lógica a desalojo_planificacion.id (Etapa top-level); NULL = sin etapa
   nombre:       string
   color:        string                     // hex "#rrggbb"
   coords:       [number, number][]         // [[lng, lat], ...] ring exterior

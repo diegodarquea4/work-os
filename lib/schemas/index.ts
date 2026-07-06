@@ -149,7 +149,9 @@ export const capaSchema = z.enum(CAPA_VALUES)
 //   el drawing tool y el parser WKT convergen acá. Mínimo 3 vértices.
 // - `color` es hex `#rrggbb` para matchear la constraint SQL.
 
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+// Exportado para que las rutas de planificación (validación manual, sin zod)
+// compartan la misma constraint hex que la constraint SQL y estos schemas.
+export const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
 
 const lngLatSchema = z.tuple([
   z.number().min(-180).max(180),
@@ -159,17 +161,19 @@ const lngLatSchema = z.tuple([
 export const poligonoCoordsSchema = z.array(lngLatSchema).min(3)
 
 export const poligonoPostSchema = z.object({
-  nombre:      z.string().trim().min(1).max(120),
-  color:       z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb'),
-  coords:      poligonoCoordsSchema,
-  descripcion: z.string().trim().max(1000).nullable().optional(),
+  nombre:           z.string().trim().min(1).max(120),
+  color:            z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb'),
+  coords:           poligonoCoordsSchema,
+  descripcion:      z.string().trim().max(1000).nullable().optional(),
+  planificacion_id: z.number().int().positive().nullable().optional(),   // Etapa (evento top-level) a la que pertenece
 })
 
 export const poligonoPatchSchema = z.object({
-  nombre:      z.string().trim().min(1).max(120).optional(),
-  color:       z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb').optional(),
-  coords:      poligonoCoordsSchema.optional(),
-  descripcion: z.string().trim().max(1000).nullable().optional(),
+  nombre:           z.string().trim().min(1).max(120).optional(),
+  color:            z.string().regex(HEX_COLOR_RE, 'Color debe ser hex #rrggbb').optional(),
+  coords:           poligonoCoordsSchema.optional(),
+  descripcion:      z.string().trim().max(1000).nullable().optional(),
+  planificacion_id: z.number().int().positive().nullable().optional(),   // re-asignar o desasociar (null) la Etapa
 })
 
 export type PoligonoPostBody  = z.infer<typeof poligonoPostSchema>

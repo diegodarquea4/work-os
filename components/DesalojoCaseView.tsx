@@ -69,6 +69,15 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   const [selectedCapaId, setSelectedCapaId] = useState<number | null>(null)
   const [calOpen,  setCalOpen]              = useState(false)
   const [mapaOpen, setMapaOpen]             = useState(false)
+  // Etapa a enfocar al abrir el mapa desde Planificación ("Ver en mapa").
+  const [mapFocusEtapaId, setMapFocusEtapaId] = useState<number | null>(null)
+
+  // Salta al mapa (tab Avance) enfocando la Etapa — puente Planificación→Mapa.
+  function handleVerEnMapa(etapaId: number) {
+    setTab('avance')
+    setMapaOpen(true)
+    setMapFocusEtapaId(etapaId)
+  }
 
   // En la tab Planificación el drawer del calendario no tiene sentido (el
   // Gantt ya ocupa el lado derecho). Lo cerramos al entrar; el user lo
@@ -465,9 +474,10 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     parent_id?:   number | null
     titulo:       string
     descripcion?: string | null
+    color?:       string | null
     fecha_inicio: string
     fecha_fin?:   string | null
-  }) {
+  }): Promise<DesalojoPlanificacion | null> {
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion`, {
         method:  'POST',
@@ -477,13 +487,16 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
       const json = await res.json()
       if (!res.ok) {
         window.alert(json?.error ?? `Error HTTP ${res.status}`)
-        return
+        return null
       }
       if (json.evento) {
         setPlanificacion(prev => sortEventos([json.evento, ...prev]))
+        return json.evento as DesalojoPlanificacion
       }
+      return null
     } catch (err) {
       window.alert(`Error de red: ${String(err)}`)
+      return null
     }
   }
 
@@ -513,18 +526,23 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
 
   async function handleDeleteEvento(id: number) {
     const prev = planificacion
+    const prevPoligonos = poligonos
     // Cascada local: si borramos un evento top-level, sus hitos también
-    // desaparecen (espejo del soft-delete server-side).
+    // desaparecen (espejo del soft-delete server-side). Y sus polígonos se
+    // desasocian (quedan "Sin etapa"), espejo del detach del server.
     setPlanificacion(prev.filter(e => e.id !== id && e.parent_id !== id))
+    setPoligonos(prevPoligonos.map(p => p.planificacion_id === id ? { ...p, planificacion_id: null } : p))
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion/${id}`, { method: 'DELETE' })
       const json = await res.json()
       if (!res.ok) {
         setPlanificacion(prev)
+        setPoligonos(prevPoligonos)
         window.alert(json?.error ?? `Error HTTP ${res.status}`)
       }
     } catch (err) {
       setPlanificacion(prev)
+      setPoligonos(prevPoligonos)
       window.alert(`Error de red: ${String(err)}`)
     }
   }
@@ -758,9 +776,11 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
           <DesalojoPlanificacionTab
             eventos={planificacion}
             capas={capas}
-            onCreate={handleAddEvento}
+            poligonos={poligonos}
+            onCreate={async (input) => { await handleAddEvento(input) }}
             onPatch={handlePatchEvento}
             onDelete={handleDeleteEvento}
+            onVerEnMapa={handleVerEnMapa}
           />
         )}
         {tab === 'responsables' && (
@@ -796,9 +816,15 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
                 capas={capas}
                 selectedCapaId={selectedCapaId}
                 poligonos={poligonos}
+                planificacion={planificacion}
                 onCreated={(p) => setPoligonos(prev => [...prev, p])}
                 onUpdated={(p) => setPoligonos(prev => prev.map(x => x.id === p.id ? p : x))}
                 onDeleted={(id) => setPoligonos(prev => prev.filter(x => x.id !== id))}
+                onCreateEtapa={handleAddEvento}
+                onPatchEvento={handlePatchEvento}
+                onAddHito={async (input) => { await handleAddEvento(input) }}
+                focusEtapaId={mapFocusEtapaId}
+                onFocusConsumed={() => setMapFocusEtapaId(null)}
               />
             )}
           </div>

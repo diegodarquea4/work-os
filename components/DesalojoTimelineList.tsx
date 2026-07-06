@@ -38,11 +38,15 @@ type Props = {
   focusedEventId?: number | null
   /** Callback al apretar el botón Foco — el padre setea el id en su estado. */
   onSelectFocus?: (id: number | null) => void
+  /** Salta al mapa enfocando esta Etapa. */
+  onVerEnMapa?: (etapaId: number) => void
+  /** Conteo de polígonos por Etapa, para el badge "N en mapa". */
+  polyCountByEtapa?: Map<number, number>
 }
 
 export default function DesalojoTimelineList({
   eventos, hitosByParent, capas, onCreate, onPatch, onDelete, flashId,
-  focusedEventId, onSelectFocus,
+  focusedEventId, onSelectFocus, onVerEnMapa, polyCountByEtapa,
 }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const capasById = new Map(capas.map(c => [c.id, c] as const))
@@ -97,6 +101,8 @@ export default function DesalojoTimelineList({
               focused={focusedEventId === ev.id}
               cardRef={getRef(ev.id)}
               flash={flashId === ev.id}
+              onVerEnMapa={onVerEnMapa}
+              poligonoCount={polyCountByEtapa?.get(ev.id) ?? 0}
             />
           ))}
         </ol>

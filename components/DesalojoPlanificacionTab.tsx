@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { DesalojoCapa, DesalojoPlanificacion } from '@/lib/types'
+import type { DesalojoCapa, DesalojoPlanificacion, DesalojoPoligono } from '@/lib/types'
 import DesalojoTimelineList from './DesalojoTimelineList'
 import DesalojoGantt from './DesalojoGantt'
 
@@ -17,6 +17,7 @@ import DesalojoGantt from './DesalojoGantt'
 type Props = {
   eventos:   DesalojoPlanificacion[]  // todos: top-level (parent_id NULL) + hitos (parent_id NOT NULL)
   capas:     DesalojoCapa[]
+  poligonos?: DesalojoPoligono[]      // para el badge "N polígonos" por Etapa
   onCreate:  (input: {
     capa_id?:     number | null
     parent_id?:   number | null
@@ -27,6 +28,7 @@ type Props = {
   }) => Promise<void>
   onPatch:   (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
   onDelete:  (id: number) => Promise<void>
+  onVerEnMapa?: (etapaId: number) => void
 }
 
 type GanttGrupo = {
@@ -37,10 +39,19 @@ type GanttGrupo = {
 }
 
 export default function DesalojoPlanificacionTab({
-  eventos, capas, onCreate, onPatch, onDelete,
+  eventos, capas, poligonos, onCreate, onPatch, onDelete, onVerEnMapa,
 }: Props) {
   const [flashId, setFlashId]               = useState<number | null>(null)
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null)
+
+  // Conteo de polígonos por Etapa (evento top-level), para el badge "N en mapa".
+  const polyCountByEtapa = useMemo(() => {
+    const m = new Map<number, number>()
+    for (const p of poligonos ?? []) {
+      if (p.planificacion_id != null) m.set(p.planificacion_id, (m.get(p.planificacion_id) ?? 0) + 1)
+    }
+    return m
+  }, [poligonos])
 
   useEffect(() => {
     if (flashId === null) return
@@ -124,6 +135,8 @@ export default function DesalojoPlanificacionTab({
           flashId={flashId}
           focusedEventId={focusedEventId}
           onSelectFocus={setFocusedEventId}
+          onVerEnMapa={onVerEnMapa}
+          polyCountByEtapa={polyCountByEtapa}
         />
       </section>
       <section className="min-w-0 space-y-4">

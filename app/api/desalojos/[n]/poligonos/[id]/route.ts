@@ -68,13 +68,26 @@ export async function PATCH(req: Request, context: Params) {
     return NextResponse.json({ error: 'Sin cambios' }, { status: 400 })
   }
 
+  // Re-asignar Etapa: validar que el evento sea top-level del caso (null = desasociar).
+  if (patch.planificacion_id != null) {
+    const { data: etapa } = await db
+      .from('desalojo_planificacion')
+      .select('id, prioridad_id, parent_id, archivado_at')
+      .eq('id', patch.planificacion_id)
+      .maybeSingle()
+    if (!etapa || etapa.prioridad_id !== check.n || etapa.parent_id !== null || etapa.archivado_at !== null) {
+      return NextResponse.json({ error: 'Etapa inválida o no pertenece al caso' }, { status: 400 })
+    }
+  }
+
   const { data: poligono, error: updErr } = await db
     .from('desalojo_poligonos')
     .update({
-      ...(patch.nombre      !== undefined ? { nombre:      patch.nombre      } : {}),
-      ...(patch.color       !== undefined ? { color:       patch.color       } : {}),
-      ...(patch.coords      !== undefined ? { coords:      patch.coords      } : {}),
-      ...(patch.descripcion !== undefined ? { descripcion: patch.descripcion } : {}),
+      ...(patch.nombre           !== undefined ? { nombre:           patch.nombre           } : {}),
+      ...(patch.color            !== undefined ? { color:            patch.color            } : {}),
+      ...(patch.coords           !== undefined ? { coords:           patch.coords           } : {}),
+      ...(patch.descripcion      !== undefined ? { descripcion:      patch.descripcion      } : {}),
+      ...(patch.planificacion_id !== undefined ? { planificacion_id: patch.planificacion_id } : {}),
     })
     .eq('id', check.id)
     .select('*')
