@@ -113,7 +113,7 @@ function buildActaHtml(regionNombre: string, resp: Record<string, Respuesta>): s
 <body>
   <div class="head">
     <div>
-      <div class="kicker">Acta de reunión — auditoría de preparación</div>
+      <div class="kicker">Acta de reunión — diagnóstico de preparación</div>
       <div class="region">Región ${esc(regionNombre)}</div>
     </div>
     <div class="meta">Fecha: ${fecha}<br/>Participantes: DPR, Dir. Regional SENAPRED, DCI</div>
@@ -274,7 +274,7 @@ export default function PrevencionRespuestaView({ canEditRegion }: Props) {
         {!loading && !error && vista === 'formulario' && (
           <div className="max-w-4xl mx-auto px-4 py-5 space-y-5">
             <div className="text-sm text-gray-500">
-              Auditoría de preparación <span className="font-semibold text-slate-700">{selectedRegion?.nombre}</span> · marca las casillas y el semáforo se calcula solo. Los comentarios quedan guardados para todo el equipo.
+              Diagnóstico de preparación <span className="font-semibold text-slate-700">{selectedRegion?.nombre}</span> · marca las casillas y el semáforo se calcula solo. Los comentarios quedan guardados para todo el equipo.
             </div>
             {SECCIONES.map(bloque => (
               <BloqueCard

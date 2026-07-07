@@ -1,7 +1,7 @@
 -- ============================================================================
 -- 034_prevencion_respuesta.sql
 --
--- Instrumento de auditoría "Prevención y Respuesta" (COGRID Regional · DCI),
+-- Instrumento de diagnóstico de preparación "Prevención y Respuesta" (COGRID Regional · DCI),
 -- migrado desde la herramienta HTML autónoma al panel (subtab dentro de PREGO).
 --
 -- Modelo: una fila por (region_cod, item_id). El contenido del instrumento

@@ -292,7 +292,7 @@ export async function updatePregoFase(
 }
 
 // ---------------------------------------------------------------------------
-// Prevención y Respuesta (auditoría COGRID Regional · subtab de PREGO)
+// Prevención y Respuesta (diagnóstico de preparación COGRID Regional · subtab de PREGO)
 // ---------------------------------------------------------------------------
 // Una fila por (region_cod, item_id). El contenido del instrumento vive en
 // lib/prevencionRespuesta.ts; acá solo persistimos la respuesta por región.

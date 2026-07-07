@@ -1,5 +1,5 @@
 // lib/prevencionRespuesta.ts
-// Instrumento de auditoría "Prevención y Respuesta" (COGRID Regional · DCI).
+// Instrumento de diagnóstico de preparación "Prevención y Respuesta" (COGRID Regional · DCI).
 // Definición ESTÁTICA (el contenido vive en código, como PREGO_FASES). Las respuestas por región van a la DB.
 // Generado desde la herramienta HTML (fuente de verdad del contenido).
 

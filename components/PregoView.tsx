@@ -18,7 +18,7 @@ const SUBTAB_KEY = 'workos:pregoSubTab'
 /**
  * Raíz de la tab PREGO. Introduce dos subtabs sin romper lo existente:
  *   - "Monitoreo PREGO"        → la matriz 16×9 de siempre (PregoMonitoreoView).
- *   - "Prevención y Respuesta" → instrumento de auditoría COGRID (nuevo).
+ *   - "Prevención y Respuesta" → instrumento de diagnóstico de preparación COGRID (nuevo).
  * El subtab activo persiste en localStorage (mismo patrón que WorkOSApp con
  * `workos:view`).
  */
