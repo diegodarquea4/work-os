@@ -407,7 +407,7 @@ function ItemRow({
 
       {/* Casillas */}
       {item.checks && item.checks.length > 0 && (
-        <div className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
+        <div className="mt-2.5 flex flex-col gap-1.5">
           {item.checks.map((label, i) => (
             <label key={i} className={`flex items-start gap-2 text-xs ${editable ? 'cursor-pointer' : 'cursor-default'}`}>
               <input
