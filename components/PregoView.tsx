@@ -4,10 +4,75 @@ import { useEffect, useRef, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG, type PregoEstado, type PregoFaseKey, type PregoRow } from '@/lib/types'
 import { getAllPrego, updatePregoFase } from '@/lib/db'
+import PrevencionRespuestaView from './PrevencionRespuestaView'
 
 type Props = {
   userName?: string
   canEditRegion?: (regionCod: string) => boolean
+}
+
+type PregoSubTab = 'monitoreo' | 'prevencion'
+
+const SUBTAB_KEY = 'workos:pregoSubTab'
+
+/**
+ * Raíz de la tab PREGO. Introduce dos subtabs sin romper lo existente:
+ *   - "Monitoreo PREGO"        → la matriz 16×9 de siempre (PregoMonitoreoView).
+ *   - "Prevención y Respuesta" → instrumento de auditoría COGRID (nuevo).
+ * El subtab activo persiste en localStorage (mismo patrón que WorkOSApp con
+ * `workos:view`).
+ */
+export default function PregoView({ userName, canEditRegion }: Props) {
+  const [subTab, setSubTab] = useState<PregoSubTab>('monitoreo')
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SUBTAB_KEY)
+      if (stored === 'monitoreo' || stored === 'prevencion') setSubTab(stored)
+    } catch { /* localStorage bloqueado (privacidad) — sin fallback */ }
+  }, [])
+
+  function changeSubTab(next: PregoSubTab) {
+    setSubTab(next)
+    try { localStorage.setItem(SUBTAB_KEY, next) } catch { /* noop */ }
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-gray-50">
+      {/* Control segmentado de subtabs */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-2 border-b border-gray-100 bg-white">
+        <div className="inline-flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <SubTabButton active={subTab === 'monitoreo'} onClick={() => changeSubTab('monitoreo')}>
+            Monitoreo PREGO
+          </SubTabButton>
+          <SubTabButton active={subTab === 'prevencion'} onClick={() => changeSubTab('prevencion')}>
+            Prevención y Respuesta
+          </SubTabButton>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        {subTab === 'monitoreo'
+          ? <PregoMonitoreoView userName={userName} canEditRegion={canEditRegion} />
+          : <PrevencionRespuestaView canEditRegion={canEditRegion} />}
+      </div>
+    </div>
+  )
+}
+
+function SubTabButton({ active, onClick, children }: {
+  active: boolean; onClick: () => void; children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+        active ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+      }`}
+    >
+      {children}
+    </button>
+  )
 }
 
 const ESTADO_CONFIG = PREGO_ESTADO_CONFIG
@@ -226,7 +291,7 @@ function exportPDF(rows: PregoRow[], avgAvance: number) {
   window.open(url, '_blank')
 }
 
-export default function PregoView({ userName, canEditRegion }: Props) {
+function PregoMonitoreoView({ userName, canEditRegion }: Props) {
   const [rows, setRows] = useState<PregoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

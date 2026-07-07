@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase'
-import { safeAuditWrite } from './dbWrite'
+import { safeAuditWrite, safeWrite } from './dbWrite'
 import type {
   Prioridad, RegionMetrics, RegionalMetric, PregoRow, PregoEstado, PregoFaseKey,
 } from './types'
@@ -289,5 +289,54 @@ export async function updatePregoFase(
     .update({ [fase]: estado, updated_at: new Date().toISOString(), updated_by: updatedBy ?? null })
     .eq('region_cod', regionCod)
   if (error) throw new Error(`DB error (prego update): ${error.message}`)
+}
+
+// ---------------------------------------------------------------------------
+// Prevención y Respuesta (auditoría COGRID Regional · subtab de PREGO)
+// ---------------------------------------------------------------------------
+// Una fila por (region_cod, item_id). El contenido del instrumento vive en
+// lib/prevencionRespuesta.ts; acá solo persistimos la respuesta por región.
+
+export type PrevencionRespuestaRow = {
+  region_cod:  string
+  item_id:     string
+  estado:      'listo' | 'parcial' | 'nolisto' | null
+  manual:      boolean
+  checks:      boolean[]
+  comentarios: { ts: number; texto: string; autor?: string }[]
+  updated_at:  string
+  updated_by:  string | null
+}
+
+export async function getAllPrevencionRespuesta(): Promise<PrevencionRespuestaRow[]> {
+  const { data, error } = await getSupabase()
+    .from('prevencion_respuesta')
+    .select('*')
+  if (error) throw new Error(`DB error (prevencion_respuesta): ${error.message}`)
+  return (data ?? []) as PrevencionRespuestaRow[]
+}
+
+/**
+ * Guarda la fila COMPLETA del ítem (estado + manual + checks + comentarios) en
+ * cada cambio. Simple y sin problemas de append concurrente sobre el jsonb para
+ * el caso de uso (una región editada a la vez en la reunión). Vía safeWrite por
+ * el invariante del RLS-200-vacío (lib/dbWrite.ts).
+ */
+export async function upsertPrevencionRespuesta(
+  regionCod: string,
+  itemId: string,
+  patch: Pick<PrevencionRespuestaRow, 'estado' | 'manual' | 'checks' | 'comentarios'>,
+  autor?: string,
+): Promise<void> {
+  const builder = getSupabase()
+    .from('prevencion_respuesta')
+    .upsert({
+      region_cod: regionCod,
+      item_id:    itemId,
+      ...patch,
+      updated_at: new Date().toISOString(),
+      updated_by: autor ?? null,
+    }, { onConflict: 'region_cod,item_id' })
+  await safeWrite(builder, `prevencion_respuesta ${regionCod}/${itemId}`)
 }
 
