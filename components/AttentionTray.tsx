@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback, useDeferredValue, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
@@ -86,8 +86,14 @@ export default function AttentionTray({
   // Mismo patrón que Dashboard: todos multi-select Set<string>. Región queda
   // como string (state GLOBAL, viene de props) — single-select via <select>.
   const [search, setSearch]                     = useState('')
+  // El input escribe `search` (inmediato); el filtrado pesado (basePool re-escanea
+  // las ~6.833 iniciativas ~12 veces por tecla) corre sobre el valor diferido, así
+  // el tipeo no se traba. Mismo patrón que NationalDashboard.
+  const deferredSearch = useDeferredValue(search)
   const filterRegion    = activeRegionName || 'todas'
   const setFilterRegion = onActiveRegionChange
+  // Mostrar la región en las filas solo cuando admin/editor mira "todas".
+  const showRegion = canEditAny && filterRegion === 'todas'
   const [filterEje, setFilterEje]               = useState<Set<string>>(new Set())
   const [filterEjeGob, setFilterEjeGob]         = useState<Set<string>>(new Set())
   const [filterSemaforo, setFilterSemaforo]     = useState<Set<string>>(new Set())
@@ -184,7 +190,7 @@ export default function AttentionTray({
     | 'tags'   | 'responsable' | 'desalojo' | 'capa' | null
 
   function basePool(excluding: FilterKey) {
-    const q = search.toLowerCase()
+    const q = deferredSearch.toLowerCase()
     return projects.filter(p => {
       if (q && !p.nombre.toLowerCase().includes(q) && !(p.ministerio ?? '').toLowerCase().includes(q)) return false
       if (excluding !== 'region'       && filterRegion !== 'todas' && p.region !== filterRegion)                                                   return false
@@ -224,7 +230,7 @@ export default function AttentionTray({
   }
 
   const baseDeps = [
-    projects, search,
+    projects, deferredSearch,
     filterRegion, filterEje, filterEjeGob, filterSemaforo, filterPrioridad,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
     filterTags, filterResponsable, filterDesalojo, filterCapa,
@@ -344,12 +350,13 @@ export default function AttentionTray({
 
   // Etapa 5: mutamos por id (PK estable) en vez de n. n sigue como key del
   // estado local en WorkOSApp.handleUpdatePrioridad.
-  async function handleToggleFoco(n: number, id: number, next: boolean) {
+  // useCallback con referencia estable ([onUpdatePrioridad]) para que las filas
+  // memoizadas no se invaliden. El guard `prev.n === n` va dentro del updater
+  // funcional → no cierra sobre `selectedIniciativa` (que no es dependencia).
+  const handleToggleFoco = useCallback(async (n: number, id: number, next: boolean) => {
     // Optimistic update
     onUpdatePrioridad(n, { en_foco: next })
-    if (selectedIniciativa?.n === n) {
-      setSelectedIniciativa(prev => prev ? { ...prev, en_foco: next } : null)
-    }
+    setSelectedIniciativa(prev => prev && prev.n === n ? { ...prev, en_foco: next } : prev)
 
     const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
@@ -360,9 +367,7 @@ export default function AttentionTray({
     const failed = !!error || !data || data.length === 0
     if (failed) {
       onUpdatePrioridad(n, { en_foco: !next })
-      if (selectedIniciativa?.n === n) {
-        setSelectedIniciativa(prev => prev ? { ...prev, en_foco: !next } : null)
-      }
+      setSelectedIniciativa(prev => prev && prev.n === n ? { ...prev, en_foco: !next } : prev)
       const msg = error
         ? `Error guardando foco: ${error.message}`
         : 'No se pudo guardar el foco (0 filas actualizadas — probable RLS / permisos).'
@@ -371,162 +376,16 @@ export default function AttentionTray({
     } else {
       console.log('[AttentionTray] Foco guardado:', data)
     }
-  }
+  }, [onUpdatePrioridad])
+
+  // Colapsar/expandir secciones de sugerencias — referencia estable.
+  const toggleCollapsed = useCallback((id: string) => {
+    setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
+  }, [])
 
   function handleUpdateAndRefresh(n: number, patch: Partial<Iniciativa>) {
     onUpdatePrioridad(n, patch)
     if (selectedIniciativa?.n === n) setSelectedIniciativa(prev => prev ? { ...prev, ...patch } : null)
-  }
-
-  // ── Inner components ───────────────────────────────────────────────────────
-
-  function IniciativaFocoRow({ p }: { p: Iniciativa }) {
-    const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-    const pc  = prioridadColor(p.prioridad)
-    const dias = diasHastaHito(p.fecha_proximo_hito)
-    const hitoUrgent = dias !== null && dias <= 7
-
-    return (
-      <div className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
-        {canEditFoco ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleToggleFoco(p.n, p.id, false) }}
-            className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
-            title="Quitar del foco"
-          >
-            <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
-          </button>
-        ) : (
-          <span className="flex-shrink-0 text-amber-500 p-1 -m-1" title="En foco">
-            <FlagIcon filled className="w-4 h-4" />
-          </span>
-        )}
-
-        <button
-          onClick={() => setSelectedIniciativa(p)}
-          className="flex-1 text-left flex items-center gap-3 min-w-0 group"
-        >
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              {p.es_desalojo && <DesalojoBadge size="sm" />}
-              <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
-                {p.nombre}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 flex-wrap">
-              <span className="truncate max-w-[200px]">{p.ministerio ?? 'Sin asignar'}</span>
-              <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
-                {p.eje}
-              </span>
-              <TagChips tags={p.tags} max={2} />
-              {p.responsable && (
-                <span className="truncate max-w-[140px]" title={p.responsable}>· {formatResponsableDisplay(p.responsable)}</span>
-              )}
-              {canEditAny && filterRegion === 'todas' && (
-                <span className="text-gray-400">· {p.region}</span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 w-24 text-right">
-            <div className="text-xs font-semibold text-gray-700 tabular-nums">{p.pct_avance ?? 0}%</div>
-            {p.fecha_proximo_hito && (
-              <div className={`text-xs ${hitoUrgent ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
-                {dias !== null && dias < 0
-                  ? `Vencido ${Math.abs(dias)}d`
-                  : dias === 0 ? 'Hoy' : `En ${dias}d`}
-              </div>
-            )}
-          </div>
-
-          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
-            {p.prioridad}
-          </span>
-        </button>
-      </div>
-    )
-  }
-
-  function SugerenciaSection({
-    id, label, badgeClass, iconColor, items, icon, metricFor,
-  }: {
-    id: string
-    label: string
-    badgeClass: string
-    iconColor: string
-    items: Iniciativa[]
-    icon: React.ReactNode
-    metricFor: (p: Iniciativa) => { text: string; color: string }
-  }) {
-    const isOpen = !collapsed[id]
-    return (
-      <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
-        <button
-          onClick={() => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))}
-          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
-        >
-          <span className={`flex-shrink-0 ${iconColor}`}>{icon}</span>
-          <span className="text-sm font-semibold text-gray-700 flex-1">{label}</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${items.length === 0 ? 'bg-gray-100 text-gray-400' : badgeClass}`}>
-            {items.length}
-          </span>
-          <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M4 6l4 4 4-4"/>
-          </svg>
-        </button>
-        {isOpen && items.length > 0 && (
-          <div className="border-t border-gray-100">
-            {items.map(p => {
-              const m = metricFor(p)
-              return <SugerenciaRow key={p.n} p={p} metricText={m.text} metricColor={m.color} />
-            })}
-          </div>
-        )}
-        {isOpen && items.length === 0 && (
-          <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-400 text-center">
-            Sin iniciativas en esta categoría
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  function SugerenciaRow({ p, metricText, metricColor }: { p: Iniciativa; metricText: string; metricColor: string }) {
-    const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-    return (
-      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 transition-colors">
-        {canEditFoco ? (
-          <button
-            onClick={() => handleToggleFoco(p.n, p.id, true)}
-            className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
-            title="Marcar en foco"
-          >
-            <FlagIcon className="w-4 h-4 transition-all duration-500" />
-          </button>
-        ) : (
-          <span className="flex-shrink-0 w-4 h-4" aria-hidden />
-        )}
-        <button onClick={() => setSelectedIniciativa(p)} className="flex-1 text-left min-w-0 flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sem.dot}`} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              {p.es_desalojo && <DesalojoBadge size="sm" />}
-              <p className="text-sm text-gray-700 line-clamp-1">{p.nombre}</p>
-            </div>
-            <p className="text-xs text-gray-400 truncate">
-              {p.ministerio ?? 'Sin asignar'} · {p.eje}
-              {p.eje_gobierno && (
-                <span className={`ml-1 px-1 rounded ${ejeGobColor(p.eje_gobierno)}`}>{p.eje_gobierno}</span>
-              )}
-              {canEditAny && filterRegion === 'todas' && ` · ${p.region}`}
-            </p>
-          </div>
-        </button>
-        <span className={`text-xs flex-shrink-0 text-right min-w-[90px] ${metricColor}`}>{metricText}</span>
-      </div>
-    )
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -743,7 +602,16 @@ export default function AttentionTray({
                 </div>
               ) : (
                 <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                  {enFoco.map(p => <IniciativaFocoRow key={p.n} p={p} />)}
+                  {enFoco.map(p => (
+                    <IniciativaFocoRow
+                      key={p.n}
+                      p={p}
+                      canEditFoco={canEditFoco}
+                      showRegion={showRegion}
+                      onToggleFoco={handleToggleFoco}
+                      onSelect={setSelectedIniciativa}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -769,6 +637,9 @@ export default function AttentionTray({
                 <div className="space-y-2 mt-2">
                   <SugerenciaSection
                     id="sug-hito-vencido" label="Hito vencido"
+                    isOpen={!collapsed['sug-hito-vencido']} onToggle={toggleCollapsed}
+                    canEditFoco={canEditFoco} showRegion={showRegion}
+                    onToggleFoco={handleToggleFoco} onSelect={setSelectedIniciativa}
                     badgeClass="bg-red-100 text-red-700" iconColor="text-red-500"
                     items={sugHitoVencido}
                     icon={<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 11v.5"/></svg>}
@@ -779,6 +650,9 @@ export default function AttentionTray({
                   />
                   <SugerenciaSection
                     id="sug-bloqueadas" label="Bloqueadas (semáforo rojo)"
+                    isOpen={!collapsed['sug-bloqueadas']} onToggle={toggleCollapsed}
+                    canEditFoco={canEditFoco} showRegion={showRegion}
+                    onToggleFoco={handleToggleFoco} onSelect={setSelectedIniciativa}
                     badgeClass="bg-red-100 text-red-700" iconColor="text-red-500"
                     items={sugBloqueadas}
                     icon={<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M5 5l6 6M11 5l-6 6"/></svg>}
@@ -786,6 +660,9 @@ export default function AttentionTray({
                   />
                   <SugerenciaSection
                     id="sug-sin-actividad" label="Sin actividad reciente (+15 días)"
+                    isOpen={!collapsed['sug-sin-actividad']} onToggle={toggleCollapsed}
+                    canEditFoco={canEditFoco} showRegion={showRegion}
+                    onToggleFoco={handleToggleFoco} onSelect={setSelectedIniciativa}
                     badgeClass="bg-amber-100 text-amber-700" iconColor="text-amber-500"
                     items={sugSinActividad}
                     icon={<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>}
@@ -793,6 +670,9 @@ export default function AttentionTray({
                   />
                   <SugerenciaSection
                     id="sug-hito-proximo" label="Hito próximo (14 días)"
+                    isOpen={!collapsed['sug-hito-proximo']} onToggle={toggleCollapsed}
+                    canEditFoco={canEditFoco} showRegion={showRegion}
+                    onToggleFoco={handleToggleFoco} onSelect={setSelectedIniciativa}
                     badgeClass="bg-blue-100 text-blue-700" iconColor="text-blue-500"
                     items={sugHitoProximo}
                     icon={<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5"/></svg>}
@@ -805,6 +685,9 @@ export default function AttentionTray({
                   />
                   <SugerenciaSection
                     id="sug-avance-bajo" label="Avance bajo (menos del 30%)"
+                    isOpen={!collapsed['sug-avance-bajo']} onToggle={toggleCollapsed}
+                    canEditFoco={canEditFoco} showRegion={showRegion}
+                    onToggleFoco={handleToggleFoco} onSelect={setSelectedIniciativa}
                     badgeClass="bg-gray-100 text-gray-600" iconColor="text-gray-400"
                     items={sugAvanceBajo}
                     icon={<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 12l4-4 3 3 5-6"/></svg>}
@@ -826,6 +709,201 @@ export default function AttentionTray({
           onUpdatePrioridad={handleUpdateAndRefresh}
           onDeletePrioridad={onDeletePrioridad}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Filas (módulo + memo) ─────────────────────────────────────────────────────
+// Extraídas del cuerpo del render de AttentionTray. Antes se redefinían en cada
+// render → React las trataba como tipos nuevos y remontaba (destruía+recreaba) las
+// filas en cada tecla / cambio de estado del padre. Ahora son componentes estables:
+// se re-renderizan (barato) en vez de remontarse, y las hojas memoizadas se saltan
+// el render si sus props no cambian. `onToggleFoco` es useCallback y `onSelect` un
+// setState — referencias estables — así el memo efectivamente aplica.
+
+type FocoRowProps = {
+  p: Iniciativa
+  canEditFoco: boolean
+  showRegion: boolean
+  onToggleFoco: (n: number, id: number, next: boolean) => void
+  onSelect: (p: Iniciativa) => void
+}
+
+const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, showRegion, onToggleFoco, onSelect }: FocoRowProps) {
+  const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+  const pc  = prioridadColor(p.prioridad)
+  const dias = diasHastaHito(p.fecha_proximo_hito)
+  const hitoUrgent = dias !== null && dias <= 7
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
+      {canEditFoco ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, p.id, false) }}
+          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
+          title="Quitar del foco"
+        >
+          <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
+        </button>
+      ) : (
+        <span className="flex-shrink-0 text-amber-500 p-1 -m-1" title="En foco">
+          <FlagIcon filled className="w-4 h-4" />
+        </span>
+      )}
+
+      <button
+        onClick={() => onSelect(p)}
+        className="flex-1 text-left flex items-center gap-3 min-w-0 group"
+      >
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {p.es_desalojo && <DesalojoBadge size="sm" />}
+            <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
+              {p.nombre}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 flex-wrap">
+            <span className="truncate max-w-[200px]">{p.ministerio ?? 'Sin asignar'}</span>
+            <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
+              {p.eje}
+            </span>
+            <TagChips tags={p.tags} max={2} />
+            {p.responsable && (
+              <span className="truncate max-w-[140px]" title={p.responsable}>· {formatResponsableDisplay(p.responsable)}</span>
+            )}
+            {showRegion && (
+              <span className="text-gray-400">· {p.region}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 w-24 text-right">
+          <div className="text-xs font-semibold text-gray-700 tabular-nums">{p.pct_avance ?? 0}%</div>
+          {p.fecha_proximo_hito && (
+            <div className={`text-xs ${hitoUrgent ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+              {dias !== null && dias < 0
+                ? `Vencido ${Math.abs(dias)}d`
+                : dias === 0 ? 'Hoy' : `En ${dias}d`}
+            </div>
+          )}
+        </div>
+
+        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
+          {p.prioridad}
+        </span>
+      </button>
+    </div>
+  )
+})
+
+type SugRowProps = {
+  p: Iniciativa
+  metricText: string
+  metricColor: string
+  canEditFoco: boolean
+  showRegion: boolean
+  onToggleFoco: (n: number, id: number, next: boolean) => void
+  onSelect: (p: Iniciativa) => void
+}
+
+const SugerenciaRow = memo(function SugerenciaRow({ p, metricText, metricColor, canEditFoco, showRegion, onToggleFoco, onSelect }: SugRowProps) {
+  const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 transition-colors">
+      {canEditFoco ? (
+        <button
+          onClick={() => onToggleFoco(p.n, p.id, true)}
+          className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
+          title="Marcar en foco"
+        >
+          <FlagIcon className="w-4 h-4 transition-all duration-500" />
+        </button>
+      ) : (
+        <span className="flex-shrink-0 w-4 h-4" aria-hidden />
+      )}
+      <button onClick={() => onSelect(p)} className="flex-1 text-left min-w-0 flex items-center gap-2">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sem.dot}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            {p.es_desalojo && <DesalojoBadge size="sm" />}
+            <p className="text-sm text-gray-700 line-clamp-1">{p.nombre}</p>
+          </div>
+          <p className="text-xs text-gray-400 truncate">
+            {p.ministerio ?? 'Sin asignar'} · {p.eje}
+            {p.eje_gobierno && (
+              <span className={`ml-1 px-1 rounded ${ejeGobColor(p.eje_gobierno)}`}>{p.eje_gobierno}</span>
+            )}
+            {showRegion && ` · ${p.region}`}
+          </p>
+        </div>
+      </button>
+      <span className={`text-xs flex-shrink-0 text-right min-w-[90px] ${metricColor}`}>{metricText}</span>
+    </div>
+  )
+})
+
+type SugSectionProps = {
+  id: string
+  label: string
+  badgeClass: string
+  iconColor: string
+  items: Iniciativa[]
+  icon: React.ReactNode
+  metricFor: (p: Iniciativa) => { text: string; color: string }
+  isOpen: boolean
+  onToggle: (id: string) => void
+  // reenviados a las filas
+  canEditFoco: boolean
+  showRegion: boolean
+  onToggleFoco: (n: number, id: number, next: boolean) => void
+  onSelect: (p: Iniciativa) => void
+}
+
+function SugerenciaSection({
+  id, label, badgeClass, iconColor, items, icon, metricFor,
+  isOpen, onToggle, canEditFoco, showRegion, onToggleFoco, onSelect,
+}: SugSectionProps) {
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
+      >
+        <span className={`flex-shrink-0 ${iconColor}`}>{icon}</span>
+        <span className="text-sm font-semibold text-gray-700 flex-1">{label}</span>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${items.length === 0 ? 'bg-gray-100 text-gray-400' : badgeClass}`}>
+          {items.length}
+        </span>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 6l4 4 4-4"/>
+        </svg>
+      </button>
+      {isOpen && items.length > 0 && (
+        <div className="border-t border-gray-100">
+          {items.map(p => {
+            const m = metricFor(p)
+            return (
+              <SugerenciaRow
+                key={p.n}
+                p={p}
+                metricText={m.text}
+                metricColor={m.color}
+                canEditFoco={canEditFoco}
+                showRegion={showRegion}
+                onToggleFoco={onToggleFoco}
+                onSelect={onSelect}
+              />
+            )
+          })}
+        </div>
+      )}
+      {isOpen && items.length === 0 && (
+        <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-400 text-center">
+          Sin iniciativas en esta categoría
+        </div>
       )}
     </div>
   )

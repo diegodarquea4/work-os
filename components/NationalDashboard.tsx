@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react'
+import { useState, useMemo, useRef, useEffect, useDeferredValue, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
@@ -1128,7 +1128,16 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )}
                 {virtualRows.map(vi => {
                   const p = filtered[vi.index]
-                  return <DataRow key={p.n} p={p} />
+                  return (
+                    <DataRow
+                      key={p.n}
+                      p={p}
+                      visibleCols={visibleCols}
+                      actividad={actividad}
+                      actividadLoading={actividadLoading}
+                      onSelect={setSelected}
+                    />
+                  )
                 })}
                 {paddingBottom > 0 && (
                   <tr aria-hidden style={{ height: paddingBottom }}>
@@ -1423,221 +1432,234 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       )}
     </div>
   )
-
-  // ── Row component (inner, accesses closure state) ─────────────────────────
-
-  function DataRow({ p }: { p: Iniciativa }) {
-    const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
-    const ejeColor = 'bg-gray-100 text-gray-600'
-    return (
-      <tr
-        onClick={() => setSelected(p)}
-        className="hover:bg-blue-50/40 cursor-pointer transition-colors"
-      >
-        {visibleCols.has('n') && (
-          <td className="px-3 py-3.5 text-xs text-gray-400 font-mono">{p.n}</td>
-        )}
-        {visibleCols.has('estado') && (
-          <td className="px-3 py-3.5">
-            <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${sem.badge}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${sem.dot}`}/>
-              {sem.label}
-            </span>
-          </td>
-        )}
-        {visibleCols.has('iniciativa') && (
-          <td className="sticky left-0 z-10 bg-white px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">
-            <div className="flex items-start gap-1.5">
-              {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
-                <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
-              </div>
-            </div>
-          </td>
-        )}
-        {visibleCols.has('region') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            <div className="text-xs font-medium text-gray-700">{p.region}</div>
-            <div className="text-xs text-gray-400">{p.capital}</div>
-          </td>
-        )}
-        {visibleCols.has('comuna') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
-            {p.comuna
-              ? <span className="line-clamp-2 block">{p.comuna.replace(/;/g, ' · ')}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('ministerio') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[200px]">
-            {p.ministerio
-              ? <span className="line-clamp-2 block">{p.ministerio.replace(/;/g, ' · ')}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('ejeRegional') && (
-          <td className="px-3 py-3.5">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${ejeColor}`}>
-              {p.eje}
-            </span>
-          </td>
-        )}
-        {visibleCols.has('ejeGobierno') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {(() => {
-              const gob = p.eje_gobierno
-              const cls = gob === 'Seguridad' ? 'bg-red-50 text-red-700' :
-                          gob === 'Social'    ? 'bg-purple-50 text-purple-700' :
-                                               'bg-blue-50 text-blue-700'
-              return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cls}`}>{gob ?? '—'}</span>
-            })()}
-          </td>
-        )}
-        {visibleCols.has('avance') && (
-          <td className="px-3 py-3.5">
-            <div className="flex items-center gap-2">
-              <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
-                <div
-                  className={`h-1.5 rounded-full ${
-                    p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
-                    p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
-                    p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                  style={{ width: `${p.pct_avance}%` }}
-                />
-              </div>
-              <span className="text-xs font-semibold text-gray-700 w-8 text-right">{p.pct_avance}%</span>
-            </div>
-          </td>
-        )}
-        {visibleCols.has('prioridad') && (
-          <td className="px-3 py-3.5">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
-              {p.prioridad}
-            </span>
-          </td>
-        )}
-        {visibleCols.has('etapaActual') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {p.etapa_actual
-              ? (() => {
-                  const cls =
-                    p.etapa_actual === 'Terminado'       ? 'bg-green-100 text-green-700' :
-                    p.etapa_actual === 'Ejecución'       ? 'bg-blue-100 text-blue-700'   :
-                    p.etapa_actual === 'Diseño'          ? 'bg-violet-100 text-violet-700':
-                    p.etapa_actual === 'Prefactibilidad' ? 'bg-amber-100 text-amber-700' :
-                    p.etapa_actual === 'Preinversión'    ? 'bg-orange-100 text-orange-700':
-                                                           'bg-gray-100 text-gray-600'
-                  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{p.etapa_actual}</span>
-                })()
-              : <span className="text-gray-300 text-xs">—</span>}
-          </td>
-        )}
-        {visibleCols.has('proximoHito') && (
-          <td className="px-3 py-3.5 max-w-[200px]">
-            {p.proximo_hito
-              ? <>
-                  <p className="text-xs text-gray-700 line-clamp-2 leading-snug">{p.proximo_hito}</p>
-                  {p.fecha_proximo_hito && (
-                    <span className="text-xs text-gray-400 mt-0.5 block">{formatDate(p.fecha_proximo_hito)}</span>
-                  )}
-                </>
-              : <span className="text-gray-300 text-xs">—</span>}
-          </td>
-        )}
-        {visibleCols.has('fechaProximoHito') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
-            {p.fecha_proximo_hito
-              ? formatDate(p.fecha_proximo_hito)
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('estadoTermino') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
-            {p.estado_termino_gobierno ?? <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('inversion') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {p.inversion_mm != null
-              ? <span className="text-xs font-mono text-gray-700">{p.inversion_mm.toLocaleString('es-CL')} MM$</span>
-              : <span className="text-gray-300 text-xs">—</span>}
-          </td>
-        )}
-        {visibleCols.has('codigoBip') && (
-          <td className="px-3 py-3.5 text-xs font-mono text-gray-600 whitespace-nowrap">
-            {p.codigo_bip ?? <span className="text-gray-300 font-sans">—</span>}
-          </td>
-        )}
-        {visibleCols.has('rat') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {p.rat
-              ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ratColor(p.rat)}`}>{p.rat}</span>
-              : <span className="text-gray-300 text-xs">—</span>}
-          </td>
-        )}
-        {visibleCols.has('fuente') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[140px]">
-            {p.fuente_financiamiento
-              ? <span className="line-clamp-2 block">{p.fuente_financiamiento}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('enFoco') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {p.en_foco
-              ? <span className="text-xs text-amber-700 font-semibold">⚑ Sí</span>
-              : <span className="text-gray-300 text-xs">—</span>}
-          </td>
-        )}
-        {visibleCols.has('capa') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            <CapaBadge value={p.capa} size="sm" />
-          </td>
-        )}
-        {visibleCols.has('origen') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
-            {p.origen
-              ? <span className="line-clamp-2 block">{p.origen}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('descripcion') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[260px]">
-            {p.descripcion
-              ? <span className="line-clamp-2 block">{p.descripcion}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('responsable') && (
-          <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap max-w-[140px]">
-            {p.responsable
-              ? <span className="truncate block" title={p.responsable}>{formatResponsableDisplay(p.responsable)}</span>
-              : <span className="text-gray-300">—</span>}
-          </td>
-        )}
-        {visibleCols.has('actividad') && (
-          <td className="px-3 py-3.5 whitespace-nowrap">
-            {actividadLoading ? (
-              <div className="h-3 bg-gray-100 rounded animate-pulse w-14" />
-            ) : (() => {
-              const dias = diasSinActividad(actividad[p.n])
-              if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
-              if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>
-              if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
-              return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
-            })()}
-          </td>
-        )}
-        {visibleCols.has('tags') && (
-          <td className="px-3 py-3.5 max-w-[220px]">
-            {(p.tags?.length ?? 0) === 0
-              ? <span className="text-xs text-gray-300">—</span>
-              : <TagChips tags={p.tags} max={3} />}
-          </td>
-        )}
-      </tr>
-    )
-  }
 }
+
+// ── Row component (módulo + memo) ─────────────────────────────────────────────
+// Extraída del cuerpo del render (antes se redefinía en cada render → React la
+// trataba como un tipo nuevo y remontaba TODA la fila en cada tecla del buscador
+// / cambio de estado del padre). Ahora es un componente estable memoizado: solo
+// re-renderiza si cambian sus props (p, visibleCols, actividad, actividadLoading).
+// `onSelect` es el setState `setSelected` (referencia estable).
+
+type DataRowProps = {
+  p: Iniciativa
+  visibleCols: Set<ColId>
+  actividad: Record<number, string | null>
+  actividadLoading: boolean
+  onSelect: (p: Iniciativa) => void
+}
+
+const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoading, onSelect }: DataRowProps) {
+  const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
+  const ejeColor = 'bg-gray-100 text-gray-600'
+  return (
+    <tr
+      onClick={() => onSelect(p)}
+      className="hover:bg-blue-50/40 cursor-pointer transition-colors"
+    >
+      {visibleCols.has('n') && (
+        <td className="px-3 py-3.5 text-xs text-gray-400 font-mono">{p.n}</td>
+      )}
+      {visibleCols.has('estado') && (
+        <td className="px-3 py-3.5">
+          <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${sem.badge}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${sem.dot}`}/>
+            {sem.label}
+          </span>
+        </td>
+      )}
+      {visibleCols.has('iniciativa') && (
+        <td className="sticky left-0 z-10 bg-white px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">
+          <div className="flex items-start gap-1.5">
+            {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
+              <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
+            </div>
+          </div>
+        </td>
+      )}
+      {visibleCols.has('region') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          <div className="text-xs font-medium text-gray-700">{p.region}</div>
+          <div className="text-xs text-gray-400">{p.capital}</div>
+        </td>
+      )}
+      {visibleCols.has('comuna') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
+          {p.comuna
+            ? <span className="line-clamp-2 block">{p.comuna.replace(/;/g, ' · ')}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('ministerio') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[200px]">
+          {p.ministerio
+            ? <span className="line-clamp-2 block">{p.ministerio.replace(/;/g, ' · ')}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('ejeRegional') && (
+        <td className="px-3 py-3.5">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${ejeColor}`}>
+            {p.eje}
+          </span>
+        </td>
+      )}
+      {visibleCols.has('ejeGobierno') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {(() => {
+            const gob = p.eje_gobierno
+            const cls = gob === 'Seguridad' ? 'bg-red-50 text-red-700' :
+                        gob === 'Social'    ? 'bg-purple-50 text-purple-700' :
+                                             'bg-blue-50 text-blue-700'
+            return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cls}`}>{gob ?? '—'}</span>
+          })()}
+        </td>
+      )}
+      {visibleCols.has('avance') && (
+        <td className="px-3 py-3.5">
+          <div className="flex items-center gap-2">
+            <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
+              <div
+                className={`h-1.5 rounded-full ${
+                  p.estado_semaforo === 'rojo'  ? 'bg-red-400' :
+                  p.estado_semaforo === 'ambar' ? 'bg-amber-400' :
+                  p.estado_semaforo === 'verde' ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+                style={{ width: `${p.pct_avance}%` }}
+              />
+            </div>
+            <span className="text-xs font-semibold text-gray-700 w-8 text-right">{p.pct_avance}%</span>
+          </div>
+        </td>
+      )}
+      {visibleCols.has('prioridad') && (
+        <td className="px-3 py-3.5">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
+            {p.prioridad}
+          </span>
+        </td>
+      )}
+      {visibleCols.has('etapaActual') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {p.etapa_actual
+            ? (() => {
+                const cls =
+                  p.etapa_actual === 'Terminado'       ? 'bg-green-100 text-green-700' :
+                  p.etapa_actual === 'Ejecución'       ? 'bg-blue-100 text-blue-700'   :
+                  p.etapa_actual === 'Diseño'          ? 'bg-violet-100 text-violet-700':
+                  p.etapa_actual === 'Prefactibilidad' ? 'bg-amber-100 text-amber-700' :
+                  p.etapa_actual === 'Preinversión'    ? 'bg-orange-100 text-orange-700':
+                                                         'bg-gray-100 text-gray-600'
+                return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{p.etapa_actual}</span>
+              })()
+            : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+      )}
+      {visibleCols.has('proximoHito') && (
+        <td className="px-3 py-3.5 max-w-[200px]">
+          {p.proximo_hito
+            ? <>
+                <p className="text-xs text-gray-700 line-clamp-2 leading-snug">{p.proximo_hito}</p>
+                {p.fecha_proximo_hito && (
+                  <span className="text-xs text-gray-400 mt-0.5 block">{formatDate(p.fecha_proximo_hito)}</span>
+                )}
+              </>
+            : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+      )}
+      {visibleCols.has('fechaProximoHito') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
+          {p.fecha_proximo_hito
+            ? formatDate(p.fecha_proximo_hito)
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('estadoTermino') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap">
+          {p.estado_termino_gobierno ?? <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('inversion') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {p.inversion_mm != null
+            ? <span className="text-xs font-mono text-gray-700">{p.inversion_mm.toLocaleString('es-CL')} MM$</span>
+            : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+      )}
+      {visibleCols.has('codigoBip') && (
+        <td className="px-3 py-3.5 text-xs font-mono text-gray-600 whitespace-nowrap">
+          {p.codigo_bip ?? <span className="text-gray-300 font-sans">—</span>}
+        </td>
+      )}
+      {visibleCols.has('rat') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {p.rat
+            ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ratColor(p.rat)}`}>{p.rat}</span>
+            : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+      )}
+      {visibleCols.has('fuente') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[140px]">
+          {p.fuente_financiamiento
+            ? <span className="line-clamp-2 block">{p.fuente_financiamiento}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('enFoco') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {p.en_foco
+            ? <span className="text-xs text-amber-700 font-semibold">⚑ Sí</span>
+            : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+      )}
+      {visibleCols.has('capa') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          <CapaBadge value={p.capa} size="sm" />
+        </td>
+      )}
+      {visibleCols.has('origen') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[160px]">
+          {p.origen
+            ? <span className="line-clamp-2 block">{p.origen}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('descripcion') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 max-w-[260px]">
+          {p.descripcion
+            ? <span className="line-clamp-2 block">{p.descripcion}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('responsable') && (
+        <td className="px-3 py-3.5 text-xs text-gray-600 whitespace-nowrap max-w-[140px]">
+          {p.responsable
+            ? <span className="truncate block" title={p.responsable}>{formatResponsableDisplay(p.responsable)}</span>
+            : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('actividad') && (
+        <td className="px-3 py-3.5 whitespace-nowrap">
+          {actividadLoading ? (
+            <div className="h-3 bg-gray-100 rounded animate-pulse w-14" />
+          ) : (() => {
+            const dias = diasSinActividad(actividad[p.n])
+            if (dias === null) return <span className="text-xs text-red-500 font-medium">Sin actividad</span>
+            if (dias > 15)    return <span className="text-xs text-red-500">Hace {dias}d</span>
+            if (dias > 7)     return <span className="text-xs text-amber-600">Hace {dias}d</span>
+            return <span className="text-xs text-gray-500">{dias === 0 ? 'Hoy' : `Hace ${dias}d`}</span>
+          })()}
+        </td>
+      )}
+      {visibleCols.has('tags') && (
+        <td className="px-3 py-3.5 max-w-[220px]">
+          {(p.tags?.length ?? 0) === 0
+            ? <span className="text-xs text-gray-300">—</span>
+            : <TagChips tags={p.tags} max={3} />}
+        </td>
+      )}
+    </tr>
+  )
+})
