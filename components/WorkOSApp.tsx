@@ -295,26 +295,45 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     window.addEventListener('pointercancel', onUp)
   }
 
-  function handleUpdatePrioridad(n: number, patch: Partial<Iniciativa>) {
+  // useCallback con deps vacías: la identidad es estable entre renders (el setter
+  // de useState lo es). Clave para que las vistas memoizadas (p.ej. las tarjetas
+  // del Kanban) no re-rendericen todas cuando WorkOSApp actualiza estado.
+  const handleUpdatePrioridad = useCallback((n: number, patch: Partial<Iniciativa>) => {
     setLocalIniciativas(prev => prev.map(p => p.n === n ? { ...p, ...patch } : p))
-  }
+  }, [])
 
-  function handleDeletePrioridad(n: number) {
+  const handleDeletePrioridad = useCallback((n: number) => {
     setLocalIniciativas(prev => prev.filter(p => p.n !== n))
-  }
+  }, [])
 
-  const projectsByRegion: Record<string, Iniciativa[]> = {}
-  for (const p of localIniciativas) {
-    if (!projectsByRegion[p.region]) projectsByRegion[p.region] = []
-    projectsByRegion[p.region].push(p)
-  }
+  // Agregados por región + globales. Se recalculaban en CADA render de WorkOSApp
+  // (incluso al arrastrar el sidebar o abrir un dropdown). Ahora se memoizan por
+  // `localIniciativas` — solo se rehacen cuando cambian los datos, y estabilizan
+  // las props que bajan a ChileMap / MapaSummarySidebar.
+  const { projectsByRegion, projectCounts, globalAvgPct, globalRag } = useMemo(() => {
+    const byRegion: Record<string, Iniciativa[]> = {}
+    for (const p of localIniciativas) {
+      if (!byRegion[p.region]) byRegion[p.region] = []
+      byRegion[p.region].push(p)
+    }
+    const counts: Record<string, number> = {}
+    for (const [region, list] of Object.entries(byRegion)) counts[region] = list.length
 
-  const projectCounts: Record<string, number> = {}
-  for (const [region, list] of Object.entries(projectsByRegion)) {
-    projectCounts[region] = list.length
-  }
+    const avg = localIniciativas.length > 0
+      ? Math.round(localIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / localIniciativas.length)
+      : 0
+    const rag = {
+      rojo:  localIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
+      ambar: localIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
+      verde: localIniciativas.filter(p => p.estado_semaforo === 'verde').length,
+    }
+    return { projectsByRegion: byRegion, projectCounts: counts, globalAvgPct: avg, globalRag: rag }
+  }, [localIniciativas])
 
-  const selectedIniciativas = selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : []
+  const selectedIniciativas = useMemo(
+    () => selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : [],
+    [selectedRegion, projectsByRegion],
+  )
 
   function handleSelectRegion(regionName: string, cod: string) {
     const found = REGIONS.find(r => r.cod === cod)
@@ -325,30 +344,23 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setActiveRegionName(found.nombre)
   }
 
-  // RAG counts per region (for sidebar)
-  function ragFor(regionName: string) {
+  // RAG counts per region (for sidebar). useCallback keyed on projectsByRegion
+  // para que MapaSummarySidebar (que llama ragFor/avgPctFor por las 16 regiones)
+  // no re-renderice por identidad de función en cada render.
+  const ragFor = useCallback((regionName: string) => {
     const list = projectsByRegion[regionName] ?? []
     return {
       rojo:  list.filter(p => p.estado_semaforo === 'rojo').length,
       ambar: list.filter(p => p.estado_semaforo === 'ambar').length,
       verde: list.filter(p => p.estado_semaforo === 'verde').length,
     }
-  }
+  }, [projectsByRegion])
 
-  function avgPctFor(regionName: string): number {
+  const avgPctFor = useCallback((regionName: string): number => {
     const list = projectsByRegion[regionName] ?? []
     if (!list.length) return 0
     return Math.round(list.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / list.length)
-  }
-
-  const globalAvgPct = localIniciativas.length > 0
-    ? Math.round(localIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / localIniciativas.length)
-    : 0
-  const globalRag = {
-    rojo:  localIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
-    ambar: localIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
-    verde: localIniciativas.filter(p => p.estado_semaforo === 'verde').length,
-  }
+  }, [projectsByRegion])
 
   return (
     <UserProvider

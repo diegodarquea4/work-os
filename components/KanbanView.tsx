@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition, useRef, useEffect } from 'react'
+import { useMemo, useState, useTransition, useRef, useEffect, useCallback, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { SEMAFORO_CONFIG, prioridadColor, splitMinisterios } from '@/lib/config'
 import FilterPopover, { type FilterOption } from './FilterPopover'
@@ -62,10 +62,10 @@ type Props = {
 
 // ── EjeCard — card for eje mode ───────────────────────────────────────────────
 
-function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }: {
+const EjeCard = memo(function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }: {
   p: Iniciativa
   onSelect: (p: Iniciativa) => void
-  onToggleFoco: (n: number, next: boolean) => void
+  onToggleFoco: (n: number, id: number, next: boolean) => void
   canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
@@ -81,7 +81,7 @@ function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }: {
     >
       {canEditFoco ? (
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, p.id, !enFoco) }}
           className={`absolute top-2 right-2 p-1 rounded transition-all duration-500 ease-out ${
             enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
           }`}
@@ -124,14 +124,14 @@ function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }: {
       )}
     </button>
   )
-}
+})
 
 // ── MinistryRow — fila compacta para vista Monday por ministerio ──────────────
 
-function MinistryRow({ p, onSelect, onToggleFoco, canEditFoco }: {
+const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEditFoco }: {
   p: Iniciativa
   onSelect: (p: Iniciativa) => void
-  onToggleFoco: (n: number, next: boolean) => void
+  onToggleFoco: (n: number, id: number, next: boolean) => void
   canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
@@ -159,7 +159,7 @@ function MinistryRow({ p, onSelect, onToggleFoco, canEditFoco }: {
       {/* Flag */}
       {canEditFoco ? (
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, !enFoco) }}
+          onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, p.id, !enFoco) }}
           className={`flex-shrink-0 p-1 -m-1 rounded transition-all duration-500 ease-out ${
             enFoco ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-amber-400'
           }`}
@@ -231,7 +231,7 @@ function MinistryRow({ p, onSelect, onToggleFoco, canEditFoco }: {
       </span>
     </button>
   )
-}
+})
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -337,7 +337,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
   // Etapa 5: mutamos por id (PK estable) en vez de n. n sigue como key del
   // estado local en WorkOSApp.handleUpdatePrioridad (FK lógicas de la tabla
   // de seguimientos/documentos también apuntan a n — no se tocan).
-  async function handleToggleFoco(n: number, id: number, next: boolean) {
+  const handleToggleFoco = useCallback(async (n: number, id: number, next: boolean) => {
     onUpdatePrioridad(n, { en_foco: next })
     const { data, error } = await getSupabase()
       .from('prioridades_territoriales')
@@ -355,7 +355,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     } else {
       console.log('[KanbanView] Foco guardado:', data)
     }
-  }
+  }, [onUpdatePrioridad])
 
   // El modo "agrupado" es el único modo de la vista Gabinete: una región
   // filtrada con sub-modos por `groupBy` ('eje', 'ministerio', 'tag', 'capa').
@@ -509,7 +509,10 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
     setFilterFoco(false)
   }
 
-  const selectedSynced = selected ? (projects.find(p => p.n === selected.n) ?? selected) : null
+  const selectedSynced = useMemo(
+    () => selected ? (projects.find(p => p.n === selected.n) ?? selected) : null,
+    [selected, projects],
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -850,7 +853,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       Sin iniciativas
                     </div>
                   ) : (
-                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />)
+                    cards.map(p => <EjeCard key={p.n} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} canEditFoco={canEditFoco} />)
                   )}
                 </div>
               </div>
@@ -894,7 +897,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       </div>
                     ) : (
                       cards.map(p => (
-                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
+                        <EjeCard key={`${p.n}-${tag}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} canEditFoco={canEditFoco} />
                       ))
                     )}
                   </div>
@@ -938,7 +941,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                       </div>
                     ) : (
                       cards.map(p => (
-                        <EjeCard key={`${p.n}-${capa}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
+                        <EjeCard key={`${p.n}-${capa}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} canEditFoco={canEditFoco} />
                       ))
                     )}
                   </div>
@@ -978,7 +981,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
                     se permite scroll lateral interno en vez de cortarse. */}
                 <div className="bg-slate-50 p-3 space-y-2 overflow-x-auto">
                   {group.iniciativas.map(p => (
-                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={(n, next) => handleToggleFoco(n, p.id, next)} canEditFoco={canEditFoco} />
+                    <MinistryRow key={`${group.nombre}-${p.n}`} p={p} onSelect={setSelected} onToggleFoco={handleToggleFoco} canEditFoco={canEditFoco} />
                   ))}
                 </div>
               </details>

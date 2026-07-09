@@ -47,10 +47,19 @@ function getName(feature: Feature): string {
   return feature.properties?.Region ?? ''
 }
 
+function tooltipHtml(name: string, count: number): string {
+  return `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}<br>
+       <span style="color:#6b7280;font-weight:400">${count} iniciativas</span></div>`
+}
+
 export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, lockedRegions = [] }: Props) {
   const geoJsonRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
 
-  // Re-style all layers when selection changes
+  // Re-style all layers (y refrescar el conteo del tooltip) cuando cambia la
+  // selección, los bloqueos o los conteos. Antes esto se hacía remontando toda
+  // la capa GeoJSON vía `key={selectedCod}` (destruía y reconstruía los 16
+  // polígonos + handlers en cada click → flash visible). Ahora se re-estila
+  // in-place; la capa se monta una sola vez.
   useEffect(() => {
     if (!geoJsonRef.current) return
     geoJsonRef.current.eachLayer((layer) => {
@@ -64,8 +73,11 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(
         buildStyle(color, isSelected, isLocked)
       )
+      ;(layer as { setTooltipContent?: (c: string) => void }).setTooltipContent?.(
+        tooltipHtml(name, projectCounts[name] ?? 0)
+      )
     })
-  }, [selectedCod, lockedRegions])
+  }, [selectedCod, lockedRegions, projectCounts])
 
   function buildStyle(color: string, isSelected: boolean, isLocked: boolean): PathOptions {
     return {
@@ -104,11 +116,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
     })
 
     // Tooltip
-    layer.bindTooltip(
-      `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}<br>
-       <span style="color:#6b7280;font-weight:400">${count} iniciativas</span></div>`,
-      { sticky: true, opacity: 0.95 }
-    )
+    layer.bindTooltip(tooltipHtml(name, count), { sticky: true, opacity: 0.95 })
   }
 
   return (
@@ -127,7 +135,6 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
         attribution='&copy; <a href="https://carto.com/">CARTO</a>'
       />
       <GeoJSON
-        key={selectedCod ?? 'none'}
         data={geoData}
         onEachFeature={onEachFeature}
         ref={geoJsonRef as never}
