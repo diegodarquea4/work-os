@@ -19,8 +19,9 @@ const AttentionTray    = dynamic(() => import('./AttentionTray'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const PregoView        = dynamic(() => import('./PregoView'))
 const DesalojosView    = dynamic(() => import('./DesalojosView'))
+const MetricasView     = dynamic(() => import('./MetricasView'))
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos'
+type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas'
 
 type Props = {
   projects: Iniciativa[]
@@ -95,7 +96,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     try {
       const storedView   = localStorage.getItem('workos:view')
       const storedRegion = localStorage.getItem('workos:activeRegion')
-      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos']
+      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas']
       if (storedView && (validViews as string[]).includes(storedView)) {
         setView(storedView as View)
       }
@@ -418,6 +419,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               PREGO
             </button>
             )}
+            <button
+              onClick={() => setView('metricas')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'metricas' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M1 9l3-3 2 2 3-4 2 2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M1 11h10" strokeLinecap="round"/>
+              </svg>
+              Métricas
+            </button>
             {profile?.role === 'admin' && (
               <button
                 onClick={() => setView('usuarios')}
@@ -524,6 +537,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             projects={visibleIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
           />
+        </div>
+      )}
+
+      {/* Métricas view */}
+      {view === 'metricas' && (
+        <div className="flex-1 overflow-hidden">
+          <MetricasView />
         </div>
       )}
 

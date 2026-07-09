@@ -138,3 +138,35 @@ export function useColegaSeguridadRegion(regionCod: string) {
 
   return { history, loading }
 }
+
+// ── Hook: lista de semanas disponibles ────────────────────────
+export function useColegaSeguridadSemanas() {
+  const [semanas, setSemanas] = useState<{ id_semana: number; nombre: string }[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const { data } = await getSupabaseColega()
+          .from('registros_leystop')
+          .select('id_semana, semana')
+          .order('id_semana', { ascending: false })
+          .limit(500)
+        if (cancelled || !data) return
+        const seen = new Set<number>()
+        const result: { id_semana: number; nombre: string }[] = []
+        for (const row of data as { id_semana: number; semana: string }[]) {
+          if (!seen.has(row.id_semana)) {
+            seen.add(row.id_semana)
+            result.push({ id_semana: row.id_semana, nombre: row.semana })
+          }
+        }
+        if (!cancelled) setSemanas(result)
+      } catch { /* silent */ }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  return { semanas }
+}
