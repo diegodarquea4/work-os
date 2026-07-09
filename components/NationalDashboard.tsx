@@ -5,11 +5,12 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import * as XLSX from 'xlsx'
 import { prioridadColor } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
-import { downloadTemplate as downloadTemplateExcel, buildPrefilledWorkbook, downloadPrefilled } from '@/lib/templateExcel'
-import { parseImportWorkbook, buildImportPayload, type ParsedRow } from '@/lib/importParser'
+// xlsx (~424 KB) + los módulos que lo importan (templateExcel/importParser) se
+// cargan DINÁMICAMENTE dentro de los handlers (export/import), no en el bundle
+// del Dashboard — la mayoría de los usuarios nunca exporta ni importa.
+import type { ParsedRow } from '@/lib/importParser'
 import { getSupabase } from '@/lib/supabase'
 import type { RegionEje } from '@/lib/types'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
@@ -454,7 +455,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // El generador del template y el parser del Excel viven ahora en
   // lib/templateExcel.ts y lib/importParser.ts (ver razones en sus comentarios).
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const { downloadTemplate: downloadTemplateExcel } = await import('@/lib/templateExcel')
     downloadTemplateExcel()
   }
 
@@ -481,6 +483,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         arr.push(e)
         regionEjesByCod.set(e.region_cod, arr)
       }
+      const { parseImportWorkbook } = await import('@/lib/importParser')
       const { rows, fileErrors, sheetName } = parseImportWorkbook(arrayBuffer, projects, regionEjesByCod)
       setImportFileName(`${file.name}  ·  Hoja: ${sheetName}`)
       setImportParseErrors(fileErrors)
@@ -582,6 +585,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         .in('region_cod', selectedCods)
       const regionEjes = (ejesData ?? []) as RegionEje[]
 
+      const { buildPrefilledWorkbook, downloadPrefilled } = await import('@/lib/templateExcel')
       // Single región: usamos downloadPrefilled para que el filename + el
       // slugify queden idénticos a Mi Región (espejo total). Multi-región:
       // construimos el wb y le ponemos un filename agregado.
@@ -589,6 +593,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         const regionName = Array.from(exportRegions)[0]
         downloadPrefilled(regionName, toExport, regionEjes)
       } else {
+        const XLSX = await import('xlsx')
         const wb = buildPrefilledWorkbook(toExport, regionEjes)
         const fecha = new Date().toISOString().split('T')[0]
         XLSX.writeFile(wb, `iniciativas-${exportRegions.size}-regiones-${fecha}.xlsx`)

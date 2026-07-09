@@ -8,7 +8,8 @@ import type {
 import { TIPOLOGIA_CFG, getCapaColor, getRoles, type RolCfg } from '@/lib/desalojos'
 import DesalojoCapaSelector from './DesalojoCapaSelector'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
-import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty } from './RichTextView'
 
 /**
  * Tab Responsables: una ficha por rol vigente de la tipología de la capa.

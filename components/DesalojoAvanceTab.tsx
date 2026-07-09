@@ -23,7 +23,8 @@ import {
 import DesalojoCapaSelector from './DesalojoCapaSelector'
 import DesalojoFaseCard from './DesalojoFaseCard'
 import DesalojoFaseStepper from './DesalojoFaseStepper'
-import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty } from './RichTextView'
 import DesalojoTipologiaChip from './DesalojoTipologiaChip'
 import DesalojoVinculoMinvu from './DesalojoVinculoMinvu'
 

@@ -9,7 +9,8 @@ import 'leaflet-draw'
 import type { DesalojoCapa, DesalojoPlanificacion, DesalojoPoligono } from '@/lib/types'
 import { parseWktPolygon } from '@/lib/wkt'
 import { estadoEventoPlanificacion } from '@/lib/desalojos'
-import RichTextEditor, { RichTextView, isHtmlEmpty, plainTextLength } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty, plainTextLength } from './RichTextView'
 
 /**
  * Panel lateral derecho con vista satelital del terreno del caso y

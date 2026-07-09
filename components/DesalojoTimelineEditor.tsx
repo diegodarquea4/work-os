@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import type { DesalojoCapa, DesalojoPlanificacion } from '@/lib/types'
-import RichTextEditor, { isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { isHtmlEmpty } from './RichTextView'
 
 /**
  * Form inline para agregar un evento al timeline de Planificación.

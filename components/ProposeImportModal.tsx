@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { downloadPrefilled } from '@/lib/templateExcel'
-import { parseImportWorkbook, type ParsedRow } from '@/lib/importParser'
+// templateExcel/importParser arrastran xlsx (~424 KB) — se importan dinámicamente
+// dentro de los handlers para no cargarlos al abrir Mi Región.
+import type { ParsedRow } from '@/lib/importParser'
 import { REGIONS } from '@/lib/regions'
 import ImportErrorReport from './ImportErrorReport'
 import type { Iniciativa } from '@/lib/projects'
@@ -100,6 +101,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
       if (cod && regionEjes && regionEjes.length > 0) {
         ejesMap.set(cod, regionEjes)
       }
+      const { parseImportWorkbook } = await import('@/lib/importParser')
       const parsed = parseImportWorkbook(buffer, iniciativas ?? [], ejesMap)
       const rowErrors = parsed.rows.flatMap(r => r.errors.map(e => `#${r.n}: ${e}`))
       const inserts    = parsed.rows.filter(r => r.errors.length === 0 && r.isNew).length
@@ -204,7 +206,10 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
               Sube un Excel con los cambios que quieres proponer.{' '}
               <button
                 type="button"
-                onClick={() => downloadPrefilled(regionName, iniciativas ?? [], regionEjes)}
+                onClick={async () => {
+                  const { downloadPrefilled } = await import('@/lib/templateExcel')
+                  downloadPrefilled(regionName, iniciativas ?? [], regionEjes)
+                }}
                 className="text-blue-600 hover:text-blue-800 font-medium underline"
               >
                 Descarga las iniciativas actuales de {regionName}

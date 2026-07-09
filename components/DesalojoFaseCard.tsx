@@ -17,7 +17,8 @@ import { formatResponsableDisplay } from '@/lib/responsable'
 import DesalojoChecklistFase from './DesalojoChecklistFase'
 import DesalojoMatrizJuridica from './DesalojoMatrizJuridica'
 import DesalojoProtocoloFinanciamiento from './DesalojoProtocoloFinanciamiento'
-import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty } from './RichTextView'
 
 /**
  * Card de una fase. Es la pieza central del tab Avance v3 — reemplaza al

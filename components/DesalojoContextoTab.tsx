@@ -8,7 +8,8 @@ import type {
   DesalojoFaseEstado,
 } from '@/lib/types'
 import DesalojoCapasMiniTable from './DesalojoCapasMiniTable'
-import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty } from './RichTextView'
 
 /**
  * Tab Contexto: lo que pertenece al CASO (no a una capa específica).

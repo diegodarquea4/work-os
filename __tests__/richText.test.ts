@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isHtmlEmpty, normalizeRichText, plainTextLength } from '@/components/RichTextEditor'
+import { isHtmlEmpty, normalizeRichText, plainTextLength } from '@/components/RichTextView'
 
 /**
  * Tests para los helpers del editor rich text.

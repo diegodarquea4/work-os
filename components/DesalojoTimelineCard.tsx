@@ -7,7 +7,8 @@ import type {
   DesalojoPlanificacionEstado,
 } from '@/lib/types'
 import { estadoEventoPlanificacion } from '@/lib/desalojos'
-import RichTextEditor, { RichTextView, isHtmlEmpty } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { RichTextView, isHtmlEmpty } from './RichTextView'
 
 /**
  * Card individual del timeline de Planificación.

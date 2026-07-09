@@ -14,7 +14,8 @@ import {
   prevFaseAplicable,
 } from '@/lib/desalojos'
 import { SEMAFORO_CONFIG } from '@/lib/config'
-import RichTextEditor, { plainTextLength } from './RichTextEditor'
+import RichTextEditor from './RichTextEditorLazy'
+import { plainTextLength } from './RichTextView'
 
 /**
  * Stepper horizontal bidireccional. Cada fase es un círculo con su sigla,
