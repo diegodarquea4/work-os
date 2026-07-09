@@ -52,40 +52,67 @@ export function mapRow(row: Prioridad): Iniciativa {
   }
 }
 
-/** All iniciativas — used for the initial page load. Paginates to bypass Supabase's 1000-row default. */
+// Proyección explícita: exactamente las columnas que consume mapRow. Evita
+// traer `select('*')` (columnas no usadas por el panel) en el SELECT de ~6.833
+// filas del load inicial. Si mapRow agrega un campo, agregarlo acá también.
+const PRIORIDAD_COLS =
+  'id,n,region,cod,capital,zona,eje,eje_id,eje_gobierno,nombre,descripcion,ministerio,' +
+  'prioridad,etapa_actual,estado_termino_gobierno,proximo_hito,fecha_proximo_hito,' +
+  'fuente_financiamiento,codigo_bip,inversion_mm,comuna,rat,estado_semaforo,pct_avance,' +
+  'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa'
+
+/**
+ * All iniciativas — used for the initial page load.
+ *
+ * Supabase capea las respuestas en 1000 filas (PostgREST max-rows), así que hay
+ * que paginar. Antes se hacía en un `while` SERIAL (cada página esperaba a la
+ * anterior → 7 viajes en serie para 6.833 filas). Ahora: un `count` head barato
+ * para saber cuántas páginas hay, y todas las páginas se disparan EN PARALELO
+ * (Promise.all). El wall-clock pasa de "suma de 7 viajes" a "1 count + el viaje
+ * más lento". Más proyección de columnas (PRIORIDAD_COLS) para achicar el payload.
+ */
 export async function getAllIniciativas(): Promise<Iniciativa[]> {
+  const db = getSupabase()
   const PAGE = 1000
-  const all: Prioridad[] = []
-  let from = 0
 
-  while (true) {
-    const { data, error } = await getSupabase()
-      .from('prioridades_territoriales')
-      .select('*')
-      .order('n', { ascending: true })
-      .range(from, from + PAGE - 1)
+  const { count, error: cErr } = await db
+    .from('prioridades_territoriales')
+    .select('id', { count: 'exact', head: true })
+  if (cErr) throw new Error(`DB error (iniciativas count): ${cErr.message}`)
 
-    if (error) throw new Error(`DB error (iniciativas): ${error.message}`)
-    if (!data || data.length === 0) break
-    all.push(...(data as Prioridad[]))
-    if (data.length < PAGE) break
-    from += PAGE
-  }
+  const total = count ?? 0
+  if (total === 0) return []
 
-  return all.map(mapRow)
+  const pages = Math.ceil(total / PAGE)
+  const results = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      db
+        .from('prioridades_territoriales')
+        .select(PRIORIDAD_COLS)
+        .order('n', { ascending: true })
+        .range(i * PAGE, i * PAGE + PAGE - 1)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`DB error (iniciativas page ${i}): ${error.message}`)
+          return (data ?? []) as unknown as Prioridad[]
+        }),
+    ),
+  )
+
+  // Promise.all preserva el orden del array → las páginas quedan en orden de `n`.
+  return results.flat().map(mapRow)
 }
 
 /** Iniciativas for one region — used by the PDF minuta route. */
 export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
   const { data, error } = await getSupabase()
     .from('prioridades_territoriales')
-    .select('*')
+    .select(PRIORIDAD_COLS)
     .eq('cod', cod)
     .order('n', { ascending: true })
 
   if (error) throw new Error(`DB error (iniciativas by cod): ${error.message}`)
 
-  return (data as Prioridad[]).map(mapRow)
+  return (data as unknown as Prioridad[]).map(mapRow)
 }
 
 // ---------------------------------------------------------------------------

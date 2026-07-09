@@ -34,6 +34,26 @@ export function useV2Indicadores(
   const [series, setSeries] = useState<Record<string, V2IndicadorValor[]>>({})
   const [loading, setLoading] = useState(true)
 
+  // Datos INDEPENDIENTES de la región: valores nacionales (region_id=0) y de
+  // TODAS las regiones (para el ranking). No cambian al cambiar de región, así
+  // que se traen UNA sola vez por montaje — antes se re-descargaban ~1.047 filas
+  // en cada cambio de región.
+  useEffect(() => {
+    let cancelled = false
+    const sb = getSupabase()
+    Promise.all([
+      sb.from('v2_indicadores_ultimo').select('*').eq('region_id', 0),
+      sb.from('v2_indicadores_ultimo').select('*').gt('region_id', 0),
+    ]).then(([nacRes, allRes]) => {
+      if (cancelled) return
+      setNacionalUltimos((nacRes.data ?? []) as V2IndicadorUltimo[])
+      setAllRegionsUltimos((allRes.data ?? []) as V2IndicadorUltimo[])
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Datos DE LA REGIÓN seleccionada: últimos valores + series pedidas. Se
+  // refetchan al cambiar de región o de la lista de series.
   useEffect(() => {
     if (!regionCod) return
 
@@ -48,11 +68,7 @@ export function useV2Indicadores(
     const fetches = Promise.all([
       // 1. Latest values for this region
       sb.from('v2_indicadores_ultimo').select('*').eq('region_id', regionId),
-      // 2. Latest national values
-      sb.from('v2_indicadores_ultimo').select('*').eq('region_id', 0),
-      // 3. All regions (for ranking)
-      sb.from('v2_indicadores_ultimo').select('*').gt('region_id', 0),
-      // 4. Time-series for requested indicators
+      // 2. Time-series for requested indicators
       ...(seriesCodigos.length > 0
         ? [sb.from('v2_indicadores_valores')
             .select('*')
@@ -66,11 +82,9 @@ export function useV2Indicadores(
     fetches.then((results) => {
       if (cancelled) return
 
-      const [regionRes, nacRes, allRes, ...seriesRes] = results
+      const [regionRes, ...seriesRes] = results
 
       setUltimos((regionRes.data ?? []) as V2IndicadorUltimo[])
-      setNacionalUltimos((nacRes.data ?? []) as V2IndicadorUltimo[])
-      setAllRegionsUltimos((allRes.data ?? []) as V2IndicadorUltimo[])
 
       if (seriesRes.length > 0 && seriesRes[0].data) {
         const grouped: Record<string, V2IndicadorValor[]> = {}
