@@ -42,11 +42,13 @@ type Props = {
   onVerEnMapa?: (etapaId: number) => void
   /** Conteo de polígonos por Etapa, para el badge "N en mapa". */
   polyCountByEtapa?: Map<number, number>
+  /** Granularidad de fecha de la vista ('dia' | 'semana'). */
+  granularidad?: 'dia' | 'semana'
 }
 
 export default function DesalojoTimelineList({
   eventos, hitosByParent, capas, onCreate, onPatch, onDelete, flashId,
-  focusedEventId, onSelectFocus, onVerEnMapa, polyCountByEtapa,
+  focusedEventId, onSelectFocus, onVerEnMapa, polyCountByEtapa, granularidad = 'dia',
 }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const capasById = new Map(capas.map(c => [c.id, c] as const))
@@ -103,6 +105,7 @@ export default function DesalojoTimelineList({
               flash={flashId === ev.id}
               onVerEnMapa={onVerEnMapa}
               poligonoCount={polyCountByEtapa?.get(ev.id) ?? 0}
+              granularidad={granularidad}
             />
           ))}
         </ol>
