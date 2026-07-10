@@ -265,12 +265,13 @@ function ResumenModule() {
     empPeriodosFilt.map(p => {
       const pi = periodos.indexOf(p)
       return {
-        label: fmtEmpPer(p),
+        label:  fmtEmpPer(p),
         tasa:   dEmp?.tasa[pi]    ?? null,
         tasa_tm:dEmp?.tasa_tm[pi] ?? null,
+        nacTm:  nac?.tasa_tm[pi]  ?? null,
       }
     }),
-    [empPeriodosFilt, periodos, dEmp]
+    [empPeriodosFilt, periodos, dEmp, nac]
   )
 
   return (
@@ -309,23 +310,16 @@ function ResumenModule() {
               ? `${semNum.replace('SEMANA ', 'Semana ')} ${semYear} (del ${fmtFechaISO(refRow?.fecha_desde_iso)} al ${fmtFechaISO(refRow?.fecha_hasta_iso)})`
               : ''
 
-            // Top 3 delitos
-            const top3: { nombre: string; casos: number }[] = []
-            if (isNac) {
+            // Top 5 delitos — desde delRows año a la fecha (conteos reales)
+            const top5Seg: { nombre: string; casos: number }[] = []
+            if (delRows.length > 0) {
+              const base5 = isNac ? delRows : delRows.filter(r => r.nombre_region === regionNombre)
               const cnt: Record<string, number> = {}
-              segRows.forEach(r => {
-                const total = r.casos_anno_fecha ?? 0
-                ;([[r.mayor_registro_1, r.n_1], [r.mayor_registro_2, r.n_2], [r.mayor_registro_3, r.n_3]] as [string | null, number | null][])
-                  .forEach(([nom, pct]) => { if (nom && pct != null) cnt[nom] = (cnt[nom] ?? 0) + Math.round(total * pct / 100) })
-              })
-              Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 3).forEach(([nombre, casos]) => top3.push({ nombre, casos }))
-            } else if (segRow) {
-              const total = segRow.casos_anno_fecha ?? 0
-              ;([[segRow.mayor_registro_1, segRow.n_1], [segRow.mayor_registro_2, segRow.n_2], [segRow.mayor_registro_3, segRow.n_3]] as [string | null, number | null][])
-                .forEach(([nom, pct]) => { if (nom && pct != null) top3.push({ nombre: nom, casos: Math.round(total * pct / 100) }) })
+              base5.forEach(r => { if (r.nombre_delito) cnt[r.nombre_delito] = (cnt[r.nombre_delito] ?? 0) + (r.anno_fecha ?? 0) })
+              Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([nombre, casos]) => top5Seg.push({ nombre, casos }))
             }
 
-            const rankEmoji = ['🥇', '🥈', '🥉']
+            const rankEmoji = ['🥇', '🥈', '🥉', '4°', '5°']
 
             return (
               <>
@@ -333,22 +327,21 @@ function ResumenModule() {
                   <h3 className="text-sm font-bold text-gray-800">🛡 Seguridad Pública</h3>
                   {semLabel && <span className="text-xs text-gray-400">{semLabel}</span>}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <KpiCard label="Delitos registrados LeyStop — año a la fecha" value={fmtN(totalCasos)} sub={isNac ? 'Total nacional' : regionNombre} color="#dc2626" />
                   <KpiCard label="Variación vs año anterior" value={fmtPct(varProm)}
                     color={varProm != null && varProm < 0 ? '#16a34a' : '#dc2626'}
                     sub="total delitos año a la fecha" />
                   <KpiCard label="Tasa delitos / 100k hab." value={tasaProm != null ? fmtN(tasaProm, 1) : '—'} sub="LeyStop año a la fecha" color="#dc2626" />
-                  <KpiCard label="Delito más común" value={toSentenceCase(delitoTop)} sub="mayor n° de registros" color="#d97706" />
                 </div>
 
-                {top3.length > 0 && (
+                {top5Seg.length > 0 && (
                   <div className="mt-4">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2">Top 3 delitos más frecuentes — año a la fecha</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      {top3.map((d, i) => (
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2">Top 5 delitos más frecuentes — año a la fecha</p>
+                    <div className="grid grid-cols-5 gap-3">
+                      {top5Seg.map((d, i) => (
                         <div key={i} className="rounded-lg bg-amber-50 border border-amber-100 p-3">
-                          <p className="text-[10px] font-bold text-amber-700 mb-1">{rankEmoji[i]} N°{i + 1}</p>
+                          <p className="text-[10px] font-bold text-amber-700 mb-1">{rankEmoji[i]}</p>
                           <p className="text-xs font-bold text-gray-800 leading-snug">{toSentenceCase(d.nombre)}</p>
                           <p className="text-[11px] text-gray-500 mt-1">{fmtN(d.casos)} casos</p>
                         </div>
@@ -421,14 +414,14 @@ function ResumenModule() {
               )
               return (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <KpiCard label="DMCS año a la fecha"        value={fmtN(totalAnno)} sub={isNac ? 'Total nacional' : regionNombre} color="#500707" />
-                    <KpiCard label="Variación vs año anterior"  value={fmtPct(varDmcs)} sub="año a la fecha" color="#7f1d1d" />
-                    <KpiCard label="Tasa DMCS / 100k hab."      value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} sub={tasaDmcsRanking ?? (isNac ? 'Nacional' : undefined)} color="#991b1b" />
-                    <KpiCard label="% del total de delitos"     value={pctDmcs.toFixed(1) + '%'} sub="son DMCS (año a la fecha)" color="#b91c1c" />
-                  </div>
-                  {barData.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {barData.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-5 items-start">
+                      <div className="grid grid-cols-2 gap-3">
+                        <KpiCard label="DMCS año a la fecha"       value={fmtN(totalAnno)} sub={isNac ? 'Total nacional' : regionNombre} color="#500707" />
+                        <KpiCard label="Variación vs año anterior" value={fmtPct(varDmcs)} sub="año a la fecha" color="#7f1d1d" />
+                        <KpiCard label="Tasa DMCS / 100k hab."     value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} sub={tasaDmcsRanking ?? (isNac ? 'Nacional' : undefined)} color="#991b1b" />
+                        <KpiCard label="% del total de delitos"    value={pctDmcs.toFixed(1) + '%'} sub="son DMCS (año a la fecha)" color="#b91c1c" />
+                      </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">DMCS por tipo — año a la fecha</p>
                         <ResponsiveContainer width="100%" height={260}>
@@ -443,19 +436,13 @@ function ResumenModule() {
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">Distribución DMCS</p>
-                        <ResponsiveContainer width="100%" height={260}>
-                          <PieChart>
-                            <Pie data={barData} dataKey="anno" nameKey="nombre" cx="50%" cy="50%"
-                              innerRadius={55} outerRadius={95} paddingAngle={2}>
-                              {barData.map((_, i) => <Cell key={i} fill={DMCS_COLORES[i % DMCS_COLORES.length]} />)}
-                            </Pie>
-                            <Tooltip formatter={(v, name) => [fmtN(v as number), name as string]} />
-                            <Legend iconSize={8} wrapperStyle={{ fontSize: 9 }} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <KpiCard label="DMCS año a la fecha"       value={fmtN(totalAnno)} sub={isNac ? 'Total nacional' : regionNombre} color="#500707" />
+                      <KpiCard label="Variación vs año anterior" value={fmtPct(varDmcs)} sub="año a la fecha" color="#7f1d1d" />
+                      <KpiCard label="Tasa DMCS / 100k hab."     value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} sub={tasaDmcsRanking ?? (isNac ? 'Nacional' : undefined)} color="#991b1b" />
+                      <KpiCard label="% del total de delitos"    value={pctDmcs.toFixed(1) + '%'} sub="son DMCS (año a la fecha)" color="#b91c1c" />
                     </div>
                   )}
                 </>
@@ -513,6 +500,18 @@ function ResumenModule() {
             const pctNac = !isNac && pibLast != null && nacTotal > 0
               ? pibLast / nacTotal * 100 : null
 
+            // Ranking PIB entre las 16 regiones (mayor a menor)
+            const pibRankingNac = !isNac && lastYear && pibLast != null
+              ? (() => {
+                  const vals = Object.entries(nacVals)
+                    .map(([, rv]) => rv[lastYear] ?? 0)
+                    .filter(v => v > 0)
+                    .sort((a, b) => b - a)
+                  const pos = vals.findIndex(v => Math.abs(v - pibLast!) < 0.01) + 1
+                  return pos > 0 ? pos : null
+                })()
+              : null
+
             const evoData = añosFilt.map(y => ({ año: y, pib: pibByYear[y] ?? null }))
 
             // Top 5 sectores productivos (solo para región)
@@ -560,7 +559,7 @@ function ResumenModule() {
                 <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-5">
                   {/* Gráfico evolución */}
                   <div>
-                    <p className="text-[11px] text-gray-500 mb-2">Evolución PIB (vol. encadenado, base 2018)</p>
+                    <p className="text-[11px] text-gray-500 mb-2">Evolución PIB</p>
                     {evoData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={230}>
                         <AreaChart data={evoData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -630,7 +629,7 @@ function ResumenModule() {
                       <KpiCard
                         label="% PIB nacional"
                         value={pctNac != null ? pctNac.toFixed(1) + '%' : (isNac ? '100%' : '—')}
-                        sub={`participación ${lastYear}`}
+                        sub={pibRankingNac ? `${pibRankingNac}° de 16 regiones · ${lastYear}` : `participación ${lastYear}`}
                         color="#dc2626"
                       />
                     </div>
@@ -672,6 +671,7 @@ function ResumenModule() {
                     )}
                   </div>
                 </div>
+                <p className="text-[10px] text-gray-400 mt-1">* PIB real encadenado, valorado a precios del año base 2018. Fuente: Banco Central de Chile.</p>
               </>
             )
           })()}
@@ -696,37 +696,9 @@ function ResumenModule() {
           </div>
           {empL ? <Spinner /> : (
             <>
-              {(() => {
-                const empColor = isNac ? '#dc2626' : '#16a34a'
-                return (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                    <KpiCard label="Tasa trim. móvil"
-                      value={fmtN(empTasaTm, 2) + '%'}
-                      sub={isNac ? 'Nacional' : regionNombre}
-                      color={empColor} />
-                    {!isNac && <KpiCard label="Tasa desoc. 🇨🇱 nacional" value={fmtN(nacTasaRes, 2) + '%'} sub={fmtEmpPer(empUltPer)} color="#dc2626" />}
-                    {!isNac && <KpiCard label="Tasa trim. móvil 🇨🇱 nac." value={fmtN(nacTasaTmRes, 2) + '%'} sub={fmtEmpPer(empUltPer)} color="#dc2626" />}
-                    {isNac && <KpiCard label="Tasa desocupación nac." value={fmtN(empTasa, 2) + '%'} sub={fmtEmpPer(empUltPer)} color={empColor} />}
-                    <KpiCard label="Var. anual trim. móvil (pp)"
-                      value={varAnualTm != null ? (varAnualTm > 0 ? '+' : '') + varAnualTm.toFixed(1) : '—'}
-                      sub="vs mismo mes año ant."
-                      color={empColor}
-                      valueColor={varAnualTm == null ? undefined : varAnualTm > 0 ? '#dc2626' : '#16a34a'} />
-                    <KpiCard label="Var. anual tasa simple (pp)"
-                      value={varAnualTasa != null ? (varAnualTasa > 0 ? '+' : '') + varAnualTasa.toFixed(1) : '—'}
-                      sub="vs mismo mes año ant."
-                      color={empColor}
-                      valueColor={varAnualTasa == null ? undefined : varAnualTasa > 0 ? '#dc2626' : '#16a34a'} />
-                    <KpiCard label="Fuerza de trabajo (miles)"
-                      value={ftProm != null ? fmtN(ftProm) : '—'}
-                      sub="prom. últ. 3 meses"
-                      color={empColor} />
-                  </div>
-                )
-              })()}
               {empEvoData.length > 0 && (
                 <div>
-                  <h4 className="text-[11px] font-semibold text-gray-500 mb-2">Desocupación: tasa simple vs. trimestre móvil</h4>
+                  <h4 className="text-[11px] font-semibold text-gray-500 mb-2">Desocupación</h4>
                   <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={empEvoData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                       <defs>
@@ -743,23 +715,70 @@ function ResumenModule() {
                         tick={{ fontSize: 9, fill: '#9ca3af' }}
                         tickFormatter={v => v + '%'}
                         axisLine={false} tickLine={false}
-                        domain={[
-                          (d: number) => niceAxisMin(d),
-                          (d: number) => niceAxisMax(d),
-                        ]}
+                        domain={['auto', 'auto']}
                       />
                       <Tooltip
                         contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}
-                        formatter={(v, name) => [fmtN(v as number, 2) + '%', name === 'tasa' ? 'Tasa desocupación' : 'Tasa trim. móvil']}
+                        formatter={(v, name) => [fmtN(v as number, 2) + '%', name === 'tasa' ? 'Tasa desoc.' : name === 'tasa_tm' ? 'Trim. móvil' : 'Trim. móvil 🇨🇱']}
                       />
-                      <Legend formatter={v => v === 'tasa' ? 'Tasa desocupación (%)' : 'Tasa trimestre móvil (%)'} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                      <Legend formatter={v => v === 'tasa' ? 'Tasa desocupación (%)' : v === 'tasa_tm' ? 'Trim. móvil (%)' : 'Trim. móvil nacional (%)'} iconSize={10} wrapperStyle={{ fontSize: 10 }} />
                       <Area type="monotone" dataKey="tasa" stroke="#2563eb" strokeWidth={2}
                         fill="url(#empGrad)" fillOpacity={1}
                         dot={{ r: 2, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls />
                       <Line type="monotone" dataKey="tasa_tm" stroke="#059669" strokeWidth={2}
                         dot={{ r: 2, fill: '#059669', strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls />
+                      {!isNac && (
+                        <Line type="monotone" dataKey="nacTm" stroke="#dc2626" strokeWidth={1.5}
+                          strokeDasharray="4 3"
+                          dot={false} activeDot={{ r: 3 }} connectNulls />
+                      )}
                     </AreaChart>
                   </ResponsiveContainer>
+                  {(() => {
+                    const empColor = isNac ? '#dc2626' : '#16a34a'
+                    const allRegTm = !isNac ? Object.entries(empDatos)
+                      .filter(([k]) => k !== '__NACIONAL__')
+                      .map(([k, v]) => ({ nombre: k, tm: v.tasa_tm[ultIdx] ?? null }))
+                      .filter((v): v is { nombre: string; tm: number } => v.tm != null)
+                      .sort((a, b) => a.tm - b.tm) : []
+                    const rank = !isNac && empTasaTm != null ? allRegTm.findIndex(v => v.nombre === regionNombre) + 1 : 0
+                    const varVsNac = !isNac && empTasaTm != null && nacTasaTmRes != null ? empTasaTm - nacTasaTmRes : null
+                    return (
+                      <>
+                        <div className={`grid gap-3 mt-3 ${isNac ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+                          <KpiCard label="Var. anual trim. móvil (pp)"
+                            value={varAnualTm != null ? (varAnualTm > 0 ? '+' : '') + varAnualTm.toFixed(1) : '—'}
+                            sub="vs mismo mes año ant."
+                            color={empColor}
+                            valueColor={varAnualTm == null ? undefined : varAnualTm > 0 ? '#dc2626' : '#16a34a'} />
+                          <KpiCard label="Var. anual tasa simple (pp)"
+                            value={varAnualTasa != null ? (varAnualTasa > 0 ? '+' : '') + varAnualTasa.toFixed(1) : '—'}
+                            sub="vs mismo mes año ant."
+                            color={empColor}
+                            valueColor={varAnualTasa == null ? undefined : varAnualTasa > 0 ? '#dc2626' : '#16a34a'} />
+                          <KpiCard label="Fuerza de trabajo (miles)"
+                            value={ftProm != null ? fmtN(ftProm) : '—'}
+                            sub="prom. últ. 3 meses"
+                            color={empColor} />
+                          {!isNac && rank > 0 && (
+                            <KpiCard label="Ranking desocupación*"
+                              value={`${rank}° de ${allRegTm.length}`}
+                              sub="trim. móvil"
+                              color={rank <= 5 ? '#16a34a' : rank >= 12 ? '#dc2626' : '#6b7280'}
+                              valueColor={rank <= 5 ? '#16a34a' : rank >= 12 ? '#dc2626' : undefined} />
+                          )}
+                          {!isNac && varVsNac != null && (
+                            <KpiCard label="Vs. trim. móvil nacional"
+                              value={(varVsNac > 0 ? '+' : '') + varVsNac.toFixed(2) + ' pp'}
+                              sub="diferencia en puntos porcentuales"
+                              color={varVsNac > 0 ? '#dc2626' : '#16a34a'}
+                              valueColor={varVsNac > 0 ? '#dc2626' : '#16a34a'} />
+                          )}
+                        </div>
+                        {!isNac && <p className="text-[10px] text-gray-400 mt-1">* Ranking sobre las 16 regiones disponibles; 1° = menor desocupación.</p>}
+                      </>
+                    )
+                  })()}
                 </div>
               )}
             </>
@@ -1215,15 +1234,14 @@ function SeguridadModule() {
               </Filtros>
               {semLabel && <p className="text-[11px] text-gray-400">Semana: <strong>{semLabel}</strong> · {dmcsRegion || 'Nacional'}</p>}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <KpiCard label="DMCS año a la fecha"    value={fmtN(totalAnno)} color="#500707" />
-                <KpiCard label="Var. vs año anterior"   value={fmtPct(varDmcs)} color="#7f1d1d" />
-                <KpiCard label="Tasa DMCS / 100k hab."  value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} color="#991b1b" />
-                <KpiCard label="% del total de delitos" value={pctDmcs.toFixed(1) + '%'} color="#b91c1c" />
-              </div>
-
-              {barData.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {barData.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-5 items-start">
+                  <div className="grid grid-cols-2 gap-3">
+                    <KpiCard label="DMCS año a la fecha"    value={fmtN(totalAnno)} color="#500707" />
+                    <KpiCard label="Var. vs año anterior"   value={fmtPct(varDmcs)} color="#7f1d1d" />
+                    <KpiCard label="Tasa DMCS / 100k hab."  value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} color="#991b1b" />
+                    <KpiCard label="% del total de delitos" value={pctDmcs.toFixed(1) + '%'} color="#b91c1c" />
+                  </div>
                   <div className="bg-white rounded-xl shadow-sm p-4">
                     <h4 className="text-xs font-bold text-gray-700 mb-3">DMCS por tipo — año a la fecha</h4>
                     <ResponsiveContainer width="100%" height={300}>
@@ -1238,19 +1256,13 @@ function SeguridadModule() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm p-4">
-                    <h4 className="text-xs font-bold text-gray-700 mb-3">Distribución DMCS</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie data={barData} dataKey="anno" nameKey="nombre" cx="50%" cy="50%"
-                          innerRadius={60} outerRadius={100} paddingAngle={2}>
-                          {barData.map((_, i) => <Cell key={i} fill={DMCS_COLORES[i % DMCS_COLORES.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v, name) => [fmtN(v as number), name as string]} />
-                        <Legend iconSize={8} wrapperStyle={{ fontSize: 9 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <KpiCard label="DMCS año a la fecha"    value={fmtN(totalAnno)} color="#500707" />
+                  <KpiCard label="Var. vs año anterior"   value={fmtPct(varDmcs)} color="#7f1d1d" />
+                  <KpiCard label="Tasa DMCS / 100k hab."  value={tasaDmcs != null ? fmtN(tasaDmcs, 1) : '—'} color="#991b1b" />
+                  <KpiCard label="% del total de delitos" value={pctDmcs.toFixed(1) + '%'} color="#b91c1c" />
                 </div>
               )}
 
