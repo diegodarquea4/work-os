@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
 import { useCurrentUserEmail } from '@/lib/context/UserContext'
 import {
-  SECCIONES, BLOQUES, ITEMS, ID2ITEM,
+  SECCIONES, BLOQUES, ITEMS, ID2ITEM, STATUS_ITEM,
   estadoDe, colorBloque, respuestaVacia,
   ESTADO_LABEL, ESTADO_PILL, CELDA_PILL,
   type Item, type Bloque, type Respuesta, type Estado,
@@ -54,6 +54,7 @@ function buildActaHtml(regionNombre: string, resp: Record<string, Respuesta>): s
   const fecha = new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' })
   const counts: Record<Estado | 'sin', number> = { listo: 0, parcial: 0, nolisto: 0, sin: 0 }
   for (const it of ITEMS) counts[estadoDe(resp[it.id], it) ?? 'sin']++
+  const statusTexto = (resp[STATUS_ITEM.id]?.comentarios?.[0]?.texto ?? '').trim()
 
   const pill = (k: Estado | 'sin') =>
     `<span class="pill" style="background:${ACTA_COLORS[k].bg};color:${ACTA_COLORS[k].fg}">${ACTA_COLORS[k].lbl}: ${counts[k]}</span>`
@@ -74,7 +75,7 @@ function buildActaHtml(regionNombre: string, resp: Record<string, Respuesta>): s
         <div class="rbody">
           <b>${esc(it.t)}</b>${checks.length ? ` <span class="mini">(${done}/${checks.length} cumplidos)</span>` : ''}
           ${checks.length ? `<div class="checks">${checks.map((t, k) => `<div class="ck${r?.checks?.[k] ? ' on' : ''}">${r?.checks?.[k] ? '☑' : '☐'} ${esc(t)}</div>`).join('')}</div>` : ''}
-          <div class="guia"><span class="gl">Preguntas guía:</span>${it.prof.map(q => `<div class="mini">– ${esc(q)}</div>`).join('')}</div>
+          ${(it.prof?.length ?? 0) ? `<div class="guia"><span class="gl">Preguntas guía:</span>${(it.prof ?? []).map(q => `<div class="mini">– ${esc(q)}</div>`).join('')}</div>` : ''}
           ${cms.length ? `<div class="cms">${cms.map(cm => `<div class="mini">• ${esc(cm.texto)}${cm.autor ? ` <span class="who">— ${esc(cm.autor)}</span>` : ''}</div>`).join('')}</div>` : ''}
         </div>
       </div>`
@@ -93,6 +94,9 @@ function buildActaHtml(regionNombre: string, resp: Record<string, Respuesta>): s
   .meta { font-size:12px; color:#64748b; }
   .pills { display:flex; gap:8px; margin:12px 0 4px; flex-wrap:wrap; }
   .pill { font-weight:600; font-size:11px; border-radius:6px; padding:3px 8px; }
+  .statusbox { margin:12px 0 4px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; break-inside:avoid; }
+  .sbh { font-size:11px; color:#0369a1; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px; }
+  .sbt { font-size:12.5px; color:#1f2937; white-space:pre-wrap; }
   .eje { margin-top:16px; break-inside:avoid; }
   .eje h4 { font-size:14.5px; color:#274b7a; margin-bottom:2px; }
   .eje h4.tent { color:#7a4ea0; }
@@ -119,6 +123,7 @@ function buildActaHtml(regionNombre: string, resp: Record<string, Respuesta>): s
     <div class="meta">Fecha: ${fecha}<br/>Participantes: DPR, Dir. Regional SENAPRED, DCI</div>
   </div>
   <div class="pills">${pill('listo')}${pill('parcial')}${pill('nolisto')}${pill('sin')}</div>
+  ${statusTexto ? `<section class="statusbox"><div class="sbh">Estado actual de la región</div><div class="sbt">${esc(statusTexto)}</div></section>` : ''}
   ${secciones}
   <script>window.onload = () => { window.print(); }</script>
 </body></html>`
@@ -201,6 +206,18 @@ export default function PrevencionRespuestaView({ canEditRegion }: Props) {
     persist(item, next)
   }
 
+  // Box de estado de la región: texto libre persistido como comentario único
+  // del ítem reservado STATUS_ITEM (no entra al consolidado ni al conteo).
+  async function handleSaveStatus(texto: string) {
+    if (!editable) return
+    const cur = getResp(selectedCod, STATUS_ITEM.id)
+    const t = texto.trim()
+    const comentarios = t
+      ? [{ ts: Date.now(), texto: t, autor: email || undefined }]
+      : []
+    await persist(STATUS_ITEM, { ...cur, comentarios })
+  }
+
   function handleAddComentario(item: Item, texto: string) {
     if (!editable) return
     const t = texto.trim()
@@ -274,8 +291,21 @@ export default function PrevencionRespuestaView({ canEditRegion }: Props) {
         {!loading && !error && vista === 'formulario' && (
           <div className="max-w-4xl mx-auto px-4 py-5 space-y-5">
             <div className="text-sm text-gray-500">
-              Diagnóstico de preparación <span className="font-semibold text-slate-700">{selectedRegion?.nombre}</span> · marca las casillas y el semáforo se calcula solo. Los comentarios quedan guardados para todo el equipo.
+              Checklist de preparación · <span className="font-semibold text-slate-700">{selectedRegion?.nombre}</span> · marca el semáforo de cada punto (Listo / Parcial / No listo) y deja comentarios; en los puntos con casillas el semáforo se calcula solo. Todo queda guardado para el equipo.
             </div>
+            {(() => {
+              const statusResp = getResp(selectedCod, STATUS_ITEM.id)
+              return (
+                <StatusBox
+                  key={selectedCod}
+                  value={statusResp.comentarios[0]?.texto ?? ''}
+                  meta={statusResp.comentarios[0]}
+                  saving={saving === `${selectedCod}:${STATUS_ITEM.id}`}
+                  editable={editable}
+                  onSave={handleSaveStatus}
+                />
+              )
+            })()}
             {SECCIONES.map(bloque => (
               <BloqueCard
                 key={bloque.id}
@@ -317,6 +347,58 @@ function VistaButton({ active, onClick, children }: {
     >
       {children}
     </button>
+  )
+}
+
+// ── Box de estado de la región ────────────────────────────────────────────────
+function StatusBox({
+  value, meta, saving, editable, onSave,
+}: {
+  value: string
+  meta?: { ts: number; texto: string; autor?: string }
+  saving: boolean
+  editable: boolean
+  onSave: (texto: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const dirty = draft.trim() !== value.trim()
+
+  return (
+    <section className="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 overflow-hidden">
+      <header className="px-4 py-3 border-b border-gray-100" style={{ borderLeft: '4px solid #0ea5e9' }}>
+        <h3 className="text-sm font-bold text-slate-800">Estado actual de la región</h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Resumen general de la situación de la región de cara a la temporada. Queda guardado para todo el equipo.
+        </p>
+      </header>
+      <div className="px-4 py-3">
+        <textarea
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          disabled={!editable || saving}
+          rows={4}
+          placeholder="Describe el estado actual de la región…"
+          className="w-full text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-200 rounded-lg px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:bg-gray-50 disabled:text-gray-400 resize-y"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-gray-400">
+            {meta ? `Última actualización: ${meta.autor ? `${meta.autor} · ` : ''}${fmtTs(meta.ts)}` : 'Sin registro aún'}
+          </span>
+          {editable && (
+            <div className="flex items-center gap-2">
+              {saving && <span className="text-[11px] text-gray-400">Guardando…</span>}
+              <button
+                onClick={() => onSave(draft)}
+                disabled={!dirty || saving}
+                className="text-xs font-medium text-slate-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Guardar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -448,9 +530,9 @@ function ItemRow({
       )}
 
       {/* Preguntas guía */}
-      {item.prof.length > 0 && (
+      {(item.prof?.length ?? 0) > 0 && (
         <ul className="mt-2.5 space-y-0.5">
-          {item.prof.map((p, i) => (
+          {(item.prof ?? []).map((p, i) => (
             <li key={i} className="text-[11px] text-gray-500 flex gap-1.5">
               <span className="text-gray-300">›</span>
               <span>{p}</span>
