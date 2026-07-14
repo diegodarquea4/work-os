@@ -43,6 +43,7 @@ import type {
   SeccionCaracterizacion,
   SeccionIndicadores,
   SeccionPlanRegional,
+  SeccionConflictos,
   SeccionAutoridades,
   PlanPdfState,
   Bullet,
@@ -57,6 +58,7 @@ import {
   COPY_AUTORIDADES_PENDIENTE,
   COPY_PLAN_REGIONAL_MISSING,
   COPY_PLAN_REGIONAL_INVALID,
+  COPY_CONFLICTOS_MISSING,
 } from './constants'
 
 import {
@@ -107,6 +109,12 @@ export interface AssemblerInputs {
    * False = fallback: el renderer pinta Sección IV con disclaimer + sample.
    */
   hasAutoridadesFicha: boolean
+  /**
+   * True cuando el bucket `conflictos-regionales` tiene el PDF para la región.
+   * En ese caso el route lo anexa verbatim con pdf-lib como Sección IV; el
+   * renderer solo pinta el título + nota. False → renderer pinta disclaimer.
+   */
+  hasConflictos: boolean
 }
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
@@ -382,7 +390,19 @@ function buildPlanRegional(
   }
 }
 
-// ── Sección IV. Autoridades ─────────────────────────────────────────────────
+// ── Sección IV. Conflictos y alertas de la región ──────────────────────────
+
+/**
+ * `disponible=true` cuando hay PDF en el bucket `conflictos-regionales`: el
+ * route lo anexa verbatim con pdf-lib (igual que autoridades) y el renderer
+ * solo pinta el título + nota. `disponible=false` → disclaimer.
+ */
+function buildConflictosSection(hasConflictos: boolean): SeccionConflictos {
+  if (hasConflictos) return { disponible: true }
+  return { disponible: false, disclaimer: COPY_CONFLICTOS_MISSING }
+}
+
+// ── Sección V. Autoridades ──────────────────────────────────────────────────
 
 /**
  * Cuando el bucket `autoridades-fichas` tiene el PDF oficial:
@@ -456,6 +476,7 @@ export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
     caracterizacion: buildCaracterizacion(raw, inputs.provincias, inputs.aiContent),
     indicadores: buildIndicadores(raw, inputs.pib, inputs.empleo, inputs.leystop, inputs.aiContent),
     planRegional: buildPlanRegional(inputs.planPdfState, inputs.aiContent),
+    conflictos: buildConflictosSection(inputs.hasConflictos),
     autoridades: buildAutoridadesSection(inputs.hasAutoridadesFicha),
   }
 }

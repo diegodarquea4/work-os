@@ -51,7 +51,17 @@ export const COPY_PLAN_REGIONAL_INVALID =
 export const COPY_PLAN_REGIONAL_MISSING =
   'Aún no se ha cargado el PDF del Plan Regional de Gobierno para esta región. El resumen de esta sección se completará automáticamente cuando el documento esté disponible.'
 
-// ── Copy: Sección IV Autoridades no disponibles ────────────────────────────
+// ── Copy: Sección IV Conflictos y alertas ──────────────────────────────────
+
+/** Se muestra cuando no hay PDF de conflictos cargado para la región. */
+export const COPY_CONFLICTOS_MISSING =
+  'Aún no se ha cargado el documento de conflictos y alertas para esta región. Se incorporará cuando esté disponible en el panel.'
+
+/** Nota bajo el título cuando SÍ hay PDF cargado (se anexa a continuación). */
+export const COPY_CONFLICTOS_ADJUNTO =
+  'El documento de conflictos y alertas cargado para la región se adjunta a continuación.'
+
+// ── Copy: Sección V Autoridades no disponibles ─────────────────────────────
 
 /** Fase B: se muestra siempre hasta que Fase D backfileé la región. */
 export const COPY_AUTORIDADES_PENDIENTE =
