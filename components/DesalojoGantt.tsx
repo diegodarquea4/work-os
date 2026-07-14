@@ -28,6 +28,8 @@ type Props = {
   focusedParent?:  DesalojoPlanificacion | null
   focusedHitos?:   DesalojoPlanificacion[]
   onExitFocus?:    () => void
+  /** Granularidad del eje: 'dia' (default, un tick por día) o 'semana' (eje comprimido, un tick por lunes). */
+  granularidad?:   'dia' | 'semana'
 }
 
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -72,6 +74,7 @@ function formatFecha(s: string): string {
 
 export default function DesalojoGantt({
   eventos, onSelectEvento, title, subtitle, focusedParent, focusedHitos, onExitFocus,
+  granularidad = 'dia',
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Filtro por rango de fecha (solo aplica fuera del modo foco).
@@ -139,7 +142,10 @@ export default function DesalojoGantt({
   const HEADER_H     = 70
   const LABEL_W      = expanded ? 280 : 200
   const CHART_W_MIN  = expanded ? 1100 : 600
-  const MIN_DAY_PX   = expanded ? 34 : 22
+  // En vista 'semana' comprimimos el ancho por día (una semana ≈ 42-56px) para
+  // que el timeline abarque más rango de un vistazo; en 'dia' el número DD tiene
+  // que caber sin colisión, así que el mínimo es mayor.
+  const MIN_DAY_PX   = granularidad === 'semana' ? (expanded ? 8 : 6) : (expanded ? 34 : 22)
   const PADDING_R    = 16
 
   // Posiciones Y dentro del header (de arriba abajo: mes, hoy, ticks, día).
@@ -189,6 +195,28 @@ export default function DesalojoGantt({
     }
     return out
   }, [minDate, maxDate, dayPx])
+
+  // Marcadores de semana — un tick por lunes. Se usan en granularidad 'semana'
+  // en vez de los de día (que a ~6px/día colisionarían). Mismo shape que
+  // dayMarkers para reutilizar el render. isMonthStart marca el primer lunes
+  // del mes (día ≤ 7) con tipografía reforzada.
+  const weekMarkers = useMemo(() => {
+    const out: { x: number; day: number; isMonthStart: boolean }[] = []
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+    const dow = (cur.getDay() + 6) % 7      // 0 = lunes
+    cur.setDate(cur.getDate() - dow)        // retrocede al lunes de la semana de minDate
+    while (cur <= maxDate) {
+      if (cur >= minDate) {
+        const x = LABEL_W + daysBetween(minDate, cur) * dayPx + dayPx / 2
+        out.push({ x, day: cur.getDate(), isMonthStart: cur.getDate() <= 7 })
+      }
+      cur.setDate(cur.getDate() + 7)
+    }
+    return out
+  }, [minDate, maxDate, dayPx])
+
+  // Marcadores efectivos del eje según granularidad.
+  const axisMarkers = granularidad === 'semana' ? weekMarkers : dayMarkers
 
   // Línea de hoy
   const hoy = new Date()
@@ -344,8 +372,9 @@ export default function DesalojoGantt({
           />
         )}
 
-        {/* Marcadores de día — tick + número en el borde inferior del header */}
-        {dayMarkers.map((d, i) => (
+        {/* Marcadores del eje (día o semana según granularidad) — tick + número
+            en el borde inferior del header */}
+        {axisMarkers.map((d, i) => (
           <g key={`d-${i}`}>
             <line
               x1={d.x} x2={d.x}

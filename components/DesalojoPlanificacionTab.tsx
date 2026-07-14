@@ -44,6 +44,16 @@ export default function DesalojoPlanificacionTab({
   const [flashId, setFlashId]               = useState<number | null>(null)
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null)
 
+  // Granularidad de fecha de toda la vista (lista + Gantt). Un solo toggle
+  // "Día ↔ Semana" comprime el detalle. Persistida por-navegador.
+  const [granularidad, setGranularidad] = useState<'dia' | 'semana'>(() => {
+    if (typeof window === 'undefined') return 'dia'
+    return localStorage.getItem('workos:planifGranularidad') === 'semana' ? 'semana' : 'dia'
+  })
+  useEffect(() => {
+    try { localStorage.setItem('workos:planifGranularidad', granularidad) } catch { /* noop */ }
+  }, [granularidad])
+
   // Conteo de polígonos por Etapa (evento top-level), para el badge "N en mapa".
   const polyCountByEtapa = useMemo(() => {
     const m = new Map<number, number>()
@@ -123,52 +133,81 @@ export default function DesalojoPlanificacionTab({
   }, [topLevel, capas])
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr] gap-6">
-      <section className="min-w-0">
-        <DesalojoTimelineList
-          eventos={topLevel}
-          hitosByParent={hitosByParent}
-          capas={capas}
-          onCreate={onCreate}
-          onPatch={onPatch}
-          onDelete={onDelete}
-          flashId={flashId}
-          focusedEventId={focusedEventId}
-          onSelectFocus={setFocusedEventId}
-          onVerEnMapa={onVerEnMapa}
-          polyCountByEtapa={polyCountByEtapa}
-        />
-      </section>
-      <section className="min-w-0 space-y-4">
-        {focusedEvent ? (
-          <DesalojoGantt
-            title={focusedEvent.titulo}
-            subtitle={focusedHitos.length === 0
-              ? 'sin hitos — agrega hitos en la card para verlos desglosados'
-              : `${focusedHitos.length} hito${focusedHitos.length === 1 ? '' : 's'}`}
-            eventos={[]}                              // ignorado en modo foco
-            focusedParent={focusedEvent}
-            focusedHitos={focusedHitos}
-            onExitFocus={() => setFocusedEventId(null)}
-            onSelectEvento={id => setFlashId(id)}
-          />
-        ) : grupos.length === 0 ? (
-          <DesalojoGantt
+    <div className="space-y-4">
+      {/* Toolbar: granularidad de fecha (día ↔ semana) — afecta lista + Gantt */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[11px] text-gray-400">Detalle de fechas</span>
+        <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-0.5 text-[11px] font-medium">
+          <button
+            type="button"
+            onClick={() => setGranularidad('dia')}
+            className={`px-2.5 py-1 rounded-md transition-colors ${granularidad === 'dia' ? 'bg-slate-800 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+            title="Ver fechas al día"
+          >
+            Día
+          </button>
+          <button
+            type="button"
+            onClick={() => setGranularidad('semana')}
+            className={`px-2.5 py-1 rounded-md transition-colors ${granularidad === 'semana' ? 'bg-slate-800 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+            title="Comprimir fechas a formato semana"
+          >
+            Semana
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr] gap-6">
+        <section className="min-w-0">
+          <DesalojoTimelineList
             eventos={topLevel}
-            onSelectEvento={id => setFlashId(id)}
+            hitosByParent={hitosByParent}
+            capas={capas}
+            onCreate={onCreate}
+            onPatch={onPatch}
+            onDelete={onDelete}
+            flashId={flashId}
+            focusedEventId={focusedEventId}
+            onSelectFocus={setFocusedEventId}
+            onVerEnMapa={onVerEnMapa}
+            polyCountByEtapa={polyCountByEtapa}
+            granularidad={granularidad}
           />
-        ) : (
-          grupos.map(g => (
+        </section>
+        <section className="min-w-0 space-y-4">
+          {focusedEvent ? (
             <DesalojoGantt
-              key={g.key}
-              title={g.title}
-              subtitle={g.subtitle ?? undefined}
-              eventos={g.eventos}
+              title={focusedEvent.titulo}
+              subtitle={focusedHitos.length === 0
+                ? 'sin hitos — agrega hitos en la card para verlos desglosados'
+                : `${focusedHitos.length} hito${focusedHitos.length === 1 ? '' : 's'}`}
+              eventos={[]}                              // ignorado en modo foco
+              focusedParent={focusedEvent}
+              focusedHitos={focusedHitos}
+              onExitFocus={() => setFocusedEventId(null)}
               onSelectEvento={id => setFlashId(id)}
+              granularidad={granularidad}
             />
-          ))
-        )}
-      </section>
+          ) : grupos.length === 0 ? (
+            <DesalojoGantt
+              eventos={topLevel}
+              onSelectEvento={id => setFlashId(id)}
+              granularidad={granularidad}
+            />
+          ) : (
+            grupos.map(g => (
+              <DesalojoGantt
+                key={g.key}
+                title={g.title}
+                subtitle={g.subtitle ?? undefined}
+                eventos={g.eventos}
+                onSelectEvento={id => setFlashId(id)}
+                granularidad={granularidad}
+              />
+            ))
+          )}
+        </section>
+      </div>
     </div>
   )
 }

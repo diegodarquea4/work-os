@@ -52,6 +52,8 @@ type Props = {
   onVerEnMapa?: (etapaId: number) => void
   /** Nº de polígonos asociados a esta Etapa en el mapa. */
   poligonoCount?: number
+  /** Granularidad de fecha: 'dia' (default) muestra el día exacto; 'semana' colapsa a la semana. */
+  granularidad?: 'dia' | 'semana'
 }
 
 const ESTADO_COLORS: Record<DesalojoPlanificacionEstado, { dot: string; chip: string; label: string }> = {
@@ -80,9 +82,34 @@ function formatFecha(inicio: string, fin: string | null): string {
   return `${id} ${MESES[im - 1]} ${iy} – ${fd} ${MESES[fm - 1]} ${fy}`
 }
 
+// Lunes (inicio de semana) de la fecha ISO dada.
+function lunesISO(iso: string): [number, number, number] {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dow = (date.getDay() + 6) % 7 // 0 = lunes
+  date.setDate(date.getDate() - dow)
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+}
+
+// Formato "semana" — colapsa el detalle del día al lunes de la semana.
+function formatFechaSemana(inicio: string, fin: string | null): string {
+  const y = new Date().getFullYear()
+  const lbl = (yy: number, mm: number, dd: number) => `${dd} ${MESES[mm - 1]}${yy !== y ? ' ' + yy : ''}`
+  const [ly, lm, ld] = lunesISO(inicio)
+  if (!fin || fin === inicio) return `Sem. del ${lbl(ly, lm, ld)}`
+  const [fy, fm, fd] = lunesISO(fin)
+  if (ly === fy && lm === fm && ld === fd) return `Sem. del ${lbl(ly, lm, ld)}`
+  return `Sem. ${lbl(ly, lm, ld)} – ${lbl(fy, fm, fd)}`
+}
+
+// Dispatcher según granularidad de la vista.
+function fmtFecha(inicio: string, fin: string | null, modo: 'dia' | 'semana'): string {
+  return modo === 'semana' ? formatFechaSemana(inicio, fin) : formatFecha(inicio, fin)
+}
+
 export default function DesalojoTimelineCard({
   evento, capa, hitos, onPatch, onDelete, onAddHito, onSelectFocus, focused, cardRef, flash,
-  onVerEnMapa, poligonoCount = 0,
+  onVerEnMapa, poligonoCount = 0, granularidad = 'dia',
 }: Props) {
   const estado = estadoEventoPlanificacion(evento)
   const colors = ESTADO_COLORS[estado]
@@ -162,7 +189,7 @@ export default function DesalojoTimelineCard({
       {/* Chip de fecha + badge de capa + estado */}
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className={`text-[11px] px-1.5 py-0.5 rounded-full ring-1 font-medium tabular-nums ${colors.chip}`}>
-          {formatFecha(evento.fecha_inicio, evento.fecha_fin)}
+          {fmtFecha(evento.fecha_inicio, evento.fecha_fin, granularidad)}
         </span>
         <span className={`text-[10px] font-semibold uppercase tracking-wide ${
           estado === 'hecho'    ? 'text-slate-500' :
@@ -364,6 +391,7 @@ export default function DesalojoTimelineCard({
         onPatch={onPatch}
         onDelete={onDelete}
         onAddHito={onAddHito}
+        granularidad={granularidad}
       />
     </li>
   )
@@ -378,7 +406,7 @@ export default function DesalojoTimelineCard({
  * re-valida, esto es solo UX).
  */
 function HitosSection({
-  evento, hitos, padreFin, onPatch, onDelete, onAddHito,
+  evento, hitos, padreFin, onPatch, onDelete, onAddHito, granularidad,
 }: {
   evento:    DesalojoPlanificacion
   hitos:     DesalojoPlanificacion[]
@@ -392,6 +420,7 @@ function HitosSection({
     fecha_inicio: string
     fecha_fin?:   string | null
   }) => Promise<void>
+  granularidad: 'dia' | 'semana'
 }) {
   const [adding, setAdding] = useState(false)
 
@@ -407,6 +436,7 @@ function HitosSection({
               padreFin={padreFin}
               onPatch={onPatch}
               onDelete={onDelete}
+              granularidad={granularidad}
             />
           ))}
         </ul>
@@ -440,13 +470,14 @@ function HitosSection({
  * fechas con min/max al rango del padre.
  */
 function HitoMini({
-  hito, padreInicio, padreFin, onPatch, onDelete,
+  hito, padreInicio, padreFin, onPatch, onDelete, granularidad,
 }: {
   hito:        DesalojoPlanificacion
   padreInicio: string
   padreFin:    string
   onPatch:     (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
   onDelete:    (id: number) => Promise<void>
+  granularidad: 'dia' | 'semana'
 }) {
   const [editing, setEditing] = useState(false)
   const [saving,  setSaving]  = useState(false)
@@ -514,7 +545,7 @@ function HitoMini({
         <div className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`} />
           <span className={`text-[10px] px-1 py-0 rounded ring-1 font-medium tabular-nums flex-shrink-0 ${colors.chip}`}>
-            {formatFecha(hito.fecha_inicio, hito.fecha_fin)}
+            {fmtFecha(hito.fecha_inicio, hito.fecha_fin, granularidad)}
           </span>
           <button
             type="button"

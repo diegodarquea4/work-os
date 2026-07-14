@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  estadoDe, colorBloque, respuestaVacia, ITEMS, BLOQUES, ID2ITEM,
+  estadoDe, colorBloque, respuestaVacia, ITEMS, BLOQUES, ID2ITEM, STATUS_ITEM,
   type Item, type Respuesta,
 } from '@/lib/prevencionRespuesta'
 
@@ -68,11 +68,17 @@ describe('colorBloque — color de celda del consolidado', () => {
 })
 
 describe('estructura del instrumento', () => {
-  it('25 ítems con semáforo (el cierre no cuenta) y 4 bloques', () => {
-    expect(ITEMS.length).toBe(25)
-    expect(BLOQUES.length).toBe(4)
+  it('22 ítems con semáforo y 5 bloques (checklist DPR final)', () => {
+    expect(ITEMS.length).toBe(22)
+    expect(BLOQUES.length).toBe(5)
   })
   it('todos los ítems del consolidado están en ID2ITEM', () => {
     for (const it of ITEMS) expect(ID2ITEM[it.id]).toBeDefined()
+  })
+  it('el box de estado es resoluble pero NO cuenta en el consolidado', () => {
+    // Debe existir en ID2ITEM para que se cargue/renderice, pero quedar fuera de
+    // ITEMS/BLOQUES para no contaminar el conteo ni el color de las celdas.
+    expect(ID2ITEM[STATUS_ITEM.id]).toBeDefined()
+    expect(ITEMS.some(it => it.id === STATUS_ITEM.id)).toBe(false)
   })
 })
