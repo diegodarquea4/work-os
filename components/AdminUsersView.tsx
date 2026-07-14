@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
-import PlanesRegionalesPanel from './PlanesRegionalesPanel'
+import DocumentosRegionalesPanel from './DocumentosRegionalesPanel'
 import ImportProposalsPanel from './ImportProposalsPanel'
 
 type UserRow = {
@@ -364,7 +364,7 @@ export default function AdminUsersView() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <PlanesRegionalesPanel />
+              <DocumentosRegionalesPanel />
             </div>
             <div>
               <ImportProposalsPanel />
