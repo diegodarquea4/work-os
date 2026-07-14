@@ -121,6 +121,12 @@ async function fetchAllPibRows(
     let query = sb.from('registros_bce')
       .select('nombre_region,periodo,valor_corregido,indicador_limpio,series_id')
       .eq('unidad_limpia', filtro.unidad ?? PIB_UNIDAD_ENC)
+      // Orden determinístico: sin él, la paginación con .range() puede saltar o
+      // duplicar filas entre páginas (PostgREST no garantiza orden estable sin
+      // ORDER BY) → total nacional/ranking mal. Mismo patrón que el fetcher de
+      // empleo (fetchAllEmpleoRows).
+      .order('series_id', { ascending: true })
+      .order('periodo', { ascending: true })
       .range(offset, offset + pageSize - 1)
     if (filtro.nombreRegion) query = query.eq('nombre_region', filtro.nombreRegion)
     if (filtro.soloNoNull) query = query.not('nombre_region', 'is', null)

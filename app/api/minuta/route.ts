@@ -142,6 +142,7 @@ export async function POST(request: Request) {
   let planPdfState:  PlanPdfState = 'missing'
   let regionEjes: RegionEje[] = []
   let autoridadesFichaBuffer: Buffer | null = null
+  let conflictosBuffer: Buffer | null = null
   let cachedAiContent: unknown = null
   let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
   // Enriched context data (fase 2)
@@ -242,6 +243,23 @@ export async function POST(request: Request) {
         }
       } catch {
         // sin ficha para esta región — cae al fallback preview
+      }
+    }
+
+    // PDF de "conflictos y alertas" de la región (bucket privado). Si existe,
+    // el post-proceso con pdf-lib lo anexa como Sección IV, verbatim — mismo
+    // patrón que la ficha de autoridades. Si no, el renderer pinta disclaimer.
+    if (canonTipo === 'kit_viaje') {
+      try {
+        const { data: confData, error: confErr } = await sb.storage
+          .from('conflictos-regionales')
+          .download(`${body.region.cod}.pdf`)
+        if (!confErr && confData) {
+          const arrayBuf = await confData.arrayBuffer()
+          conflictosBuffer = Buffer.from(arrayBuf)
+        }
+      } catch {
+        // sin PDF de conflictos para esta región — el renderer muestra disclaimer
       }
     }
 
@@ -671,21 +689,34 @@ export async function POST(request: Request) {
         footerBannerDataUrl: FOOTER_BANNER_DATA_URL ?? '',
         aiFresh: !cachedAiContent,
         hasAutoridadesFicha: !!autoridadesFichaBuffer,
+        hasConflictos: !!conflictosBuffer,
       })
       buffer = await renderKitDeViajePdf(kitData)
 
-      // Sección IV: si hay ficha oficial en el bucket, la anexamos al final
-      // con pdf-lib. El ficha ES la Sección IV — el renderer ya omitió esa
-      // página. Sus páginas preservan texto vectorial + fotos + layout 1:1.
-      if (autoridadesFichaBuffer) {
+      // Anexos verbatim con pdf-lib, EN ORDEN de sección: primero Conflictos
+      // (Sección IV), después Autoridades (Sección V). Cuando el PDF existe, el
+      // renderer omite por completo la sección (ambos PDFs traen su propio
+      // encabezado) para no dejar una página de título semi-vacía antes del
+      // anexo. Cada PDF preserva su layout 1:1 (texto vectorial + imágenes).
+      if (conflictosBuffer || autoridadesFichaBuffer) {
         const t0 = Date.now()
         const { PDFDocument } = await import('pdf-lib')
-        const kitDoc   = await PDFDocument.load(new Uint8Array(buffer))
-        const fichaDoc = await PDFDocument.load(new Uint8Array(autoridadesFichaBuffer))
-        const pages = await kitDoc.copyPages(fichaDoc, fichaDoc.getPageIndices())
-        for (const p of pages) kitDoc.addPage(p)
+        const kitDoc = await PDFDocument.load(new Uint8Array(buffer))
+        let anexadas = 0
+        for (const anexo of [conflictosBuffer, autoridadesFichaBuffer]) {
+          if (!anexo) continue
+          try {
+            const anexoDoc = await PDFDocument.load(new Uint8Array(anexo))
+            const pages = await kitDoc.copyPages(anexoDoc, anexoDoc.getPageIndices())
+            for (const p of pages) kitDoc.addPage(p)
+            anexadas += pages.length
+          } catch (e) {
+            // PDF anexo corrupto/no-parseable — se omite sin romper la minuta.
+            console.warn('[minuta] no pude anexar un PDF (corrupto):', e)
+          }
+        }
         buffer = Buffer.from(await kitDoc.save())
-        console.log(`[minuta] anexé ficha autoridades (${pages.length} páginas) en ${Date.now() - t0}ms`)
+        console.log(`[minuta] anexé ${anexadas} páginas (conflictos + autoridades) en ${Date.now() - t0}ms`)
       }
     } else {
       // canonTipo === 'ejecutiva' — Avance PREGO.

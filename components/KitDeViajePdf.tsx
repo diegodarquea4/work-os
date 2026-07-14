@@ -10,8 +10,10 @@
  *     inline (sin página de portada ni de índice separadas).
  *   - Sección I   — Caracterización general de la región
  *   - Sección II  — Indicadores socioeconómicos clave
- *   - Sección III — Plan Regional de Gobierno Región X (vacía por ahora)
- *   - Sección IV  — Principales conflictos y alertas de la región (vacía por ahora)
+ *   - Sección III — Plan Regional de Gobierno Región X
+ *   - Sección IV  — Principales conflictos y alertas de la región
+ *       (anexada como PDF oficial vía pdf-lib en el route cuando existe carga;
+ *       el renderer solo pinta título + disclaimer cuando `disponible=false`)
  *   - Sección V   — Autoridades regionales
  *       (anexada como PDF oficial vía pdf-lib en el route cuando existe ficha;
  *       el renderer solo pinta preview + disclaimer cuando `disponible=false`)
@@ -435,12 +437,26 @@ function SeccionIII({ data }: { data: KitDeViajeData }) {
   )
 }
 
-// ── Sección IV — placeholder (contenido pendiente) ─────────────────────────
+// ── Sección IV — Conflictos y alertas de la región ─────────────────────────
 
-function SeccionPlaceholder({ numeral, titulo }: { numeral: string; titulo: string }) {
+/**
+ * Solo se renderiza cuando NO hay PDF de conflictos cargado (`disponible=false`):
+ * pintamos el título + el disclaimer que trae el assembler. Cuando SÍ hay PDF,
+ * el route lo anexa verbatim con pdf-lib (y ese PDF ya trae su propio encabezado
+ * "Principales conflictos y Alertas de la región"), así que esta sección se omite
+ * por completo — mismo patrón que la ficha de autoridades (Sección V). Así se
+ * evita una página de título semi-vacía antes del anexo.
+ */
+function SeccionIV({ data }: { data: KitDeViajeData }) {
+  const { conflictos } = data
   return (
     <View>
-      <SectionTitle numeral={numeral}>{titulo}</SectionTitle>
+      <SectionTitle numeral="IV">{TITULO_SECCIONES.IV}</SectionTitle>
+      {conflictos.disclaimer && (
+        <View style={s.disclaimerBox}>
+          <Text style={s.disclaimerText}>{conflictos.disclaimer}</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -559,7 +575,11 @@ export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
         <SeccionI data={data} />
         <SeccionII data={data} />
         <SeccionIII data={data} />
-        <SeccionPlaceholder numeral="IV" titulo={TITULO_SECCIONES.IV} />
+        {/* Sección IV: cuando disponible=true el route anexa el PDF de conflictos
+            por post-procesamiento con pdf-lib (ese PDF ES la Sección IV, con su
+            propio encabezado), así que acá no pintamos nada — evita una página de
+            título semi-vacía. Cuando disponible=false, pintamos título + disclaimer. */}
+        {!data.conflictos.disponible && <SeccionIV data={data} />}
         {/* Sección V: cuando disponible=true el route anexa el ficha oficial
             por post-procesamiento con pdf-lib (el ficha ES la Sección V, con
             su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando

@@ -153,6 +153,17 @@ export interface SeccionPlanRegional {
   parrafos: string[]
 }
 
+export interface SeccionConflictos {
+  /**
+   * true cuando hay un PDF cargado en el bucket `conflictos-regionales` para la
+   * región. En ese caso el route lo anexa verbatim con pdf-lib (mismo patrón
+   * que la ficha de autoridades) y el renderer solo pinta el título + una nota.
+   * false → el renderer muestra el `disclaimer`.
+   */
+  disponible: boolean
+  disclaimer?: string
+}
+
 export interface SeccionAutoridades {
   /**
    * false hasta que Fase D backfileé la región. Cuando `disponible=false`,
@@ -194,6 +205,7 @@ export interface KitDeViajeData {
   caracterizacion: SeccionCaracterizacion
   indicadores: SeccionIndicadores
   planRegional: SeccionPlanRegional
+  conflictos: SeccionConflictos
   autoridades: SeccionAutoridades
 }
 
