@@ -167,6 +167,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     ejecutiva: { cached: false, generated_at: null },
     ficha:     { cached: false, generated_at: null },
   })
+  // Contexto Regional pide un N° de Minuta DCI antes de generar. window.prompt()
+  // no funciona en este entorno (bloqueado por el sandbox del preview) — modal propio.
+  const [numeroModalOpen, setNumeroModalOpen] = useState(false)
+  const [numeroInput, setNumeroInput] = useState('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
 
@@ -313,7 +317,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
   // ── Minuta handler ───────────────────────────────────────────────────────────
 
-  async function handleMinuta(tipo: 'ejecutiva' | 'ficha' = 'ejecutiva', force = false) {
+  // Contexto Regional lleva "Minuta DCI N°XX" en el encabezado — el número se
+  // pide con un modal propio (numeroModalOpen) antes de llamar a esta función,
+  // no con window.prompt() (bloqueado por el sandbox de este entorno).
+  async function handleMinuta(tipo: 'ejecutiva' | 'ficha' = 'ejecutiva', force = false, numero?: string) {
     if (!region || downloadingMinuta) return
     setDownloadingMinuta(true)
     setDownloadingTipo(tipo)
@@ -326,7 +333,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
       const res = await fetch('/api/minuta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, fecha, tipo, ...(force ? { force: true } : {}) }),
+        body: JSON.stringify({ region, fecha, tipo, ...(numero ? { numero } : {}), ...(force ? { force: true } : {}) }),
       })
       if (!res.ok) {
         // El server devuelve JSON {error, detalle?} en 4xx/5xx. Leerlo para
@@ -358,6 +365,17 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
       setDownloadingMinuta(false)
       setDownloadingTipo(null)
     }
+  }
+
+  function openNumeroModal() {
+    setNumeroInput('')
+    setNumeroModalOpen(true)
+  }
+
+  function confirmNumeroModal() {
+    const numero = numeroInput.trim() || undefined
+    setNumeroModalOpen(false)
+    handleMinuta('ficha', false, numero)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -585,7 +603,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                   {minutaMenuOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-max py-1">
                       <button
-                        onClick={() => handleMinuta('ficha')}
+                        onClick={openNumeroModal}
                         className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
                         {downloadingMinuta && downloadingTipo === 'ficha' ? (
@@ -932,6 +950,45 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
         </div>
 
       </div>
+
+      {/* ── Modal: N° de Minuta DCI (Contexto Regional) ────────────────────── */}
+      {numeroModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setNumeroModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">N° de Minuta DCI</h3>
+            <p className="text-xs text-gray-500 mb-3">Aparece en el encabezado como &quot;Minuta DCI N°XX&quot;.</p>
+            <input
+              type="text"
+              autoFocus
+              value={numeroInput}
+              onChange={e => setNumeroInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmNumeroModal() }}
+              placeholder="Ej: 61"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setNumeroModalOpen(false)}
+                className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmNumeroModal}
+                className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
+              >
+                Generar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Minuta loading overlay ─────────────────────────────────────────── */}
       {downloadingMinuta && (

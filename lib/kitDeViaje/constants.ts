@@ -16,9 +16,12 @@ export const DIVISION   = 'División de Coordinación Interministerial'
 // "I. I. Caracterización general" en el índice.
 
 export const TITULO_SECCIONES = {
-  I:   'Caracterización general',
+  I:   'Caracterización general de la región',
   II:  'Indicadores socioeconómicos clave',
-  IV:  'Autoridades regionales',
+  /** Se completa en el renderer con " Región {nombre}". */
+  III: 'Plan Regional de Gobierno',
+  IV:  'Principales conflictos y alertas de la región',
+  V:   'Autoridades regionales',
 } as const
 
 // ── Copy: PDF PREGO no disponible ──────────────────────────────────────────
@@ -37,6 +40,16 @@ export const COPY_PREGO_MISSING =
 /** Se muestra por eje cuando el AI no logró extraer una justificación específica. */
 export const COPY_EJE_SIN_JUSTIFICACION =
   'Justificación pendiente.'
+
+// ── Copy: Sección III (Contexto Regional) — PDF plan-regional no disponible ─
+
+/** Análogo a COPY_PREGO_INVALID pero para el resumen de Sección III (no la justificación por eje). */
+export const COPY_PLAN_REGIONAL_INVALID =
+  'El PDF del Plan Regional de Gobierno para esta región presenta problemas de carga en el panel. El resumen de esta sección se completará automáticamente cuando el documento se corrija.'
+
+/** Análogo a COPY_PREGO_MISSING pero para el resumen de Sección III (no la justificación por eje). */
+export const COPY_PLAN_REGIONAL_MISSING =
+  'Aún no se ha cargado el PDF del Plan Regional de Gobierno para esta región. El resumen de esta sección se completará automáticamente cuando el documento esté disponible.'
 
 // ── Copy: Sección IV Autoridades no disponibles ────────────────────────────
 

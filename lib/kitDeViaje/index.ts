@@ -12,7 +12,7 @@
 export * from './types'
 export * from './constants'
 export { validatePlanPdfBuffer } from './pdfValidation'
-export { buildKitDeViajeData, type AssemblerInputs } from './assembler'
+export { buildKitDeViajeData, buildRawDataLines, type AssemblerInputs, type RawDataLines } from './assembler'
 export * from './format'
 export {
   buildContextPrompt,

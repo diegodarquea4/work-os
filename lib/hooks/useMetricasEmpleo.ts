@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
 
 export type EmpleoRow = {
   nombre_region: string
@@ -25,27 +26,18 @@ export type EmpleoTodas = {
   datos: Record<string, EmpleoRegionData>  // incluye '__NACIONAL__'
 }
 
-// ── Fórmulas verbatim de generar_dashboard.py ────────────────
+// ── Fórmulas verbatim de generar_dashboard.py (compartidas: lib/metricas/empleoFormulas.ts) ──
 
 function _calcFT(ocu: number | null, tasa: number | null): number | null {
-  if (ocu == null || tasa == null || tasa >= 100 || tasa < 0) return null
-  return parseFloat((ocu / (1 - tasa / 100)).toFixed(1))
+  return calcFuerzaTrabajo(ocu, tasa)
 }
 
 function _calcDesoc(ft: number | null, ocu: number | null): number | null {
-  if (ft == null || ocu == null) return null
-  return parseFloat((ft - ocu).toFixed(1))
+  return calcDesocupados(ft, ocu)
 }
 
-// tasa_tm[i] = Σ desoc[i-2..i] / Σ ft[i-2..i] * 100  (i < 2 → null)
 function _tasaTmAt(desoc: (number | null)[], ft: (number | null)[], i: number): number | null {
-  if (i < 2) return null
-  const ds = [desoc[i - 2], desoc[i - 1], desoc[i]]
-  const fs = [ft[i - 2], ft[i - 1], ft[i]]
-  if (ds.some(v => v == null) || fs.some(v => v == null)) return null
-  const sft = (fs as number[]).reduce((a, b) => a + b, 0)
-  if (!sft) return null
-  return parseFloat(((ds as number[]).reduce((a, b) => a + b, 0) / sft * 100).toFixed(2))
+  return calcTasaTrimestreMovil(desoc, ft, i)
 }
 
 function _buildRegionData(periodos: string[], tasa: (number | null)[], ocupados: (number | null)[]): EmpleoRegionData {

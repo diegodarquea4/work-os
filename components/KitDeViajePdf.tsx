@@ -1,24 +1,25 @@
 /**
- * KitDeViajePdf — renderer PDF multi-página del Kit de Viaje (Fase B).
+ * KitDeViajePdf — renderer PDF del Kit de Viaje ("Contexto Regional").
  *
  * Consume `KitDeViajeData` (contrato de lib/kitDeViaje/types.ts) — el mismo
  * objeto que Fase C consumirá para el .docx. Cero data-fetching acá: si un
  * campo no está en `data`, la subsección no se renderiza.
  *
- * Layout:
- *   - Portada (página 1): cover con branding Ministerio + región + fecha.
- *   - Índice (página 2): TOC estático.
- *   - Sección I — Caracterización general
- *   - Sección II — Indicadores socioeconómicos clave
- *   - Sección IV — Autoridades regionales
- *       (anexada como PDF oficial vía pdf-lib en el route; el renderer solo
- *       pinta preview + disclaimer cuando `disponible=false`)
+ * Layout (rediseño — sin portada, documento continuo tipo Word):
+ *   - Encabezado: "Minuta Regional" / "Región de X" / párrafo intro / índice
+ *     inline (sin página de portada ni de índice separadas).
+ *   - Sección I   — Caracterización general de la región
+ *   - Sección II  — Indicadores socioeconómicos clave
+ *   - Sección III — Plan Regional de Gobierno Región X (vacía por ahora)
+ *   - Sección IV  — Principales conflictos y alertas de la región (vacía por ahora)
+ *   - Sección V   — Autoridades regionales
+ *       (anexada como PDF oficial vía pdf-lib en el route cuando existe ficha;
+ *       el renderer solo pinta preview + disclaimer cuando `disponible=false`)
  *
- * Header/footer fijos desde página 2 vía `<View fixed>`. Portada no tiene
- * header ni footer — es full-bleed institucional.
- *
- * La antigua Sección III (PREGO) migró al bloque "Del diagnóstico a la
- * priorización" de la minuta "Avance PREGO" (`MinutaEjecutiva.tsx`).
+ * Header/footer fijos vía `<View fixed>` dentro de un único `<Page wrap>` —
+ * el documento fluye como un Word, sin saltos de página forzados entre
+ * secciones. Tipografía Carlito 11 (open-source, métricamente compatible con
+ * Calibri — sustituto de Aptos, no disponible para incrustar sin licencia).
  */
 
 import {
@@ -26,13 +27,26 @@ import {
 } from '@react-pdf/renderer'
 import type {
   KitDeViajeData,
-  Bullet as TBullet,
   IndicadorFila,
+  ProvinciaFila,
+  PibSectorFila,
   AutoridadGrupo,
   Autoridad,
 } from '@/lib/kitDeViaje/types'
 import { TITULO_SECCIONES } from '@/lib/kitDeViaje/constants'
 import { samplePreviewAutoridades } from '@/lib/kitDeViaje/sampleAutoridades'
+
+/** cm → pt (1 cm = 28,3465 pt) — todas las medidas de header/footer vienen en cm. */
+const CM = (cm: number) => cm * 28.3465
+
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+
+/** "13 de julio de 2026" — fecha del día en que se generó el documento. */
+function formatFechaHeader(isoOrNull: string): string {
+  const d = isoOrNull ? new Date(isoOrNull) : new Date()
+  if (isNaN(d.getTime())) return ''
+  return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`
+}
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -44,121 +58,73 @@ const COLORS = {
   border:     '#999',
   bgHeader:   '#e8e8e8',
   bgAccent:   '#f0f5ff',
-  bgCover:    '#1e3a8a',    // azul institucional para portada
   onCover:    '#ffffff',
   disclaimer: '#fff8e1',    // fondo suave amarillo para cajas de "info no disponible"
   disclaimerBorder: '#d4a017',
 }
 
 const s = StyleSheet.create({
-  // Page shell
+  // Page shell — paddingTop deja espacio para el logo del header (top:24 +
+  // alto 1,93cm/54,7pt): sin esto el logo se monta sobre "Minuta Regional".
   page: {
-    fontFamily: 'Helvetica', fontSize: 10, color: COLORS.ink,
-    paddingTop: 60, paddingBottom: 50, paddingHorizontal: 56,
-  },
-  pageCover: {
-    fontFamily: 'Helvetica', color: COLORS.onCover,
-    backgroundColor: COLORS.bgCover,
-    padding: 0,
+    fontFamily: 'Carlito', fontSize: 11, color: COLORS.ink,
+    paddingTop: 96, paddingBottom: 50, paddingHorizontal: 56,
   },
 
-  // Cover
-  coverInner: {
-    flex: 1, paddingHorizontal: 72, paddingVertical: 120,
-    justifyContent: 'space-between',
-  },
-  coverLogo: { width: 140, height: 'auto' },
-  coverBrand: { fontSize: 11, letterSpacing: 1.5, marginTop: 24, opacity: 0.9 },
-  coverBrandLine2: { fontSize: 11, opacity: 0.9, marginTop: 4 },
-  coverMainBlock: {},
-  coverKicker: { fontSize: 14, letterSpacing: 2, marginBottom: 12, opacity: 0.9 },
-  coverTitle: { fontSize: 36, fontWeight: 'bold', lineHeight: 1.1 },
-  coverRegion: { fontSize: 28, marginTop: 8, opacity: 0.95 },
-  coverFecha: { fontSize: 14, marginTop: 40, letterSpacing: 1, opacity: 0.9 },
-
-  // Header / Footer (fixed en páginas de contenido)
+  // Header / Footer (fixed en todas las páginas del documento) — sin líneas
   pageHeader: {
     position: 'absolute', top: 24, left: 56, right: 56,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderBottomWidth: 0.5, borderBottomColor: COLORS.hairline, paddingBottom: 6,
   },
-  pageHeaderLogo: { width: 30, height: 'auto' },
-  pageHeaderCenter: { fontSize: 8, color: COLORS.muted, letterSpacing: 1 },
-  pageHeaderRegion: { fontSize: 9, color: COLORS.inkSoft, fontWeight: 'bold' },
+  // 1,93 cm alto × 2,12 cm ancho (1 cm = 28,3465 pt)
+  pageHeaderLogo: { height: CM(1.93), width: CM(2.12) },
+  pageHeaderFechaBox: { alignItems: 'flex-end' },
+  pageHeaderFecha: { fontSize: 9, color: COLORS.muted },
+  pageHeaderNumero: { fontSize: 9, color: COLORS.muted, marginTop: 2 },
+  // Pie de página: vacío salvo la imagen, a sangre completa (borde a borde).
   pageFooter: {
-    position: 'absolute', bottom: 24, left: 56, right: 56,
-    flexDirection: 'row', justifyContent: 'space-between',
+    position: 'absolute', bottom: 8, left: 0, right: 0,
+    alignItems: 'center',
   },
-  pageFooterMuted: { fontSize: 8, color: COLORS.muted },
+  // Ancho a sangre completa (todo el ancho A4). Alto mayor a los 0,58cm
+  // originales — a esa altura la banda se veía comprimida/aplastada al
+  // estirarla al ancho completo de la página.
+  pageFooterImage: { height: CM(1.2), width: CM(21) },
 
-  // Índice
-  indexTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 20, marginBottom: 24 },
-  indexRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: COLORS.hairline },
-  indexNum: { width: 40, fontSize: 11, fontWeight: 'bold' },
-  indexText: { flex: 1, fontSize: 11 },
+  // Encabezado de la minuta (reemplaza portada + índice separados)
+  tituloMinuta: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+  subtituloRegion: { fontSize: 11, textAlign: 'center', textDecoration: 'underline', marginBottom: 14 },
+  parrafoIntro: { fontSize: 11, lineHeight: 1.4, marginBottom: 10 },
+  indiceRow: { flexDirection: 'row', marginBottom: 3 },
+  indiceNum: { width: 22, fontSize: 11 },
+  indiceText: { flex: 1, fontSize: 11 },
 
-  // Section headers
-  sectionTitle: {
-    fontSize: 15, fontWeight: 'bold', marginBottom: 12,
-    paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: COLORS.ink,
-  },
-  subSectionTitle: { fontSize: 11, fontWeight: 'bold', marginTop: 12, marginBottom: 6 },
+  // Section headers — sin línea ni fondo, solo negrita
+  sectionTitle: { fontSize: 11, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  subSectionTitle: { fontSize: 11, fontWeight: 'bold', marginTop: 10, marginBottom: 6 },
 
   // Prose
-  para: { fontSize: 10, lineHeight: 1.55, textAlign: 'justify', marginBottom: 8 },
-  paraLast: { fontSize: 10, lineHeight: 1.55, textAlign: 'justify', marginBottom: 4 },
+  para: { fontSize: 11, lineHeight: 1.4, textAlign: 'justify', marginBottom: 8 },
+  paraLast: { fontSize: 11, lineHeight: 1.4, textAlign: 'justify', marginBottom: 4 },
 
   // Bullets (label • value con nota opcional)
-  bulletRow: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' },
-  bulletDot: { width: 12, fontSize: 10, lineHeight: 1.4 },
-  bulletBody: { flex: 1, fontSize: 10, lineHeight: 1.4 },
+  bulletRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-start' },
+  bulletDot: { width: 12, fontSize: 11, lineHeight: 1.4 },
+  bulletBody: { flex: 1, fontSize: 11, lineHeight: 1.4, textAlign: 'justify' },
   bulletLabel: { fontWeight: 'bold' },
   bulletValue: {},
-  bulletNota: { color: COLORS.muted, fontSize: 9 },
+  bulletNota: { color: COLORS.muted, fontSize: 9.5 },
+  // Sub-items indentados bajo un bullet (provincias, sectores del PIB)
+  subItemLabel: { fontSize: 11, fontWeight: 'bold', marginTop: 4, marginBottom: 2 },
+  subItemText: { fontSize: 11, lineHeight: 1.3, marginLeft: 10, marginBottom: 2 },
 
   // Tables
   tableContainer: { marginTop: 4, marginBottom: 10, borderWidth: 0.5, borderColor: COLORS.border },
   tableHeaderRow: { flexDirection: 'row', backgroundColor: COLORS.bgHeader, borderBottomWidth: 0.5, borderColor: COLORS.border },
   tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderColor: COLORS.hairline },
-  tableCell: { fontSize: 9, paddingVertical: 3, paddingHorizontal: 6, lineHeight: 1.3 },
-  tableHeaderCell: { fontSize: 9, fontWeight: 'bold', paddingVertical: 4, paddingHorizontal: 6 },
-  tableCellNota: { fontSize: 8, color: COLORS.muted },
-
-  // PREGO
-  ejeBlock: { marginBottom: 14 },
-  ejeTitle: { fontSize: 12, fontWeight: 'bold', marginBottom: 6 },
-  ejeMeta: { flexDirection: 'row', marginBottom: 6, gap: 12, flexWrap: 'wrap' },
-  ejeChip: {
-    fontSize: 8, paddingVertical: 2, paddingHorizontal: 6,
-    borderRadius: 3, backgroundColor: COLORS.bgHeader, color: COLORS.inkSoft,
-  },
-  ejeResumenRow: { flexDirection: 'row', marginBottom: 8, gap: 6 },
-  semaforoChip: {
-    fontSize: 9, paddingVertical: 2, paddingHorizontal: 5,
-    borderRadius: 3, color: COLORS.ink,
-  },
-  semaforoVerde:  { backgroundColor: '#c8e6c9' },
-  semaforoAmbar:  { backgroundColor: '#ffe0b2' },
-  semaforoRojo:   { backgroundColor: '#ffcdd2' },
-  semaforoGris:   { backgroundColor: '#e0e0e0' },
-  destacadaRow: {
-    flexDirection: 'row', paddingVertical: 4,
-    borderBottomWidth: 0.25, borderBottomColor: COLORS.hairline,
-    alignItems: 'flex-start',
-  },
-  // Círculo real (View) — Helvetica no soporta ○ (U+25CB) y lo renderiza como Ë.
-  // Este View se dibuja con color según semáforo.
-  destacadaCirculo: {
-    width: 8, height: 8, borderRadius: 4,
-    marginRight: 8, marginTop: 3,
-  },
-  // Contenedor nombre+ministerio — flexDirection column explícito. Sin esto,
-  // react-pdf a veces colapsa ambos Text en la misma línea baseline y
-  // ministerio se pinta encima de nombre.
-  destacadaBody: { flex: 1, flexDirection: 'column' },
-  destacadaNombre: { fontSize: 9, lineHeight: 1.3, color: COLORS.ink },
-  destacadaMinisterio: { fontSize: 8, color: COLORS.muted, marginTop: 1, lineHeight: 1.2 },
-  destacadaPct: { width: 44, fontSize: 9, textAlign: 'right', color: COLORS.inkSoft },
+  tableCell: { fontSize: 10, paddingVertical: 3, paddingHorizontal: 6, lineHeight: 1.3 },
+  tableHeaderCell: { fontSize: 10, fontWeight: 'bold', paddingVertical: 4, paddingHorizontal: 6 },
+  tableCellNota: { fontSize: 9, color: COLORS.muted },
 
   // Disclaimer callout
   disclaimerBox: {
@@ -166,21 +132,20 @@ const s = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: COLORS.disclaimerBorder,
     padding: 10, marginBottom: 10,
   },
-  disclaimerText: { fontSize: 10, lineHeight: 1.5, color: COLORS.inkSoft },
+  disclaimerText: { fontSize: 11, lineHeight: 1.4, color: COLORS.inkSoft },
 
   // Provincias (Sec I)
-  provinciasTitle: { fontSize: 10, fontWeight: 'bold', marginTop: 6, marginBottom: 4 },
+  provinciasTitle: { fontSize: 11, fontWeight: 'bold', marginTop: 6, marginBottom: 4 },
 
-  // Sección IV — Autoridades
+  // Sección V — Autoridades
   previewNote: {
-    fontSize: 8, color: COLORS.muted, fontStyle: 'italic',
+    fontSize: 9, color: COLORS.muted, fontStyle: 'italic',
     marginBottom: 12, letterSpacing: 0.3,
   },
   grupoBlock: { marginBottom: 16 },
   grupoTitle: {
-    fontSize: 9, fontWeight: 'bold', letterSpacing: 1.5, color: COLORS.inkSoft,
-    paddingBottom: 4, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
-    marginBottom: 8,
+    fontSize: 10, fontWeight: 'bold', letterSpacing: 1, color: COLORS.inkSoft,
+    paddingBottom: 4, marginBottom: 8,
   },
   // Grid de tarjetas: 3 por fila con gap
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -196,7 +161,7 @@ const s = StyleSheet.create({
     minHeight: 78,
   },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
-  cardNombre: { fontSize: 9, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 4, lineHeight: 1.2 },
+  cardNombre: { fontSize: 10, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 4, lineHeight: 1.2 },
   cardNombreSingle: { fontSize: 11, fontWeight: 'bold', color: COLORS.ink, flex: 1, marginRight: 6, lineHeight: 1.2 },
   // Card con avatar: layout row [avatar] [content]
   cardBodyRow: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -212,34 +177,95 @@ const s = StyleSheet.create({
   avatarGrid: { width: 28, height: 28 },
   avatarSingle: { width: 44, height: 44 },
   avatarImage: { width: '100%', height: '100%' },
-  avatarInitials:       { fontSize: 10, fontWeight: 'bold', color: COLORS.bgCover, letterSpacing: 0.3 },
-  avatarInitialsSingle: { fontSize: 14, fontWeight: 'bold', color: COLORS.bgCover, letterSpacing: 0.5 },
+  avatarInitials:       { fontSize: 10, fontWeight: 'bold', color: COLORS.ink, letterSpacing: 0.3 },
+  avatarInitialsSingle: { fontSize: 14, fontWeight: 'bold', color: COLORS.ink, letterSpacing: 0.5 },
   partidoChip: {
     fontSize: 7, paddingVertical: 1, paddingHorizontal: 4,
     borderRadius: 2, backgroundColor: COLORS.bgAccent, color: COLORS.inkSoft,
     fontWeight: 'bold', letterSpacing: 0.3,
   },
-  cardCargo: { fontSize: 8, color: COLORS.inkSoft, marginBottom: 4, lineHeight: 1.3 },
+  cardCargo: { fontSize: 9, color: COLORS.inkSoft, marginBottom: 4, lineHeight: 1.3 },
   cardCargoSingle: { fontSize: 10, color: COLORS.inkSoft, marginBottom: 6, lineHeight: 1.3 },
-  cardContactLine: { fontSize: 7.5, color: COLORS.muted, marginBottom: 1, lineHeight: 1.25 },
+  cardContactLine: { fontSize: 8.5, color: COLORS.muted, marginBottom: 1, lineHeight: 1.25 },
   cardContactLabel: { fontWeight: 'bold', color: COLORS.inkSoft },
 })
 
 // ── Primitives ─────────────────────────────────────────────────────────────
 
-function BulletList({ items }: { items: TBullet[] }) {
+/** Bullet de prosa simple: "• Label: texto redactado (por IA o fallback)." */
+function BulletProsa({ label, texto }: { label: string; texto: string }) {
+  if (!texto) return null
   return (
-    <View>
-      {items.map((b, i) => (
-        <View key={i} style={s.bulletRow}>
-          <Text style={s.bulletDot}>•</Text>
-          <Text style={s.bulletBody}>
-            <Text style={s.bulletLabel}>{b.label}: </Text>
-            <Text style={s.bulletValue}>{b.value}</Text>
-            {b.nota ? <Text style={s.bulletNota}> ({b.nota})</Text> : null}
+    <View style={s.bulletRow} wrap={false}>
+      <Text style={s.bulletDot}>•</Text>
+      <Text style={s.bulletBody}>
+        <Text style={s.bulletLabel}>{label}: </Text>
+        {texto}
+      </Text>
+    </View>
+  )
+}
+
+/** Sección I, bullet #2 — 100% determinístico, no depende del AI. */
+function BulletOrganizacion({ label, provincias }: { label: string; provincias: ProvinciaFila[] }) {
+  if (provincias.length === 0) return null
+  return (
+    <View style={s.bulletRow}>
+      <Text style={s.bulletDot}>•</Text>
+      <View style={s.bulletBody}>
+        <Text style={s.bulletLabel}>{label}:</Text>
+        {provincias.map((p, i) => (
+          <Text key={i} style={s.subItemText}>{p.provincia}: {p.comunas}</Text>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/** Sección II, bullet #1 — prosa (AI/fallback) + sub-listado determinístico de sectores. */
+function BulletPib({ label, texto, sectores }: { label: string; texto: string; sectores: PibSectorFila[] }) {
+  if (!texto && sectores.length === 0) return null
+  return (
+    <View style={s.bulletRow} wrap={false}>
+      <Text style={s.bulletDot}>•</Text>
+      <View style={s.bulletBody}>
+        {texto && (
+          <Text>
+            <Text style={s.bulletLabel}>{label}: </Text>
+            {texto}
           </Text>
+        )}
+        {sectores.length > 0 && (
+          <>
+            <Text style={s.subItemLabel}>Principales sectores productivos:</Text>
+            {sectores.map((sec, i) => (
+              <Text key={i} style={s.subItemText}>
+                {sec.sector}: {sec.pct.toLocaleString('es-CL', { minimumFractionDigits: 1 })}%
+              </Text>
+            ))}
+          </>
+        )}
+      </View>
+    </View>
+  )
+}
+
+/** Sección II, bullet #2 — 100% determinístico: label + tabla con columna Contexto. */
+function BulletMercadoLaboral({ label, periodo, tabla }: { label: string; periodo: string; tabla: IndicadorFila[] }) {
+  if (tabla.length === 0) return null
+  return (
+    <View style={s.bulletRow} wrap={false}>
+      <Text style={s.bulletDot}>•</Text>
+      <View style={s.bulletBody}>
+        <Text style={s.bulletLabel}>{label} (BCE/INE{periodo ? `, ${periodo}` : ''}):</Text>
+        <View style={{ marginTop: 4 }}>
+          <PdfTable
+            headers={['Indicador', 'Valor', 'Contexto']}
+            rows={tabla.map(r => ({ cells: [r.indicador, r.valor, r.contexto ?? '—'] }))}
+            colWidths={[35, 20, 45]}
+          />
         </View>
-      ))}
+      </View>
     </View>
   )
 }
@@ -274,16 +300,13 @@ function PdfTable({ headers, rows, colWidths }: {
   )
 }
 
-function Disclaimer({ text }: { text: string }) {
-  return (
-    <View style={s.disclaimerBox}>
-      <Text style={s.disclaimerText}>{text}</Text>
-    </View>
-  )
+function SectionTitle({ numeral, children }: { numeral: string; children: string }) {
+  return <Text style={s.sectionTitle}>{numeral}. {children}</Text>
 }
 
-function SectionTitle({ numeral, children }: { numeral: 'I' | 'II' | 'III' | 'IV'; children: string }) {
-  return <Text style={s.sectionTitle}>{numeral}. {children}</Text>
+/** "Región de Los Lagos" / "Región Metropolitana" (excepción de estilo, como en el resto del documento). */
+function regionLabel(nombre: string): string {
+  return nombre === 'Metropolitana' ? 'Región Metropolitana' : `Región de ${nombre}`
 }
 
 // ── Header / Footer fijos ───────────────────────────────────────────────────
@@ -294,165 +317,135 @@ function PageHeader({ data }: { data: KitDeViajeData }) {
       {data.branding.logo_data_url
         ? <Image src={data.branding.logo_data_url} style={s.pageHeaderLogo} />
         : <View style={s.pageHeaderLogo} />}
-      <Text style={s.pageHeaderCenter}>KIT DE VIAJE</Text>
-      <Text style={s.pageHeaderRegion}>REGIÓN DE {data.region.nombre.toUpperCase()}</Text>
+      <View style={s.pageHeaderFechaBox}>
+        <Text style={s.pageHeaderFecha}>{formatFechaHeader(data.meta.generado_en)}</Text>
+        {data.numeroMinuta && (
+          <Text style={s.pageHeaderNumero}>Minuta DCI N°{data.numeroMinuta}</Text>
+        )}
+      </View>
     </View>
   )
 }
 
 function PageFooter({ data }: { data: KitDeViajeData }) {
+  if (!data.branding.footer_banner_data_url) return <View style={s.pageFooter} fixed />
   return (
     <View style={s.pageFooter} fixed>
-      <Text style={s.pageFooterMuted}>{data.branding.division}</Text>
-      <Text
-        style={s.pageFooterMuted}
-        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-      />
+      <Image src={data.branding.footer_banner_data_url} style={s.pageFooterImage} />
     </View>
   )
 }
 
-// ── Portada ────────────────────────────────────────────────────────────────
+// ── Encabezado — título, región, párrafo intro e índice inline ─────────────
 
-function Portada({ data }: { data: KitDeViajeData }) {
-  return (
-    <Page size="A4" style={s.pageCover}>
-      <View style={s.coverInner}>
-        <View>
-          {data.branding.logo_data_url && (
-            <Image src={data.branding.logo_data_url} style={s.coverLogo} />
-          )}
-          <Text style={s.coverBrand}>{data.branding.ministerio.toUpperCase()}</Text>
-          <Text style={s.coverBrandLine2}>{data.branding.division}</Text>
-        </View>
-
-        <View style={s.coverMainBlock}>
-          <Text style={s.coverKicker}>KIT DE VIAJE</Text>
-          <Text style={s.coverTitle}>Región de {data.region.nombre}</Text>
-          {data.region.capital && (
-            <Text style={s.coverRegion}>Capital: {data.region.capital}</Text>
-          )}
-          <Text style={s.coverFecha}>{data.fecha.display}</Text>
-        </View>
-      </View>
-    </Page>
-  )
-}
-
-// ── Índice ─────────────────────────────────────────────────────────────────
-
-function Indice({ data }: { data: KitDeViajeData }) {
-  const rows: { num: string; text: string }[] = [
-    { num: 'I.',   text: TITULO_SECCIONES.I  },
+function EncabezadoMinuta({ data }: { data: KitDeViajeData }) {
+  const region = regionLabel(data.region.nombre)
+  const filas: { num: string; text: string }[] = [
+    { num: 'I.',   text: TITULO_SECCIONES.I },
     { num: 'II.',  text: TITULO_SECCIONES.II },
-    { num: 'III.', text: TITULO_SECCIONES.IV },
+    { num: 'III.', text: `${TITULO_SECCIONES.III} ${region}` },
+    { num: 'IV.',  text: TITULO_SECCIONES.IV },
+    { num: 'V.',   text: TITULO_SECCIONES.V },
   ]
   return (
-    <Page size="A4" style={s.page}>
-      <PageHeader data={data} />
-      <PageFooter data={data} />
-      <Text style={s.indexTitle}>Índice</Text>
-      {rows.map((r, i) => (
-        <View key={i} style={s.indexRow}>
-          <Text style={s.indexNum}>{r.num}</Text>
-          <Text style={s.indexText}>{r.text}</Text>
-        </View>
-      ))}
-    </Page>
+    <View>
+      <Text style={s.tituloMinuta}>Minuta Regional</Text>
+      <Text style={s.subtituloRegion}>{region}</Text>
+      <Text style={s.parrafoIntro}>
+        La presente minuta trabajada por la División de Coordinación Interministerial, Gobierno Interior y Estudios considera:
+      </Text>
+      <View>
+        {filas.map((f, i) => (
+          <View key={i} style={s.indiceRow}>
+            <Text style={s.indiceNum}>{f.num}</Text>
+            <Text style={s.indiceText}>{f.text}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
   )
 }
 
 // ── Sección I — Caracterización general ────────────────────────────────────
 
 function SeccionI({ data }: { data: KitDeViajeData }) {
-  const { caracterizacion, region } = data
+  const { bullets } = data.caracterizacion
   return (
-    <Page size="A4" style={s.page}>
-      <PageHeader data={data} />
-      <PageFooter data={data} />
-
+    <View>
       <SectionTitle numeral="I">{TITULO_SECCIONES.I}</SectionTitle>
-
-      {caracterizacion.parrafos.map((p, i) => (
-        <Text key={i} style={i === caracterizacion.parrafos.length - 1 ? s.paraLast : s.para}>
-          {p}
-        </Text>
-      ))}
-
-      {caracterizacion.bullets.length > 0 && (
-        <>
-          <Text style={s.subSectionTitle}>Indicadores territoriales</Text>
-          <BulletList items={caracterizacion.bullets} />
-        </>
-      )}
-
-      {caracterizacion.provincias_tabla && caracterizacion.provincias_tabla.length > 0 && (
-        <>
-          <Text style={s.provinciasTitle}>Provincias y comunas de la {region.nombre === 'Metropolitana' ? 'Región' : `Región de ${region.nombre}`}</Text>
-          <PdfTable
-            headers={['Provincia', 'Comunas']}
-            rows={caracterizacion.provincias_tabla.map(p => ({ cells: [p.provincia, p.comunas] }))}
-            colWidths={[28, 72]}
-          />
-        </>
-      )}
-    </Page>
+      <BulletProsa label="Localización y superficie" texto={bullets.localizacion_superficie} />
+      <BulletOrganizacion label="Organización político-administrativa" provincias={bullets.organizacion_politico_administrativa} />
+      <BulletProsa label="Población (Censo 2024)" texto={bullets.poblacion} />
+      <BulletProsa label="Estructura etaria" texto={bullets.estructura_etaria} />
+      <BulletProsa label="Composición" texto={bullets.composicion} />
+    </View>
   )
 }
 
 // ── Sección II — Indicadores socioeconómicos ───────────────────────────────
 
 function SeccionII({ data }: { data: KitDeViajeData }) {
-  const { indicadores } = data
-  const narrativas: Array<{ label: string; text: string }> = []
-  if (indicadores.pib_comentario)    narrativas.push({ label: 'Economía y PIB',        text: indicadores.pib_comentario })
-  if (indicadores.matriz_productiva) narrativas.push({ label: 'Matriz productiva',      text: indicadores.matriz_productiva })
-  if (indicadores.ingresos_pobreza)  narrativas.push({ label: 'Ingresos y pobreza',     text: indicadores.ingresos_pobreza })
-  if (indicadores.educacion_nota)    narrativas.push({ label: 'Educación',              text: indicadores.educacion_nota })
-  if (indicadores.salud_nota)        narrativas.push({ label: 'Salud',                  text: indicadores.salud_nota })
-  if (indicadores.vivienda_nota)     narrativas.push({ label: 'Vivienda',               text: indicadores.vivienda_nota })
-  if (indicadores.seguridad_nota)    narrativas.push({ label: 'Seguridad',              text: indicadores.seguridad_nota })
-
+  const { bullets } = data.indicadores
   return (
-    <Page size="A4" style={s.page}>
-      <PageHeader data={data} />
-      <PageFooter data={data} />
-
+    <View>
       <SectionTitle numeral="II">{TITULO_SECCIONES.II}</SectionTitle>
-
-      {indicadores.tendencia_general && (
-        <Text style={s.para}>{indicadores.tendencia_general}</Text>
-      )}
-
-      {indicadores.bullets.length > 0 && (
-        <BulletList items={indicadores.bullets} />
-      )}
-
-      {indicadores.mercado_laboral_tabla && indicadores.mercado_laboral_tabla.length > 0 && (
-        <>
-          <Text style={s.subSectionTitle}>Mercado laboral</Text>
-          <PdfTable
-            headers={['Indicador', 'Valor']}
-            rows={indicadores.mercado_laboral_tabla.map((r: IndicadorFila) => ({
-              cells: [r.indicador, r.valor],
-              nota: r.nota,
-            }))}
-            colWidths={[70, 30]}
-          />
-        </>
-      )}
-
-      {narrativas.map((n, i) => (
-        <View key={i} wrap={false}>
-          <Text style={s.subSectionTitle}>{n.label}</Text>
-          <Text style={s.para}>{n.text}</Text>
-        </View>
-      ))}
-    </Page>
+      <BulletPib label="PIB regional" texto={bullets.pib_regional} sectores={bullets.pib_sectores} />
+      <BulletMercadoLaboral label="Mercado laboral" periodo={bullets.mercado_laboral_periodo} tabla={bullets.mercado_laboral_tabla} />
+      <BulletProsa label="Ingresos y pobreza (CASEN 2024)" texto={bullets.ingresos_pobreza} />
+      <BulletProsa label="Educación (Censo 2024)" texto={bullets.educacion} />
+      <BulletProsa label="Salud (CASEN 2024)" texto={bullets.salud} />
+      <BulletProsa label="Vivienda (Censo 2024)" texto={bullets.vivienda} />
+      <BulletProsa
+        label={`Seguridad pública (LeyStop Carabineros${bullets.seguridad_semana ? `, ${bullets.seguridad_semana}` : ''})`}
+        texto={bullets.seguridad_publica}
+      />
+    </View>
   )
 }
 
-// ── Sección IV — Autoridades ────────────────────────────────────────────────
+// ── Sección III — Plan Regional de Gobierno ─────────────────────────────────
+
+function SeccionIII({ data }: { data: KitDeViajeData }) {
+  const { planRegional, region } = data
+  // PDF disponible pero sin párrafos: el redactor de IA no corrió (falta
+  // ANTHROPIC_API_KEY) o falló en silencio (soft-fail) — distinto del caso
+  // "PDF no disponible", que trae su propio disclaimer desde el assembler.
+  const sinRedactar = planRegional.disponible && planRegional.parrafos.length === 0
+  return (
+    <View>
+      <SectionTitle numeral="III">{`${TITULO_SECCIONES.III} ${regionLabel(region.nombre)}`}</SectionTitle>
+      {!planRegional.disponible && planRegional.disclaimer && (
+        <View style={s.disclaimerBox}>
+          <Text style={s.disclaimerText}>{planRegional.disclaimer}</Text>
+        </View>
+      )}
+      {sinRedactar && (
+        <View style={s.disclaimerBox}>
+          <Text style={s.disclaimerText}>
+            El resumen de esta sección se redacta automáticamente a partir del PDF del Plan Regional de Gobierno. No se generó en esta ejecución — verifique que el redactor de IA esté disponible y regenere la minuta.
+          </Text>
+        </View>
+      )}
+      {planRegional.parrafos.map((p, i) => (
+        <Text key={i} style={i === planRegional.parrafos.length - 1 ? s.paraLast : s.para}>
+          {p}
+        </Text>
+      ))}
+    </View>
+  )
+}
+
+// ── Sección IV — placeholder (contenido pendiente) ─────────────────────────
+
+function SeccionPlaceholder({ numeral, titulo }: { numeral: string; titulo: string }) {
+  return (
+    <View>
+      <SectionTitle numeral={numeral}>{titulo}</SectionTitle>
+    </View>
+  )
+}
+
+// ── Sección V — Autoridades ──────────────────────────────────────────────
 
 /** Iniciales para el placeholder: primera letra del primer nombre + primera del último apellido. */
 function computeInitials(nombre: string): string {
@@ -524,7 +517,7 @@ function GrupoBlock({ grupo }: { grupo: AutoridadGrupo }) {
   )
 }
 
-function SeccionIV({ data }: { data: KitDeViajeData }) {
+function SeccionV({ data }: { data: KitDeViajeData }) {
   const { autoridades } = data
   // Preview mode Fase B: cuando la sección no está disponible (Fase D pendiente),
   // renderizamos sample data para que Diego revise el layout. Cleanup: cuando
@@ -533,11 +526,8 @@ function SeccionIV({ data }: { data: KitDeViajeData }) {
   const grupos = isPreview ? samplePreviewAutoridades(data.region.nombre) : autoridades.grupos
 
   return (
-    <Page size="A4" style={s.page} wrap>
-      <PageHeader data={data} />
-      <PageFooter data={data} />
-
-      <SectionTitle numeral="III">{TITULO_SECCIONES.IV}</SectionTitle>
+    <View wrap>
+      <SectionTitle numeral="V">{TITULO_SECCIONES.V}</SectionTitle>
 
       {isPreview && (
         <Text style={s.previewNote}>
@@ -548,7 +538,7 @@ function SeccionIV({ data }: { data: KitDeViajeData }) {
       {grupos.map((g, i) => (
         <GrupoBlock key={i} grupo={g} />
       ))}
-    </Page>
+    </View>
   )
 }
 
@@ -557,19 +547,25 @@ function SeccionIV({ data }: { data: KitDeViajeData }) {
 export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
   return (
     <Document
-      title={`Kit de Viaje — Región de ${data.region.nombre}`}
+      title={`Minuta Regional — ${regionLabel(data.region.nombre)}`}
       author={data.branding.division}
-      subject={`Kit de Viaje ${data.fecha.display}`}
+      subject={`Minuta Regional ${data.fecha.display}`}
     >
-      <Portada data={data} />
-      <Indice data={data} />
-      <SeccionI data={data} />
-      <SeccionII data={data} />
-      {/* Sección IV: cuando disponible=true el route anexa el ficha oficial
-          por post-procesamiento con pdf-lib (el ficha ES la Sección IV,
-          con su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando
-          disponible=false, pintamos disclaimer + sample data como preview. */}
-      {!data.autoridades.disponible && <SeccionIV data={data} />}
+      <Page size="A4" style={s.page} wrap>
+        <PageHeader data={data} />
+        <PageFooter data={data} />
+
+        <EncabezadoMinuta data={data} />
+        <SeccionI data={data} />
+        <SeccionII data={data} />
+        <SeccionIII data={data} />
+        <SeccionPlaceholder numeral="IV" titulo={TITULO_SECCIONES.IV} />
+        {/* Sección V: cuando disponible=true el route anexa el ficha oficial
+            por post-procesamiento con pdf-lib (el ficha ES la Sección V, con
+            su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando
+            disponible=false, pintamos disclaimer + sample data como preview. */}
+        {!data.autoridades.disponible && <SeccionV data={data} />}
+      </Page>
     </Document>
   )
 }

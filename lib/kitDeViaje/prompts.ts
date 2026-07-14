@@ -1,16 +1,26 @@
 /**
  * Prompts para el redactor del Kit de Viaje ("Contexto Regional").
  *
- * `buildContextPrompt` toma `region_metrics` + `fichaExtra` + `trendSummaries`
- * y devuelve narrativa para Sección I (caracterización) y Sección II
- * (indicadores). No usa el PDF PREGO — el contexto socioeconómico es
- * independiente del Plan Regional. La justificación de ejes se genera en la
- * minuta "Avance PREGO" con otro prompt (ver `generateJustificacionEjes` en
- * `lib/minutaAI.ts`).
+ * `buildContextPrompt` recibe las líneas de datos crudos YA CALCULADAS por
+ * `buildRawDataLines()` (ver `lib/kitDeViaje/assembler.ts`) — la misma fuente
+ * que usa el fallback determinístico cuando el AI no corre. El redactor solo
+ * transforma esas líneas en prosa agrupada en 5 bullets (Sección I) + 6
+ * bullets (Sección II) — no recalcula porcentajes, no compara contra
+ * "nacional", no interpreta JSON anidado. Esto evita que la IA invente o
+ * descuadre cifras que ya están correctas en las líneas.
+ *
+ * "Organización político-administrativa" (Sección I), los sectores del PIB y
+ * la tabla de "Mercado laboral" (Sección II) NO se piden acá — son 100%
+ * determinísticos, el assembler los arma directo desde los datos.
+ *
+ * No usa el PDF PREGO — el contexto socioeconómico es independiente del
+ * Plan Regional. El resumen de Sección III se genera con otro prompt
+ * (`generatePregoResumen` en `lib/minutaAI.ts`), igual que la justificación
+ * de ejes de "Avance PREGO" (`generateJustificacionEjes`).
  */
 
-import type { RegionMetrics } from '@/lib/types'
-import type { FichaExtraData, TrendSummaries } from '@/lib/minutaAI'
+import type { Bullet } from './types'
+import type { RawDataLines } from './assembler'
 
 // ── Guardarraíles compartidos ──────────────────────────────────────────────
 
@@ -29,17 +39,39 @@ Reglas de estilo (obligatorias en cada respuesta):
   "debiera priorizarse". Describí lo que el dato muestra.
 - Números en formato es-CL: separador de miles con punto, decimal con coma
   (ej: 37.068 km², 12,4%).
-- Sin emojis, sin markdown, sin viñetas — texto plano.
-- No inventes cifras. Si un dato no está en el input, NO lo menciones.
+- Sin emojis, sin markdown, sin viñetas — texto plano, prosa corrida.
 `.trim()
+
+const REGLA_FUENTE_UNICA = `
+REGLA CRÍTICA — fuente única de datos:
+Cada bloque de líneas abajo YA TRAE el valor final, correcto y formateado —
+incluidas comparaciones contra el promedio nacional donde corresponde. Tu
+único trabajo es convertir esas líneas en prosa fluida, agrupadas en el
+bullet correspondiente.
+- NO recalcules porcentajes, promedios ni variaciones.
+- NO corrijas, redondees ni "mejores" ningún valor.
+- NO inventes cifras que no estén en las líneas.
+- NO menciones un dato si su línea no está en el input (significa que no
+  hay valor disponible para esa región).
+- Cada oración que incluya un número debe poder rastrearse a una línea
+  específica de las que te paso.
+- Excepción puntual (única permitida): en "estructura_etaria" podés agregar
+  UNA frase final interpretando si el índice de envejecimiento es alto o bajo
+  y qué implica (ej: envejecimiento poblacional vs. población joven) — es una
+  lectura del número, no una cifra nueva.
+`.trim()
+
+/** "Label: value (nota)" por línea — mismo formato que usa el fallback determinístico. */
+function fmtLineas(lines: Bullet[]): string {
+  if (lines.length === 0) return '(sin datos disponibles)'
+  return lines.map(b => `- ${b.label}: ${b.value}${b.nota ? ` (${b.nota})` : ''}`).join('\n')
+}
 
 // ── (1) Contexto socioeconómico — Secciones I y II ─────────────────────────
 
 export interface ContextPromptInput {
   region: { cod: string; nombre: string }
-  metrics: RegionMetrics | null
-  fichaExtra: FichaExtraData | null
-  trendSummaries: TrendSummaries | null
+  raw: RawDataLines
 }
 
 export interface ContextPromptOutput {
@@ -50,60 +82,80 @@ export interface ContextPromptOutput {
 /**
  * Devuelve system + user prompts para la llamada de contexto. El caller usa
  * respuesta.content[0].text como JSON con las claves:
- *   { caracterizacion_parrafos: string[], indicadores_narrativa: {...} }
+ *   { caracterizacion: {...4 campos}, indicadores: {...6 campos} }
  */
 export function buildContextPrompt(input: ContextPromptInput): ContextPromptOutput {
-  const { region, metrics, fichaExtra, trendSummaries } = input
+  const { region, raw } = input
 
   const system = `
 Sos un redactor técnico del Ministerio del Interior de Chile, División de
-Coordinación Interministerial. Redactás secciones ejecutivas del "Kit de
-Viaje" — documento institucional que la autoridad lee antes de una visita
+Coordinación Interministerial. Redactás la Sección I ("Caracterización
+general de la región") y la Sección II ("Indicadores socioeconómicos clave")
+del documento "Contexto Regional" — que la autoridad lee antes de una visita
 regional. Tono técnico-descriptivo, sin marketing.
 
 ${REGLAS_ESTILO}
 
+${REGLA_FUENTE_UNICA}
+
 Devolvés SOLO un objeto JSON válido con exactamente esta forma (sin texto
-adicional, sin backticks, sin comentarios):
+adicional, sin backticks, sin comentarios). Cada valor es un string de prosa
+(1-3 oraciones); si el bloque de líneas correspondiente viene vacío, devolvé
+string vacío para ese campo:
 
 {
-  "caracterizacion_parrafos": [
-    // 2 a 3 párrafos de 3-5 oraciones cada uno describiendo la región:
-    // ubicación relativa en Chile, características demográficas y sociales
-    // salientes, y composición cultural (pueblos originarios, migración,
-    // ruralidad). Cada párrafo es un string. No repitas los números de los
-    // bullets — usalos como base pero enriquecé con contexto.
-  ],
-  "indicadores_narrativa": {
-    "pib_comentario": "",       // 2-3 oraciones sobre PIB regional
-    "matriz_productiva": "",    // 2-3 oraciones sobre sectores productivos
-    "ingresos_pobreza": "",     // 2-3 oraciones sobre CASEN 2024
-    "educacion_nota": "",       // 2 oraciones sobre escolaridad/cobertura
-    "salud_nota": "",           // 2 oraciones sobre FONASA/camas/lista espera
-    "vivienda_nota": "",        // 2 oraciones sobre déficit/hacinamiento
-    "seguridad_nota": "",       // 2 oraciones sobre victimización/percepción
-    "tendencia_general": ""     // 1 línea sintética. Opcional (string vacío ok).
+  "caracterizacion": {
+    "localizacion_superficie": "", // usa el bloque LOCALIZACION_Y_SUPERFICIE
+    "poblacion": "",               // usa el bloque POBLACION
+    "estructura_etaria": "",       // usa el bloque ESTRUCTURA_ETARIA (+ 1 frase de interpretación, ver regla)
+    "composicion": ""              // usa el bloque COMPOSICION
+  },
+  "indicadores": {
+    "pib_regional": "",       // usa el bloque PIB_REGIONAL — incluí qué sector(es) explican más el crecimiento o la caída
+    "ingresos_pobreza": "",   // usa el bloque INGRESOS_Y_POBREZA
+    "educacion": "",          // usa el bloque EDUCACION
+    "salud": "",              // usa el bloque SALUD
+    "vivienda": "",           // usa el bloque VIVIENDA
+    "seguridad_publica": ""   // usa el bloque SEGURIDAD_PUBLICA
   }
 }
-
-Cualquier campo cuya data no esté en el input se devuelve como string vacío.
-NO inventes cifras faltantes.
 `.trim()
 
-  const dataDump = {
-    region,
-    region_metrics: metrics ?? null,
-    ficha_extra: fichaExtra ?? null,
-    trend_summaries: trendSummaries ?? null,
-  }
-
   const user = `
-Datos crudos del panel para la Región ${region.nombre} (código ${region.cod}):
+Líneas de datos ya calculadas para la Región ${region.nombre} (código ${region.cod}):
 
-${JSON.stringify(dataDump, null, 2)}
+=== LOCALIZACION_Y_SUPERFICIE ===
+${fmtLineas(raw.localizacion)}
 
-Redactá el JSON pedido usando estos datos. Recordá: si un valor es null o
-undefined, no lo menciones. No agregues campos fuera del schema.
+=== POBLACION ===
+${fmtLineas(raw.poblacion)}
+
+=== ESTRUCTURA_ETARIA ===
+${fmtLineas(raw.estructuraEtaria)}
+
+=== COMPOSICION ===
+${fmtLineas(raw.composicion)}
+
+=== PIB_REGIONAL ===
+${fmtLineas(raw.pibRegional)}
+
+=== INGRESOS_Y_POBREZA ===
+${fmtLineas(raw.ingresosPobreza)}
+
+=== EDUCACION ===
+${fmtLineas(raw.educacion)}
+
+=== SALUD ===
+${fmtLineas(raw.salud)}
+
+=== VIVIENDA ===
+${fmtLineas(raw.vivienda)}
+
+=== SEGURIDAD_PUBLICA ===
+${fmtLineas(raw.seguridad)}
+
+Redactá el JSON pedido usando ÚNICAMENTE estas líneas. No agregues campos
+fuera del schema.
 `.trim()
 
   return { system, user }
