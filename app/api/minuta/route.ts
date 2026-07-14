@@ -694,9 +694,10 @@ export async function POST(request: Request) {
       buffer = await renderKitDeViajePdf(kitData)
 
       // Anexos verbatim con pdf-lib, EN ORDEN de sección: primero Conflictos
-      // (Sección IV), después Autoridades (Sección V). El renderer ya pintó el
-      // título de la IV y omitió la ficha de la V. Cada PDF preserva su layout
-      // 1:1 (texto vectorial + imágenes).
+      // (Sección IV), después Autoridades (Sección V). Cuando el PDF existe, el
+      // renderer omite por completo la sección (ambos PDFs traen su propio
+      // encabezado) para no dejar una página de título semi-vacía antes del
+      // anexo. Cada PDF preserva su layout 1:1 (texto vectorial + imágenes).
       if (conflictosBuffer || autoridadesFichaBuffer) {
         const t0 = Date.now()
         const { PDFDocument } = await import('pdf-lib')

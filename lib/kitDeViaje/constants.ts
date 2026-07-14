@@ -57,10 +57,6 @@ export const COPY_PLAN_REGIONAL_MISSING =
 export const COPY_CONFLICTOS_MISSING =
   'Aún no se ha cargado el documento de conflictos y alertas para esta región. Se incorporará cuando esté disponible en el panel.'
 
-/** Nota bajo el título cuando SÍ hay PDF cargado (se anexa a continuación). */
-export const COPY_CONFLICTOS_ADJUNTO =
-  'El documento de conflictos y alertas cargado para la región se adjunta a continuación.'
-
 // ── Copy: Sección V Autoridades no disponibles ─────────────────────────────
 
 /** Fase B: se muestra siempre hasta que Fase D backfileé la región. */
