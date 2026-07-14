@@ -12,27 +12,7 @@ export type MinutaEjecutivaContent = {
   tendencia_general?: string        // 1 línea: "Mejora en empleo; deterioro en seguridad"
 }
 
-export type MinutaTipo = 'ejecutiva' | 'ficha'
-
-export type FichaRegionalContent = {
-  introduccion: string           // I. párrafo contextual geográfico-político
-  estructura_etaria: string      // I. narrativa edad/envejecimiento
-  composicion: string            // I. narrativa pueblos originarios/inmigrantes/discapacidad
-  pib_comentario: string         // II. variación PIB últimos años (2-3 oraciones)
-  matriz_productiva: string      // II. narrativa sectores productivos
-  mercado_laboral_nota: string   // II. contexto mercado laboral vs nacional (1-2 oraciones)
-  ingresos_pobreza: string       // II. CASEN 2024 párrafo completo
-  educacion_nota: string         // II. Censo 2024 educación
-  salud_nota: string             // II. CASEN 2024 salud
-  vivienda_nota: string          // II. Censo 2024 vivienda
-  seguridad_nota: string         // II. LeyStop narrativa seguridad
-  prego_intro: string            // III. párrafo intro PREGO
-  prego_ejes: {
-    numero: number
-    nombre: string
-    items: { letra: string; texto: string }[]
-  }[]
-}
+export type MinutaTipo = 'ejecutiva'
 
 /** Data passed to AI for ficha/kit-de-viaje generation */
 export type FichaExtraData = {
@@ -337,227 +317,11 @@ export async function generateMinutaContent(
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
   fichaExtra?: FichaExtraData | null,
-): Promise<MinutaEjecutivaContent | FichaRegionalContent | null> {
+): Promise<MinutaEjecutivaContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
-
-  // Kit de Viaje (ex Ficha Regional): generates full narrative content for sections I, II, III
-  if (tipo === 'ficha') {
-    const m = metrics
-    const fe = fichaExtra
-
-    // Build comprehensive data context for AI
-    const dataContext = `
-DATOS REGIÓN DE ${regionNombre.toUpperCase()} — ${fecha}
-
-=== GEOGRAFÍA Y DEMOGRAFÍA ===
-- Superficie: ${m?.superficie_km2?.toLocaleString('es-CL') ?? 'N/D'} km² (${m?.pct_territorio_nacional ?? 'N/D'}% del territorio nacional)
-- Provincias: ${m?.provincias_n ?? 'N/D'} | Comunas: ${m?.comunas_n ?? 'N/D'} | Capital: ${m?.region_nombre ?? regionNombre}
-- Población total (Censo 2024): ${m?.poblacion_total?.toLocaleString('es-CL') ?? 'N/D'} hab
-- Mujeres: ${m?.pct_mujeres ?? 'N/D'}% (${m?.poblacion_total && m?.pct_mujeres ? Math.round(m.poblacion_total * m.pct_mujeres / 100).toLocaleString('es-CL') : 'N/D'}) | Hombres: ${m?.pct_hombres ?? 'N/D'}% (${m?.poblacion_total && m?.pct_hombres ? Math.round(m.poblacion_total * m.pct_hombres / 100).toLocaleString('es-CL') : 'N/D'})
-- Promedio de edad: ${m?.promedio_edad ?? m?.prom_edad ?? 'N/D'} años | 60+ años: ${m?.pct_edad_60_mas ?? 'N/D'}%
-- Población urbana: ${m?.pct_urbana ?? 'N/D'}% | Rural: ${m?.pct_rural ?? 'N/D'}%
-- Pueblos originarios: ${m?.pct_indigena ?? 'N/D'}% (${m?.n_pueblos_orig?.toLocaleString('es-CL') ?? 'N/D'} personas)
-- Inmigrantes: ${m?.pct_inmigrantes ?? 'N/D'}% (${m?.n_inmigrantes?.toLocaleString('es-CL') ?? 'N/D'} personas)
-- Discapacidad: ${m?.n_discapacidad?.toLocaleString('es-CL') ?? 'N/D'} personas
-- Jefatura femenina de hogar: ${m?.pct_jefatura_mujer ?? 'N/D'}%
-- Densidad: ${m?.densidad_poblacional ?? 'N/D'} hab/km²
-
-=== PIB REGIONAL (BCCh, nominal precios corrientes) ===
-- PIB: $${fe?.pibAnualRegion ? Math.round(fe.pibAnualRegion.value).toLocaleString('es-CL') : 'N/D'} miles de millones (${fe?.pibAnualRegion ? formatPeriod(fe.pibAnualRegion.period) : 'N/D'})
-- % del PIB nacional: ${fe?.allRegionsPib?.find(r => r.nombre === regionNombre)?.pct_pib?.toFixed(1) ?? 'N/D'}%
-- Ranking: ${fe?.allRegionsPib ? (() => { const sorted = [...fe.allRegionsPib].sort((a, b) => b.pib_mm - a.pib_mm); const idx = sorted.findIndex(r => r.nombre === regionNombre); return idx >= 0 ? `${idx + 1}° de 16` : 'N/D' })() : 'N/D'}
-${fe?.pibAnualHistory && fe.pibAnualHistory.length > 1 ? `- Evolución PIB anual: ${fe.pibAnualHistory.map(h => `${h.period.slice(0, 4)}: $${Math.round(h.value).toLocaleString('es-CL')} MM`).join(' → ')}` : ''}
-
-=== PIB SECTORIAL (BCCh, top sectores) ===
-${fe?.pibSectorial?.slice(0, 8).map(s => `- ${s.sector}: $${Math.round(s.valor).toLocaleString('es-CL')} MM (${s.pct.toFixed(1)}%)`).join('\n') ?? 'N/D'}
-- Sectores principales: ${m?.sectores_productivos_principales ?? 'N/D'}
-- Vocación regional: ${m?.vocacion_regional ?? 'N/D'}
-
-=== MERCADO LABORAL (INE-ENE, trimestre móvil) ===
-- Tasa desocupación: ${m?.tasa_desocupacion ?? 'N/D'}% (nacional: ${fe?.desocupacionNacional?.toFixed(1) ?? 'N/D'}%)
-- Ocupados: ${trendSummaries?.empleoINE?.ocupados_miles ? `${Math.round(trendSummaries.empleoINE.ocupados_miles)} mil` : 'N/D'}
-- Fuerza de trabajo: ${trendSummaries?.empleoINE?.fuerza_trabajo_miles ? `${Math.round(trendSummaries.empleoINE.fuerza_trabajo_miles)} mil` : 'N/D'}
-- Tasa participación laboral: ${m?.tasa_participacion_laboral ?? 'N/D'}%
-- Informalidad laboral: ${m?.tasa_ocupacion_informal ?? 'N/D'}%
-${trendSummaries?.empleoINE?.period ? `- Período dato empleo: ${formatPeriod(trendSummaries.empleoINE.period)}` : ''}
-
-=== POBREZA E INGRESOS (CASEN 2024) ===
-- Pobreza por ingresos: ${m?.pct_pobreza_ingresos ?? 'N/D'}% (nacional ~17,3%)
-- Pobreza extrema: ${m?.pct_pobreza_extrema ?? 'N/D'}%
-- Pobreza multidimensional: ${m?.pct_pobreza_multidimensional ?? 'N/D'}%
-- Pobreza severa: ${m?.pct_pobreza_severa ?? 'N/D'}%
-- Hogares RSH tramo 40%: ${m?.hogares_rsh_tramo40?.toLocaleString('es-CL') ?? 'N/D'} (${m?.pct_rsh_tramo40 ?? 'N/D'}%)
-
-=== EDUCACIÓN (Censo 2024) ===
-- Escolaridad promedio: ${m?.anios_escolaridad_promedio ?? 'N/D'} años
-- Educación superior: ${m?.pct_educacion_superior ?? 'N/D'}%
-- Alfabetismo: ${m?.tasa_alfabetismo ?? 'N/D'}%
-- Matrícula escolar: ${m?.matricula_escolar_total?.toLocaleString('es-CL') ?? 'N/D'}
-- Cobertura parvularia: ${m?.cobertura_parvularia_pct ?? 'N/D'}%
-
-=== SALUD ===
-- FONASA: ${m?.pct_fonasa ?? 'N/D'}%
-- Hospitales: ${m?.hospitales_n ?? 'N/D'}
-- Camas/1.000 hab: ${m?.camas_por_1000_hab ?? 'N/D'}
-- Lista de espera: ${m?.lista_espera_n?.toLocaleString('es-CL') ?? 'N/D'}
-
-=== VIVIENDA (Censo 2024) ===
-- Déficit habitacional: ${m?.deficit_habitacional?.toLocaleString('es-CL') ?? 'N/D'}
-- Hacinamiento: ${m?.pct_hacinamiento ?? 'N/D'}%
-- Acceso agua pública: ${m?.pct_acceso_agua_publica ?? 'N/D'}%
-- Jefatura femenina hogar: ${m?.pct_jefatura_mujer ?? 'N/D'}%
-
-=== SEGURIDAD PÚBLICA ===
-${leystopData ? `- LeyStop Carabineros (semana ${leystopData.semana ?? '?'}):
-  Casos año a la fecha: ${leystopData.casos_anno_fecha?.toLocaleString('es-CL') ?? 'N/D'}
-  Variación anual: ${leystopData.var_anno_fecha != null ? `${leystopData.var_anno_fecha > 0 ? '+' : ''}${leystopData.var_anno_fecha.toFixed(1)}%` : 'N/D'}
-  Top delitos: ${[1, 2, 3, 4, 5].map(i => {
-    const d = leystopData[`mayor_registro_${i}` as keyof LeystopMinuta] as string | null
-    const p = leystopData[`pct_${i}` as keyof LeystopMinuta] as number | null
-    return d ? `${d} (${p?.toFixed(0) ?? '?'}%)` : null
-  }).filter(Boolean).join(', ')}` : '- Datos LeyStop no disponibles'}
-- ENUSC: Hogares víctimas DMCS ${m?.pct_hogares_victimas_dmcs ?? 'N/D'}% | Inseguridad percibida ${m?.pct_percepcion_inseguridad ?? 'N/D'}%
-- Tasa denuncias/100k: ${m?.tasa_denuncias_100k ?? 'N/D'} | Tasa delitos/100k: ${m?.tasa_delitos_100k ?? 'N/D'}
-`.trim()
-
-    const fichaRules = `
-REGLAS OBLIGATORIAS:
-1. Usa ÚNICAMENTE los datos proporcionados. NO inventes cifras, fechas, porcentajes ni nombres.
-2. NO recomiendes acciones. NO uses "debe", "debería", "se recomienda".
-3. NO atribuyas causas ni proyectes consecuencias.
-4. NO uses adjetivos valorativos: "preocupante", "favorable", "estratégico", "alentador", "crítico".
-5. Tono: formal, directo, informativo. Estilo de minuta técnica ministerial.
-6. Cada cifra debe tener su fuente: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop Carabineros).
-7. Si falta información, omítela sin mencionar su ausencia.
-8. Escribe en español de Chile.
-9. Los párrafos deben ser densos en datos, no retóricos.
-10. NO repitas cifras que ya aparecen en los bullets de datos (%, habitantes, km²). Los campos narrativos agregan CONTEXTO e IMPLICANCIAS, no repiten números.
-11. Sé CONCISO. Cada campo tiene un límite estricto de oraciones. No lo excedas.
-12. En los sub-items del PREGO, usa "En **tema**," al inicio para indicar negrita (con doble asterisco).`
-
-    const fichaSchema = `{
-  "introduccion": "MÁXIMO 2 oraciones. Ubicación geográfica y principal característica de la región.",
-  "estructura_etaria": "MÁXIMO 2 oraciones. Implicancias del envejecimiento o juventud. NO repitas la edad promedio ni el % de 60+ (ya están en el bullet).",
-  "composicion": "MÁXIMO 2 oraciones. Contexto territorial de pueblos originarios e inmigración. NO repitas los porcentajes (ya están en el bullet).",
-  "pib_comentario": "MÁXIMO 2 oraciones. Evolución del PIB en los últimos años y tendencia.",
-  "matriz_productiva": "MÁXIMO 2 oraciones. Vocación productiva y sectores estratégicos.",
-  "mercado_laboral_nota": "MÁXIMO 2 oraciones. Contexto de la desocupación respecto al promedio nacional.",
-  "ingresos_pobreza": "MÁXIMO 3 oraciones. Pobreza por ingresos, extrema y multidimensional con comparación nacional.",
-  "educacion_nota": "MÁXIMO 2 oraciones. Escolaridad y contexto educativo.",
-  "salud_nota": "MÁXIMO 2 oraciones. Cobertura y brechas de salud.",
-  "vivienda_nota": "MÁXIMO 2 oraciones. Déficit habitacional y acceso a servicios.",
-  "seguridad_nota": "MÁXIMO 2 oraciones. LeyStop casos año y delitos más frecuentes.",
-  "prego_intro": "MÁXIMO 2 oraciones introduciendo el Plan Regional.",
-  "prego_ejes": [
-    {
-      "numero": 1,
-      "nombre": "Nombre del eje",
-      "items": [
-        { "letra": "a", "texto": "En **tema en negrita**, se ejecuta/implementa [acción concreta con cifras y plazos]. Máximo 2 oraciones por item." }
-      ]
-    }
-  ]
-}`
-
-    // Build messages — include Plan Regional PDF if available
-    const userContent: Anthropic.Messages.ContentBlockParam[] = [{
-      type: 'text',
-      text: `Genera el contenido narrativo para la MINUTA REGIONAL PARA LA AUTORIDAD de la Región de ${regionNombre} (${fecha}).
-
-${dataContext}
-
-Responde ÚNICAMENTE con un JSON válido (sin markdown, sin \`\`\`):
-${fichaSchema}`,
-    }]
-
-    if (planPdfBase64) {
-      userContent.unshift({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: planPdfBase64 },
-        cache_control: { type: 'ephemeral' },
-      } as unknown as Anthropic.Messages.ContentBlockParam)
-    }
-
-    try {
-      // ── PASS 1: Generate draft ──
-      const t0 = Date.now()
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: `Eres redactor técnico senior de la División de Coordinación Interministerial (DCI), Gobierno Interior y División de Estudios del Ministerio del Interior de Chile. Redactas la MINUTA REGIONAL PARA LA AUTORIDAD — documento que acompaña a la máxima autoridad en visitas regionales.
-
-INSTRUCCIÓN CRÍTICA SOBRE EL PREGO:
-- Si se adjunta un Plan Regional de Gobierno (PDF), DEBES extraer los ejes estratégicos con todos sus sub-items. El campo prego_ejes NO PUEDE quedar vacío si hay PDF adjunto.
-- Si NO hay PDF adjunto, genera 3 ejes genéricos basados en los indicadores de la región (ej: si hay alta desocupación → eje de empleo; si hay pobreza alta → eje social; seguridad siempre es eje).
-- prego_ejes SIEMPRE debe tener al menos 3 ejes con al menos 2 items cada uno.
-
-${fichaRules}`,
-        messages: [{ role: 'user', content: userContent }],
-      })
-      const text = response.content.find(b => b.type === 'text')?.text ?? ''
-      const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
-      const draft = JSON.parse(cleaned) as FichaRegionalContent
-      const t1 = Date.now()
-      console.log(`[minutaAI] Kit de Viaje DRAFT for ${regionNombre}: ${Object.keys(draft).length} fields, prego_ejes: ${draft.prego_ejes?.length ?? 0}, planPdf: ${!!planPdfBase64} (${t1 - t0}ms)`)
-
-      // ── PASS 2: Review & rewrite ──
-      // A second AI call reviews the draft against the source data and rewrites for quality.
-      const reviewResponse = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: `Eres editor senior de minutas ministeriales. Recibes un borrador de MINUTA REGIONAL y los datos fuente originales. Tu trabajo es revisar y REESCRIBIR el borrador completo para máxima calidad.
-
-CRITERIOS DE REVISIÓN:
-1. CONCISIÓN: Cada campo debe respetar su límite de oraciones. Si excede, recorta sin perder datos clave.
-2. NO REPETICIÓN: Si un párrafo repite cifras que ya aparecen en otro campo (ej: % edad ya está en el bullet de estructura etaria), elimina la repetición.
-3. PRECISIÓN: Verifica que las cifras del borrador coincidan con los datos fuente. Si hay discrepancia, usa el dato fuente.
-4. FORMATO: Los sub-items del PREGO deben comenzar con "En **tema en negrita**," (doble asterisco markdown).
-5. TONO: Formal, seco, técnico. Cero adjetivos valorativos. Cero recomendaciones.
-6. FUENTES: Cada cifra debe tener fuente entre paréntesis: (Censo 2024), (CASEN 2024), (BCCh), (INE-ENE), (LeyStop).
-7. CLARIDAD: Si algo se puede mostrar más directo o claro, hazlo. Privilegia datos concretos sobre narrativa.
-8. PREGO: NUNCA elimines ni vacíes prego_ejes. Si el borrador tiene ejes, mantenlos y mejóralos. Si están vacíos, genera al menos 3 ejes basados en los datos.
-
-Responde ÚNICAMENTE con el JSON completo reescrito (misma estructura, sin markdown, sin \`\`\`).`,
-        messages: [{
-          role: 'user',
-          content: `BORRADOR A REVISAR:
-${JSON.stringify(draft, null, 2)}
-
-DATOS FUENTE ORIGINALES:
-${dataContext}
-
-Revisa el borrador contra los datos fuente. Reescribe lo que sea necesario para maximizar concisión, precisión y claridad. Mantén la misma estructura JSON exacta.`,
-        }],
-      })
-      const reviewText = reviewResponse.content.find(b => b.type === 'text')?.text ?? ''
-      const reviewCleaned = reviewText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
-
-      let final: FichaRegionalContent
-      try {
-        final = JSON.parse(reviewCleaned) as FichaRegionalContent
-        // Safety: if review lost PREGO ejes that draft had, restore them
-        if ((!final.prego_ejes || final.prego_ejes.length === 0) && draft.prego_ejes?.length > 0) {
-          console.warn(`[minutaAI] Review lost PREGO ejes for ${regionNombre}, restoring from draft`)
-          final.prego_ejes = draft.prego_ejes
-          final.prego_intro = final.prego_intro || draft.prego_intro
-        }
-        const t2 = Date.now()
-        console.log(`[minutaAI] Kit de Viaje REVIEWED for ${regionNombre}: prego_ejes: ${final.prego_ejes?.length ?? 0} (${t2 - t1}ms review, ${t2 - t0}ms total)`)
-      } catch {
-        // If review JSON parsing fails, use the draft
-        console.warn(`[minutaAI] Review parse failed for ${regionNombre}, using draft`)
-        final = draft
-      }
-
-      return final
-    } catch (err) {
-      console.error(`[minutaAI] Failed to generate Kit de Viaje for ${regionNombre}:`, err)
-      return null
-    }
-  }
 
   const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData, seguimientos, semaforoTrends, nationalBenchmark, trendSummaries)
   const ejes = [...new Set(projects.map(p => p.eje))]
@@ -752,7 +516,7 @@ function parseAiJson<T>(response: Anthropic.Messages.Message, label = 'unknown')
   }
 }
 
-type ContextAiOutput = Pick<KitDeViajeAIContent, 'caracterizacion_parrafos' | 'indicadores_narrativa'>
+type ContextAiOutput = Pick<KitDeViajeAIContent, 'caracterizacion' | 'indicadores'>
 
 /**
  * Error tipado para fallas de AI que requieren acción humana explícita
@@ -841,8 +605,8 @@ export async function generateKitViajeContent(params: {
   const ctx = await generateKitViajeContext(params.contextInput)
   if (!ctx) return null
   return {
-    caracterizacion_parrafos: ctx.caracterizacion_parrafos,
-    indicadores_narrativa:    ctx.indicadores_narrativa,
+    caracterizacion: ctx.caracterizacion,
+    indicadores:     ctx.indicadores,
   }
 }
 
@@ -938,6 +702,95 @@ del objeto son los números (${ejesResumen.map(e => `"${e.numero}"`).join(', ')}
     const hard = categorizeAnthropicError(err)
     if (hard) throw hard
     console.error(`[minutaAI] justif ejes fallo ${params.region.nombre}:`, err)
+    return null
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Contexto Regional — Sección III (resumen del Plan Regional de Gobierno)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type PregoResumenOutput = { parrafos: string[] }
+
+const PREGO_RESUMEN_SYSTEM = `
+Sos un redactor técnico del Ministerio del Interior de Chile, División de
+Coordinación Interministerial. Redactás la Sección III ("Plan Regional de
+Gobierno") del documento "Contexto Regional" — un resumen descriptivo del
+Plan Regional de Gobierno (PREGO) a partir del PDF adjunto, para que la
+autoridad entienda de qué trata el plan antes de una visita regional.
+
+Reglas de estilo (obligatorias):
+- Castellano neutro chileno. Sin voseo rioplatense ("vos", "sabés", "tenés").
+- Nunca "Ministerio del Interior y Seguridad Pública". Solo "Ministerio del
+  Interior".
+- Nunca "División de Coordinación Interregional". Es "Interministerial".
+- Registro técnico-descriptivo, sin adjetivos valorativos ("preocupante",
+  "excelente", "exitoso", "crítico"). Describí el contenido del plan, no opines.
+- Sin recomendaciones ni exhortaciones.
+- Sin emojis, sin markdown, sin viñetas — texto plano.
+- Basate ÚNICAMENTE en el contenido del PDF adjunto. No inventes ejes,
+  cifras ni compromisos que no estén en el documento.
+
+Reglas específicas:
+- 2 a 4 párrafos de 3 a 5 oraciones cada uno.
+- Describí el enfoque general del plan, los ejes o pilares estratégicos que
+  lo componen (nombrálos) y las prioridades declaradas — sin transcribir el
+  documento, sintetizando.
+- No repitas cifras de contexto socioeconómico (población, PIB, pobreza) —
+  esas ya están en las Secciones I y II. Enfocate en el contenido del PREGO.
+
+Devolvés SOLO un objeto JSON válido con exactamente esta forma (sin texto
+adicional, sin backticks, sin comentarios):
+
+{ "parrafos": ["...", "..."] }
+`.trim()
+
+/**
+ * Lee el PDF del Plan Regional de Gobierno y redacta un resumen descriptivo
+ * para la Sección III de "Contexto Regional". Independiente de
+ * `generateJustificacionEjes` (que sirve a "Avance PREGO" y necesita el
+ * catálogo de ejes canónico) — acá no se requiere `region_ejes`, solo el PDF.
+ */
+export async function generatePregoResumen(params: {
+  region: { cod: string; nombre: string }
+  planPdfBase64: string
+}): Promise<PregoResumenOutput | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!params.planPdfBase64) return null
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const documentBlock = {
+    type: 'document' as const,
+    source: {
+      type: 'base64' as const,
+      media_type: 'application/pdf' as const,
+      data: params.planPdfBase64,
+    },
+    cache_control: { type: 'ephemeral' as const },
+  }
+
+  const t0 = Date.now()
+  try {
+    const response = await client.messages.create({
+      model: AI_MODEL_KIT_VIAJE,
+      max_tokens: AI_MAX_TOKENS_KIT_VIAJE,
+      system: PREGO_RESUMEN_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          documentBlock as unknown as Anthropic.Messages.ContentBlockParam,
+          { type: 'text', text: `Redactá el resumen del Plan Regional de Gobierno de la Región ${params.region.nombre} a partir del PDF adjunto.` },
+        ],
+      }],
+    })
+    const parsed = parseAiJson<PregoResumenOutput>(response, `prego_resumen:${params.region.cod}`)
+    if (!parsed) return null
+    console.log(`[minutaAI] prego resumen ${params.region.nombre} en ${Date.now() - t0}ms (${parsed.parrafos?.length ?? 0} párrafos)`)
+    return parsed
+  } catch (err) {
+    const hard = categorizeAnthropicError(err)
+    if (hard) throw hard
+    console.error(`[minutaAI] prego resumen fallo ${params.region.nombre}:`, err)
     return null
   }
 }

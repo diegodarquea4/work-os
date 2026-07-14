@@ -39,6 +39,7 @@ export interface FechaMeta {
 
 // ── Sección I. Caracterización general ─────────────────────────────────────
 
+/** Par label/value genérico — usado internamente como "líneas de datos crudos" que alimentan al AI. */
 export interface Bullet {
   label: string
   value: string
@@ -47,19 +48,26 @@ export interface Bullet {
 
 export interface ProvinciaFila {
   provincia: string
-  comunas: string       // "Concepción, Coronel, ..." (ya joined)
+  comunas: string       // "Concepción, Coronel, ..." (ya joined, capital primero)
   poblacion?: string
 }
 
+/**
+ * 5 bullets fijos, cada uno con su rótulo fijo y un texto en prosa (redactado
+ * por el AI a partir de las líneas de datos crudos, o un fallback
+ * determinístico cuando el AI no corrió). "Organización político-administrativa"
+ * es 100% determinística (no depende del AI) — viene de provincias-comunas.json.
+ */
+export interface SeccionCaracterizacionBullets {
+  localizacion_superficie: string
+  organizacion_politico_administrativa: ProvinciaFila[]
+  poblacion: string
+  estructura_etaria: string
+  composicion: string
+}
+
 export interface SeccionCaracterizacion {
-  /** Narrativa AI-redactada. Uno o más párrafos. */
-  parrafos: string[]
-  /**
-   * Bullets dinámicos desde region_metrics.
-   * Si la métrica no existe en la fila de la región, el bullet no se emite.
-   */
-  bullets: Bullet[]
-  provincias_tabla?: ProvinciaFila[]
+  bullets: SeccionCaracterizacionBullets
 }
 
 // ── Sección II. Indicadores socioeconómicos ────────────────────────────────
@@ -68,19 +76,37 @@ export interface IndicadorFila {
   indicador: string
   valor: string
   nota?: string
+  /** Columna "Contexto" de la tabla de Mercado laboral (ranking, variación, etc). Determinístico. */
+  contexto?: string
+}
+
+export interface PibSectorFila {
+  sector: string
+  pct: number
+}
+
+/**
+ * 7 bullets fijos. "PIB regional" trae un sub-listado determinístico de
+ * sectores (`pib_sectores`); "Mercado laboral" es una tabla 100%
+ * determinística (incluida la columna Contexto) — ninguno de los dos depende
+ * del AI. El resto son textos en prosa redactados por el AI (o fallback).
+ */
+export interface SeccionIndicadoresBullets {
+  pib_regional: string
+  pib_sectores: PibSectorFila[]
+  mercado_laboral_periodo: string
+  mercado_laboral_tabla: IndicadorFila[]
+  ingresos_pobreza: string
+  educacion: string
+  salud: string
+  vivienda: string
+  seguridad_publica: string
+  /** "SEMANA 25" — última semana con registro LeyStop, para el rótulo del bullet. */
+  seguridad_semana: string
 }
 
 export interface SeccionIndicadores {
-  bullets: Bullet[]
-  mercado_laboral_tabla?: IndicadorFila[]
-  pib_comentario?: string       // narrativa AI
-  matriz_productiva?: string    // narrativa AI
-  ingresos_pobreza?: string     // narrativa AI (CASEN)
-  educacion_nota?: string       // narrativa AI (Censo)
-  salud_nota?: string
-  vivienda_nota?: string
-  seguridad_nota?: string
-  tendencia_general?: string    // 1 línea, opcional
+  bullets: SeccionIndicadoresBullets
 }
 
 // ── Sección IV. Autoridades regionales ─────────────────────────────────────
@@ -117,6 +143,16 @@ export interface AutoridadGrupo {
   layout: 'single' | 'grid'
 }
 
+// ── Sección III. Plan Regional de Gobierno ─────────────────────────────────
+
+export interface SeccionPlanRegional {
+  /** false cuando no hay PDF válido en el bucket `plan-regional` para la región. */
+  disponible: boolean
+  disclaimer?: string
+  /** Resumen redactado por `generatePregoResumen()` a partir del PDF. */
+  parrafos: string[]
+}
+
 export interface SeccionAutoridades {
   /**
    * false hasta que Fase D backfileé la región. Cuando `disponible=false`,
@@ -140,7 +176,8 @@ export interface KitDeViajeMeta {
 export interface KitDeViajeBranding {
   ministerio: string              // "Ministerio del Interior" (canónico, sin "y Seguridad Pública")
   division: string                // "División de Coordinación Interministerial"
-  logo_data_url: string           // data URI del logo del Ministerio
+  logo_data_url: string           // data URI del logo del Ministerio (encabezado)
+  footer_banner_data_url: string  // data URI de la banda "Trabajando para Usted" (pie de página)
 }
 
 /**
@@ -151,9 +188,12 @@ export interface KitDeViajeData {
   meta: KitDeViajeMeta
   region: RegionMeta
   fecha: FechaMeta
+  /** "61" en "Minuta DCI N°61" — ingresado por quien genera el documento. */
+  numeroMinuta?: string
   branding: KitDeViajeBranding
   caracterizacion: SeccionCaracterizacion
   indicadores: SeccionIndicadores
+  planRegional: SeccionPlanRegional
   autoridades: SeccionAutoridades
 }
 
@@ -168,15 +208,21 @@ export interface KitDeViajeData {
  * PDF oficial en el bucket `autoridades-fichas`.
  */
 export interface KitDeViajeAIContent {
-  caracterizacion_parrafos: string[]
-  indicadores_narrativa: {
-    pib_comentario?: string
-    matriz_productiva?: string
-    ingresos_pobreza?: string
-    educacion_nota?: string
-    salud_nota?: string
-    vivienda_nota?: string
-    seguridad_nota?: string
-    tendencia_general?: string
+  caracterizacion: {
+    localizacion_superficie?: string
+    poblacion?: string
+    estructura_etaria?: string
+    composicion?: string
   }
+  indicadores: {
+    pib_regional?: string
+    ingresos_pobreza?: string
+    educacion?: string
+    salud?: string
+    vivienda?: string
+    seguridad_publica?: string
+  }
+  /** Sección III — resumen del PREGO. Se agrega aparte de `generateKitViajeContext`,
+   *  vía `generatePregoResumen()`, porque lee un PDF distinto (Plan Regional). */
+  plan_regional_parrafos?: string[]
 }

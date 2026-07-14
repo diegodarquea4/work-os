@@ -100,6 +100,8 @@ export const minutaPostSchema = z.object({
   tipo:   z.enum(['ejecutiva', 'ficha', 'kit_viaje']).default('ejecutiva'),
   format: z.enum(['pdf', 'docx']).default('pdf'),
   force:  z.boolean().default(false),
+  /** "61" en "Minuta DCI N°61" — solo aplica a 'ficha'/'kit_viaje' (Contexto Regional). */
+  numero: z.string().max(20).optional(),
 })
 
 export type MinutaPostBody = z.infer<typeof minutaPostSchema>

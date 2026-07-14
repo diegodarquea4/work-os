@@ -54,3 +54,17 @@ export function fmtDensidad(n: number | null | undefined): string | null {
   const s = n.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
   return `${s}${NBSP}hab/km²`
 }
+
+/** "$7,55 billones" — PIB regional. Input en MM$ (miles de millones, registros_bce). */
+export function fmtBillonesPesos(mmValor: number | null | undefined): string | null {
+  if (mmValor == null || !Number.isFinite(mmValor)) return null
+  const s = (mmValor / 1000).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `$${s}${NBSP}billones`
+}
+
+/** "$1.247 mil" — ingreso monetario del hogar (CASEN, input en pesos). */
+export function fmtMilesPesos(pesos: number | null | undefined): string | null {
+  if (pesos == null || !Number.isFinite(pesos)) return null
+  const s = Math.round(pesos / 1000).toLocaleString('es-CL')
+  return `$${s}${NBSP}mil`
+}

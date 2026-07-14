@@ -14,6 +14,7 @@ import {
   generateMinutaContent,
   generateKitViajeContent,
   generateJustificacionEjes,
+  generatePregoResumen,
   KitViajeAiHardError,
   type LeystopMinuta, type SeguimientoMinuta,
   type SemaforoTrendSummary, type NationalBenchmark, type TrendSummaries,
@@ -21,15 +22,28 @@ import {
   type JustificacionEjesOutput,
 } from '@/lib/minutaAI'
 import provinciasData from '@/data/provincias-comunas.json'
-import { getSupabaseColega } from '@/lib/supabaseColega'
 import { registerPdfFonts } from '@/lib/pdfFonts'
 import {
   buildKitDeViajeData,
+  buildRawDataLines,
   renderKitDeViajePdf,
   validatePlanPdfBuffer,
   type KitDeViajeAIContent,
   type PlanPdfState,
 } from '@/lib/kitDeViaje'
+import {
+  buildGeoContexto,
+  fetchCensoContexto,
+  fetchPibContexto,
+  fetchEmpleoContexto,
+  fetchCasenContexto,
+  fetchDmcsPct,
+  type GeoContexto,
+  type PibContexto,
+  type EmpleoContexto,
+  type CasenContexto,
+} from '@/lib/kitDeViaje/metricasData'
+import type { CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 
 // Cap a 300s: 7+ queries Supabase en serie + Anthropic AI con PDF + render react-pdf.
 // Sin esto Vercel mata el handler a ~60s y el usuario ve "no se generó la minuta"
@@ -37,19 +51,21 @@ import {
 export const maxDuration = 300
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-pdf.png')
+const FOOTER_BANNER_PATH = path.join(process.cwd(), 'public', 'footer-gobierno-chile.png')
 
 // Read logo as base64 data URL at startup — more reliable than file paths in serverless
 // NOTE: logo-pdf.png is an RGB PNG converted from the original CMYK JPEG.
 // react-pdf v4 cannot handle CMYK JPEG images (4-component) — they corrupt the page layout.
-function readLogoDataUrl(): string | null {
+function readPngDataUrl(filePath: string): string | null {
   try {
-    const buf = fs.readFileSync(LOGO_PATH)
+    const buf = fs.readFileSync(filePath)
     return `data:image/png;base64,${buf.toString('base64')}`
   } catch {
     return null
   }
 }
-const LOGO_DATA_URL = readLogoDataUrl()
+const LOGO_DATA_URL = readPngDataUrl(LOGO_PATH)
+const FOOTER_BANNER_DATA_URL = readPngDataUrl(FOOTER_BANNER_PATH)
 
 export async function GET(request: Request) {
   const authProfile = await requireAuth()
@@ -133,15 +149,34 @@ export async function POST(request: Request) {
   let semaforoTrends: SemaforoTrendSummary | null = null
   let nationalBenchmark: NationalBenchmark[] = []
   let trendSummaries: TrendSummaries | null = null
-  let fichaExtra: FichaExtraData | null = null
+  // Legacy passthrough para 'ejecutiva' (generateMinutaContent acepta el
+  // parámetro pero nunca lo pobló ni antes ni ahora — Contexto Regional usa
+  // metricasContexto en su lugar, no fichaExtra).
+  const fichaExtra: FichaExtraData | null = null
+  // "Contexto Regional" — datos exclusivamente de las tablas que alimentan
+  // el panel de Métricas (registros_bce, registros_bce_empleo, casen_regiones,
+  // censo_regiones.json). Nunca region_metrics ni v2_indicadores_*.
+  let metricasContexto: {
+    geo: GeoContexto
+    censo: CensoRegionData | null
+    pib: PibContexto
+    empleo: EmpleoContexto
+    casen: CasenContexto | null
+    dmcsPct: number | null
+  } = {
+    geo: { km2: 0, pctTerritorioNacional: 0, comunasN: 0, provinciasN: 0 },
+    censo: null,
+    pib: { pibRegionMM: null, periodo: null, pctPibNacional: null, ranking: null, variacionAnualPct: null, sectores: [] },
+    empleo: { tasaDesocupacion: null, ocupadosMiles: null, fuerzaTrabajoMiles: null, periodo: null, rankingDesocupacion: null, variacionTrimestralPp: null },
+    casen: null,
+    dmcsPct: null,
+  }
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getIniciativasByCod, getMetricsByCod } = await import('@/lib/db')
     const sb = getSupabaseAdmin()
     sbRef = sb
     const regionId = INE_CODE[body.region.cod]
-
-    const colegaOk = !!(process.env.NEXT_PUBLIC_SUPABASE_COLEGA_URL && process.env.NEXT_PUBLIC_SUPABASE_COLEGA_ANON)
 
     const [prioridades, metricas, seiaRes, mopRes, leystopRes, cacheRes] = await Promise.all([
       getIniciativasByCod(body.region.cod),
@@ -160,9 +195,12 @@ export async function POST(request: Request) {
             .order('nombre')
             .limit(15)
         : Promise.resolve({ data: null }),
-      colegaOk && regionId !== undefined
-        ? getSupabaseColega()
-            .from('registros_leystop')
+      // `getSupabaseColega()` es hoy solo un alias de `getSupabase()` (los datos
+      // se consolidaron al Supabase principal en la mig. 031) — se consulta
+      // directo con `sb` (admin), sin depender de las env vars COLEGA_URL/ANON
+      // que ya no existen y dejaban esta query siempre en null.
+      regionId !== undefined
+        ? sb.from('registros_leystop')
             .select('semana,tasa_registro,casos_ultima_semana,var_ultima_semana,var_28dias,var_anno_fecha,casos_anno_fecha,casos_anno_fecha_anterior,mayor_registro_1,pct_1,mayor_registro_2,pct_2,mayor_registro_3,pct_3,mayor_registro_4,pct_4,mayor_registro_5,pct_5,controles,controles_identidad,controles_vehicular,fiscalizaciones,incautaciones,incaut_fuego,incaut_blancas,allanamientos_anno,vehiculos_recuperados_anno,decomisos_anno')
             .eq('id_region', regionId)
             .order('id_semana', { ascending: false })
@@ -214,15 +252,17 @@ export async function POST(request: Request) {
     leystopData  = (leystopRes.data as LeystopMinuta | null)
     cachedAiContent = (cacheRes.data as { ai_content: unknown } | null)?.ai_content ?? null
 
-    // Fetch Plan Regional PDF from Storage. Solo lo consumen:
+    // Fetch Plan Regional PDF from Storage. Lo consumen:
     //   1. Minuta 'ejecutiva' — para el bloque "Del diagnóstico a la
     //      priorización" (justificación de ejes con AI + PDF como document input).
     //   2. Path legacy de `generateMinutaContent('ejecutiva', ...)` que también
     //      usa el PDF como contexto para la narrativa.
-    // El Kit de Viaje ya no lo usa — Sección III fue retirada.
+    //   3. Contexto Regional ('kit_viaje') — Sección III ("Plan Regional de
+    //      Gobierno Región X") lo usa para el resumen redactado por
+    //      `generatePregoResumen()`.
     // `validatePlanPdfBuffer` detecta el caso Ñuble XVI.pdf (328 bytes,
     // corrupto en prod) para no fabricar contenido cuando el PDF es basura.
-    if (canonTipo === 'ejecutiva') {
+    if (canonTipo === 'ejecutiva' || canonTipo === 'kit_viaje') {
       try {
         const { data: pdfData, error: pdfError } = await sb.storage
           .from('plan-regional')
@@ -434,79 +474,25 @@ export async function POST(request: Request) {
       trendSummaries = { unemployment: unemploymentTrend, crime: crimeTrend, empleoINE, ventas, pibAnual }
     }
 
-    // ── Kit de Viaje extra data (PIB all regions, sectorial, history) ────────
-    if (canonTipo === 'kit_viaje' && regionId !== undefined) {
-      const [allPibRes, sectorRes, nacBenchRes, pibHistoryRes] = await Promise.all([
-        sb.from('v2_indicadores_ultimo')
-          .select('codigo_indicador, region_id, valor')
-          .in('codigo_indicador', ['ECO_PIB_ANUAL', 'ECO_PCT_PIB'])
-          .gt('region_id', 0),
-        sb.from('v2_indicadores_ultimo')
-          .select('codigo_indicador, valor')
-          .like('codigo_indicador', 'ECO_PIB_%')
-          .eq('region_id', regionId),
-        sb.from('v2_indicadores_ultimo')
-          .select('codigo_indicador, valor')
-          .eq('region_id', 0)
-          .in('codigo_indicador', ['EMP_DESOC_TASA']),
-        sb.from('regional_metrics')
-          .select('value, period')
-          .eq('region_id', regionId)
-          .eq('metric_name', 'pib_regional_anual')
-          .order('period', { ascending: true }),
+    // ── Contexto Regional — datos de las tablas que alimentan Métricas ──────
+    // Reemplaza el antiguo bloque "Kit de Viaje extra data" que consultaba
+    // v2_indicadores_ultimo. Corre siempre para kit_viaje (no solo sin cache)
+    // porque también alimenta los bullets deterministas del assembler, no
+    // solo el prompt de IA.
+    if (canonTipo === 'kit_viaje') {
+      const [pib, empleo, casen, dmcsPct] = await Promise.all([
+        fetchPibContexto(sb, body.region.nombre),
+        fetchEmpleoContexto(sb, body.region.nombre),
+        fetchCasenContexto(sb, body.region),
+        regionId !== undefined ? fetchDmcsPct(sb, regionId) : Promise.resolve(null),
       ])
-
-      const allPib = (allPibRes.data ?? []) as { codigo_indicador: string; region_id: number; valor: number }[]
-      const pibByRegion = new Map<number, { pib: number; pct: number }>()
-      for (const r of allPib) {
-        const entry = pibByRegion.get(r.region_id) ?? { pib: 0, pct: 0 }
-        if (r.codigo_indicador === 'ECO_PIB_ANUAL') entry.pib = r.valor
-        if (r.codigo_indicador === 'ECO_PCT_PIB') entry.pct = r.valor
-        pibByRegion.set(r.region_id, entry)
-      }
-
-      const { REGIONS } = await import('@/lib/regions')
-      const allRegionsPib = [...pibByRegion.entries()]
-        .map(([rid, d]) => ({
-          region_id: rid,
-          nombre: REGIONS.find(r => INE_CODE[r.cod] === rid)?.nombre ?? `Región ${rid}`,
-          pib_mm: d.pib,
-          pct_pib: d.pct,
-        }))
-        .sort((a, b) => b.pib_mm - a.pib_mm)
-
-      // Sectorial breakdown
-      const sectorData = (sectorRes.data ?? []) as { codigo_indicador: string; valor: number }[]
-      const SECTOR_NAMES: Record<string, string> = {
-        ECO_PIB_AGRO: 'Agropecuario-silvícola', ECO_PIB_PESCA: 'Pesca',
-        ECO_PIB_MINERIA: 'Minería', ECO_PIB_INDUSTRIA: 'Industria manufacturera',
-        ECO_PIB_ELECTRIC: 'Electricidad, gas y agua', ECO_PIB_CONSTRUC: 'Construcción',
-        ECO_PIB_COMERCIO: 'Comercio', ECO_PIB_REST_HOT: 'Restaurantes y hoteles',
-        ECO_PIB_TRANSPORTE: 'Transporte y comunicaciones', ECO_PIB_FINANCIERO: 'Servicios financieros',
-        ECO_PIB_VIVIENDA: 'Propiedad de vivienda', ECO_PIB_SERV_PERS: 'Servicios personales',
-        ECO_PIB_ADM_PUB: 'Administración pública',
-      }
-      const sectorRows = sectorData
-        .filter(s => SECTOR_NAMES[s.codigo_indicador])
-        .map(s => ({ sector: SECTOR_NAMES[s.codigo_indicador], valor: s.valor }))
-        .sort((a, b) => b.valor - a.valor)
-      const sectorTotal = sectorRows.reduce((s, r) => s + r.valor, 0)
-      const pibSectorial = sectorRows.map(s => ({
-        ...s,
-        pct: sectorTotal > 0 ? (s.valor / sectorTotal) * 100 : 0,
-      }))
-
-      const nacBench = (nacBenchRes.data ?? []) as { codigo_indicador: string; valor: number }[]
-      const desocNac = nacBench.find(r => r.codigo_indicador === 'EMP_DESOC_TASA')?.valor ?? null
-
-      const pibHistory = (pibHistoryRes.data ?? []) as { value: number; period: string }[]
-
-      fichaExtra = {
-        allRegionsPib,
-        pibSectorial,
-        desocupacionNacional: desocNac,
-        pibAnualRegion: trendSummaries?.pibAnual ?? null,
-        pibAnualHistory: pibHistory.map(h => ({ period: h.period, value: h.value })),
+      metricasContexto = {
+        geo: buildGeoContexto(body.region),
+        censo: regionId !== undefined ? fetchCensoContexto(regionId) : null,
+        pib,
+        empleo,
+        casen,
+        dmcsPct,
       }
     }
   } else {
@@ -528,14 +514,41 @@ export async function POST(request: Request) {
   } else if (canonTipo === 'kit_viaje') {
     console.log(`[minuta] kit_viaje for ${body.region.nombre} — projects: ${projects.length}, metrics: ${!!metrics}`)
     try {
+      // El prompt recibe las mismas líneas de datos crudos que usa el fallback
+      // determinístico (`buildRawDataLines`, única fuente de verdad) — así la
+      // IA solo redacta, sin recalcular ni descuadrar cifras.
+      const rawDataLines = buildRawDataLines({
+        region: body.region,
+        geo: metricasContexto.geo,
+        censo: metricasContexto.censo,
+        pib: metricasContexto.pib,
+        empleo: metricasContexto.empleo,
+        casen: metricasContexto.casen,
+        leystop: leystopData,
+        dmcsPct: metricasContexto.dmcsPct,
+      })
+
       aiContent = await generateKitViajeContent({
         contextInput: {
           region: { cod: body.region.cod, nombre: body.region.nombre },
-          metrics,
-          fichaExtra,
-          trendSummaries,
+          raw: rawDataLines,
         },
       })
+
+      // Sección III — resumen del PREGO. Llamada aparte porque lee un PDF
+      // distinto (Plan Regional) y no depende de los bullets de Métricas.
+      if (planPdfState === 'ok' && planPdfBase64) {
+        const pregoResumen = await generatePregoResumen({
+          region: { cod: body.region.cod, nombre: body.region.nombre },
+          planPdfBase64,
+        })
+        if (pregoResumen) {
+          aiContent = {
+            ...(aiContent as KitDeViajeAIContent ?? { caracterizacion: {}, indicadores: {} }),
+            plan_regional_parrafos: pregoResumen.parrafos,
+          }
+        }
+      }
     } catch (err) {
       if (err instanceof KitViajeAiHardError) {
         // Créditos agotados o auth rota — corta acá con 503 + mensaje humano
@@ -643,12 +656,19 @@ export async function POST(request: Request) {
       const kitData = buildKitDeViajeData({
         region: body.region,
         fecha: body.fecha,
-        metrics,
+        numeroMinuta: body.numero,
+        geo: metricasContexto.geo,
+        censo: metricasContexto.censo,
+        pib: metricasContexto.pib,
+        empleo: metricasContexto.empleo,
+        casen: metricasContexto.casen,
+        leystop: leystopData,
+        dmcsPct: metricasContexto.dmcsPct,
+        planPdfState,
         aiContent: aiContent as KitDeViajeAIContent | null,
-        fichaExtra,
-        trendSummaries,
         provincias: regionProvs.map(p => ({ provincia: p.nombre, comunas: p.comunas })),
         logoDataUrl: LOGO_DATA_URL ?? '',
+        footerBannerDataUrl: FOOTER_BANNER_DATA_URL ?? '',
         aiFresh: !cachedAiContent,
         hasAutoridadesFicha: !!autoridadesFichaBuffer,
       })
