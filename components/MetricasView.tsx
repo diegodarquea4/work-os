@@ -17,7 +17,7 @@ import {
 } from '@/lib/hooks/useColegaDelitos'
 import {
   useMetricasPibRegion, useMetricasPibNacional,
-  periodoLabel, parsePeriodo, PIB_UNIDAD_ENC,
+  periodoLabel, parsePeriodo, PIB_UNIDAD_ENC, PIB_UNIDAD_NOM,
 } from '@/lib/hooks/useMetricasPib'
 import {
   useMetricasEmpleoTodas,
@@ -209,7 +209,7 @@ function ResumenModule() {
   const { rows: segRows, semana, loading: segL }                  = useColegaSeguridadAll()
   const { rows: delRows, loading: dmcsL }                         = useColegaDelitosAll()
   const { rows: pibRows, loading: pibRegL }                       = useMetricasPibRegion(regionNombre || null)
-  const { valores: nacVals, años: nacAños, loading: pibNacL }     = useMetricasPibNacional()
+  const { valores: nacVals, valoresNom: nacValsNom, años: nacAños, loading: pibNacL } = useMetricasPibNacional()
   const { periodos, datos: empDatos, loading: empL }              = useMetricasEmpleoTodas()
   const { loading: censoL, get: censoGet, byCode: censoByCod, nacional: censoNacional } = useCensoRegiones()
 
@@ -454,24 +454,32 @@ function ResumenModule() {
         {/* ── PIB ── */}
         <div className="bg-white rounded-xl shadow-sm border-t-4 border-blue-600 p-5">
           {(pibRegL || pibNacL) ? <Spinner /> : (() => {
-            // Filas PIB total anuales encadenadas para la región
+            // Filas PIB total anuales encadenadas (real) para la región
             const pibAnual = pibRows.filter(r =>
               r.indicador_limpio === 'PIB' &&
               r.unidad_limpia === PIB_UNIDAD_ENC &&
               r.series_id?.endsWith('A')
             ).map(r => ({ year: parsePeriodo(r.periodo).year, val: r.valor_corregido ?? 0 }))
 
+            // Filas PIB total anuales nominales (corrientes) para la región
+            const pibAnualNom = pibRows.filter(r =>
+              r.indicador_limpio === 'PIB' &&
+              r.unidad_limpia === PIB_UNIDAD_NOM &&
+              r.series_id?.endsWith('A')
+            ).map(r => ({ year: parsePeriodo(r.periodo).year, val: r.valor_corregido ?? 0 }))
+
             const regAños = [...new Set(pibAnual.map(r => r.year))].sort()
             const allAños = isNac ? nacAños : regAños
 
-            const efectivoDe    = pibDesde    || (allAños[0]                   ?? '')
+            // Gráfico de evolución (real, encadenado) siempre desde 2018 al último año disponible
+            const efectivoDe    = pibDesde    || (allAños.find(y => y >= '2018') ?? allAños[0] ?? '')
             const efectivoHasta = pibHasta    || (allAños[allAños.length - 1]   ?? '')
             const añosFilt = allAños.filter(y => y >= efectivoDe && y <= efectivoHasta)
 
             const lastYear = añosFilt[añosFilt.length - 1] ?? ''
             const prevYear = añosFilt[añosFilt.length - 2] ?? ''
 
-            // PIB por año (región o suma nacional)
+            // PIB real por año (región o suma nacional) — para el gráfico y la Var. % anual
             const pibByYear: Record<string, number> = {}
             if (isNac) {
               nacAños.forEach(y => {
@@ -481,19 +489,31 @@ function ResumenModule() {
               pibAnual.forEach(({ year, val }) => { pibByYear[year] = val })
             }
 
+            // PIB nominal por año (región o suma nacional) — para las tarjetas del último año
+            const pibNomByYear: Record<string, number> = {}
+            if (isNac) {
+              nacAños.forEach(y => {
+                pibNomByYear[y] = Object.values(nacValsNom).reduce((s, rv) => s + (rv[y] ?? 0), 0)
+              })
+            } else {
+              pibAnualNom.forEach(({ year, val }) => { pibNomByYear[year] = val })
+            }
+
             const pibLast = lastYear ? (pibByYear[lastYear] ?? null) : null
             const pibPrev = prevYear ? (pibByYear[prevYear] ?? null) : null
             const varAnual = pibLast != null && pibPrev != null && pibPrev > 0
               ? (pibLast - pibPrev) / pibPrev * 100 : null
 
-            // Per cápita: miles MM$ × 1000 / pop → millones de pesos por hab.
-            const perCapita = !isNac && pibLast != null && pibPoblacion != null && pibPoblacion > 0
-              ? pibLast * 1000 / pibPoblacion : null
+            const pibNomLast = lastYear ? (pibNomByYear[lastYear] ?? null) : null
 
-            // Total en billones (1 bill = 1 000 MM$)
-            const pibBill = pibLast != null ? pibLast / 1000 : null
+            // Per cápita nominal: miles MM$ × 1000 / pop → millones de pesos por hab.
+            const perCapita = !isNac && pibNomLast != null && pibPoblacion != null && pibPoblacion > 0
+              ? pibNomLast * 1000 / pibPoblacion : null
 
-            // % del PIB nacional (suma de todas las regiones ese año)
+            // Total nominal en billones (1 bill = 1 000 MM$)
+            const pibBill = pibNomLast != null ? pibNomLast / 1000 : null
+
+            // % del PIB nacional (suma de todas las regiones ese año) — sobre base real, no varía si es nominal
             const nacTotal = lastYear
               ? Object.values(nacVals).reduce((s, rv) => s + (rv[lastYear] ?? 0), 0)
               : 0
@@ -514,12 +534,12 @@ function ResumenModule() {
 
             const evoData = añosFilt.map(y => ({ año: y, pib: pibByYear[y] ?? null }))
 
-            // Top 5 sectores productivos (solo para región)
+            // Top 5 sectores productivos (solo para región) — siempre en MM$ nominal
             const sectorMap: Record<string, { last: number | null; prev: number | null }> = {}
             if (!isNac) {
               pibRows
                 .filter(r =>
-                  r.unidad_limpia === PIB_UNIDAD_ENC &&
+                  r.unidad_limpia === PIB_UNIDAD_NOM &&
                   r.series_id?.endsWith('A') &&
                   r.indicador_limpio !== 'PIB' &&
                   r.indicador_limpio in SECTOR_DISP
@@ -559,7 +579,7 @@ function ResumenModule() {
                 <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-5">
                   {/* Gráfico evolución */}
                   <div>
-                    <p className="text-[11px] text-gray-500 mb-2">Evolución PIB</p>
+                    <p className="text-[11px] text-gray-500 mb-2">Evolución PIB real</p>
                     {evoData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={230}>
                         <AreaChart data={evoData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -608,16 +628,16 @@ function ResumenModule() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <KpiCard
-                        label={`PIB per cápita ${lastYear}`}
-                        value={perCapita != null ? fmtN(perCapita, 2) + ' mill.' : '—'}
-                        sub="por habitante · Censo 2024"
-                        color="#1d4ed8"
-                      />
-                      <KpiCard
                         label={`PIB total ${lastYear}`}
                         value={pibBill != null ? fmtN(pibBill, 2) + ' bill.' : '—'}
-                        sub="billones de pesos enc. base 2018"
+                        sub="billones de pesos, nominal"
                         color="#2563eb"
+                      />
+                      <KpiCard
+                        label={`PIB per cápita ${lastYear}`}
+                        value={perCapita != null ? fmtN(perCapita, 2) + ' mill.' : '—'}
+                        sub="por habitante, nominal · Censo 2024"
+                        color="#1d4ed8"
                       />
                       <KpiCard
                         label="Var. % anual"
@@ -643,7 +663,7 @@ function ResumenModule() {
                           <thead>
                             <tr className="bg-slate-800 text-white">
                               <th className="px-3 py-2 text-left font-medium">Sector</th>
-                              <th className="px-3 py-2 text-right font-medium">MM$ enc.</th>
+                              <th className="px-3 py-2 text-right font-medium">MM$ nominal</th>
                               <th className="px-3 py-2 text-right font-medium">Var. %</th>
                               <th className="px-3 py-2 text-right font-medium">% PIB reg.</th>
                             </tr>
@@ -651,7 +671,7 @@ function ResumenModule() {
                           <tbody>
                             {top5.map((s, i) => {
                               const varPct = s.prev != null && s.prev > 0 ? (s.last - s.prev) / s.prev * 100 : null
-                              const pctPib = pibLast != null && pibLast > 0 ? s.last / pibLast * 100 : null
+                              const pctPib = pibNomLast != null && pibNomLast > 0 ? s.last / pibNomLast * 100 : null
                               return (
                                 <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                   <td className="px-3 py-1.5 text-gray-900">{s.nombre}</td>
@@ -671,7 +691,7 @@ function ResumenModule() {
                     )}
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">* PIB real encadenado, valorado a precios del año base 2018. Fuente: Banco Central de Chile.</p>
+                <p className="text-[10px] text-gray-400 mt-1">* Gráfico y Var. % anual en volumen encadenado (real), serie empalmada referencia 2018. Tarjetas de PIB total, per cápita y Top 5 sectores en pesos nominales (corrientes). Fuente: Banco Central de Chile.</p>
               </>
             )
           })()}

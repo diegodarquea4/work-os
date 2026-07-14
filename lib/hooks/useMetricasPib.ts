@@ -13,6 +13,7 @@ export type PibRow = {
 }
 
 export const PIB_UNIDAD_ENC = 'miles de millones de pesos encadenados'
+export const PIB_UNIDAD_NOM = 'miles de millones de pesos corrientes (base 2018)'
 
 // Parse DD-MM-YYYY or YYYY-MM-DD → { year, month, sortKey }
 export function parsePeriodo(p: string): { year: string; month: number; sortKey: string } {
@@ -75,14 +76,15 @@ export function useMetricasPibRegion(regionNombre: string | null) {
 export type PibNacionalData = {
   años:           string[]
   regiones:       string[]
-  valores:        Record<string, Record<string, number | null>>  // [region][year]
-  extrarregional: Record<string, number | null>                  // [year]
+  valores:        Record<string, Record<string, number | null>>  // [region][year] — encadenado (real)
+  extrarregional: Record<string, number | null>                  // [year] — encadenado (real)
+  valoresNom:     Record<string, Record<string, number | null>>  // [region][year] — nominal (corrientes)
 }
 
-/** Carga PIB encadenado anual para TODAS las regiones × TODOS los años disponibles.
- *  También incluye fila Extrarregional si existe. */
+/** Carga PIB anual (encadenado real + nominal corriente) para TODAS las regiones × TODOS los años disponibles.
+ *  También incluye fila Extrarregional si existe (solo serie encadenada). */
 export function useMetricasPibNacional() {
-  const [data, setData]       = useState<PibNacionalData>({ años: [], regiones: [], valores: {}, extrarregional: {} })
+  const [data, setData]       = useState<PibNacionalData>({ años: [], regiones: [], valores: {}, extrarregional: {}, valoresNom: {} })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -95,8 +97,8 @@ export function useMetricasPibNacional() {
         while (true) {
           const { data: rows, error } = await sb
             .from('registros_bce')
-            .select('nombre_region,periodo,valor_corregido,series_id,indicador_limpio')
-            .eq('unidad_limpia', PIB_UNIDAD_ENC)
+            .select('nombre_region,periodo,valor_corregido,series_id,indicador_limpio,unidad_limpia')
+            .in('unidad_limpia', [PIB_UNIDAD_ENC, PIB_UNIDAD_NOM])
             .in('indicador_limpio', ['PIB', 'Extrarregional'])
             .range(offset, offset + 999)
           if (cancelled) return
@@ -111,21 +113,23 @@ export function useMetricasPibNacional() {
         const añoSet = new Set<string>()
         const regSet = new Set<string>()
         const valores:        Record<string, Record<string, number | null>> = {}
+        const valoresNom:     Record<string, Record<string, number | null>> = {}
         const extrarregional: Record<string, number | null> = {}
 
         for (const r of annual) {
           const { year } = parsePeriodo(r.periodo)
           añoSet.add(year)
+          const target = r.unidad_limpia === PIB_UNIDAD_NOM ? valoresNom : valores
           if (r.nombre_region) {
             regSet.add(r.nombre_region)
-            if (!valores[r.nombre_region]) valores[r.nombre_region] = {}
-            valores[r.nombre_region][year] = r.valor_corregido
-          } else if (r.indicador_limpio === 'Extrarregional') {
+            if (!target[r.nombre_region]) target[r.nombre_region] = {}
+            target[r.nombre_region][year] = r.valor_corregido
+          } else if (r.indicador_limpio === 'Extrarregional' && r.unidad_limpia === PIB_UNIDAD_ENC) {
             extrarregional[year] = r.valor_corregido
           }
         }
 
-        if (!cancelled) setData({ años: [...añoSet].sort(), regiones: [...regSet], valores, extrarregional })
+        if (!cancelled) setData({ años: [...añoSet].sort(), regiones: [...regSet], valores, extrarregional, valoresNom })
       } catch { /* silent */ } finally {
         if (!cancelled) setLoading(false)
       }

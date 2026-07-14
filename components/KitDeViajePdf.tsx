@@ -237,7 +237,7 @@ function BulletPib({ label, texto, sectores }: { label: string; texto: string; s
         )}
         {sectores.length > 0 && (
           <>
-            <Text style={s.subItemLabel}>Principales sectores productivos:</Text>
+            <Text style={s.subItemLabel}>Principales sectores productivos (% del PIB nominal):</Text>
             {sectores.map((sec, i) => (
               <Text key={i} style={s.subItemText}>
                 {sec.sector}: {sec.pct.toLocaleString('es-CL', { minimumFractionDigits: 1 })}%

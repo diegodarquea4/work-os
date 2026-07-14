@@ -215,13 +215,17 @@ export function buildRawDataLines(params: {
   }
 
   // ── Sección II ──
+  // PIB: las cifras "foto" (total y por sector) van en nominal — lo marcamos
+  // explícito en el label para no mezclarlo con crecimiento/ranking/%nacional,
+  // que siguen en volumen encadenado (real). Mismo criterio que las KpiCard
+  // del panel de Métricas ("billones de pesos, nominal").
   const pibRegional: Bullet[] = []
-  pushIf(pibRegional, 'PIB regional', fmtBillonesPesos(pib.pibRegionMM), pib.periodo ?? undefined)
+  pushIf(pibRegional, 'PIB regional (nominal)', fmtBillonesPesos(pib.pibRegionMM), pib.periodo ?? undefined)
   pushIf(pibRegional, '% del PIB nacional', fmtPct(pib.pctPibNacional))
   if (pib.ranking != null) pibRegional.push({ label: 'Ranking PIB entre regiones', value: `${pib.ranking}°/16` })
   pushIf(pibRegional, 'Crecimiento PIB anual', fmtVariacion(pib.variacionAnualPct))
   pib.sectores.slice(0, 8).forEach(s => {
-    pushIf(pibRegional, `Sector — ${s.sector}`, `${s.pct.toLocaleString('es-CL', { minimumFractionDigits: 1 })}% del PIB`, fmtVariacion(s.variacionAnualPct) ? `${fmtVariacion(s.variacionAnualPct)} anual` : undefined)
+    pushIf(pibRegional, `Sector — ${s.sector}`, `${s.pct.toLocaleString('es-CL', { minimumFractionDigits: 1 })}% del PIB (nominal)`, fmtVariacion(s.variacionAnualPct) ? `${fmtVariacion(s.variacionAnualPct)} anual` : undefined)
   })
 
   const mercadoLaboral: Bullet[] = []

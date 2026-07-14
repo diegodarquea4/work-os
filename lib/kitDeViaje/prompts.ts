@@ -111,7 +111,11 @@ string vacío para ese campo:
     "composicion": ""              // usa el bloque COMPOSICION
   },
   "indicadores": {
-    "pib_regional": "",       // usa el bloque PIB_REGIONAL — incluí qué sector(es) explican más el crecimiento o la caída
+    "pib_regional": "",       // usa el bloque PIB_REGIONAL — incluí qué sector(es) explican más el crecimiento o la caída.
+                               // OJO: el monto del PIB total y de cada sector vienen en pesos NOMINALES (marcados
+                               // "(nominal)" en la línea) — no los confundas ni los llames "reales". El crecimiento
+                               // anual, el ranking y el % del PIB nacional SÍ son en términos reales (volumen
+                               // encadenado) — no digas que el crecimiento es "nominal".
     "ingresos_pobreza": "",   // usa el bloque INGRESOS_Y_POBREZA
     "educacion": "",          // usa el bloque EDUCACION
     "salud": "",              // usa el bloque SALUD

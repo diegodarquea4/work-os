@@ -56,7 +56,19 @@ export function fetchCensoContexto(ineCode: number): CensoRegionData | null {
 
 // ── PIB regional (registros_bce) ────────────────────────────────────────────
 
+/**
+ * Regla real-vs-nominal (misma que `components/MetricasView.tsx` /
+ * `lib/hooks/useMetricasPib.ts`, panel de Métricas):
+ * - Crecimientos/variaciones interanuales → SIEMPRE en volumen encadenado
+ *   (real, serie empalmada referencia 2018): `variacionAnualPct` (total y
+ *   por sector), `ranking`, `pctPibNacional`.
+ * - Cifras "foto" del último año → en pesos nominales (corrientes):
+ *   `pibRegionMM` y `sectores[].valorMM`/`.pct`.
+ * Mezclar bases da un % de sector o una variación sin sentido económico —
+ * por eso se consultan como dos unidades separadas, nunca combinadas.
+ */
 const PIB_UNIDAD_ENC = 'miles de millones de pesos encadenados'
+const PIB_UNIDAD_NOM = 'miles de millones de pesos corrientes (base 2018)'
 
 // Sectores "hoja" (excluye 'PIB' total y los rollups 'PIB Producción de
 // bienes' / 'PIB Resto de bienes' / 'PIB Servicios') — mismo universo que
@@ -81,30 +93,40 @@ function anioDePeriodo(periodo: string): string {
   return parts[0].length === 4 ? parts[0] : parts[2]
 }
 
+type PibRow = { nombre_region: string; periodo: string; valor_corregido: number | null; indicador_limpio: string; series_id: string }
+
+/** Fila "hoja" del PIB sectorial: no es el total 'PIB' ni un rollup, y con valor. */
+function esSectorHoja(r: PibRow): boolean {
+  return !!r.series_id?.endsWith('A') && r.indicador_limpio in SECTOR_LEAF_DISP && r.valor_corregido != null
+}
+
 /**
  * PostgREST cappea en 1000 filas por default — `registros_bce` filtrado solo
  * por indicador+unidad ya supera eso (1221 filas para el PIB total de las 16
  * regiones). Sin paginar, la "última" fila por región puede quedar fuera de
  * la página y el ranking/% nacional sale mal. Mismo patrón que
  * `useMetricasPibRegion`/`useMetricasPibNacional` (cliente).
+ *
+ * `unidad` default = encadenado (real) — pasar `PIB_UNIDAD_NOM` para las
+ * cifras "foto" nominales (ver nota de la regla real-vs-nominal arriba).
  */
 async function fetchAllPibRows(
   sb: SupabaseClient,
-  filtro: { nombreRegion?: string; soloNoNull?: boolean },
-): Promise<{ nombre_region: string; periodo: string; valor_corregido: number | null; indicador_limpio: string; series_id: string }[]> {
-  const all: { nombre_region: string; periodo: string; valor_corregido: number | null; indicador_limpio: string; series_id: string }[] = []
+  filtro: { nombreRegion?: string; soloNoNull?: boolean; unidad?: string },
+): Promise<PibRow[]> {
+  const all: PibRow[] = []
   let offset = 0
   const pageSize = 1000
   while (true) {
     let query = sb.from('registros_bce')
       .select('nombre_region,periodo,valor_corregido,indicador_limpio,series_id')
-      .eq('unidad_limpia', PIB_UNIDAD_ENC)
+      .eq('unidad_limpia', filtro.unidad ?? PIB_UNIDAD_ENC)
       .range(offset, offset + pageSize - 1)
     if (filtro.nombreRegion) query = query.eq('nombre_region', filtro.nombreRegion)
     if (filtro.soloNoNull) query = query.not('nombre_region', 'is', null)
     const { data, error } = await query
     if (error || !data?.length) break
-    all.push(...(data as typeof all))
+    all.push(...(data as PibRow[]))
     if (data.length < pageSize) break
     offset += pageSize
   }
@@ -128,9 +150,10 @@ function variacionPct(actual: number | null | undefined, anterior: number | null
 }
 
 export async function fetchPibContexto(sb: SupabaseClient, regionNombre: string): Promise<PibContexto> {
-  const allRows = await fetchAllPibRows(sb, { soloNoNull: true })
+  // REAL (encadenado) — único uso: ranking y % del PIB nacional entre las 16 regiones.
+  const allRowsReal = await fetchAllPibRows(sb, { soloNoNull: true })
 
-  const annual = allRows
+  const annual = allRowsReal
     .filter(r => r.indicador_limpio === 'PIB' && r.series_id?.endsWith('A') && r.valor_corregido != null)
 
   const latestByRegion = new Map<string, { valor: number; periodo: string }>()
@@ -148,41 +171,58 @@ export async function fetchPibContexto(sb: SupabaseClient, regionNombre: string)
 
   let sectores: PibContexto['sectores'] = []
   let variacionAnualPct: number | null = null
+  let pibRegionNominalMM: number | null = null
+  let periodoNominal: string | null = null
+
   if (regionEntry) {
-    const regionRows = await fetchAllPibRows(sb, { nombreRegion: regionNombre })
     const lastYear = anioDePeriodo(regionEntry.periodo)
     const prevYear = String(parseInt(lastYear, 10) - 1)
 
-    const pibPrevYear = regionRows.find(r =>
+    // ── REAL (encadenado): variación anual del total y de cada sector ──
+    const regionRowsReal = await fetchAllPibRows(sb, { nombreRegion: regionNombre })
+
+    const pibPrevYear = regionRowsReal.find(r =>
       r.indicador_limpio === 'PIB' && r.series_id?.endsWith('A') &&
       anioDePeriodo(r.periodo) === prevYear && r.valor_corregido != null,
     )
     variacionAnualPct = variacionPct(regionEntry.valor, pibPrevYear?.valor_corregido)
 
-    const esSectorHoja = (r: typeof regionRows[number]) =>
-      r.series_id?.endsWith('A') && r.indicador_limpio in SECTOR_LEAF_DISP && r.valor_corregido != null
-
-    const crudosLastYear = regionRows.filter(r => esSectorHoja(r) && anioDePeriodo(r.periodo) === lastYear)
-    const prevPorSector = new Map(
-      regionRows
+    const variacionPorSector = new Map<string, number | null>()
+    const prevPorSectorReal = new Map(
+      regionRowsReal
         .filter(r => esSectorHoja(r) && anioDePeriodo(r.periodo) === prevYear)
         .map(r => [r.indicador_limpio, r.valor_corregido as number]),
     )
+    regionRowsReal
+      .filter(r => esSectorHoja(r) && anioDePeriodo(r.periodo) === lastYear)
+      .forEach(r => variacionPorSector.set(r.indicador_limpio, variacionPct(r.valor_corregido, prevPorSectorReal.get(r.indicador_limpio))))
 
-    const sectorTotal = crudosLastYear.reduce((s, r) => s + (r.valor_corregido as number), 0)
-    sectores = crudosLastYear
+    // ── NOMINAL (corriente): "foto" del PIB total y de cada sector ──
+    const regionRowsNominal = await fetchAllPibRows(sb, { nombreRegion: regionNombre, unidad: PIB_UNIDAD_NOM })
+
+    const pibNominalRow = regionRowsNominal.find(r =>
+      r.indicador_limpio === 'PIB' && r.series_id?.endsWith('A') &&
+      anioDePeriodo(r.periodo) === lastYear && r.valor_corregido != null,
+    )
+    pibRegionNominalMM = pibNominalRow?.valor_corregido ?? null
+    periodoNominal = pibNominalRow?.periodo ?? null
+
+    const sectorLastYearNominal = regionRowsNominal.filter(r => esSectorHoja(r) && anioDePeriodo(r.periodo) === lastYear)
+    const sectorTotalNominal = sectorLastYearNominal.reduce((s, r) => s + (r.valor_corregido as number), 0)
+
+    sectores = sectorLastYearNominal
       .map(r => ({
         sector: SECTOR_LEAF_DISP[r.indicador_limpio],
         valorMM: r.valor_corregido as number,
-        pct: sectorTotal > 0 ? parseFloat(((r.valor_corregido as number) / sectorTotal * 100).toFixed(1)) : 0,
-        variacionAnualPct: variacionPct(r.valor_corregido, prevPorSector.get(r.indicador_limpio)),
+        pct: sectorTotalNominal > 0 ? parseFloat(((r.valor_corregido as number) / sectorTotalNominal * 100).toFixed(1)) : 0,
+        variacionAnualPct: variacionPorSector.get(r.indicador_limpio) ?? null,
       }))
       .sort((a, b) => b.valorMM - a.valorMM)
   }
 
   return {
-    pibRegionMM: regionEntry?.valor ?? null,
-    periodo: regionEntry?.periodo ?? null,
+    pibRegionMM: pibRegionNominalMM,
+    periodo: periodoNominal ?? regionEntry?.periodo ?? null,
     pctPibNacional: regionEntry && totalNacional > 0
       ? parseFloat((regionEntry.valor / totalNacional * 100).toFixed(2))
       : null,

@@ -55,7 +55,13 @@ export function fmtDensidad(n: number | null | undefined): string | null {
   return `${s}${NBSP}hab/km²`
 }
 
-/** "$7,55 billones" — PIB regional. Input en MM$ (miles de millones, registros_bce). */
+/**
+ * "$7,55 billones" — PIB regional. Input en MM$ (miles de millones,
+ * `registros_bce`). Se usa para la cifra "foto" del último año — el llamador
+ * debe pasar el valor en unidad NOMINAL (corriente), no encadenado (real):
+ * las variaciones/crecimientos van siempre en real, los montos absolutos en
+ * nominal (ver regla real-vs-nominal en `lib/kitDeViaje/metricasData.ts`).
+ */
 export function fmtBillonesPesos(mmValor: number | null | undefined): string | null {
   if (mmValor == null || !Number.isFinite(mmValor)) return null
   const s = (mmValor / 1000).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
