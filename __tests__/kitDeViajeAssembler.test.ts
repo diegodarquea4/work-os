@@ -6,6 +6,7 @@ import type { PibContexto, EmpleoContexto, CasenContexto } from '@/lib/kitDeViaj
 import type { LeystopMinuta } from '@/lib/minutaAI'
 import {
   COPY_AUTORIDADES_PENDIENTE,
+  COPY_CONFLICTOS_MISSING,
   MINISTERIO,
   DIVISION,
 } from '@/lib/kitDeViaje/constants'
@@ -42,6 +43,7 @@ function inputs(over: Partial<AssemblerInputs> = {}): AssemblerInputs {
     footerBannerDataUrl: 'data:image/png;base64,YYY',
     aiFresh: true,
     hasAutoridadesFicha: false,
+    hasConflictos: false,
     ...over,
   }
 }
@@ -228,9 +230,25 @@ describe('Sección III — Plan Regional de Gobierno', () => {
   })
 })
 
-// ── Sección IV: Autoridades skeleton ───────────────────────────────────────
+// ── Sección IV: Conflictos y alertas ───────────────────────────────────────
 
-describe('Sección IV — Autoridades', () => {
+describe('Sección IV — Conflictos y alertas', () => {
+  it('sin PDF cargado → disponible=false + disclaimer', () => {
+    const d = buildKitDeViajeData(inputs({ hasConflictos: false }))
+    expect(d.conflictos.disponible).toBe(false)
+    expect(d.conflictos.disclaimer).toBe(COPY_CONFLICTOS_MISSING)
+  })
+
+  it('con PDF en bucket → disponible=true SIN disclaimer (route anexa el PDF verbatim)', () => {
+    const d = buildKitDeViajeData(inputs({ hasConflictos: true }))
+    expect(d.conflictos.disponible).toBe(true)
+    expect(d.conflictos.disclaimer).toBeUndefined()
+  })
+})
+
+// ── Sección V: Autoridades skeleton ─────────────────────────────────────────
+
+describe('Sección V — Autoridades', () => {
   it('sin ficha oficial → disponible=false + disclaimer + grupos vacío (fallback preview)', () => {
     const d = buildKitDeViajeData(inputs({ hasAutoridadesFicha: false }))
     expect(d.autoridades.disponible).toBe(false)

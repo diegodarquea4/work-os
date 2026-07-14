@@ -33,7 +33,7 @@ import type {
   AutoridadGrupo,
   Autoridad,
 } from '@/lib/kitDeViaje/types'
-import { TITULO_SECCIONES } from '@/lib/kitDeViaje/constants'
+import { TITULO_SECCIONES, COPY_CONFLICTOS_ADJUNTO } from '@/lib/kitDeViaje/constants'
 import { samplePreviewAutoridades } from '@/lib/kitDeViaje/sampleAutoridades'
 
 /** cm → pt (1 cm = 28,3465 pt) — todas las medidas de header/footer vienen en cm. */
@@ -435,12 +435,28 @@ function SeccionIII({ data }: { data: KitDeViajeData }) {
   )
 }
 
-// ── Sección IV — placeholder (contenido pendiente) ─────────────────────────
+// ── Sección IV — Conflictos y alertas de la región ─────────────────────────
 
-function SeccionPlaceholder({ numeral, titulo }: { numeral: string; titulo: string }) {
+/**
+ * Cuando hay PDF cargado (`disponible=true`), el route anexa ese PDF verbatim
+ * con pdf-lib a continuación de esta página (igual que la ficha de autoridades)
+ * — acá solo pintamos el título + una nota. Cuando no hay PDF, mostramos el
+ * disclaimer que trae el assembler.
+ */
+function SeccionIV({ data }: { data: KitDeViajeData }) {
+  const { conflictos } = data
   return (
     <View>
-      <SectionTitle numeral={numeral}>{titulo}</SectionTitle>
+      <SectionTitle numeral="IV">{TITULO_SECCIONES.IV}</SectionTitle>
+      {conflictos.disponible ? (
+        <Text style={s.para}>{COPY_CONFLICTOS_ADJUNTO}</Text>
+      ) : (
+        conflictos.disclaimer && (
+          <View style={s.disclaimerBox}>
+            <Text style={s.disclaimerText}>{conflictos.disclaimer}</Text>
+          </View>
+        )
+      )}
     </View>
   )
 }
@@ -559,7 +575,7 @@ export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
         <SeccionI data={data} />
         <SeccionII data={data} />
         <SeccionIII data={data} />
-        <SeccionPlaceholder numeral="IV" titulo={TITULO_SECCIONES.IV} />
+        <SeccionIV data={data} />
         {/* Sección V: cuando disponible=true el route anexa el ficha oficial
             por post-procesamiento con pdf-lib (el ficha ES la Sección V, con
             su propio header 'FICHA DE AUTORIDADES REGIONALES'). Cuando
