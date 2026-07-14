@@ -1,4 +1,5 @@
--- 036_metricas_unique_constraints.sql
+-- 037_metricas_unique_constraints.sql
+-- (renumerada de 036 → 037: el 036 lo tomó 036_conflictos_regionales.sql en main)
 -- Agrega restricciones UNIQUE faltantes en las tablas de métricas
 -- importadas en 031_metricas_import.sql.
 --
