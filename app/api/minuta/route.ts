@@ -83,19 +83,33 @@ export async function GET(request: Request) {
   const cacheTipo = rawTipo === 'ficha' ? 'kit_viaje' : rawTipo
 
   if (!region_cod || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    return Response.json({ cached: false, generated_at: null })
+    return Response.json({ cached: false, generated_at: null, generated_by: null })
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  // Versión vigente y persistente (una por región+tipo, sin filtro por fecha):
+  // queda guardada hasta que un admin la regenera.
   const sb = getSupabaseAdmin()
   const { data } = await sb.from('minuta_cache')
-    .select('generated_at')
+    .select('generated_at, generated_by')
     .eq('region_cod', region_cod)
     .eq('tipo', cacheTipo)
-    .eq('cache_date', today)
     .maybeSingle()
 
-  return Response.json({ cached: !!data, generated_at: data?.generated_at ?? null })
+  // Best-effort: nombre/email de quien generó, para mostrarlo en el preview.
+  let generadoPor: string | null = null
+  if (data?.generated_by) {
+    const { data: prof } = await sb.from('user_profiles')
+      .select('full_name, email')
+      .eq('id', data.generated_by)
+      .maybeSingle()
+    generadoPor = prof?.full_name || prof?.email || null
+  }
+
+  return Response.json({
+    cached: !!data,
+    generated_at: data?.generated_at ?? null,
+    generated_by: generadoPor,
+  })
 }
 
 export async function POST(request: Request) {
@@ -144,6 +158,7 @@ export async function POST(request: Request) {
   let autoridadesFichaBuffer: Buffer | null = null
   let conflictosBuffer: Buffer | null = null
   let cachedAiContent: unknown = null
+  let cachedNumero: string | null = null
   let sbRef: ReturnType<typeof getSupabaseAdmin> | null = null
   // Enriched context data (fase 2)
   let seguimientosMinuta: SeguimientoMinuta[] = []
@@ -211,10 +226,9 @@ export async function POST(request: Request) {
       force
         ? Promise.resolve({ data: null })
         : sb.from('minuta_cache')
-            .select('ai_content')
+            .select('ai_content, numero')
             .eq('region_cod', body.region.cod)
             .eq('tipo', canonTipo)
-            .eq('cache_date', today)
             .maybeSingle(),
     ])
 
@@ -268,7 +282,22 @@ export async function POST(request: Request) {
     seiaProjects = (seiaRes.data as SeiaProject[] | null)
     mopProjects  = (mopRes.data  as MopProject[]  | null)
     leystopData  = (leystopRes.data as LeystopMinuta | null)
-    cachedAiContent = (cacheRes.data as { ai_content: unknown } | null)?.ai_content ?? null
+    const cacheRow = cacheRes.data as { ai_content: unknown; numero: string | null } | null
+    cachedAiContent = cacheRow?.ai_content ?? null
+    cachedNumero    = cacheRow?.numero ?? null
+
+    // Solo admin genera/regenera (server-side; la UI ya lo refleja pero no basta).
+    // Un no-admin solo puede continuar cuando existe versión guardada y NO fuerza:
+    // render puro de la versión vigente para previsualizar/descargar.
+    const willGenerate = force || !cachedAiContent
+    if (willGenerate && authProfile.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: force
+          ? 'Solo un administrador puede regenerar la minuta.'
+          : 'Solo un administrador puede generar la primera versión de la minuta. Solicítala a un administrador.' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
 
     // Fetch Plan Regional PDF from Storage. Lo consumen:
     //   1. Minuta 'ejecutiva' — para el bloque "Del diagnóstico a la
@@ -589,8 +618,10 @@ export async function POST(request: Request) {
         tipo:         canonTipo,
         cache_date:   today,
         ai_content:   aiContent as Record<string, unknown>,
+        numero:       body.numero ?? null,
         generated_by: authProfile.id,
-      }, { onConflict: 'region_cod,tipo,cache_date' })
+        generated_at: new Date().toISOString(),
+      }, { onConflict: 'region_cod,tipo' })
       if (cacheErr) console.error('[minuta] cache store:', cacheErr.message)
     }
   } else {
@@ -621,8 +652,10 @@ export async function POST(request: Request) {
         tipo:         canonTipo,
         cache_date:   today,
         ai_content:   aiContent as Record<string, unknown>,
+        numero:       null,   // Avance PREGO no lleva "Minuta DCI N°XX"
         generated_by: authProfile.id,
-      }, { onConflict: 'region_cod,tipo,cache_date' })
+        generated_at: new Date().toISOString(),
+      }, { onConflict: 'region_cod,tipo' })
       if (cacheErr) console.error('[minuta] cache store:', cacheErr.message)
     }
   }
@@ -674,7 +707,9 @@ export async function POST(request: Request) {
       const kitData = buildKitDeViajeData({
         region: body.region,
         fecha: body.fecha,
-        numeroMinuta: body.numero,
+        // En preview de la versión guardada (cache-hit) usamos el número
+        // persistido; al generar/regenerar, el que envió el admin.
+        numeroMinuta: cachedAiContent ? (cachedNumero ?? undefined) : body.numero,
         geo: metricasContexto.geo,
         censo: metricasContexto.censo,
         pib: metricasContexto.pib,
