@@ -54,6 +54,12 @@ export function useMetricasPibRegion(regionNombre: string | null) {
             .from('registros_bce')
             .select('nombre_region,periodo,valor_corregido,indicador_limpio,unidad_limpia,series_id')
             .eq('nombre_region', regionNombre)
+            // Orden determinístico: una región tiene ~2.500-3.600 filas en
+            // registros_bce → esta query pagina. Sin ORDER BY estable, .range()
+            // puede saltar/duplicar filas entre páginas → sectores/evolución del
+            // panel mal. Mismo patrón que fetchAllPibRows (server).
+            .order('series_id', { ascending: true })
+            .order('periodo', { ascending: true })
             .range(offset, offset + pageSize - 1)
           if (cancelled) return
           if (error || !data?.length) break
@@ -100,6 +106,13 @@ export function useMetricasPibNacional() {
             .select('nombre_region,periodo,valor_corregido,series_id,indicador_limpio,unidad_limpia')
             .in('unidad_limpia', [PIB_UNIDAD_ENC, PIB_UNIDAD_NOM])
             .in('indicador_limpio', ['PIB', 'Extrarregional'])
+            // Orden determinístico: PIB total de las 16 regiones ya supera 1000
+            // filas (más aún con ambas unidades enc+nom) → esta query pagina. Sin
+            // ORDER BY estable, .range() puede saltar/duplicar filas entre páginas
+            // (PostgREST no garantiza orden sin ORDER BY) → total nacional/ranking/%
+            // mal. Mismo patrón que fetchAllPibRows (server) y fetchAllEmpleoRows.
+            .order('series_id', { ascending: true })
+            .order('periodo', { ascending: true })
             .range(offset, offset + 999)
           if (cancelled) return
           if (error || !rows?.length) break
