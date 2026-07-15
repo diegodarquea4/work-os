@@ -669,7 +669,7 @@ function ResumenModule() {
                         valueColor={varAnual != null ? (varAnual < 0 ? '#dc2626' : '#059669') : undefined}
                       />
                       <KpiCard
-                        label="% PIB nacional"
+                        label="% PIB nacional**"
                         value={pctNac != null ? pctNac.toFixed(1) + '%' : (isNac ? '100%' : '—')}
                         sub={pibRankingNac ? `${pibRankingNac}° de 16 regiones · ${lastYear}` : `participación ${lastYear}`}
                         color="#dc2626"
@@ -714,6 +714,7 @@ function ResumenModule() {
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1">* Gráfico y Crecimiento PIB real anual (tarjeta y Top 5 sectores) en volumen encadenado (real), serie empalmada referencia 2018. PIB total, per cápita y MM$ por sector en pesos nominales (corrientes). Fuente: Banco Central de Chile.</p>
+                <p className="text-[10px] text-gray-400 mt-1">** % PIB nacional calculado sobre la suma de las 16 regiones; excluye el Extrarregional del total nacional usado como base.</p>
               </>
             )
           })()}
@@ -1679,7 +1680,7 @@ function PibModule() {
                           <th className="px-4 py-2.5 text-left font-medium sticky left-0 bg-slate-800 min-w-[160px]">Región</th>
                           {nacAños.map(a => <th key={a} className="px-3 py-2.5 text-right font-medium whitespace-nowrap">{a}</th>)}
                           <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap bg-slate-700 border-l-2 border-sky-400">CAGR</th>
-                          <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">% PIB {latestNacYear}</th>
+                          <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">% PIB {latestNacYear}*</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1721,7 +1722,7 @@ function PibModule() {
                         )}
                         {/* Total nacional */}
                         <tr className="bg-indigo-50 font-bold border-t-2 border-indigo-300">
-                          <td className="px-4 py-2 text-indigo-800 sticky left-0 bg-indigo-50">Total regiones</td>
+                          <td className="px-4 py-2 text-indigo-800 sticky left-0 bg-indigo-50">Total nacional</td>
                           {nacAños.map(a => {
                             const sum = nacRegs.reduce((s, r) => s + (nacVals[r]?.[a] ?? 0), 0) + (nacExtra[a] ?? 0)
                             return <td key={a} className="px-3 py-2 text-right tabular-nums text-indigo-800">{fmtN(sum, 0)}</td>
@@ -1732,7 +1733,7 @@ function PibModule() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="px-5 py-2 text-[10px] text-gray-400 italic">Fuente: Banco Central de Chile, series encadenadas base 2018.</p>
+                  <p className="px-5 py-2 text-[10px] text-gray-400 italic">Fuente: Banco Central de Chile, series encadenadas base 2018. Total nacional incluye Extrarregional. * % calculado sobre la suma de las 16 regiones; excluye el Extrarregional del total usado como base.</p>
                 </div>
               )}
             </div>
