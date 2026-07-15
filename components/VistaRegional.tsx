@@ -163,13 +163,22 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   const [downloadingMinuta, setDownloadingMinuta] = useState(false)
   const [downloadingTipo, setDownloadingTipo] = useState<'ejecutiva' | 'ficha' | null>(null)
   const [minutaMenuOpen, setMinutaMenuOpen] = useState(false)
-  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'ficha', { cached: boolean; generated_at: string | null }>>({
-    ejecutiva: { cached: false, generated_at: null },
-    ficha:     { cached: false, generated_at: null },
+  const [minutaCache, setMinutaCache] = useState<Record<'ejecutiva' | 'ficha', { cached: boolean; generated_at: string | null; generated_by: string | null }>>({
+    ejecutiva: { cached: false, generated_at: null, generated_by: null },
+    ficha:     { cached: false, generated_at: null, generated_by: null },
   })
-  // Contexto Regional pide un N° de Minuta DCI antes de generar. window.prompt()
-  // no funciona en este entorno (bloqueado por el sandbox del preview) — modal propio.
+  // Preview de la versión guardada: PDF embebido inline. `url` es un objectURL del
+  // blob que también se reutiliza para el botón Descargar (sin segundo POST).
+  const [minutaPreview, setMinutaPreview] = useState<{
+    tipo: 'ejecutiva' | 'ficha'; url: string; generatedAt: string | null; generatedBy: string | null
+  } | null>(null)
+  // Solo admin genera/regenera; el resto solo previsualiza/descarga lo guardado.
+  const isAdmin = profile?.role === 'admin'
+  // Contexto Regional pide un N° de Minuta DCI antes de generar/regenerar.
+  // window.prompt() no funciona en este entorno (sandbox) — modal propio.
+  // `numeroForce` distingue "generar la primera versión" de "regenerar" (force).
   const [numeroModalOpen, setNumeroModalOpen] = useState(false)
+  const [numeroForce, setNumeroForce] = useState(false)
   const [numeroInput, setNumeroInput] = useState('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
@@ -199,8 +208,8 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
       fetch(`/api/minuta?region_cod=${selectedCod}&tipo=ficha`).then(r => r.ok ? r.json() : null),
     ]).then(([ej, ficha]) => {
       setMinutaCache({
-        ejecutiva: ej    ?? { cached: false, generated_at: null },
-        ficha:     ficha ?? { cached: false, generated_at: null },
+        ejecutiva: ej    ?? { cached: false, generated_at: null, generated_by: null },
+        ficha:     ficha ?? { cached: false, generated_at: null, generated_by: null },
       })
     }).catch(() => {})
   }, [selectedCod])
@@ -320,11 +329,16 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   // Contexto Regional lleva "Minuta DCI N°XX" en el encabezado — el número se
   // pide con un modal propio (numeroModalOpen) antes de llamar a esta función,
   // no con window.prompt() (bloqueado por el sandbox de este entorno).
-  async function handleMinuta(tipo: 'ejecutiva' | 'ficha' = 'ejecutiva', force = false, numero?: string) {
+  // Genera/reusa la minuta y la abre en el modal de PREVIEW (no descarga directo).
+  // - Sin `force` y con versión guardada → cache-hit: el server reusa lo guardado.
+  // - Con `force` o sin versión → genera (solo admin; el server también lo valida).
+  async function openMinuta(tipo: 'ejecutiva' | 'ficha' = 'ejecutiva', force = false, numero?: string) {
     if (!region || downloadingMinuta) return
     setDownloadingMinuta(true)
     setDownloadingTipo(tipo)
     setMinutaMenuOpen(false)
+    // Al regenerar reemplazamos el PDF del modal: liberamos el objectURL anterior.
+    if (minutaPreview?.url) URL.revokeObjectURL(minutaPreview.url)
     try {
       const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -349,17 +363,19 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
       }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}-${tipo}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-      // Update local cache state so buttons reflect new status immediately
-      setMinutaCache(prev => ({ ...prev, [tipo]: { cached: true, generated_at: new Date().toISOString() } }))
+      // Si generamos/regeneramos, la fecha es ahora; si fue cache-hit, la fecha
+      // guardada que ya teníamos en el estado.
+      const genero = force || !minutaCache[tipo].cached
+      const generatedAt = genero ? new Date().toISOString() : minutaCache[tipo].generated_at
+      const generatedBy = genero
+        ? (profile?.full_name || profile?.email || null)
+        : minutaCache[tipo].generated_by
+      setMinutaPreview({ tipo, url, generatedAt, generatedBy })
+      setMinutaCache(prev => ({ ...prev, [tipo]: { cached: true, generated_at: generatedAt, generated_by: generatedBy } }))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error('[VistaRegional] handleMinuta error:', err)
-      setToastMsg(`No se pudo generar la minuta: ${msg}`)
+      console.error('[VistaRegional] openMinuta error:', err)
+      setToastMsg(`No se pudo abrir la minuta: ${msg}`)
       setTimeout(() => setToastMsg(null), 8000)
     } finally {
       setDownloadingMinuta(false)
@@ -367,15 +383,31 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     }
   }
 
-  function openNumeroModal() {
+  function downloadPreview() {
+    if (!minutaPreview || !region) return
+    const a = document.createElement('a')
+    a.href = minutaPreview.url
+    a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}-${minutaPreview.tipo}.pdf`
+    a.click()
+  }
+
+  function closeMinutaPreview() {
+    if (minutaPreview?.url) URL.revokeObjectURL(minutaPreview.url)
+    setMinutaPreview(null)
+  }
+
+  // Abre el modal de N° DCI antes de generar/regenerar Contexto Regional.
+  function openNumeroModal(force = false) {
     setNumeroInput('')
+    setNumeroForce(force)
     setNumeroModalOpen(true)
   }
 
   function confirmNumeroModal() {
     const numero = numeroInput.trim() || undefined
+    const force = numeroForce
     setNumeroModalOpen(false)
-    handleMinuta('ficha', false, numero)
+    openMinuta('ficha', force, numero)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -555,8 +587,9 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                   <div className="flex items-center gap-1">
                     <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
                       <button
-                        onClick={() => handleMinuta('ejecutiva')}
-                        disabled={downloadingMinuta || !region}
+                        onClick={() => openMinuta('ejecutiva', false)}
+                        disabled={downloadingMinuta || !region || (!isAdmin && !minutaCache.ejecutiva.cached)}
+                        title={!isAdmin && !minutaCache.ejecutiva.cached ? 'Aún no hay versión generada. Un administrador debe generarla.' : undefined}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {downloadingMinuta && downloadingTipo === 'ejecutiva' ? (
@@ -564,14 +597,14 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                               <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
                             </svg>
-                            {minutaCache.ejecutiva.cached ? 'Descargando...' : 'Generando...'}
+                            {minutaCache.ejecutiva.cached ? 'Abriendo...' : 'Generando...'}
                           </>
                         ) : (
                           <>
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                               <path d="M2 2h5l3 3v5H2V2z"/><path d="M6 2v4h4"/>
                             </svg>
-                            {minutaCache.ejecutiva.cached ? 'Descargar Avance PREGO' : 'Generar Avance PREGO'}
+                            {minutaCache.ejecutiva.cached ? 'Ver Avance PREGO' : 'Generar Avance PREGO'}
                           </>
                         )}
                       </button>
@@ -585,40 +618,28 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                         </svg>
                       </button>
                     </div>
-                    {/* Force regenerate — admin/editor only, visible when cached */}
-                    {(profile?.role === 'admin' || profile?.role === 'editor') && minutaCache.ejecutiva.cached && (
-                      <button
-                        onClick={() => handleMinuta('ejecutiva', true)}
-                        disabled={downloadingMinuta || !region}
-                        title="Regenerar con IA (fuerza nueva generación)"
-                        className="p-1.5 text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
-                      >
-                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 6a5 5 0 1 0 1-3"/>
-                          <path d="M1 1v3h3"/>
-                        </svg>
-                      </button>
-                    )}
                   </div>
                   {minutaMenuOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-max py-1">
                       <button
-                        onClick={openNumeroModal}
-                        className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => minutaCache.ficha.cached ? openMinuta('ficha', false) : openNumeroModal(false)}
+                        disabled={downloadingMinuta || (!isAdmin && !minutaCache.ficha.cached)}
+                        title={!isAdmin && !minutaCache.ficha.cached ? 'Aún no hay versión generada. Un administrador debe generarla.' : undefined}
+                        className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         {downloadingMinuta && downloadingTipo === 'ficha' ? (
                           <>
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                               <circle cx="6" cy="6" r="4" strokeDasharray="12" strokeDashoffset="4" />
                             </svg>
-                            Generando...
+                            {minutaCache.ficha.cached ? 'Abriendo...' : 'Generando...'}
                           </>
                         ) : (
                           <>
                             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                               <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="6"/><line x1="6" y1="6" x2="8" y2="7"/>
                             </svg>
-                            {minutaCache.ficha.cached ? 'Descargar Contexto Regional' : 'Generar Contexto Regional'}
+                            {minutaCache.ficha.cached ? 'Ver Contexto Regional' : 'Generar Contexto Regional'}
                           </>
                         )}
                       </button>
@@ -983,8 +1004,80 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
                 onClick={confirmNumeroModal}
                 className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
               >
-                Generar
+                {numeroForce ? 'Regenerar' : 'Generar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: preview de la minuta guardada (PDF embebido) ────────────── */}
+      {minutaPreview && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={closeMinutaPreview}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[88vh] mx-4 flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Encabezado: título + fecha de generación */}
+            <div className="flex items-start justify-between gap-3 px-5 py-3 border-b border-gray-200">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {minutaPreview.tipo === 'ficha' ? 'Contexto Regional' : 'Avance PREGO'}
+                  {region ? ` · ${region.nombre}` : ''}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {minutaPreview.generatedAt
+                    ? `Generada el ${new Date(minutaPreview.generatedAt).toLocaleString('es-CL', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${minutaPreview.generatedBy ? ` · ${minutaPreview.generatedBy}` : ''}`
+                    : 'Versión guardada'}
+                </p>
+              </div>
+              <button
+                onClick={closeMinutaPreview}
+                title="Cerrar"
+                className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M4 4l8 8M12 4l-8 8"/>
+                </svg>
+              </button>
+            </div>
+            {/* PDF embebido */}
+            <div className="flex-1 bg-gray-100">
+              <iframe src={minutaPreview.url} title="Previsualización de minuta" className="w-full h-full" />
+            </div>
+            {/* Acciones */}
+            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-200">
+              <span className="text-[11px] text-gray-400">
+                {isAdmin
+                  ? 'Versión guardada. Puedes descargarla o regenerarla.'
+                  : 'Versión guardada. Solo un administrador puede regenerarla.'}
+              </span>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => minutaPreview.tipo === 'ficha' ? openNumeroModal(true) : openMinuta('ejecutiva', true)}
+                    disabled={downloadingMinuta}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 6a5 5 0 1 0 1-3"/><path d="M1 1v3h3"/>
+                    </svg>
+                    Regenerar
+                  </button>
+                )}
+                <button
+                  onClick={downloadPreview}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 1v7M3 5l3 3 3-3M1 11h10"/>
+                  </svg>
+                  Descargar
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -999,12 +1092,12 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
             </svg>
             <h3 className="text-sm font-semibold text-gray-900 mb-1">
               {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
-                ? 'Descargando minuta...'
+                ? 'Abriendo minuta...'
                 : 'Generando minuta con IA...'}
             </h3>
             <p className="text-xs text-gray-500">
               {minutaCache[downloadingTipo ?? 'ejecutiva']?.cached
-                ? 'Usando versión en cache de hoy.'
+                ? 'Cargando la versión guardada.'
                 : downloadingTipo === 'ficha'
                   ? 'Compilando datos regionales para el Contexto Regional. Esto toma unos segundos.'
                   : 'Analizando datos regionales y generando el Avance PREGO. Esto puede tomar hasta 20 segundos.'}
