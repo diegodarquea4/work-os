@@ -536,6 +536,9 @@ function ResumenModule() {
 
             // Top 5 sectores productivos (solo para región) — siempre en MM$ nominal
             const sectorMap: Record<string, { last: number | null; prev: number | null }> = {}
+            // Crecimiento real (encadenado) por sector — separado del monto nominal
+            // de arriba para no mezclar bases al calcular la Var. %.
+            const sectorMapReal: Record<string, { last: number | null; prev: number | null }> = {}
             if (!isNac) {
               pibRows
                 .filter(r =>
@@ -551,12 +554,31 @@ function ResumenModule() {
                   if (y === lastYear) sectorMap[r.indicador_limpio].last = r.valor_corregido
                   if (y === prevYear) sectorMap[r.indicador_limpio].prev = r.valor_corregido
                 })
+              pibRows
+                .filter(r =>
+                  r.unidad_limpia === PIB_UNIDAD_ENC &&
+                  r.series_id?.endsWith('A') &&
+                  r.indicador_limpio !== 'PIB' &&
+                  r.indicador_limpio in SECTOR_DISP
+                )
+                .forEach(r => {
+                  const y = parsePeriodo(r.periodo).year
+                  if (y !== lastYear && y !== prevYear) return
+                  if (!sectorMapReal[r.indicador_limpio]) sectorMapReal[r.indicador_limpio] = { last: null, prev: null }
+                  if (y === lastYear) sectorMapReal[r.indicador_limpio].last = r.valor_corregido
+                  if (y === prevYear) sectorMapReal[r.indicador_limpio].prev = r.valor_corregido
+                })
             }
             const top5 = Object.entries(sectorMap)
               .filter(([, v]) => v.last != null)
               .sort(([, a], [, b]) => (b.last ?? 0) - (a.last ?? 0))
               .slice(0, 5)
-              .map(([key, v]) => ({ nombre: SECTOR_DISP[key] ?? key, last: v.last as number, prev: v.prev }))
+              .map(([key, v]) => {
+                const real = sectorMapReal[key]
+                const varPctReal = real?.last != null && real?.prev != null && real.prev > 0
+                  ? (real.last - real.prev) / real.prev * 100 : null
+                return { nombre: SECTOR_DISP[key] ?? key, last: v.last as number, varPctReal }
+              })
 
             return (
               <>
@@ -640,7 +662,7 @@ function ResumenModule() {
                         color="#1d4ed8"
                       />
                       <KpiCard
-                        label="Var. % anual"
+                        label="Crecimiento PIB real anual"
                         value={varAnual != null ? (varAnual >= 0 ? '+' : '') + varAnual.toFixed(1) + '%' : '—'}
                         sub={prevYear ? `vs ${prevYear}` : 'vs año anterior'}
                         color={varAnual != null ? (varAnual < 0 ? '#dc2626' : '#059669') : '#6b7280'}
@@ -664,13 +686,13 @@ function ResumenModule() {
                             <tr className="bg-slate-800 text-white">
                               <th className="px-3 py-2 text-left font-medium">Sector</th>
                               <th className="px-3 py-2 text-right font-medium">MM$ nominal</th>
-                              <th className="px-3 py-2 text-right font-medium">Var. %</th>
+                              <th className="px-3 py-2 text-right font-medium">Crecimiento PIB real anual</th>
                               <th className="px-3 py-2 text-right font-medium">% PIB reg.</th>
                             </tr>
                           </thead>
                           <tbody>
                             {top5.map((s, i) => {
-                              const varPct = s.prev != null && s.prev > 0 ? (s.last - s.prev) / s.prev * 100 : null
+                              const varPct = s.varPctReal
                               const pctPib = pibNomLast != null && pibNomLast > 0 ? s.last / pibNomLast * 100 : null
                               return (
                                 <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -691,7 +713,7 @@ function ResumenModule() {
                     )}
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">* Gráfico y Var. % anual en volumen encadenado (real), serie empalmada referencia 2018. Tarjetas de PIB total, per cápita y Top 5 sectores en pesos nominales (corrientes). Fuente: Banco Central de Chile.</p>
+                <p className="text-[10px] text-gray-400 mt-1">* Gráfico y Crecimiento PIB real anual (tarjeta y Top 5 sectores) en volumen encadenado (real), serie empalmada referencia 2018. PIB total, per cápita y MM$ por sector en pesos nominales (corrientes). Fuente: Banco Central de Chile.</p>
               </>
             )
           })()}
