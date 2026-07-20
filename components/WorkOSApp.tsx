@@ -157,9 +157,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return null
   }, [profile])
 
-  // Desalojos: admin (lectura+edición) y regional (solo lectura, sus regiones).
-  // Editor/viewer NO lo ven. readOnly gobierna la UI de edición; el RLS lo respalda.
-  const canSeeDesalojos = profile?.role === 'admin' || profile?.role === 'regional'
+  // Desalojos: admin (lectura+edición); regional y viewer (solo lectura). El
+  // scoping por región lo aplican las rutas API y visibleIniciativas: regional y
+  // viewer-filtrado ven solo sus region_cods; viewer-nacional ve todo. Editor NO
+  // lo ve. readOnly gobierna la UI de edición; el RLS lo respalda.
+  const canSeeDesalojos =
+    profile?.role === 'admin' || profile?.role === 'regional' || profile?.role === 'viewer'
   const desalojosReadOnly = profile?.role !== 'admin'
   const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },

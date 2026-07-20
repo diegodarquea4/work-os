@@ -23,8 +23,10 @@ import type { DesalojoCapa, DesalojoDetalle, DesalojoFaseEstado } from '@/lib/ty
 export async function GET() {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // admin (todo) o regional (solo sus regiones, read-only). Editor/viewer: no.
-  if (profile.role !== 'admin' && profile.role !== 'regional') {
+  // Lectura: admin (todo) + regional + viewer (solo lectura). Editor: no.
+  // Scoping por región para regional y para viewer "filtrado" (con region_cods);
+  // el viewer nacional (sin region_cods) ve todo, igual que en el resto del panel.
+  if (profile.role !== 'admin' && profile.role !== 'regional' && profile.role !== 'viewer') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -63,8 +65,13 @@ export async function GET() {
     fases_estado: fasesByPid.get(d.prioridad_id) ?? [],
   }))
 
-  // Scoping regional: solo casos cuya prioridad esté en sus region_cods.
-  if (profile.role === 'regional') {
+  // Scoping por región: regional siempre; viewer solo si tiene region_cods
+  // (viewer nacional sin region_cods ve todo). Mismo criterio que needsRegionFilter
+  // en WorkOSApp para el resto de las vistas.
+  const scopeByRegion =
+    profile.role === 'regional' ||
+    (profile.role === 'viewer' && profile.region_cods.length > 0)
+  if (scopeByRegion) {
     const codByN = await regionCodByPrioridad(db, casos.map(c => c.prioridad_id))
     casos = casos.filter(c => {
       const cod = codByN.get(c.prioridad_id)

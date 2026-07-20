@@ -42,7 +42,8 @@ export async function GET(
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
   const db = getSupabaseAdmin()
-  // admin (todo) o regional (solo su región, read-only). Editor/viewer: no.
+  // admin (todo) · regional/viewer-filtrado (su región) · viewer-nacional (todo),
+  // siempre read-only. Editor: no. Ver canReadDesalojo.
   if (!(await canReadDesalojo(profile, db, n))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
