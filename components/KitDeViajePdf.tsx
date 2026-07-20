@@ -374,8 +374,13 @@ function SeccionI({ data }: { data: KitDeViajeData }) {
   const { bullets } = data.caracterizacion
   return (
     <View>
-      <SectionTitle numeral="I">{TITULO_SECCIONES.I}</SectionTitle>
-      <BulletProsa label="Localización y superficie" texto={bullets.localizacion_superficie} />
+      {/* Título + primer bullet en un solo bloque wrap={false}: si no caben
+          juntos en lo que queda de página, react-pdf los empuja ENTEROS a la
+          siguiente en vez de dejar el título huérfano con un salto en blanco. */}
+      <View wrap={false}>
+        <SectionTitle numeral="I">{TITULO_SECCIONES.I}</SectionTitle>
+        <BulletProsa label="Localización y superficie" texto={bullets.localizacion_superficie} />
+      </View>
       <BulletOrganizacion label="Organización político-administrativa" provincias={bullets.organizacion_politico_administrativa} />
       <BulletProsa label="Población (Censo 2024)" texto={bullets.poblacion} />
       <BulletProsa label="Estructura etaria" texto={bullets.estructura_etaria} />
@@ -390,8 +395,13 @@ function SeccionII({ data }: { data: KitDeViajeData }) {
   const { bullets } = data.indicadores
   return (
     <View>
-      <SectionTitle numeral="II">{TITULO_SECCIONES.II}</SectionTitle>
-      <BulletPib label="PIB regional" texto={bullets.pib_regional} sectores={bullets.pib_sectores} />
+      {/* Título + primer bullet en un solo bloque wrap={false}: si no caben
+          juntos en lo que queda de página, react-pdf los empuja ENTEROS a la
+          siguiente en vez de dejar el título huérfano con un salto en blanco. */}
+      <View wrap={false}>
+        <SectionTitle numeral="II">{TITULO_SECCIONES.II}</SectionTitle>
+        <BulletPib label="PIB regional" texto={bullets.pib_regional} sectores={bullets.pib_sectores} />
+      </View>
       <BulletMercadoLaboral label="Mercado laboral" periodo={bullets.mercado_laboral_periodo} tabla={bullets.mercado_laboral_tabla} />
       <BulletProsa label="Ingresos y pobreza (CASEN 2024)" texto={bullets.ingresos_pobreza} />
       <BulletProsa label="Educación (Censo 2024)" texto={bullets.educacion} />
