@@ -42,9 +42,12 @@ type Props = {
    *  aunque falten ítems del checklist (soft-override) y deja audit. */
   onSetFase:    (fase: DesalojoFase, justificacion?: string) => Promise<void>
   disabled?:    boolean
+  /** Solo lectura: deshabilita avanzar/retroceder/cambiar de fase. */
+  readOnly?:    boolean
 }
 
-export default function DesalojoFaseStepper({ capa, fasesEstado, onSetFase, disabled = false }: Props) {
+export default function DesalojoFaseStepper({ capa, fasesEstado, onSetFase, disabled = false, readOnly = false }: Props) {
+  const locked = disabled || readOnly
   const aplicables = getFasesAplicables(capa.tipologia)
   const fases: DesalojoFase[] = [...aplicables, 'cerrado']
   const idxActual = fases.indexOf(capa.fase_actual)
@@ -56,7 +59,7 @@ export default function DesalojoFaseStepper({ capa, fasesEstado, onSetFase, disa
   const [overrideModal, setOverrideModal] = useState<{ fase: DesalojoFase; reasons: string[] } | null>(null)
 
   async function handleClick(fase: DesalojoFase) {
-    if (fase === capa.fase_actual || disabled) return
+    if (fase === capa.fase_actual || locked) return
     const idxDestino = fases.indexOf(fase)
     if (idxDestino < 0) return
 
@@ -102,7 +105,7 @@ export default function DesalojoFaseStepper({ capa, fasesEstado, onSetFase, disa
 
           // Con soft-override, la "siguiente" siempre es clickeable (el modal
           // se encarga de pedir justificación si faltan ítems).
-          const clickable = !disabled && (
+          const clickable = !locked && (
             isPrev ||
             isNext ||
             (idxActual >= 0 && idx < idxActual)

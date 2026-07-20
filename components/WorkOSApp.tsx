@@ -157,14 +157,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return null
   }, [profile])
 
-  const GROUPED_VIEWS: { key: View; label: string; adminOnly?: boolean }[] = [
+  // Desalojos: admin (lectura+edición) y regional (solo lectura, sus regiones).
+  // Editor/viewer NO lo ven. readOnly gobierna la UI de edición; el RLS lo respalda.
+  const canSeeDesalojos = profile?.role === 'admin' || profile?.role === 'regional'
+  const desalojosReadOnly = profile?.role !== 'admin'
+  const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
     { key: 'atencion',       label: 'Atención'  },
     { key: 'kanban',         label: 'Gabinete'  },
     { key: 'vista-regional', label: 'Mi Región' },
-    { key: 'desalojos',      label: 'Desalojos', adminOnly: true },
+    { key: 'desalojos',      label: 'Desalojos', visible: canSeeDesalojos },
   ]
-  const visibleGroupedViews = GROUPED_VIEWS.filter(v => !v.adminOnly || profile?.role === 'admin')
+  const visibleGroupedViews = GROUPED_VIEWS.filter(v => v.visible !== false)
   const isGroupedActive  = visibleGroupedViews.some(v => v.key === view)
   const activeGroupLabel = visibleGroupedViews.find(v => v.key === view)?.label ?? 'Seguimiento'
 
@@ -539,15 +543,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
-      {/* Desalojos view — admin only. Doble check (botón + render) para
-          que un user que manualmente cambie `view` via devtools no vea
-          contenido. La protección real es por RLS + check server-side en
-          las API routes. */}
-      {view === 'desalojos' && profile?.role === 'admin' && (
+      {/* Desalojos view — admin (edición) + regional (solo lectura, sus regiones).
+          Doble check (botón + render) para que un user que manualmente cambie
+          `view` via devtools no vea contenido fuera de su rol. La protección real
+          es por RLS (regional_read scopeado) + check server-side en las API routes. */}
+      {view === 'desalojos' && canSeeDesalojos && (
         <div className="flex-1 overflow-hidden">
           <DesalojosView
             projects={visibleIniciativas}
             onUpdatePrioridad={handleUpdatePrioridad}
+            readOnly={desalojosReadOnly}
           />
         </div>
       )}

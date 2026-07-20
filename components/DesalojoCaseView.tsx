@@ -51,11 +51,14 @@ const DesalojoMapaDrawer = dynamic(() => import('./DesalojoMapaDrawer'), { ssr: 
 
 type Props = {
   iniciativa: Iniciativa
+  /** Solo-lectura (regionales): oculta toda acción de edición. Las escrituras
+   *  igual están bloqueadas server-side (rutas admin-only), esto es UX. */
+  readOnly?: boolean
 }
 
 type Tab = 'contexto' | 'avance' | 'planificacion' | 'responsables'
 
-export default function DesalojoCaseView({ iniciativa }: Props) {
+export default function DesalojoCaseView({ iniciativa, readOnly = false }: Props) {
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState<string | null>(null)
   const [tab, setTab]                   = useState<Tab>('contexto')
@@ -119,7 +122,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   // ── Mutaciones detalle ──────────────────────────────────────────────────
 
   async function handlePatchResumen(resumen: string | null) {
-    if (!detalle) return
+    if (readOnly || !detalle) return
     const prev = detalle
     setDetalle({ ...detalle, resumen_narrativo: resumen })
     try {
@@ -147,6 +150,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     capaId: number,
     patch:  Partial<DesalojoCapa> & { justificacion_avance?: string },
   ) {
+    if (readOnly) return
     const prev = capas
     // El optimistic update aplica solo los campos de la tabla, no metadatos
     // del PATCH como `justificacion_avance`.
@@ -193,6 +197,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     fase:   DesalojoFaseConSemaforo,
     patch:  { semaforo?: SemaforoDimension; notas?: string | null; checklist_patch?: DesalojoChecklistEstado },
   ) {
+    if (readOnly) return
     // Optimistic: aplicar el patch al estado local correspondiente.
     const prev = fasesEstado
     setFasesEstado(prev.map(e => {
@@ -229,6 +234,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }
 
   async function handleCrearCapa(nombre: string) {
+    if (readOnly) return
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/capas`, {
         method:  'POST',
@@ -276,6 +282,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     rolKey: string,
     value:  DesalojoResponsable | null,
   ) {
+    if (readOnly) return
     const prev = capas
     setCapas(prev.map(c => {
       if (c.id !== capaId) return c
@@ -306,6 +313,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }
 
   async function handleArchivarCapa(capaId: number) {
+    if (readOnly) return
     const prev = capas
     setCapas(prev.filter(c => c.id !== capaId))
     try {
@@ -329,6 +337,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     tipo:        DesalojoSeguimientoTipo,
     descripcion: string,
   ) {
+    if (readOnly) return
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/seguimientos`, {
         method:  'POST',
@@ -421,6 +430,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     dimension: DesalojoDimension | null,
     file:      File,
   ) {
+    if (readOnly) return
     try {
       await uploadDirectAndRegister(file, { capa_id: capaId, dimension })
     } catch (err) {
@@ -435,6 +445,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     itemKey: string,
     file:    File,
   ) {
+    if (readOnly) return
     try {
       await uploadDirectAndRegister(file, { capa_id: capaId, fase, item_key: itemKey })
     } catch (err) {
@@ -443,6 +454,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }
 
   async function handleDeleteDoc(docId: number) {
+    if (readOnly) return
     if (!window.confirm('¿Eliminar este documento?')) return
     const prev = documentos
     setDocumentos(prev.filter(d => d.id !== docId))
@@ -478,6 +490,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
     fecha_inicio: string
     fecha_fin?:   string | null
   }): Promise<DesalojoPlanificacion | null> {
+    if (readOnly) return null
     try {
       const res = await fetch(`/api/desalojos/${iniciativa.n}/planificacion`, {
         method:  'POST',
@@ -501,6 +514,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }
 
   async function handlePatchEvento(id: number, patch: Partial<DesalojoPlanificacion>) {
+    if (readOnly) return
     const prev = planificacion
     setPlanificacion(sortEventos(prev.map(e => e.id === id ? { ...e, ...patch } : e)))
     try {
@@ -525,6 +539,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
   }
 
   async function handleDeleteEvento(id: number) {
+    if (readOnly) return
     const prev = planificacion
     const prevPoligonos = poligonos
     // Cascada local: si borramos un evento top-level, sus hitos también
@@ -615,6 +630,17 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
           <div className="flex items-start gap-2 flex-wrap">
             <DesalojoBadge size="md" />
             <h1 className="text-xl font-bold text-gray-900 flex-1 min-w-0">{iniciativa.nombre}</h1>
+            {readOnly && (
+              <span
+                title="Tienes acceso de solo lectura a los desalojos de tu región"
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium"
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2.5" y="5.5" width="7" height="5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/>
+                </svg>
+                Solo lectura
+              </span>
+            )}
             <button
               type="button"
               disabled
@@ -706,36 +732,41 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setMapaOpen(o => !o)}
-              disabled={tab === 'planificacion'}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                tab === 'planificacion'
-                  ? 'text-gray-300 cursor-not-allowed'
-                  : mapaOpen
-                    ? 'bg-slate-900 text-white hover:bg-slate-700'
-                    : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
-              }`}
-              title={
-                tab === 'planificacion'
-                  ? 'El Gantt de Planificación reemplaza este panel en esta tab'
-                  : mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'
-              }
-              aria-label={mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'}
-              aria-pressed={mapaOpen}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 4l4-1.5 4 1.5 4-1.5v10L10 14l-4-1.5L2 14z"/>
-                <path d="M6 2.5v10M10 4v10"/>
-              </svg>
-              <span>Mapa</span>
-              {poligonos.length > 0 && !mapaOpen && tab !== 'planificacion' && (
-                <span className="ml-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
-                  {poligonos.length > 9 ? '9+' : poligonos.length}
-                </span>
-              )}
-            </button>
+            {/* Mapa: incluye edición de polígonos (escritura directa que no pasa
+                por el safety net de los handlers). En solo-lectura se oculta —
+                el Calendario, que es de solo visualización, se mantiene. */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setMapaOpen(o => !o)}
+                disabled={tab === 'planificacion'}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  tab === 'planificacion'
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : mapaOpen
+                      ? 'bg-slate-900 text-white hover:bg-slate-700'
+                      : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
+                }`}
+                title={
+                  tab === 'planificacion'
+                    ? 'El Gantt de Planificación reemplaza este panel en esta tab'
+                    : mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'
+                }
+                aria-label={mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'}
+                aria-pressed={mapaOpen}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 4l4-1.5 4 1.5 4-1.5v10L10 14l-4-1.5L2 14z"/>
+                  <path d="M6 2.5v10M10 4v10"/>
+                </svg>
+                <span>Mapa</span>
+                {poligonos.length > 0 && !mapaOpen && tab !== 'planificacion' && (
+                  <span className="ml-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
+                    {poligonos.length > 9 ? '9+' : poligonos.length}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -753,6 +784,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onArchivarCapa={handleArchivarCapa}
             onUploadDoc={async (file) => { await handleUploadDoc(null, null, file) }}
             onDeleteDoc={handleDeleteDoc}
+            readOnly={readOnly}
           />
         )}
         {tab === 'avance' && (
@@ -770,6 +802,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onUploadDocItem={handleUploadDocItem}
             onDeleteDoc={handleDeleteDoc}
             regionCaso={iniciativa.region}
+            readOnly={readOnly}
           />
         )}
         {tab === 'planificacion' && (
@@ -781,6 +814,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             onPatch={handlePatchEvento}
             onDelete={handleDeleteEvento}
             onVerEnMapa={handleVerEnMapa}
+            readOnly={readOnly}
           />
         )}
         {tab === 'responsables' && (
@@ -789,6 +823,7 @@ export default function DesalojoCaseView({ iniciativa }: Props) {
             selectedCapaId={selectedCapaId}
             onSelectCapa={setSelectedCapaId}
             onPatchResponsable={handlePatchResponsable}
+            readOnly={readOnly}
           />
         )}
         </div>

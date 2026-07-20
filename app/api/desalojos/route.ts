@@ -17,12 +17,16 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { regionCodByPrioridad } from '@/lib/desalojoAccess'
 import type { DesalojoCapa, DesalojoDetalle, DesalojoFaseEstado } from '@/lib/types'
 
 export async function GET() {
   const profile = await requireAuth()
-  if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // admin (todo) o regional (solo sus regiones, read-only). Editor/viewer: no.
+  if (profile.role !== 'admin' && profile.role !== 'regional') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const db = getSupabaseAdmin()
   const [detalleRes, capasRes, fasesRes] = await Promise.all([
@@ -52,12 +56,21 @@ export async function GET() {
     fasesByPid.set(f.prioridad_id, arr)
   }
 
-  const casos = detalles.map(d => ({
+  let casos = detalles.map(d => ({
     prioridad_id: d.prioridad_id,
     detalle:      d,
     capas:        capasByPid.get(d.prioridad_id) ?? [],
     fases_estado: fasesByPid.get(d.prioridad_id) ?? [],
   }))
+
+  // Scoping regional: solo casos cuya prioridad esté en sus region_cods.
+  if (profile.role === 'regional') {
+    const codByN = await regionCodByPrioridad(db, casos.map(c => c.prioridad_id))
+    casos = casos.filter(c => {
+      const cod = codByN.get(c.prioridad_id)
+      return !!cod && profile.region_cods.includes(cod)
+    })
+  }
 
   return NextResponse.json({ casos })
 }

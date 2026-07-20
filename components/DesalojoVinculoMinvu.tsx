@@ -19,10 +19,12 @@ type Props = {
   regionPreset?: string
   onVincular:    (folio: string, lat: number, lng: number) => Promise<void>
   onQuitar:      () => Promise<void>
+  /** Solo lectura: oculta las acciones de vincular/cambiar/quitar folio. */
+  readOnly?:     boolean
 }
 
 export default function DesalojoVinculoMinvu({
-  folio, regionPreset, onVincular, onQuitar,
+  folio, regionPreset, onVincular, onQuitar, readOnly = false,
 }: Props) {
   // Cache del último fetch: { folio, data } — la data es null si el fetch
   // resolvió sin matches o falló. El display se DERIVA del folio actual vs el
@@ -84,35 +86,39 @@ export default function DesalojoVinculoMinvu({
               </p>
             ) : null}
           </div>
-          <div className="flex gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setOpenModal(true)}
-              className="text-[10px] px-2 py-1 rounded text-gray-600 hover:bg-gray-100 font-medium uppercase tracking-wide"
-            >
-              Cambiar
-            </button>
-            <button
-              type="button"
-              onClick={handleQuitar}
-              className="text-[10px] px-2 py-1 rounded text-red-600 hover:bg-red-50 font-medium uppercase tracking-wide"
-            >
-              Quitar
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setOpenModal(true)}
+                className="text-[10px] px-2 py-1 rounded text-gray-600 hover:bg-gray-100 font-medium uppercase tracking-wide"
+              >
+                Cambiar
+              </button>
+              <button
+                type="button"
+                onClick={handleQuitar}
+                className="text-[10px] px-2 py-1 rounded text-red-600 hover:bg-red-50 font-medium uppercase tracking-wide"
+              >
+                Quitar
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-3 text-[11px]">
           <p className="text-gray-500 leading-snug">
             Sin vínculo al catastro MINVU. Vinculá para heredar coords y datos oficiales.
           </p>
-          <button
-            type="button"
-            onClick={() => setOpenModal(true)}
-            className="text-[11px] px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-semibold shrink-0"
-          >
-            Vincular folio MINVU
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setOpenModal(true)}
+              className="text-[11px] px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-semibold shrink-0"
+            >
+              Vincular folio MINVU
+            </button>
+          )}
         </div>
       )}
 

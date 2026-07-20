@@ -280,9 +280,15 @@ function ExtraRow({
           <ul className="space-y-1">
             {docs.map(d => (
               <li key={d.id} className="flex items-center gap-2 px-2 py-1 bg-white border border-gray-200 rounded text-[11px]">
-                <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate" title={d.nombre}>
-                  {d.nombre}
-                </a>
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate" title={d.nombre}>
+                    {d.nombre}
+                  </a>
+                ) : (
+                  <span className="flex-1 min-w-0 text-slate-600 truncate" title={`${d.nombre} (descarga solo para administradores)`}>
+                    {d.nombre}
+                  </span>
+                )}
                 {d.tamano_bytes && <span className="text-gray-400 flex-shrink-0">{fmtBytes(d.tamano_bytes)}</span>}
                 {onDeleteDoc && (
                   <button onClick={() => onDeleteDoc(d.id)} className="text-gray-400 hover:text-red-600 flex-shrink-0 text-sm leading-none px-1" title="Eliminar" aria-label="Eliminar documento">×</button>

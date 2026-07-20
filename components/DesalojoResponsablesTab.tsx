@@ -32,10 +32,12 @@ type Props = {
     rolKey: string,
     value: DesalojoResponsable | null,
   ) => Promise<void>
+  /** Solo lectura: oculta los controles de asignar/editar/eliminar responsables. */
+  readOnly?:      boolean
 }
 
 export default function DesalojoResponsablesTab({
-  capas, selectedCapaId, onSelectCapa, onPatchResponsable,
+  capas, selectedCapaId, onSelectCapa, onPatchResponsable, readOnly = false,
 }: Props) {
   const activas = capas.filter(c => c.activa)
   const capa    = activas.find(c => c.id === selectedCapaId) ?? activas[0] ?? null
@@ -59,7 +61,7 @@ export default function DesalojoResponsablesTab({
   return (
     <div className="space-y-4">
       <DesalojoCapaSelector capas={activas} selectedId={capa.id} onSelect={onSelectCapa} />
-      <CapaResponsables key={capa.id} capa={capa} onPatchResponsable={onPatchResponsable} />
+      <CapaResponsables key={capa.id} capa={capa} onPatchResponsable={onPatchResponsable} readOnly={readOnly} />
     </div>
   )
 }
@@ -67,10 +69,11 @@ export default function DesalojoResponsablesTab({
 // ────────────────────────────────────────────────────────────────────────
 
 function CapaResponsables({
-  capa, onPatchResponsable,
+  capa, onPatchResponsable, readOnly = false,
 }: {
   capa: DesalojoCapa
   onPatchResponsable: (capaId: number, rolKey: string, value: DesalojoResponsable | null) => Promise<void>
+  readOnly?: boolean
 }) {
   const roles = getRoles(capa.tipologia)
   const color = getCapaColor(capa.orden)
@@ -119,6 +122,7 @@ function CapaResponsables({
             rol={rol}
             value={responsables[rol.key] ?? null}
             onSave={(value) => onPatchResponsable(capa.id, rol.key, value)}
+            readOnly={readOnly}
           />
         ))}
       </div>
@@ -141,13 +145,15 @@ function CapaResponsables({
                     {value.institucion && <> · {value.institucion}</>}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onPatchResponsable(capa.id, key, null)}
-                  className="text-[11px] text-amber-800 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-amber-100"
-                >
-                  Eliminar
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onPatchResponsable(capa.id, key, null)}
+                    className="text-[11px] text-amber-800 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-amber-100"
+                  >
+                    Eliminar
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -160,11 +166,12 @@ function CapaResponsables({
 // ────────────────────────────────────────────────────────────────────────
 
 function RolCard({
-  rol, value, onSave,
+  rol, value, onSave, readOnly = false,
 }: {
   rol:     RolCfg
   value:   DesalojoResponsable | null
   onSave:  (value: DesalojoResponsable | null) => Promise<void>
+  readOnly?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<DesalojoResponsable>(
@@ -222,13 +229,13 @@ function RolCard({
             <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{rol.descripcion}</p>
           )}
         </div>
-        {!editing && tieneValor && (
+        {!readOnly && !editing && tieneValor && (
           <button type="button" onClick={start}
             className="text-xs text-slate-600 hover:text-slate-900 font-medium flex-shrink-0">
             Editar
           </button>
         )}
-        {!editing && !tieneValor && (
+        {!readOnly && !editing && !tieneValor && (
           <button type="button" onClick={start}
             className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-medium flex-shrink-0">
             + Asignar

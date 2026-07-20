@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { canReadDesalojo } from '@/lib/desalojoAccess'
 import { desalojoDetallePatchSchema } from '@/lib/schemas'
 import type { DesalojoDocumento } from '@/lib/types'
 
@@ -34,14 +35,18 @@ export async function GET(
   context: { params: Promise<{ n: string }> },
 ) {
   const profile = await requireAuth()
-  if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { n: nStr } = await context.params
   const n = Number(nStr)
   if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: 'Invalid n' }, { status: 400 })
 
   const db = getSupabaseAdmin()
+  // admin (todo) o regional (solo su región, read-only). Editor/viewer: no.
+  if (!(await canReadDesalojo(profile, db, n))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const [detalleRes, capasRes, fasesRes, segRes, docsRes, planRes, polyRes] = await Promise.all([
     db.from('desalojo_detalle')      .select('*').eq('prioridad_id', n).maybeSingle(),
     db.from('desalojo_capas')        .select('*').eq('prioridad_id', n).eq('activa', true).order('orden', { ascending: true }),
@@ -60,7 +65,12 @@ export async function GET(
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 })
   }
 
-  const documentos = await withSignedUrls(db, (docsRes.data ?? []) as DesalojoDocumento[])
+  // El bucket desalojos-docs sigue admin-only: a los regionales les damos la
+  // metadata del documento pero sin URL firmada (no descargan el archivo).
+  const docsRaw = (docsRes.data ?? []) as DesalojoDocumento[]
+  const documentos = profile.role === 'admin'
+    ? await withSignedUrls(db, docsRaw)
+    : docsRaw.map(d => ({ ...d, url: '' }))
 
   return NextResponse.json({
     detalle:       detalleRes.data ?? null,

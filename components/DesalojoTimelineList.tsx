@@ -44,11 +44,14 @@ type Props = {
   polyCountByEtapa?: Map<number, number>
   /** Granularidad de fecha de la vista ('dia' | 'semana'). */
   granularidad?: 'dia' | 'semana'
+  /** Solo lectura: oculta el editor de crear evento y los controles de las cards. */
+  readOnly?: boolean
 }
 
 export default function DesalojoTimelineList({
   eventos, hitosByParent, capas, onCreate, onPatch, onDelete, flashId,
   focusedEventId, onSelectFocus, onVerEnMapa, polyCountByEtapa, granularidad = 'dia',
+  readOnly = false,
 }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const capasById = new Map(capas.map(c => [c.id, c] as const))
@@ -96,6 +99,7 @@ export default function DesalojoTimelineList({
               evento={ev}
               capa={ev.capa_id !== null ? capasById.get(ev.capa_id) ?? null : null}
               hitos={hitosByParent.get(ev.id) ?? []}
+              readOnly={readOnly}
               onPatch={onPatch}
               onDelete={onDelete}
               onAddHito={async input => { await onCreate(input) }}
@@ -111,7 +115,7 @@ export default function DesalojoTimelineList({
         </ol>
       )}
 
-      {editorOpen ? (
+      {!readOnly && (editorOpen ? (
         <DesalojoTimelineEditor
           capas={capas.filter(c => c.activa)}
           onCreate={async (input) => {
@@ -128,7 +132,7 @@ export default function DesalojoTimelineList({
         >
           + Agregar evento
         </button>
-      )}
+      ))}
     </div>
   )
 }

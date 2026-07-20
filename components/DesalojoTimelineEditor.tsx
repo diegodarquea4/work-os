@@ -22,9 +22,11 @@ type Props = {
     fecha_fin?:   string | null
   }) => Promise<void>
   onCancel: () => void
+  /** Solo lectura: el formulario de creación no aplica. El padre además lo oculta. */
+  readOnly?: boolean
 }
 
-export default function DesalojoTimelineEditor({ capas, onCreate, onCancel }: Props) {
+export default function DesalojoTimelineEditor({ capas, onCreate, onCancel, readOnly = false }: Props) {
   const [titulo,       setTitulo]       = useState('')
   const [descripcion,  setDescripcion]  = useState('')
   const [fechaInicio,  setFechaInicio]  = useState(() => new Date().toLocaleDateString('sv-SE'))
@@ -58,6 +60,10 @@ export default function DesalojoTimelineEditor({ capas, onCreate, onCancel }: Pr
       setSaving(false)
     }
   }
+
+  // Solo lectura: no se ofrece crear eventos. El padre ya lo oculta; esto
+  // es una defensa adicional para que el form nunca se renderice.
+  if (readOnly) return null
 
   return (
     <form
