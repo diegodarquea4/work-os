@@ -48,40 +48,39 @@ export type ImportErrorBanner = {
   action: string
 }
 
-const RE_FILA = /#(\d+)\s*[:\-—·]/
+// El ancla nueva es "Fila N · «nombre»: …". Mantiene compat con el viejo "#N:".
+const RE_FILA = /fila\s+(\d+)/i
 
 /** Clasifica un string de error en una familia. */
 export function classifyError(raw: string): ClassifiedError {
   const filaMatch = raw.match(RE_FILA)
   const fila = filaMatch ? Number(filaMatch[1]) : undefined
-  const t = raw.toLowerCase()
 
-  // Dato obligatorio faltante en parsing — el caso del Excel sin la columna.
-  if (/(nombre|región|region|eje|ministerio)\s+requerid[ao]/i.test(raw)) {
+  // Dato obligatorio faltante — "Falta la Región / el Nombre / el Eje / el Ministerio".
+  if (/falta\s+(?:la|el)\s+(?:región|region|nombre|eje|ministerio)/i.test(raw)
+      || /(nombre|región|region|eje|ministerio)\s+requerid[ao]/i.test(raw)) {
     return { raw, family: 'dato-requerido', fila }
   }
 
-  // Region no esta en el catalogo de 16.
-  if (/región\s+".+"\s+no\s+reconocida/i.test(raw)) {
+  // Región no coincide con el catálogo de 16.
+  if (/región\s+«[^»]+»:\s*no coincide/i.test(raw) || /región\s+".+"\s+no\s+reconocida/i.test(raw)) {
     return { raw, family: 'region-invalida', fila }
   }
 
-  // Eje no esta en el catalogo de su region.
-  if (/eje.*no.*catalog/i.test(raw) || /eje.*no\s+existe/i.test(raw)) {
-    return { raw, family: 'eje-invalido', fila }
-  }
-
-  // RAT o valor enum invalido.
-  if (/inválido|invalido|fuera\s+de\s+rango|valores?\s+v[aá]lidos?/i.test(raw)) {
-    return { raw, family: 'valor-invalido', fila }
-  }
-
-  // Region del # no coincide con la del Excel.
-  if (/el\s+#\s*\d+\s+corresponde\s+a\s+la\s+región/i.test(raw)) {
+  // El # existe pero en otra región (no se puede mover de región desde el import).
+  if (/la\s+iniciativa\s+#\d+\s+es\s+de\s+la\s+región/i.test(raw)
+      || /el\s+#\s*\d+\s+corresponde\s+a\s+la\s+región/i.test(raw)) {
     return { raw, family: 'region-mismatch', fila }
   }
 
-  // Permisos.
+  // Eje mal formateado o fuera del catálogo de su región.
+  if (/eje\s+«[^»]+»:\s*formato/i.test(raw)
+      || /eje\s+\d+:\s*no\s+está\s+en\s+el\s+catálogo/i.test(raw)
+      || /eje.*no.*catalog/i.test(raw) || /eje.*no\s+existe/i.test(raw)) {
+    return { raw, family: 'eje-invalido', fila }
+  }
+
+  // Permisos (mensajes del trigger / Postgres 42501).
   if (/sin\s+permiso|permission\s+denied|insufficient\s+privilege/i.test(raw)
       || /42501/.test(raw)
       || /regional\s+solo\s+puede\s+modificar/i.test(raw)
@@ -99,9 +98,19 @@ export function classifyError(raw: string): ClassifiedError {
     return { raw, family: 'fk-faltante', fila }
   }
 
-  // Postgres: invalid input syntax / formato (fechas, numeros).
-  if (/invalid\s+input\s+syntax/i.test(raw) || /22p02/i.test(raw) || /formato.*inválid/i.test(raw)) {
+  // Formato: número/fecha/separador de ministerios inválido (incluye Postgres 22P02).
+  if (/debe\s+ser\s+un\s+número/i.test(raw)
+      || /formato\s+inválido/i.test(raw)
+      || /fuera\s+de\s+rango/i.test(raw)
+      || /parece\s+traer\s+varios\s+ministerios/i.test(raw)
+      || /invalid\s+input\s+syntax/i.test(raw) || /22p02/i.test(raw)) {
     return { raw, family: 'formato', fila }
+  }
+
+  // Valor enum fuera de las opciones permitidas.
+  if (/no\s+es\s+una\s+opción\s+válida/i.test(raw) || /no\s+se\s+entiende/i.test(raw)
+      || /inválid[ao]|invalid[ao]|valores?\s+v[aá]lidos?/i.test(raw)) {
+    return { raw, family: 'valor-invalido', fila }
   }
 
   return { raw, family: 'otro', fila }
@@ -146,7 +155,8 @@ function bannerForDominant(
     case 'dato-requerido': {
       // Distinguir cual columna esta faltando para guiar al usuario.
       const sample = items.find(it => it.family === 'dato-requerido')?.raw ?? ''
-      const m = sample.match(/(nombre|región|region|eje|ministerio)\s+requerid/i)
+      const m = sample.match(/falta\s+(?:la|el)\s+(región|region|nombre|eje|ministerio)/i)
+             ?? sample.match(/(nombre|región|region|eje|ministerio)\s+requerid/i)
       const columna = m ? prettyColumna(m[1]) : 'una columna obligatoria'
       const headerExacto = m ? exactHeaderHint(m[1]) : ''
       return {

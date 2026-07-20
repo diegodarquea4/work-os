@@ -39,12 +39,29 @@ export const VALID_CAPA           = ['l', 'll', 'lll'] as const
 
 export type ParsedRow = {
   n:            number            // # existente (update) o nuevo asignado (insert)
+  excelRow:     number           // # de fila en el Excel (1-based) — ancla para el usuario
   nombre:       string
   region:       string
   patch:        Record<string, unknown>   // campos a actualizar (vacíos saltados)
   errors:       string[]
   isNew:        boolean
   insertData?:  Record<string, unknown>   // payload completo para INSERT
+}
+
+/**
+ * Ancla de una fila para mostrarle al usuario DÓNDE está el error, en términos
+ * que reconoce: el número de fila de su Excel y, si existe, el nombre de la
+ * iniciativa. Evita el "#412" interno (un número que el sistema le inventa a las
+ * filas nuevas y que el usuario no tiene en su planilla).
+ */
+export function rowErrorLabel(row: Pick<ParsedRow, 'excelRow' | 'nombre'>): string {
+  const name = row.nombre?.trim()
+  return name ? `Fila ${row.excelRow} · «${name}»` : `Fila ${row.excelRow}`
+}
+
+/** Aplana los errores de un conjunto de filas con su ancla, listos para el modal. */
+export function flattenRowErrors(rows: ParsedRow[]): string[] {
+  return rows.flatMap(r => r.errors.map(e => `${rowErrorLabel(r)}: ${e}`))
 }
 
 export type ParseResult = {
@@ -56,7 +73,35 @@ export type ParseResult = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalize(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Normalizaci\u00f3n para matching de enums: como `normalize` pero adem\u00e1s colapsa los
+ * espacios alrededor de "/" (ej: "Inicio Obras / Programa" \u2192 "inicio obras/programa"),
+ * porque varias opciones can\u00f3nicas usan "/" como separador interno.
+ */
+function normalizeEnum(s: string): string {
+  return normalize(s).replace(/\s*\/\s*/g, '/')
+}
+
+/**
+ * Match tolerante de un valor contra una lista de opciones can\u00f3nicas: ignora
+ * tildes, may\u00fasculas y espacios de m\u00e1s. Devuelve la opci\u00f3n CAN\u00d3NICA (la que se
+ * persiste) si hay match, o `undefined` si el valor no corresponde a ninguna.
+ *
+ * Esto elimina la fricci\u00f3n de "una tilde mal puesta o una may\u00fascula": el
+ * delegado escribe "ejecucion" o "ALTA" y se guarda "Ejecuci\u00f3n" / "Alta". Solo
+ * falla si el valor realmente no es una de las opciones.
+ */
+function matchEnum(input: string, options: readonly string[]): string | undefined {
+  const n = normalizeEnum(input)
+  return options.find(o => normalizeEnum(o) === n)
+}
+
+/** Mensaje uniforme para un valor que no calza con ninguna opci\u00f3n del cat\u00e1logo. */
+function opcionInvalida(columna: string, valor: string, opciones: readonly string[]): string {
+  return `${columna} \u00ab${valor}\u00bb: no es una opci\u00f3n v\u00e1lida. Usa: ${opciones.join(' \u00b7 ')}.`
 }
 
 /**
@@ -213,15 +258,15 @@ export function parseImportWorkbook(
   ): { ejeId: number; numero: number; label: string } | null {
     const parsed = parseEjeString(raw)
     if (!parsed) {
-      rowErrors.push(`Eje "${raw}" inválido — formato esperado: "Eje N: Nombre"`)
+      rowErrors.push(`Eje «${raw}»: formato inválido. Debe ser «Eje N: Nombre» (ej: «Eje 3: Seguridad»).`)
       return null
     }
     const map = ejeByNumPerRegion.get(regionCod)
     const found = map?.get(parsed.numero)
     if (!found) {
       rowErrors.push(
-        `Eje ${parsed.numero} no existe en el catálogo de ${regionNombre}. ` +
-        `Pídele a admin agregarlo desde "Gestionar ejes" antes de re-subir.`
+        `Eje ${parsed.numero}: no está en el catálogo de ${regionNombre}. ` +
+        `Pídele a un admin que lo agregue en «Gestionar ejes» antes de re-subir.`
       )
       return null
     }
@@ -256,60 +301,64 @@ export function parseImportWorkbook(
   ) {
     const ejeGobierno = col(row, 'Eje Gobierno')
     if (ejeGobierno) {
-      if (!(VALID_EJE_GOBIERNO as readonly string[]).includes(ejeGobierno)) rowErrors.push(`eje gobierno "${ejeGobierno}" inválido`)
-      else target.eje_gobierno = ejeGobierno
+      const m = matchEnum(ejeGobierno, VALID_EJE_GOBIERNO)
+      if (!m) rowErrors.push(opcionInvalida('Eje Gobierno', ejeGobierno, VALID_EJE_GOBIERNO))
+      else target.eje_gobierno = m
     }
     const prioridad = col(row, 'Prioridad')
     if (prioridad) {
-      if (!(VALID_PRIORIDAD as readonly string[]).includes(prioridad)) rowErrors.push(`prioridad "${prioridad}" inválida`)
-      else target.prioridad = prioridad
+      const m = matchEnum(prioridad, VALID_PRIORIDAD)
+      if (!m) rowErrors.push(opcionInvalida('Prioridad', prioridad, VALID_PRIORIDAD))
+      else target.prioridad = m
     }
     const etapa = col(row, 'Etapa Actual')
     if (etapa) {
-      if (!(VALID_ETAPA as readonly string[]).includes(etapa)) rowErrors.push(`etapa "${etapa}" inválida`)
-      else target.etapa_actual = etapa
+      const m = matchEnum(etapa, VALID_ETAPA)
+      if (!m) rowErrors.push(opcionInvalida('Etapa Actual', etapa, VALID_ETAPA))
+      else target.etapa_actual = m
     }
     const estadoTermino = col(row, 'Estado Término Gob.')
     if (estadoTermino) {
-      if (!(VALID_ESTADO_TERMINO as readonly string[]).includes(estadoTermino)) rowErrors.push(`estado término "${estadoTermino}" inválido`)
-      else target.estado_termino_gobierno = estadoTermino
+      const m = matchEnum(estadoTermino, VALID_ESTADO_TERMINO)
+      if (!m) rowErrors.push(opcionInvalida('Estado Término Gob.', estadoTermino, VALID_ESTADO_TERMINO))
+      else target.estado_termino_gobierno = m
     }
     const proximoHito = col(row, 'Próximo Hito')
     if (proximoHito) {
-      if (!(VALID_PROXIMO_HITO as readonly string[]).includes(proximoHito)) rowErrors.push(`próximo hito "${proximoHito}" inválido`)
-      else target.proximo_hito = proximoHito
+      const m = matchEnum(proximoHito, VALID_PROXIMO_HITO)
+      if (!m) rowErrors.push(opcionInvalida('Próximo Hito', proximoHito, VALID_PROXIMO_HITO))
+      else target.proximo_hito = m
     }
     const fuente = col(row, 'Fuente Financiamiento')
     if (fuente) {
-      if (!(VALID_FUENTE as readonly string[]).includes(fuente)) rowErrors.push(`fuente "${fuente}" inválida`)
-      else target.fuente_financiamiento = fuente
+      const m = matchEnum(fuente, VALID_FUENTE)
+      if (!m) rowErrors.push(opcionInvalida('Fuente Financiamiento', fuente, VALID_FUENTE))
+      else target.fuente_financiamiento = m
     }
     const rat = col(row, 'RAT')
     if (rat) {
-      if (!(VALID_RAT as readonly string[]).includes(rat)) rowErrors.push(`RAT "${rat}" inválido`)
-      else target.rat = rat
+      const m = matchEnum(rat, VALID_RAT)
+      if (!m) rowErrors.push(opcionInvalida('RAT', rat, VALID_RAT))
+      else target.rat = m
     }
     const inversionStr = col(row, 'Inversión ($MM)')
     if (inversionStr !== undefined && inversionStr !== '') {
       const num = Number(String(inversionStr).replace(',', '.'))
-      if (isNaN(num)) rowErrors.push(`inversión "${inversionStr}" inválida`)
+      if (isNaN(num)) rowErrors.push(`Inversión ($MM) «${inversionStr}»: debe ser un número (ej: 1250 o 1250,5).`)
       else target.inversion_mm = num
     }
     // ── Campos operativos (semáforo, % avance, en foco) ─────────────────────
     const semaforo = col(row, 'Semáforo')
     if (semaforo) {
-      const norm = semaforo.toLowerCase()
-      if (!(VALID_SEMAFORO as readonly string[]).includes(norm)) {
-        rowErrors.push(`semáforo "${semaforo}" inválido (esperado: verde, ambar, rojo, gris)`)
-      } else {
-        target.estado_semaforo = norm
-      }
+      const m = matchEnum(semaforo, VALID_SEMAFORO)
+      if (!m) rowErrors.push(opcionInvalida('Semáforo', semaforo, VALID_SEMAFORO))
+      else target.estado_semaforo = m
     }
     const pctStr = col(row, '% Avance')
     if (pctStr !== undefined && pctStr !== '') {
       const n = parseInt(String(pctStr).replace(',', '.'), 10)
       if (isNaN(n) || n < 0 || n > 100) {
-        rowErrors.push(`% avance "${pctStr}" inválido (esperado entero 0–100)`)
+        rowErrors.push(`% Avance «${pctStr}»: debe ser un número entero de 0 a 100.`)
       } else {
         target.pct_avance = n
       }
@@ -322,7 +371,7 @@ export function parseImportWorkbook(
       } else if (['no', 'n', 'false', '0'].includes(norm)) {
         target.en_foco = false
       } else {
-        rowErrors.push(`en foco "${focoStr}" inválido (esperado: Sí / No)`)
+        rowErrors.push(`En Foco «${focoStr}»: no se entiende. Usa Sí o No.`)
       }
     }
     // Capa de importancia (migración 024). Solo admin/editor puede aplicarla
@@ -331,12 +380,9 @@ export function parseImportWorkbook(
     // la fila con SQLSTATE 42501 (mensaje del trigger explica la whitelist).
     const capaStr = col(row, 'Capa')
     if (capaStr) {
-      const norm = capaStr.toLowerCase().trim()
-      if (!(VALID_CAPA as readonly string[]).includes(norm)) {
-        rowErrors.push(`capa "${capaStr}" inválida (esperado: l, ll, lll)`)
-      } else {
-        target.capa = norm
-      }
+      const m = matchEnum(capaStr, VALID_CAPA)
+      if (!m) rowErrors.push(opcionInvalida('Capa', capaStr, VALID_CAPA))
+      else target.capa = m
     }
     const fechaRaw = col(row, 'Fecha Próximo Hito')
     if (fechaRaw !== undefined && fechaRaw !== '') {
@@ -345,7 +391,7 @@ export function parseImportWorkbook(
       // o día). El reader ya convierte Date/serial a DD-MM-AAAA río arriba.
       const dm = fechaRaw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
       if (!dm) {
-        rowErrors.push(`fecha "${fechaRaw}" inválida — usar DD-MM-AAAA o DD/MM/AAAA (ej: 31-12-2027)`)
+        rowErrors.push(`Fecha Próximo Hito «${fechaRaw}»: formato inválido. Usa DD-MM-AAAA (ej: 31-12-2027).`)
       } else {
         const dd = dm[1].padStart(2, '0')
         const mm = dm[2].padStart(2, '0')
@@ -353,7 +399,7 @@ export function parseImportWorkbook(
         const day = parseInt(dd, 10)
         const mon = parseInt(mm, 10)
         if (mon < 1 || mon > 12 || day < 1 || day > 31) {
-          rowErrors.push(`fecha "${fechaRaw}" tiene día o mes fuera de rango`)
+          rowErrors.push(`Fecha Próximo Hito «${fechaRaw}»: el día o el mes están fuera de rango.`)
         } else {
           target.fecha_proximo_hito = `${yyyy}-${mm}-${dd}`
         }
@@ -410,7 +456,7 @@ export function parseImportWorkbook(
       if (!raw || raw.includes(';') || raw.includes('·')) return null
       const matches = raw.match(/\bministerio\b/gi)
       if (!matches || matches.length < 2) return null
-      return `Multi-ministerio mal separado: usa ; (punto y coma) entre ministerios. Ej: "Ministerio de Vivienda y Urbanismo;Ministerio de Obras Públicas". NO uses " y " ni ",". Valor recibido: "${raw}"`
+      return `Ministerio «${raw}»: parece traer varios ministerios juntos. Sepáralos con «;» (punto y coma), ej: «Ministerio de Vivienda y Urbanismo;Ministerio de Obras Públicas». No uses « y » ni «,».`
     }
     const multiValueCols = new Set(['ministerio', 'comuna'])
     for (const [label, dbCol] of [
@@ -445,7 +491,12 @@ export function parseImportWorkbook(
 
   const rows: ParsedRow[] = []
 
-  for (const row of dataRows) {
+  for (let j = 0; j < dataRows.length; j++) {
+    const row = dataRows[j]
+    // # de fila tal como la ve el usuario en Excel (1-based): raw[0] es la fila 1
+    // de encabezados, así que la fila de datos j corresponde a la fila
+    // dataStart + j + 1 de la planilla.
+    const excelRow = dataStart + j + 1
     // Saltamos filas completamente vacías (común al final de archivos Excel).
     if (row.every(cell => String(cell ?? '').trim() === '')) continue
 
@@ -459,12 +510,14 @@ export function parseImportWorkbook(
       const ministerio   = col(row, 'Ministerio') ?? ''
       const rowErrors: string[] = []
 
-      if (!regionNombre)            rowErrors.push('Región requerida')
+      if (!regionNombre)            rowErrors.push('Falta la Región (columna obligatoria).')
       const regionObj = findRegion(regionNombre)
-      if (regionNombre && !regionObj) rowErrors.push(`Región "${regionNombre}" no reconocida`)
-      if (!nombre)                  rowErrors.push('Nombre requerido')
-      if (!eje)                     rowErrors.push('Eje requerido')
-      if (!ministerio)              rowErrors.push('Ministerio requerido')
+      if (regionNombre && !regionObj) rowErrors.push(
+        `Región «${regionNombre}»: no coincide con ninguna de las 16. Escribe el nombre corto del catálogo (ej: «Metropolitana», no «Región Metropolitana»).`
+      )
+      if (!nombre)                  rowErrors.push('Falta el Nombre de la iniciativa (columna obligatoria).')
+      if (!eje)                     rowErrors.push('Falta el Eje (columna obligatoria).')
+      if (!ministerio)              rowErrors.push('Falta el Ministerio (columna obligatoria).')
 
       // Validación + resolución del eje contra el catálogo.
       let codigoIniciativa: string | null = null
@@ -516,6 +569,7 @@ export function parseImportWorkbook(
       parseOptionalFields(row, insertData, rowErrors, /* isUpdate */ false)
       rows.push({
         n:          newN,
+        excelRow,
         nombre,
         region:     regionNombre,
         patch:      {},
@@ -529,13 +583,13 @@ export function parseImportWorkbook(
     // ── UPDATE (con #) ───────────────────────────────────────────────────────
     const n = Number(nStr)
     if (isNaN(n) || n <= 0) {
-      fileErrors.push(`Fila con # inválido "${nStr}" — omitida`)
+      fileErrors.push(`Fila ${excelRow}: el # «${nStr}» no es un número válido — fila omitida.`)
       continue
     }
 
     const project = existingProjects.find(p => p.n === n)
     if (!project) {
-      fileErrors.push(`#${nStr}: no existe en el sistema — si es nueva, deja la columna # vacía`)
+      fileErrors.push(`Fila ${excelRow}: la iniciativa #${nStr} no existe en el sistema. Si es nueva, deja la columna # vacía.`)
       continue
     }
 
@@ -543,8 +597,8 @@ export function parseImportWorkbook(
     const regionInput = col(row, 'Región')
     if (regionInput && normalize(regionInput) !== normalize(project.region)) {
       rowErrors.push(
-        `El # ${nStr} corresponde a la región ${project.region}, no a "${regionInput}". ` +
-        `Para crear nuevas iniciativas de ${regionInput}, deja la columna # vacía.`
+        `La iniciativa #${nStr} es de la región ${project.region}, no de «${regionInput}». ` +
+        `Para crear una iniciativa nueva de «${regionInput}», deja la columna # vacía.`
       )
     }
 
@@ -564,6 +618,7 @@ export function parseImportWorkbook(
 
     rows.push({
       n,
+      excelRow,
       nombre: project.nombre,
       region: project.region,
       patch,
