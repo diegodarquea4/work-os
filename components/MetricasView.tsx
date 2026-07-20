@@ -23,6 +23,7 @@ import {
   useMetricasEmpleoTodas,
 } from '@/lib/hooks/useMetricasEmpleo'
 import { useCensoRegiones, type CensoRegionData } from '@/lib/hooks/useCensoRegiones'
+import { useUltimaActualizacionMetricas, fmtUltimaActualizacion } from '@/lib/hooks/useUltimaActualizacionMetricas'
 import { getSupabase } from '@/lib/supabase'
 
 // ── Tipos ──────────────────────────────────────────────────────
@@ -173,6 +174,17 @@ function ModuleNav({ active, onSelect }: { active: ModuleId; onSelect: (m: Modul
         >{m.label}</button>
       ))}
     </nav>
+  )
+}
+
+function UltimaActualizacionBar() {
+  const { fecha, loading } = useUltimaActualizacionMetricas()
+  return (
+    <div className="bg-white border-b border-gray-200 px-6 py-1.5 flex justify-end">
+      <span className="text-[10px] text-gray-400">
+        {loading ? 'Cargando…' : fecha ? `Última actualización: ${fmtUltimaActualizacion(fecha)}` : 'Sin datos de actualización'}
+      </span>
+    </div>
   )
 }
 
@@ -2800,6 +2812,7 @@ export default function MetricasView() {
         <h1 className="text-sm font-semibold text-white tracking-wide">📊 Dashboard Regional · Chile</h1>
       </div>
       <ModuleNav active={activeModule} onSelect={setActiveModule} />
+      <UltimaActualizacionBar />
       <div className="flex-1 overflow-auto">
         {activeModule === 'resumen'   && <ResumenModule />}
         {activeModule === 'seguridad' && <SeguridadModule />}
