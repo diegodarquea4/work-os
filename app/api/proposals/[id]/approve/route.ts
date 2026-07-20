@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { parseImportWorkbook, buildImportPayload } from '@/lib/importParser'
+import { parseImportWorkbook, buildImportPayload, flattenRowErrors } from '@/lib/importParser'
 import { applyImport, recordImportLog } from '@/lib/importApplier'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
@@ -110,7 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ error: `Parseo: ${String(err)}` }, { status: 500 })
   }
 
-  const rowErrors = parsed.rows.filter(r => r.errors.length > 0).flatMap(r => r.errors.map(e => `#${r.n}: ${e}`))
+  const rowErrors = flattenRowErrors(parsed.rows)
   const allParseErrors = [...parsed.fileErrors, ...rowErrors]
 
   // 5. Aplicar payload.

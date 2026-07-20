@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
-import { parseImportWorkbook } from '@/lib/importParser'
+import { parseImportWorkbook, rowErrorLabel } from '@/lib/importParser'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 
@@ -98,14 +98,11 @@ export async function POST(request: Request) {
     // Solo bloqueamos por errores que mencionan ejes desconocidos. Los demás
     // errores (semáforo inválido, etc.) los descubre el admin al aprobar y
     // ahí se muestran en applied_with_errors — no son razón para bloquear.
-    const ejeRowErrors = parsed.rows
-      .flatMap(r => r.errors.map(e => ({ n: r.n, nombre: r.nombre, region: r.region, msg: e })))
-      .filter(e => e.msg.toLowerCase().includes('eje'))
-    if (ejeRowErrors.length > 0) {
-      validationErrors = ejeRowErrors.map(e =>
-        e.n ? `Fila #${e.n} (${e.nombre || 'sin nombre'}): ${e.msg}` : `Fila nueva (${e.nombre || 'sin nombre'}): ${e.msg}`
-      )
-    }
+    validationErrors = parsed.rows.flatMap(r =>
+      r.errors
+        .filter(e => e.toLowerCase().includes('eje'))
+        .map(e => `${rowErrorLabel(r)}: ${e}`)
+    )
   } catch (err) {
     return Response.json({ error: `No se pudo parsear el archivo: ${String(err)}` }, { status: 400 })
   }

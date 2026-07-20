@@ -101,9 +101,9 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
       if (cod && regionEjes && regionEjes.length > 0) {
         ejesMap.set(cod, regionEjes)
       }
-      const { parseImportWorkbook } = await import('@/lib/importParser')
+      const { parseImportWorkbook, flattenRowErrors } = await import('@/lib/importParser')
       const parsed = parseImportWorkbook(buffer, iniciativas ?? [], ejesMap)
-      const rowErrors = parsed.rows.flatMap(r => r.errors.map(e => `#${r.n}: ${e}`))
+      const rowErrors = flattenRowErrors(parsed.rows)
       const inserts    = parsed.rows.filter(r => r.errors.length === 0 && r.isNew).length
       const updates    = parsed.rows.filter(r => r.errors.length === 0 && !r.isNew && Object.keys(r.patch).length > 0).length
       const conErrores = parsed.rows.filter(r => r.errors.length > 0).length
@@ -159,7 +159,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={handleClose}>
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <header className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
@@ -275,8 +275,11 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
                 </div>
 
                 {todosLosErrores.length > 0 && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <ImportErrorReport errors={todosLosErrores} variant="compact" />
+                  <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-xs font-semibold text-red-800 mb-2">
+                      Revisa estos puntos antes de enviar
+                    </p>
+                    <ImportErrorReport errors={todosLosErrores} variant="compact" initialShown={12} />
                   </div>
                 )}
 

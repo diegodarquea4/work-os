@@ -59,8 +59,8 @@ export default function ImportErrorReport({ errors, variant = 'full', initialSho
         <ul
           className={
             variant === 'compact'
-              ? 'mt-2 max-h-48 overflow-auto text-xs text-gray-700 space-y-0.5 pr-1'
-              : 'mt-2 max-h-64 overflow-auto text-xs text-gray-700 space-y-0.5 pr-1 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200'
+              ? 'mt-2 max-h-80 overflow-auto text-xs text-gray-700 space-y-1.5 pr-1'
+              : 'mt-2 max-h-96 overflow-auto text-xs text-gray-700 space-y-1.5 pr-1 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200'
           }
         >
           {itemsToShow.map((it, i) => (
