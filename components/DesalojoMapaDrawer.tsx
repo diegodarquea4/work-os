@@ -49,6 +49,8 @@ type Props = {
   /** Enfoca una Etapa al abrir el mapa desde Planificación ("Ver en mapa"). */
   focusEtapaId?:    number | null
   onFocusConsumed?: () => void
+  /** Solo-lectura (regionales): renderiza los polígonos pero sin editar nada. */
+  readOnly?:        boolean
 }
 
 const PALETTE = [
@@ -400,7 +402,7 @@ function WktModal({
 
 // ── Color swatch picker inline (para la lista) ─────────────────────────────
 
-function ColorSwatchPicker({ color, onChange }: { color: string; onChange: (c: string) => void }) {
+function ColorSwatchPicker({ color, onChange, readOnly = false }: { color: string; onChange: (c: string) => void; readOnly?: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
 
@@ -412,6 +414,11 @@ function ColorSwatchPicker({ color, onChange }: { color: string; onChange: (c: s
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
+
+  // Solo-lectura: muestra el color como una muestra estática, sin picker.
+  if (readOnly) {
+    return <span className="w-4 h-4 rounded ring-1 ring-gray-300 flex-shrink-0" style={{ backgroundColor: color }} aria-label="Color" />
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -519,9 +526,11 @@ function fmtFecha(inicio: string, fin: string | null): string {
 function MapHitoRow({
   hito,
   onPatchEvento,
+  readOnly = false,
 }: {
   hito: DesalojoPlanificacion
   onPatchEvento: (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
+  readOnly?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState(hito.descripcion ?? '')
@@ -545,13 +554,15 @@ function MapHitoRow({
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ESTADO_DOT[estado]}`} />
         <span className="text-[10px] text-gray-400 tabular-nums flex-shrink-0">{fmtFecha(hito.fecha_inicio, hito.fecha_fin)}</span>
         <span className="text-gray-800 truncate flex-1 min-w-0" title={hito.titulo}>{hito.titulo}</span>
-        <button
-          type="button"
-          onClick={() => setEditing(e => !e)}
-          className="text-[10px] flex-shrink-0 text-slate-500 hover:text-slate-900 font-medium"
-        >
-          {editing ? 'Cerrar' : tiene ? 'Editar' : '+ Detalle'}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setEditing(e => !e)}
+            className="text-[10px] flex-shrink-0 text-slate-500 hover:text-slate-900 font-medium"
+          >
+            {editing ? 'Cerrar' : tiene ? 'Editar' : '+ Detalle'}
+          </button>
+        )}
       </div>
       {/* Detalle SIEMPRE visible cuando existe (lectura), salvo mientras se edita. */}
       {tiene && !editing && (
@@ -730,6 +741,7 @@ export default function DesalojoMapaDrawer(props: Props) {
     onCreated, onUpdated, onDeleted,
     onCreateEtapa, onPatchEvento, onAddHito,
     focusEtapaId, onFocusConsumed,
+    readOnly = false,
   } = props
 
   const { center, zoom } = useMemo(() => computeCenter(capas, selectedCapaId), [capas, selectedCapaId])
@@ -840,16 +852,18 @@ export default function DesalojoMapaDrawer(props: Props) {
 
   // Inicia el dibujo asociando el próximo polígono a `etapaId` (null = sin etapa).
   const beginDraw = useCallback((etapaId: number | null) => {
+    if (readOnly) return
     setDrawTargetEtapaId(etapaId)
     bridgeRef.current?.startDrawing()
-  }, [])
+  }, [readOnly])
   const beginWkt = useCallback((etapaId: number | null) => {
+    if (readOnly) return
     setDrawTargetEtapaId(etapaId)
     setWktModalOpen(true)
-  }, [])
+  }, [readOnly])
 
   const handleConfirmPending = useCallback(async (nombre: string, color: string) => {
-    if (!pendingCoords) return
+    if (readOnly || !pendingCoords) return
     setSaving(true)
     try {
       const res = await fetch(`/api/desalojos/${prioridadId}/poligonos`, {
@@ -873,17 +887,20 @@ export default function DesalojoMapaDrawer(props: Props) {
     } finally {
       setSaving(false)
     }
-  }, [pendingCoords, prioridadId, onCreated, drawTargetEtapaId, fitToRings])
+  }, [readOnly, pendingCoords, prioridadId, onCreated, drawTargetEtapaId, fitToRings])
 
   async function handleRecolorEtapa(etapaId: number, color: string) {
+    if (readOnly) return
     await onPatchEvento(etapaId, { color })
   }
   async function handleRenameEtapa(etapa: DesalojoPlanificacion, nuevo: string) {
+    if (readOnly) return
     const trimmed = nuevo.trim()
     if (!trimmed || trimmed === etapa.titulo) return
     await onPatchEvento(etapa.id, { titulo: trimmed })
   }
   async function handleCreateEtapa(input: { titulo: string; color?: string | null; fecha_inicio: string; fecha_fin?: string | null }) {
+    if (readOnly) return
     const created = await onCreateEtapa(input)
     if (created) {
       setNewEtapaOpen(false)
@@ -892,6 +909,7 @@ export default function DesalojoMapaDrawer(props: Props) {
   }
 
   async function handleRename(p: DesalojoPoligono, nuevoNombre: string) {
+    if (readOnly) { setEditingId(null); return }
     const trimmed = nuevoNombre.trim()
     if (!trimmed || trimmed === p.nombre) { setEditingId(null); return }
     try {
@@ -911,6 +929,7 @@ export default function DesalojoMapaDrawer(props: Props) {
   }
 
   async function handleRecolor(p: DesalojoPoligono, color: string) {
+    if (readOnly) return
     if (color === p.color) return
     try {
       const res = await fetch(`/api/desalojos/${prioridadId}/poligonos/${p.id}`, {
@@ -927,6 +946,7 @@ export default function DesalojoMapaDrawer(props: Props) {
   }
 
   async function handleDelete(p: DesalojoPoligono) {
+    if (readOnly) return
     if (!window.confirm(`¿Borrar el polígono "${p.nombre}"?`)) return
     try {
       const res = await fetch(`/api/desalojos/${prioridadId}/poligonos/${p.id}`, {
@@ -958,7 +978,7 @@ export default function DesalojoMapaDrawer(props: Props) {
       />
       <MapInstanceCapture mapRef={mapRef} />
       <FitToPolygons fitKey={fitInfo.key} rings={fitInfo.rings} />
-      <DrawControl bridgeRef={bridgeRef} onCreatedRaw={handleDrawCreated} />
+      {!readOnly && <DrawControl bridgeRef={bridgeRef} onCreatedRaw={handleDrawCreated} />}
       {poligonos.filter(p => visible(p.id)).map(p => {
         const latlngs: [number, number][] = p.coords.map(([lng, lat]) => [lat, lng])
         const etapa = p.planificacion_id != null ? etapaById.get(p.planificacion_id) : null
@@ -1012,6 +1032,7 @@ export default function DesalojoMapaDrawer(props: Props) {
 
   // ── Botones de toolbar reutilizados ───────────────────────────────────────
   function ToolbarActions() {
+    if (readOnly) return null
     const label = selectedEtapa ? `Dibujar en "${selectedEtapa.titulo}"` : 'Dibujar'
     return (
       <>
@@ -1053,14 +1074,18 @@ export default function DesalojoMapaDrawer(props: Props) {
           ← Volver a etapas
         </button>
         <div className="flex items-start gap-2">
-          <ColorSwatchPicker color={selectedEtapa.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(selectedEtapa.id, c)} />
-          <input
-            type="text"
-            defaultValue={selectedEtapa.titulo}
-            onBlur={e => handleRenameEtapa(selectedEtapa, e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-            className="flex-1 min-w-0 text-sm font-semibold text-gray-900 border-b border-transparent hover:border-gray-200 focus:border-slate-900 focus:outline-none pb-0.5"
-          />
+          <ColorSwatchPicker color={selectedEtapa.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(selectedEtapa.id, c)} readOnly={readOnly} />
+          {readOnly ? (
+            <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 pb-0.5 truncate">{selectedEtapa.titulo}</span>
+          ) : (
+            <input
+              type="text"
+              defaultValue={selectedEtapa.titulo}
+              onBlur={e => handleRenameEtapa(selectedEtapa, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              className="flex-1 min-w-0 text-sm font-semibold text-gray-900 border-b border-transparent hover:border-gray-200 focus:border-slate-900 focus:outline-none pb-0.5"
+            />
+          )}
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           <span className={`w-1.5 h-1.5 rounded-full ${ESTADO_DOT[estado]}`} />
@@ -1070,11 +1095,13 @@ export default function DesalojoMapaDrawer(props: Props) {
         <div className="space-y-1.5 pt-1 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Polígonos ({etapaPolys.length})</h4>
-            <button type="button" onClick={() => beginDraw(selectedEtapa.id)} disabled={!!pendingCoords || saving}
-              className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">+ Dibujar</button>
+            {!readOnly && (
+              <button type="button" onClick={() => beginDraw(selectedEtapa.id)} disabled={!!pendingCoords || saving}
+                className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">+ Dibujar</button>
+            )}
           </div>
           {etapaPolys.length === 0 ? (
-            <p className="text-[11px] text-gray-400">Sin polígonos. Dibujá al menos uno para esta etapa.</p>
+            <p className="text-[11px] text-gray-400">{readOnly ? 'Sin polígonos.' : 'Sin polígonos. Dibujá al menos uno para esta etapa.'}</p>
           ) : (
             <ul className="space-y-0.5">
               {etapaPolys.map(p => (
@@ -1082,7 +1109,9 @@ export default function DesalojoMapaDrawer(props: Props) {
                   <button type="button" onClick={() => toggleVisible(p.id)} className="text-gray-400 hover:text-gray-700" title={visible(p.id) ? 'Ocultar' : 'Mostrar'}><IconEye on={visible(p.id)} /></button>
                   <span className="flex-1 min-w-0 truncate text-gray-900">{p.nombre}</span>
                   <button type="button" onClick={() => handleCenterOn(p)} className="text-gray-400 hover:text-slate-900" title="Centrar en mapa"><IconCenter /></button>
-                  <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+                  {!readOnly && (
+                    <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1092,25 +1121,28 @@ export default function DesalojoMapaDrawer(props: Props) {
           <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Hitos ({etapaHitos.length})</h4>
           {etapaHitos.length > 0 && (
             <ul className="space-y-1">
-              {etapaHitos.map(h => <MapHitoRow key={h.id} hito={h} onPatchEvento={onPatchEvento} />)}
+              {etapaHitos.map(h => <MapHitoRow key={h.id} hito={h} onPatchEvento={onPatchEvento} readOnly={readOnly} />)}
             </ul>
           )}
-          <AddHitoForm etapa={selectedEtapa} onAddHito={onAddHito} />
+          {etapaHitos.length === 0 && readOnly && (
+            <p className="text-[11px] text-gray-400">Sin hitos.</p>
+          )}
+          {!readOnly && <AddHitoForm etapa={selectedEtapa} onAddHito={onAddHito} />}
         </div>
       </div>
     )
   })() : (
     <div className="p-3 space-y-3">
-      {newEtapaOpen ? (
+      {!readOnly && (newEtapaOpen ? (
         <NewEtapaForm nextColor={nextEtapaColor} onCreate={handleCreateEtapa} onCancel={() => setNewEtapaOpen(false)} />
       ) : (
         <button type="button" onClick={() => setNewEtapaOpen(true)}
           className="w-full text-xs font-medium text-slate-700 border border-dashed border-gray-300 rounded-lg py-1.5 hover:bg-gray-50">
           + Nueva etapa
         </button>
-      )}
+      ))}
       {etapas.length === 0 && sinEtapa.length === 0 && (
-        <p className="text-xs text-gray-500 text-center py-4">Sin etapas todavía. Creá una etapa y dibujá sus polígonos.</p>
+        <p className="text-xs text-gray-500 text-center py-4">{readOnly ? 'Sin etapas ni polígonos en este caso.' : 'Sin etapas todavía. Creá una etapa y dibujá sus polígonos.'}</p>
       )}
       {etapas.length > 0 && (
         <ul className="space-y-1">
@@ -1118,13 +1150,15 @@ export default function DesalojoMapaDrawer(props: Props) {
             const ps = polygonsByEtapa.get(e.id) ?? []
             return (
               <li key={e.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50">
-                <ColorSwatchPicker color={e.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(e.id, c)} />
+                <ColorSwatchPicker color={e.color ?? PALETTE[0]} onChange={c => handleRecolorEtapa(e.id, c)} readOnly={readOnly} />
                 <button type="button" onClick={() => setSelectedEtapaId(e.id)} className="flex-1 min-w-0 text-left">
                   <span className="block text-xs text-gray-900 truncate">{e.titulo}</span>
                   <span className="block text-[10px] text-gray-400">{ps.length} polígono{ps.length === 1 ? '' : 's'}</span>
                 </button>
-                <button type="button" onClick={() => { setSelectedEtapaId(e.id); beginDraw(e.id) }} disabled={!!pendingCoords || saving}
-                  className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">Dibujar</button>
+                {!readOnly && (
+                  <button type="button" onClick={() => { setSelectedEtapaId(e.id); beginDraw(e.id) }} disabled={!!pendingCoords || saving}
+                    className="text-[11px] text-slate-700 hover:text-slate-900 font-medium disabled:opacity-40">Dibujar</button>
+                )}
               </li>
             )
           })}
@@ -1137,18 +1171,22 @@ export default function DesalojoMapaDrawer(props: Props) {
             {sinEtapa.map(p => (
               <li key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50">
                 <button type="button" onClick={() => toggleVisible(p.id)} className="text-gray-400 hover:text-gray-700" title={visible(p.id) ? 'Ocultar' : 'Mostrar'}><IconEye on={visible(p.id)} /></button>
-                <ColorSwatchPicker color={p.color} onChange={c => handleRecolor(p, c)} />
-                {editingId === p.id ? (
+                <ColorSwatchPicker color={p.color} onChange={c => handleRecolor(p, c)} readOnly={readOnly} />
+                {!readOnly && editingId === p.id ? (
                   <input type="text" value={editingName} onChange={e => setEditingName(e.target.value)}
                     onBlur={() => handleRename(p, editingName)}
                     onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingId(null) }}
                     autoFocus className="flex-1 min-w-0 px-2 py-0.5 text-xs border border-gray-300 rounded" />
+                ) : readOnly ? (
+                  <span className="flex-1 min-w-0 text-xs text-gray-900 truncate">{p.nombre}</span>
                 ) : (
                   <button type="button" onClick={() => { setEditingId(p.id); setEditingName(p.nombre) }}
                     className="flex-1 min-w-0 text-left text-xs text-gray-900 hover:text-slate-700 truncate">{p.nombre}</button>
                 )}
                 <button type="button" onClick={() => handleCenterOn(p)} className="text-gray-400 hover:text-slate-900" title="Centrar en mapa"><IconCenter /></button>
-                <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+                {!readOnly && (
+                  <button type="button" onClick={() => handleDelete(p)} className="text-gray-400 hover:text-rose-600" title="Borrar polígono"><IconTrash /></button>
+                )}
               </li>
             ))}
           </ul>
@@ -1173,9 +1211,11 @@ export default function DesalojoMapaDrawer(props: Props) {
             <div className="flex-1 max-w-md">
               <SearchBox onSelect={handleSearchSelect} />
             </div>
-            <div className="flex items-center gap-2">
-              <ToolbarActions />
-            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-2">
+                <ToolbarActions />
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setExpanded(false)}
@@ -1256,10 +1296,12 @@ export default function DesalojoMapaDrawer(props: Props) {
           <SearchBox compact onSelect={handleSearchSelect} />
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200">
-          <ToolbarActions />
-        </div>
+        {/* Toolbar — solo cuando hay acciones de edición (no en solo-lectura) */}
+        {!readOnly && (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200">
+            <ToolbarActions />
+          </div>
+        )}
 
         {/* Mapa */}
         <div className="relative" style={{ height: '320px' }}>

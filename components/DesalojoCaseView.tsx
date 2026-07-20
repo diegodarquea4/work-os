@@ -732,41 +732,40 @@ export default function DesalojoCaseView({ iniciativa, readOnly = false }: Props
                 </span>
               )}
             </button>
-            {/* Mapa: incluye edición de polígonos (escritura directa que no pasa
-                por el safety net de los handlers). En solo-lectura se oculta —
-                el Calendario, que es de solo visualización, se mantiene. */}
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => setMapaOpen(o => !o)}
-                disabled={tab === 'planificacion'}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  tab === 'planificacion'
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : mapaOpen
-                      ? 'bg-slate-900 text-white hover:bg-slate-700'
-                      : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
-                }`}
-                title={
-                  tab === 'planificacion'
-                    ? 'El Gantt de Planificación reemplaza este panel en esta tab'
-                    : mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'
-                }
-                aria-label={mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'}
-                aria-pressed={mapaOpen}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 4l4-1.5 4 1.5 4-1.5v10L10 14l-4-1.5L2 14z"/>
-                  <path d="M6 2.5v10M10 4v10"/>
-                </svg>
-                <span>Mapa</span>
-                {poligonos.length > 0 && !mapaOpen && tab !== 'planificacion' && (
-                  <span className="ml-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
-                    {poligonos.length > 9 ? '9+' : poligonos.length}
-                  </span>
-                )}
-              </button>
-            )}
+            {/* Mapa: en solo-lectura (regionales) se muestra igual, pero el
+                DesalojoMapaDrawer entra en modo readOnly — renderiza los polígonos
+                sin ninguna afordancia de edición (y sus writes por fetch directo
+                quedan guardados). */}
+            <button
+              type="button"
+              onClick={() => setMapaOpen(o => !o)}
+              disabled={tab === 'planificacion'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                tab === 'planificacion'
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : mapaOpen
+                    ? 'bg-slate-900 text-white hover:bg-slate-700'
+                    : 'text-gray-600 hover:text-slate-900 hover:bg-gray-100'
+              }`}
+              title={
+                tab === 'planificacion'
+                  ? 'El Gantt de Planificación reemplaza este panel en esta tab'
+                  : mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'
+              }
+              aria-label={mapaOpen ? 'Cerrar mapa' : 'Abrir mapa del caso'}
+              aria-pressed={mapaOpen}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 4l4-1.5 4 1.5 4-1.5v10L10 14l-4-1.5L2 14z"/>
+                <path d="M6 2.5v10M10 4v10"/>
+              </svg>
+              <span>Mapa</span>
+              {poligonos.length > 0 && !mapaOpen && tab !== 'planificacion' && (
+                <span className="ml-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">
+                  {poligonos.length > 9 ? '9+' : poligonos.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -860,6 +859,7 @@ export default function DesalojoCaseView({ iniciativa, readOnly = false }: Props
                 onAddHito={async (input) => { await handleAddEvento(input) }}
                 focusEtapaId={mapFocusEtapaId}
                 onFocusConsumed={() => setMapFocusEtapaId(null)}
+                readOnly={readOnly}
               />
             )}
           </div>
