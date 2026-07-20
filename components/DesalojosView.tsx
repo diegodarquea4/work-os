@@ -27,6 +27,8 @@ import { HomeIcon } from './icons/HomeIcon'
 type Props = {
   projects:           Iniciativa[]
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  /** Solo-lectura (regionales): la vista y el caso ocultan toda edición. */
+  readOnly?:          boolean
 }
 
 type Caso = {
@@ -35,7 +37,7 @@ type Caso = {
   fases_estado: DesalojoFaseEstado[]
 }
 
-export default function DesalojosView({ projects }: Props) {
+export default function DesalojosView({ projects, readOnly = false }: Props) {
   const cases = useMemo(
     () => projects.filter(p => p.es_desalojo).sort((a, b) => a.nombre.localeCompare(b.nombre)),
     [projects],
@@ -268,7 +270,7 @@ export default function DesalojosView({ projects }: Props) {
       {/* Ficha del caso seleccionado */}
       <main className="flex-1 min-w-0 overflow-hidden">
         {selectedIniciativa ? (
-          <DesalojoCaseView key={selectedIniciativa.n} iniciativa={selectedIniciativa} />
+          <DesalojoCaseView key={selectedIniciativa.n} iniciativa={selectedIniciativa} readOnly={readOnly} />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             Selecciona un caso de la izquierda para ver su seguimiento.

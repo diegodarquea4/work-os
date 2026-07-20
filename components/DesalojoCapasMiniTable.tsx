@@ -27,10 +27,12 @@ type Props = {
   onCreate:        (nombre: string) => Promise<void>
   onRenombrar:     (capaId: number, nombre: string) => Promise<void>
   onArchivar:      (capaId: number) => Promise<void>
+  readOnly?:       boolean
 }
 
 export default function DesalojoCapasMiniTable({
   capas, fasesEstado, onSelectCapa, onCreate, onRenombrar, onArchivar,
+  readOnly = false,
 }: Props) {
   // Lookup: capaId × fase → semáforo.
   const semByCapaFase = new Map<string, SemaforoDimension>()
@@ -83,16 +85,18 @@ export default function DesalojoCapasMiniTable({
             Cada capa es un polígono con tipología, fase y semáforos propios.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(s => !s)}
-          className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-medium"
-        >
-          + Nueva capa
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(s => !s)}
+            className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-medium"
+          >
+            + Nueva capa
+          </button>
+        )}
       </header>
 
-      {showCreate && (
+      {!readOnly && showCreate && (
         <form onSubmit={handleCreate} className="px-4 py-3 bg-slate-50 border-b border-gray-100 flex items-center gap-2">
           <input
             autoFocus
@@ -189,32 +193,34 @@ export default function DesalojoCapasMiniTable({
               </div>
 
               {/* Acciones */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => { setEditingId(c.id); setEditName(c.nombre) }}
-                  className="text-gray-400 hover:text-slate-700 p-1"
-                  title="Renombrar"
-                  aria-label="Renombrar capa"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 2l3 3-8 8H1v-3z"/>
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleArchivar(c)}
-                  className="text-gray-400 hover:text-red-600 p-1"
-                  title="Archivar"
-                  aria-label="Archivar capa"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1.5" y="2.5" width="11" height="2.5" rx="0.5"/>
-                    <path d="M2.5 5v6.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V5"/>
-                    <path d="M5.5 7.5h3"/>
-                  </svg>
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { setEditingId(c.id); setEditName(c.nombre) }}
+                    className="text-gray-400 hover:text-slate-700 p-1"
+                    title="Renombrar"
+                    aria-label="Renombrar capa"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 2l3 3-8 8H1v-3z"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleArchivar(c)}
+                    className="text-gray-400 hover:text-red-600 p-1"
+                    title="Archivar"
+                    aria-label="Archivar capa"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1.5" y="2.5" width="11" height="2.5" rx="0.5"/>
+                      <path d="M2.5 5v6.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V5"/>
+                      <path d="M5.5 7.5h3"/>
+                    </svg>
+                  </button>
+                </div>
+              )}
             </li>
           )
         })}

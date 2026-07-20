@@ -59,6 +59,8 @@ type Props = {
   onDeleteDoc:     (docId: number) => Promise<void>
   /** Región del caso, usada como filtro inicial al buscar en el catastro MINVU. */
   regionCaso?:     string
+  /** Solo lectura: oculta o deshabilita todos los controles de edición. */
+  readOnly?:       boolean
 }
 
 export default function DesalojoAvanceTab({
@@ -67,6 +69,7 @@ export default function DesalojoAvanceTab({
   onPatchCapa, onPatchFase,
   onAddSeguimiento, onUploadDoc, onUploadDocItem, onDeleteDoc,
   regionCaso,
+  readOnly = false,
 }: Props) {
   const activas = capas.filter(c => c.activa)
   const capa    = activas.find(c => c.id === selectedCapaId) ?? activas[0] ?? null
@@ -168,7 +171,7 @@ export default function DesalojoAvanceTab({
           <DesalojoTipologiaChip
             tipologia={capa.tipologia}
             size="md"
-            onClick={() => {
+            onClick={readOnly ? undefined : () => {
               setTipoDraft(capa.tipologia)
               setTipoNotaDraft(capa.tipologia_nota ?? '')
               setAssigningTipo(true)
@@ -201,6 +204,7 @@ export default function DesalojoAvanceTab({
         <DesalojoVinculoMinvu
           folio={capa.folio_minvu}
           regionPreset={regionCaso}
+          readOnly={readOnly}
           onVincular={async (folio, lat, lng) => {
             // Set folio + coords del catastro. Si la capa tenía coords manuales, las sobreescribe
             // (el usuario está afirmando que ESTE folio es el correcto y sus coords son la verdad).
@@ -215,7 +219,7 @@ export default function DesalojoAvanceTab({
       </section>
 
       {/* Asignar tipología (panel inline) */}
-      {assigningTipo && (
+      {!readOnly && assigningTipo && (
         <section className="border border-slate-300 rounded-xl bg-slate-50 px-4 py-3">
           <h3 className="text-sm font-bold text-gray-900">Asignar tipología</h3>
           <p className="text-[11px] text-gray-500 mb-3 leading-tight">
@@ -295,6 +299,7 @@ export default function DesalojoAvanceTab({
         <DesalojoFaseStepper
           capa={capa}
           fasesEstado={fasesCapa}
+          readOnly={readOnly}
           onSetFase={async (fase: DesalojoFase, justificacion?: string) => {
             const patch: Record<string, unknown> = { fase_actual: fase }
             if (justificacion) patch.justificacion_avance = justificacion
@@ -324,6 +329,7 @@ export default function DesalojoAvanceTab({
           return (
             <DesalojoFaseCard
               key={f}
+              readOnly={readOnly}
               capa={capa}
               fase={f}
               estado={estado}

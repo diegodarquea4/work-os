@@ -116,12 +116,14 @@ type Props = {
   /** Modo compacto para layout horizontal: oculta descripción del header,
       padding más chico, sigla más pequeña. */
   compact?:          boolean
+  /** Solo lectura: oculta o deshabilita todos los controles de edición. */
+  readOnly?:         boolean
 }
 
 export default function DesalojoFaseCard({
   capa, fase, estado, seguimientos, documentos,
   onPatchCapa, onPatchFase, onAddSeguimiento, onUploadDoc, onUploadDocItem, onDeleteDoc,
-  open = true, onToggleOpen, compact = false,
+  open = true, onToggleOpen, compact = false, readOnly = false,
 }: Props) {
   const cfg            = FASE_CFG[fase]
   const fields         = FASE_FIELDS[fase]
@@ -289,7 +291,7 @@ export default function DesalojoFaseCard({
               <button
                 key={opt.value}
                 onClick={() => handleSemaforo(opt.value)}
-                disabled={saving}
+                disabled={saving || readOnly}
                 title={opt.label}
                 aria-label={opt.label}
                 aria-pressed={active}
@@ -353,9 +355,9 @@ export default function DesalojoFaseCard({
             fase={fase}
             estado={estado.checklist_estado}
             docs={docsItems}
-            onPatch={async patch => { await onPatchFase({ checklist_patch: patch }) }}
-            onUploadDoc={onUploadDocItem ? async (itemKey, file) => { await onUploadDocItem(itemKey, file) } : undefined}
-            onDeleteDoc={onDeleteDoc}
+            onPatch={async patch => { if (!readOnly) await onPatchFase({ checklist_patch: patch }) }}
+            onUploadDoc={!readOnly && onUploadDocItem ? async (itemKey, file) => { await onUploadDocItem(itemKey, file) } : undefined}
+            onDeleteDoc={readOnly ? undefined : onDeleteDoc}
           />
 
           {/* Campos estructurados de la fase */}
@@ -414,6 +416,10 @@ export default function DesalojoFaseCard({
                             Cancelar
                           </button>
                         </div>
+                      ) : readOnly ? (
+                        <div className="w-full text-left text-sm text-gray-800 px-2.5 py-1.5 min-h-[36px]">
+                          {renderFieldValue(field)}
+                        </div>
                       ) : (
                         <button
                           onClick={() => startEdit(field)}
@@ -436,7 +442,7 @@ export default function DesalojoFaseCard({
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Notas de la fase</h4>
-              {!editingNotas && (
+              {!readOnly && !editingNotas && (
                 <button
                   type="button"
                   onClick={() => { setNotasDraft(estado.notas ?? ''); setEditingNotas(true) }}
@@ -481,14 +487,18 @@ export default function DesalojoFaseCard({
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
                 Documentos {docsFase.length > 0 && <span className="text-gray-400 normal-case font-normal">({docsFase.length})</span>}
               </h4>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1 disabled:opacity-50"
-              >
-                {uploading ? 'Subiendo…' : '+ Subir'}
-              </button>
+              {!readOnly && (
+                <>
+                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {uploading ? 'Subiendo…' : '+ Subir'}
+                  </button>
+                </>
+              )}
             </div>
             {docsFase.length === 0 ? (
               <p className="text-[11px] text-gray-400 text-center py-2">Sin documentos en esta fase.</p>
@@ -496,19 +506,27 @@ export default function DesalojoFaseCard({
               <ul className="space-y-1">
                 {docsFase.map(d => (
                   <li key={d.id} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 rounded text-xs">
-                    <a href={d.url} target="_blank" rel="noopener noreferrer"
-                      className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate" title={d.nombre}>
-                      {d.nombre}
-                    </a>
+                    {d.url ? (
+                      <a href={d.url} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate" title={d.nombre}>
+                        {d.nombre}
+                      </a>
+                    ) : (
+                      <span className="flex-1 min-w-0 text-slate-600 truncate" title={`${d.nombre} (descarga solo para administradores)`}>
+                        {d.nombre}
+                      </span>
+                    )}
                     {d.tamano_bytes && <span className="text-gray-400 flex-shrink-0">{fmtBytes(d.tamano_bytes)}</span>}
-                    <button
-                      onClick={() => onDeleteDoc(d.id)}
-                      className="text-gray-400 hover:text-red-600 flex-shrink-0 text-base leading-none px-1"
-                      title="Eliminar"
-                      aria-label="Eliminar documento"
-                    >
-                      ×
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => onDeleteDoc(d.id)}
+                        className="text-gray-400 hover:text-red-600 flex-shrink-0 text-base leading-none px-1"
+                        title="Eliminar"
+                        aria-label="Eliminar documento"
+                      >
+                        ×
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -519,7 +537,7 @@ export default function DesalojoFaseCard({
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Seguimientos</h4>
-              {!showForm && (
+              {!readOnly && !showForm && (
                 <button
                   onClick={() => setShowForm(true)}
                   className="text-xs text-slate-600 hover:text-slate-900 font-medium"

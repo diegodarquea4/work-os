@@ -54,6 +54,8 @@ type Props = {
   poligonoCount?: number
   /** Granularidad de fecha: 'dia' (default) muestra el día exacto; 'semana' colapsa a la semana. */
   granularidad?: 'dia' | 'semana'
+  /** Solo lectura: oculta o deshabilita los controles de edición del evento y sus hitos. */
+  readOnly?:  boolean
 }
 
 const ESTADO_COLORS: Record<DesalojoPlanificacionEstado, { dot: string; chip: string; label: string }> = {
@@ -109,7 +111,7 @@ function fmtFecha(inicio: string, fin: string | null, modo: 'dia' | 'semana'): s
 
 export default function DesalojoTimelineCard({
   evento, capa, hitos, onPatch, onDelete, onAddHito, onSelectFocus, focused, cardRef, flash,
-  onVerEnMapa, poligonoCount = 0, granularidad = 'dia',
+  onVerEnMapa, poligonoCount = 0, granularidad = 'dia', readOnly = false,
 }: Props) {
   const estado = estadoEventoPlanificacion(evento)
   const colors = ESTADO_COLORS[estado]
@@ -251,45 +253,57 @@ export default function DesalojoTimelineCard({
               <span className="font-medium">{focused ? 'En foco' : 'Foco'}</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={saving}
-            className="opacity-0 group-hover:opacity-100 text-[11px] text-gray-400 hover:text-red-600 transition-opacity disabled:opacity-30 px-1"
-            aria-label="Eliminar evento"
-            title="Eliminar"
-          >
-            ✕
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={saving}
+              className="opacity-0 group-hover:opacity-100 text-[11px] text-gray-400 hover:text-red-600 transition-opacity disabled:opacity-30 px-1"
+              aria-label="Eliminar evento"
+              title="Eliminar"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Título editable inline */}
-      <input
-        type="text"
-        value={tituloDraft}
-        onChange={e => setTituloDraft(e.target.value)}
-        onBlur={commitTitulo}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() }
-          if (e.key === 'Escape') { setTituloDraft(evento.titulo); (e.target as HTMLInputElement).blur() }
-        }}
-        disabled={saving}
-        className="w-full text-sm font-medium text-gray-900 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-gray-400 focus:outline-none px-0 py-0.5 disabled:opacity-50"
-        placeholder="Título del evento"
-      />
+      {/* Título editable inline (solo lectura → texto plano) */}
+      {readOnly ? (
+        <p className="w-full text-sm font-medium text-gray-900 px-0 py-0.5">{evento.titulo}</p>
+      ) : (
+        <input
+          type="text"
+          value={tituloDraft}
+          onChange={e => setTituloDraft(e.target.value)}
+          onBlur={commitTitulo}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() }
+            if (e.key === 'Escape') { setTituloDraft(evento.titulo); (e.target as HTMLInputElement).blur() }
+          }}
+          disabled={saving}
+          className="w-full text-sm font-medium text-gray-900 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-gray-400 focus:outline-none px-0 py-0.5 disabled:opacity-50"
+          placeholder="Título del evento"
+        />
+      )}
 
       {/* Descripción truncada o expandida */}
       {!expanded && !isHtmlEmpty(evento.descripcion) && (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setExpanded(true)}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true) } }}
-          className="text-xs text-gray-600 mt-1 line-clamp-2 hover:text-gray-900 cursor-pointer"
-        >
-          <RichTextView html={evento.descripcion} />
-        </div>
+        readOnly ? (
+          <div className="text-xs text-gray-600 mt-1">
+            <RichTextView html={evento.descripcion} />
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setExpanded(true)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true) } }}
+            className="text-xs text-gray-600 mt-1 line-clamp-2 hover:text-gray-900 cursor-pointer"
+          >
+            <RichTextView html={evento.descripcion} />
+          </div>
+        )
       )}
       {expanded && (
         <div className="mt-2 space-y-2">
@@ -370,7 +384,7 @@ export default function DesalojoTimelineCard({
       )}
 
       {/* Toggle expand si está colapsada y no hay descripción */}
-      {!expanded && !evento.descripcion && (
+      {!readOnly && !expanded && !evento.descripcion && (
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -392,6 +406,7 @@ export default function DesalojoTimelineCard({
         onDelete={onDelete}
         onAddHito={onAddHito}
         granularidad={granularidad}
+        readOnly={readOnly}
       />
     </li>
   )
@@ -406,7 +421,7 @@ export default function DesalojoTimelineCard({
  * re-valida, esto es solo UX).
  */
 function HitosSection({
-  evento, hitos, padreFin, onPatch, onDelete, onAddHito, granularidad,
+  evento, hitos, padreFin, onPatch, onDelete, onAddHito, granularidad, readOnly = false,
 }: {
   evento:    DesalojoPlanificacion
   hitos:     DesalojoPlanificacion[]
@@ -421,6 +436,7 @@ function HitosSection({
     fecha_fin?:   string | null
   }) => Promise<void>
   granularidad: 'dia' | 'semana'
+  readOnly?: boolean
 }) {
   const [adding, setAdding] = useState(false)
 
@@ -437,11 +453,12 @@ function HitosSection({
               onPatch={onPatch}
               onDelete={onDelete}
               granularidad={granularidad}
+              readOnly={readOnly}
             />
           ))}
         </ul>
       )}
-      {adding ? (
+      {!readOnly && (adding ? (
         <HitoAddForm
           parentId={evento.id}
           padreInicio={evento.fecha_inicio}
@@ -457,7 +474,7 @@ function HitosSection({
         >
           + agregar hito
         </button>
-      )}
+      ))}
     </div>
   )
 }
@@ -470,7 +487,7 @@ function HitosSection({
  * fechas con min/max al rango del padre.
  */
 function HitoMini({
-  hito, padreInicio, padreFin, onPatch, onDelete, granularidad,
+  hito, padreInicio, padreFin, onPatch, onDelete, granularidad, readOnly = false,
 }: {
   hito:        DesalojoPlanificacion
   padreInicio: string
@@ -478,6 +495,7 @@ function HitoMini({
   onPatch:     (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
   onDelete:    (id: number) => Promise<void>
   granularidad: 'dia' | 'semana'
+  readOnly?:   boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [saving,  setSaving]  = useState(false)
@@ -547,33 +565,46 @@ function HitoMini({
           <span className={`text-[10px] px-1 py-0 rounded ring-1 font-medium tabular-nums flex-shrink-0 ${colors.chip}`}>
             {fmtFecha(hito.fecha_inicio, hito.fecha_fin, granularidad)}
           </span>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-gray-700 hover:text-slate-900 text-left truncate flex-1 min-w-0"
-            title={hito.titulo}
-          >
-            {hito.titulo}
-          </button>
-          <button
-            type="button"
-            onClick={() => setDetalleOpen(o => !o)}
-            className={`text-[10px] transition-colors flex-shrink-0 ${
-              tieneDetalle ? 'text-slate-600 hover:text-slate-900 font-medium' : 'text-gray-400 hover:text-slate-700 opacity-0 group-hover:opacity-100'
-            }`}
-            title={tieneDetalle ? 'Ver/editar detalle' : 'Agregar detalle'}
-          >
-            {tieneDetalle ? '• Detalle' : '+ Detalle'}
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteHito}
-            disabled={saving}
-            className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-red-600 transition-opacity flex-shrink-0"
-            aria-label="Eliminar hito"
-          >
-            ✕
-          </button>
+          {readOnly ? (
+            <span
+              className="text-gray-700 text-left truncate flex-1 min-w-0"
+              title={hito.titulo}
+            >
+              {hito.titulo}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-gray-700 hover:text-slate-900 text-left truncate flex-1 min-w-0"
+              title={hito.titulo}
+            >
+              {hito.titulo}
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setDetalleOpen(o => !o)}
+              className={`text-[10px] transition-colors flex-shrink-0 ${
+                tieneDetalle ? 'text-slate-600 hover:text-slate-900 font-medium' : 'text-gray-400 hover:text-slate-700 opacity-0 group-hover:opacity-100'
+              }`}
+              title={tieneDetalle ? 'Ver/editar detalle' : 'Agregar detalle'}
+            >
+              {tieneDetalle ? '• Detalle' : '+ Detalle'}
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleDeleteHito}
+              disabled={saving}
+              className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-red-600 transition-opacity flex-shrink-0"
+              aria-label="Eliminar hito"
+            >
+              ✕
+            </button>
+          )}
         </div>
         {detalleOpen && (
           <div className="mt-1.5 ml-3.5 pl-2 border-l-2 border-slate-100 space-y-1.5">

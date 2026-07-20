@@ -36,6 +36,7 @@ type Props = {
   onArchivarCapa: (capaId: number) => Promise<void>
   onUploadDoc:    (file: File) => Promise<void>
   onDeleteDoc:    (docId: number) => Promise<void>
+  readOnly?:      boolean
 }
 
 export default function DesalojoContextoTab({
@@ -43,6 +44,7 @@ export default function DesalojoContextoTab({
   onPatchResumen, onSelectCapa,
   onCrearCapa, onRenombrarCapa, onArchivarCapa,
   onUploadDoc, onDeleteDoc,
+  readOnly = false,
 }: Props) {
   const [editingResumen, setEditingResumen] = useState(false)
   const [draftResumen, setDraftResumen]     = useState(detalle.resumen_narrativo ?? '')
@@ -104,7 +106,7 @@ export default function DesalojoContextoTab({
       <section className="border border-gray-200 rounded-xl bg-white px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-bold text-gray-900">Detalle del caso</h3>
-          {!editingResumen && (
+          {!readOnly && !editingResumen && (
             <button
               type="button"
               onClick={() => { setDraftResumen(detalle.resumen_narrativo ?? ''); setEditingResumen(true) }}
@@ -152,6 +154,7 @@ export default function DesalojoContextoTab({
         onCreate={onCrearCapa}
         onRenombrar={onRenombrarCapa}
         onArchivar={onArchivarCapa}
+        readOnly={readOnly}
       />
 
       {/* Catastro consolidado (Sección II del 038) */}
@@ -182,43 +185,57 @@ export default function DesalojoContextoTab({
           <h3 className="text-sm font-bold text-gray-900">
             Documentos generales {docsGenerales.length > 0 && <span className="font-normal text-gray-400">({docsGenerales.length})</span>}
           </h3>
-          <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
-          >
-            {uploading ? 'Subiendo…' : '+ Subir'}
-          </button>
+          {!readOnly && (
+            <>
+              <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
+              >
+                {uploading ? 'Subiendo…' : '+ Subir'}
+              </button>
+            </>
+          )}
         </div>
-        <p className="text-[11px] text-gray-500 mb-2 leading-tight">
-          Para documentos vinculados a una capa o fase, súbelos desde la pestaña Avance.
-        </p>
+        {!readOnly && (
+          <p className="text-[11px] text-gray-500 mb-2 leading-tight">
+            Para documentos vinculados a una capa o fase, súbelos desde la pestaña Avance.
+          </p>
+        )}
         {docsGenerales.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-3">Sin documentos generales todavía.</p>
         ) : (
           <ul className="space-y-1">
             {docsGenerales.map(d => (
               <li key={d.id} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 rounded text-xs">
-                <a
-                  href={d.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate"
-                  title={d.nombre}
-                >
-                  {d.nombre}
-                </a>
+                {d.url ? (
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 min-w-0 text-slate-700 hover:text-slate-900 truncate"
+                    title={d.nombre}
+                  >
+                    {d.nombre}
+                  </a>
+                ) : (
+                  <span className="flex-1 min-w-0 text-slate-600 truncate" title={`${d.nombre} (descarga solo para administradores)`}>
+                    {d.nombre}
+                  </span>
+                )}
                 {d.tamano_bytes && <span className="text-gray-400 flex-shrink-0">{fmtBytes(d.tamano_bytes)}</span>}
-                <button
-                  onClick={() => onDeleteDoc(d.id)}
-                  className="text-gray-400 hover:text-red-600 flex-shrink-0 text-base leading-none px-1"
-                  title="Eliminar"
-                  aria-label="Eliminar documento"
-                >
-                  ×
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => onDeleteDoc(d.id)}
+                    className="text-gray-400 hover:text-red-600 flex-shrink-0 text-base leading-none px-1"
+                    title="Eliminar"
+                    aria-label="Eliminar documento"
+                  >
+                    ×
+                  </button>
+                )}
               </li>
             ))}
           </ul>

@@ -29,6 +29,8 @@ type Props = {
   onPatch:   (id: number, patch: Partial<DesalojoPlanificacion>) => Promise<void>
   onDelete:  (id: number) => Promise<void>
   onVerEnMapa?: (etapaId: number) => void
+  /** Solo lectura: oculta los controles de crear/editar/eliminar eventos. */
+  readOnly?: boolean
 }
 
 type GanttGrupo = {
@@ -40,6 +42,7 @@ type GanttGrupo = {
 
 export default function DesalojoPlanificacionTab({
   eventos, capas, poligonos, onCreate, onPatch, onDelete, onVerEnMapa,
+  readOnly = false,
 }: Props) {
   const [flashId, setFlashId]               = useState<number | null>(null)
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null)
@@ -163,6 +166,7 @@ export default function DesalojoPlanificacionTab({
             eventos={topLevel}
             hitosByParent={hitosByParent}
             capas={capas}
+            readOnly={readOnly}
             onCreate={onCreate}
             onPatch={onPatch}
             onDelete={onDelete}
