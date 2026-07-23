@@ -73,6 +73,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
+  // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
+  // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
+  // cualquier otra vía para no dejarla "pegada" en visitas futuras.
+  const [metricasInitialRegion, setMetricasInitialRegion] = useState<string | undefined>(undefined)
   const [viewDropOpen, setViewDropOpen]        = useState(false)
   const [dropPos, setDropPos]                  = useState({ top: 0, left: 0 })
   const viewDropRef                            = useRef<HTMLDivElement>(null)
@@ -439,7 +443,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             </button>
             )}
             <button
-              onClick={() => setView('metricas')}
+              onClick={() => { setMetricasInitialRegion(undefined); setView('metricas') }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 view === 'metricas' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
               }`}
@@ -563,7 +567,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {/* Métricas view */}
       {view === 'metricas' && (
         <div className="flex-1 overflow-hidden">
-          <MetricasView />
+          <MetricasView initialRegionNombre={metricasInitialRegion} />
         </div>
       )}
 
@@ -631,11 +635,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               <RegionPreviewPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
-                actividad={actividad}
-                nationalAvgPct={globalAvgPct}
                 onClose={() => setSelectedRegion(null)}
-                onGoToKanban={() => setView('kanban')}
                 onGoToDashboard={() => setView('vista-regional')}
+                onVerMasIndicadores={(r) => { setMetricasInitialRegion(r.nombre); setView('metricas') }}
               />
             </div>
           )}
@@ -677,7 +679,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <span className="font-bold text-amber-600">{secondsLeft}</span> segundos.
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                Haz clic en "Continuar" para mantener la sesión activa.
+                Haz clic en &quot;Continuar&quot; para mantener la sesión activa.
               </p>
             </div>
             <div className="px-6 pb-5 flex gap-2">

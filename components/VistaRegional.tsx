@@ -1,16 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useColegaSeguridadAll } from '@/lib/hooks/useColegaSeguridad'
-import { useColegaDelitosAll, DMCS_LISTA } from '@/lib/hooks/useColegaDelitos'
-import { useMetricasEmpleoTodas } from '@/lib/hooks/useMetricasEmpleo'
-import { useMetricasPibRegion, useMetricasPibNacional, parsePeriodo, PIB_UNIDAD_ENC, PIB_UNIDAD_NOM } from '@/lib/hooks/useMetricasPib'
-import { useUltimaActualizacionMetricas, fmtUltimaActualizacion } from '@/lib/hooks/useUltimaActualizacionMetricas'
 import { perCapita } from '@/lib/indicatorUtils'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
-import { REGIONS, INE_CODE } from '@/lib/regions'
+import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
@@ -22,6 +17,7 @@ import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
 import RegionEjesPanel from './RegionEjesPanel'
 import AlertCard from './AlertCard'
+import MetricasClaveSection, { MetricCard } from './MetricasClaveSection'
 import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import {
@@ -31,169 +27,6 @@ import {
 } from '@/lib/regionSummary'
 
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
-
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-
-function Sparkline({ data, color = '#3B82F6', height = 30 }: { data: number[]; color?: string; height?: number }) {
-  if (data.length < 2) return null
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const range = max - min || 1
-  const W = 72
-  const pad = 2
-  const pts = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (W - pad * 2)
-    const y = pad + ((max - v) / range) * (height - pad * 2)
-    return `${x},${y}`
-  })
-  return (
-    <svg width={W} height={height} viewBox={`0 0 ${W} ${height}`} className="overflow-visible flex-shrink-0">
-      <polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, trendDown, trendSuffix = 'pp', sparkData, sparkColor, extra, period, comparison, comparisonGood, ranking }: {
-  title: string
-  subtitle: string
-  value: string
-  valueNote?: string
-  trend: number | null
-  trendLabel: string
-  trendDown: boolean      // true = going down is good (desocupación, criminalidad)
-  trendSuffix?: string
-  sparkData?: number[]
-  sparkColor?: string
-  extra?: string
-  period?: string
-  comparison?: string
-  comparisonGood?: boolean | null
-  ranking?: string | null
-}) {
-  const trendGood = trend === null ? null : (trendDown ? trend < 0 : trend > 0)
-  const trendIcon = trend === null ? null : trend > 0 ? '↑' : trend < 0 ? '↓' : '→'
-  const trendCls  = trendGood === null ? '' : trendGood ? 'text-green-600' : 'text-red-600'
-  const compCls   = comparisonGood == null ? 'text-gray-500' : comparisonGood ? 'text-green-600' : 'text-red-600'
-
-  return (
-    <div className="bg-slate-50/70 rounded-xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-gray-700 truncate">{title}</p>
-          <p className="text-[10px] text-gray-400 truncate">{subtitle}</p>
-        </div>
-        {sparkData && sparkData.length >= 2 && (
-          <Sparkline data={sparkData} color={sparkColor} />
-        )}
-      </div>
-      <p className="text-fluid-2xl font-bold text-slate-900 leading-tight">{value}</p>
-      {valueNote && <p className="text-[10px] text-gray-400">{valueNote}</p>}
-      {trend !== null && (
-        <p className={`text-xs mt-1 ${trendCls}`}>
-          {trendIcon} {Math.abs(trend).toFixed(1)}{trendSuffix} {trendLabel}
-        </p>
-      )}
-      {(comparison || ranking) && (
-        <p className={`text-[10px] mt-1 font-medium ${compCls}`}>
-          {comparison}{comparison && ranking ? ' · ' : ''}{ranking}
-        </p>
-      )}
-      {extra && <p className="text-[10px] text-gray-400 mt-1 truncate">{extra}</p>}
-      {period && <p className="text-[10px] text-gray-300 mt-1">{period.slice(0, 7)}</p>}
-    </div>
-  )
-}
-
-// ── SeguridadSplitCard ────────────────────────────────────────────────────────
-// Tarjeta ancha con dos mitades: delitos generales (LeyStop) a la izquierda y
-// DMCS a la derecha, separadas por un borde vertical. Mismo look que MetricCard.
-
-const toSentenceCase = (s: string) =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s
-
-function SeguridadSplitCard({
-  subtitle,
-  tasaDelitos,
-  varDelitosAnual,
-  top3Delitos,
-  tasaDmcs,
-  varDmcs,
-  dmcsRanking,
-  pctDmcs,
-}: {
-  subtitle: string
-  tasaDelitos: number | null
-  varDelitosAnual: number | null
-  top3Delitos: { nombre: string; casos: number }[]
-  tasaDmcs: number | null
-  varDmcs: number | null
-  dmcsRanking: string | null
-  pctDmcs: number | null
-}) {
-  const varDelitosCls = varDelitosAnual == null ? 'text-gray-400' : varDelitosAnual < 0 ? 'text-green-600' : 'text-red-600'
-  const varDelitosIcon = varDelitosAnual == null ? '' : varDelitosAnual > 0 ? '↑' : varDelitosAnual < 0 ? '↓' : '→'
-  const varDmcsCls = varDmcs == null ? 'text-gray-400' : varDmcs < 0 ? 'text-green-600' : 'text-red-600'
-  const varDmcsIcon = varDmcs == null ? '' : varDmcs > 0 ? '↑' : varDmcs < 0 ? '↓' : '→'
-
-  return (
-    <div className="bg-slate-50/70 rounded-xl border border-gray-100 shadow-sm p-4 col-span-2">
-      <p className="text-xs font-semibold text-gray-700 truncate">Seguridad</p>
-      <p className="text-[10px] text-gray-400 truncate mb-2">{subtitle}</p>
-      <div className="grid grid-cols-2 gap-4">
-        {/* Delitos generales */}
-        <div>
-          <p className="text-fluid-2xl font-bold text-slate-900 leading-tight">
-            {tasaDelitos != null ? tasaDelitos.toFixed(1) : 'N/D'}
-          </p>
-          <p className="text-[10px] text-gray-400">delitos cada 100 mil hab.</p>
-          {varDelitosAnual != null && (
-            <p className={`text-xs mt-1 ${varDelitosCls}`}>
-              {varDelitosIcon} {Math.abs(varDelitosAnual).toFixed(1)}% vs año anterior
-            </p>
-          )}
-          {top3Delitos.length > 0 && (
-            <div className="mt-2 space-y-0.5">
-              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide">Top 3 delitos</p>
-              {top3Delitos.map((d, i) => (
-                <p key={i} className="text-[10px] text-gray-500 truncate" title={toSentenceCase(d.nombre)}>
-                  {i + 1}. {toSentenceCase(d.nombre)}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* DMCS */}
-        <div className="border-l border-gray-200 pl-4">
-          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-1">DMCS</p>
-          <p className="text-fluid-2xl font-bold text-slate-900 leading-tight">
-            {tasaDmcs != null ? tasaDmcs.toFixed(1) : 'N/D'}
-          </p>
-          <p className="text-[10px] text-gray-400">DMCS cada 100 mil hab.</p>
-          {varDmcs != null && (
-            <p className={`text-xs mt-1 ${varDmcsCls}`}>
-              {varDmcsIcon} {Math.abs(varDmcs).toFixed(1)}% vs año anterior
-            </p>
-          )}
-          {(dmcsRanking || pctDmcs != null) && (
-            <p className="text-[10px] mt-1 font-medium text-gray-500">
-              {dmcsRanking ?? ''}{dmcsRanking && pctDmcs != null ? ' · ' : ''}{pctDmcs != null ? `${pctDmcs.toFixed(1)}% del total de delitos` : ''}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -205,6 +38,9 @@ type Props = {
   activeRegionName: string
   onActiveRegionChange: (regionName: string) => void
 }
+
+// Ver comentario junto a su uso en la Sección 4 (Métricas clave).
+const SHOW_INVERSION_CARD = false
 
 export default function VistaRegional({ iniciativas, actividad, profile, activeRegionName, onActiveRegionChange }: Props) {
   // Determine accessible region codes for this user
@@ -322,12 +158,6 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   )
 
   // External data hooks
-  const { rows: allLeystop } = useColegaSeguridadAll()
-  const { rows: delitosRows } = useColegaDelitosAll()
-  const { periodos: empPeriodos, datos: empDatosTodas, loading: empLoading } = useMetricasEmpleoTodas()
-  const { rows: pibRowsReg, loading: pibRegLoading } = useMetricasPibRegion(region?.nombre ?? null)
-  const { valores: pibNacVal, valoresNom: pibNacValNom } = useMetricasPibNacional()
-  const { fecha: ultimaActualizacionMetricas } = useUltimaActualizacionMetricas()
   const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
   const { proyectos: mopProjects, total: mopTotal } = useMopProjects(selectedCod ?? '')
 
@@ -402,105 +232,6 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   // Solo iniciativas con monto asignado cuentan en el total mostrado en la tarjeta.
   const regionIniciativasConMonto = regionIniciativas.filter(p => p.inversion_mm != null && p.inversion_mm > 0)
   const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, poblacionRegion)
-  const metricsLoading = empLoading || pibRegLoading
-
-  // ── Desocupación — misma fuente que la pestaña Métricas (registros_bce_empleo) ──
-  const empUltIdx = empPeriodos.length - 1
-  const empReg = region ? empDatosTodas[region.nombre] : null
-  const empNac = empDatosTodas['__NACIONAL__']
-  const desocValor = empReg?.tasa_tm[empUltIdx] ?? null
-  const desocValorPrev = empUltIdx >= 1 ? (empReg?.tasa_tm[empUltIdx - 1] ?? null) : null
-  const desocTrend = desocValor != null && desocValorPrev != null ? desocValor - desocValorPrev : null
-  const desocNac = empNac?.tasa_tm[empUltIdx] ?? null
-  const desocDelta = desocValor != null && desocNac != null ? desocValor - desocNac : null
-  const desocSparkData = empReg?.tasa_tm.slice(-3).filter((v): v is number => v != null)
-  const desocPeriodo = empPeriodos[empUltIdx] ?? undefined
-  const desocRanking = (() => {
-    if (!region || desocValor == null) return null
-    const vals = Object.entries(empDatosTodas)
-      .filter(([k]) => k !== '__NACIONAL__')
-      .map(([nombre, d]) => ({ nombre, v: d.tasa_tm[empUltIdx] }))
-      .filter((r): r is { nombre: string; v: number } => r.v != null)
-      .sort((a, b) => a.v - b.v)
-    const idx = vals.findIndex(r => r.nombre === region.nombre)
-    return idx === -1 ? null : `${idx + 1}°/${vals.length}`
-  })()
-
-  // ── PIB Regional — misma fuente que la pestaña Métricas (registros_bce) ──
-  const pibAnualReal = pibRowsReg
-    .filter(r => r.indicador_limpio === 'PIB' && r.unidad_limpia === PIB_UNIDAD_ENC && r.series_id?.endsWith('A'))
-    .map(r => ({ year: parsePeriodo(r.periodo).year, val: r.valor_corregido ?? 0 }))
-    .sort((a, b) => a.year.localeCompare(b.year))
-  const pibAnualNom = pibRowsReg
-    .filter(r => r.indicador_limpio === 'PIB' && r.unidad_limpia === PIB_UNIDAD_NOM && r.series_id?.endsWith('A'))
-    .map(r => ({ year: parsePeriodo(r.periodo).year, val: r.valor_corregido ?? 0 }))
-
-  const pibLastYear = pibAnualReal.at(-1)?.year
-  const pibValReal = pibAnualReal.at(-1)?.val ?? null
-  const pibValRealPrev = pibAnualReal.length >= 2 ? pibAnualReal[pibAnualReal.length - 2].val : null
-  const pibCrecimientoReal = pibValReal != null && pibValRealPrev != null && pibValRealPrev > 0
-    ? (pibValReal - pibValRealPrev) / pibValRealPrev * 100 : null
-
-  const pibValNom = pibLastYear ? (pibAnualNom.find(r => r.year === pibLastYear)?.val ?? null) : null
-  const pibBillNom = pibValNom != null ? pibValNom / 1000 : null
-
-  const pibNacTotalNom = pibLastYear
-    ? Object.values(pibNacValNom).reduce((s, rv) => s + (rv[pibLastYear] ?? 0), 0)
-    : 0
-  const pibPctNacionalNominal = pibValNom != null && pibNacTotalNom > 0 ? pibValNom / pibNacTotalNom * 100 : null
-
-  const pibRanking = (() => {
-    if (!pibLastYear || pibValReal == null) return null
-    const vals = Object.values(pibNacVal)
-      .map(rv => rv[pibLastYear] ?? 0)
-      .filter(v => v > 0)
-      .sort((a, b) => b - a)
-    const pos = vals.findIndex(v => Math.abs(v - pibValReal) < 0.01) + 1
-    return pos > 0 ? `${pos}°/${vals.length}` : null
-  })()
-
-  const pibSparkData = pibAnualReal.slice(-3).map(r => r.val)
-
-  // ── Seguridad — misma fuente que la pestaña Métricas (registros_leystop / registros_leystop_delitos) ──
-  const regionLeystop = allLeystop.find(r => INE_CODE[selectedCod ?? ''] === r.id_region)
-  const delitosRegion = region ? delitosRows.filter(r => r.nombre_region === region.nombre) : []
-
-  const tasaDelitos100k = regionLeystop?.tasa_registro ?? null
-  const varDelitosAnual = regionLeystop?.var_anno_fecha ?? null
-
-  const top3Delitos = (() => {
-    const cnt: Record<string, number> = {}
-    delitosRegion.forEach(r => { if (r.nombre_delito) cnt[r.nombre_delito] = (cnt[r.nombre_delito] ?? 0) + (r.anno_fecha ?? 0) })
-    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([nombre, casos]) => ({ nombre, casos }))
-  })()
-
-  const dmcsRegionRows = delitosRegion.filter(r => DMCS_LISTA.includes(r.nombre_delito))
-  const dmcsTotalAnno = dmcsRegionRows.reduce((s, r) => s + (r.anno_fecha ?? 0), 0)
-  const dmcsTotalAnt = dmcsRegionRows.reduce((s, r) => s + (r.anno_fecha_ant ?? 0), 0)
-  const varDmcsAnual = dmcsTotalAnt > 0 ? (dmcsTotalAnno - dmcsTotalAnt) / dmcsTotalAnt * 100 : null
-  const totalDelitosRegion = delitosRegion.reduce((s, r) => s + (r.anno_fecha ?? 0), 0)
-  const pctDmcs = totalDelitosRegion > 0 ? dmcsTotalAnno / totalDelitosRegion * 100 : null
-
-  const tasaDmcs = (() => {
-    if (!regionLeystop?.tasa_registro || regionLeystop.tasa_registro <= 0 || !regionLeystop.casos_anno_fecha || regionLeystop.casos_anno_fecha <= 0) return null
-    const pob = regionLeystop.casos_anno_fecha / regionLeystop.tasa_registro * 100000
-    return dmcsTotalAnno / pob * 100000
-  })()
-
-  const dmcsRanking = (() => {
-    if (!region || tasaDmcs == null) return null
-    const tasas = allLeystop.flatMap(sr => {
-      if (!sr.tasa_registro || sr.tasa_registro <= 0 || !sr.casos_anno_fecha || sr.casos_anno_fecha <= 0) return []
-      const dmcsSum = delitosRows
-        .filter(d => d.nombre_region === sr.nombre_region && DMCS_LISTA.includes(d.nombre_delito))
-        .reduce((s, d) => s + (d.anno_fecha ?? 0), 0)
-      const pob = sr.casos_anno_fecha / sr.tasa_registro * 100000
-      return [{ region: sr.nombre_region, tasa: dmcsSum / pob * 100000 }]
-    }).sort((a, b) => b.tasa - a.tasa)
-    const idx = tasas.findIndex(r => r.region === region.nombre)
-    return idx === -1 ? null : `${idx + 1}°/${tasas.length}`
-  })()
-
   // Mostramos el selector cada vez que el usuario tiene acceso a más de una
   // región. Vale para admin/editor (todas), viewer sin asignaciones (todas),
   // regional con varias regiones, y viewer con varias asignadas.
@@ -1045,62 +776,22 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
         {/* ── Sección 4: Métricas clave ────────────────────────────────────────── */}
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Métricas clave</h3>
-            {ultimaActualizacionMetricas && (
-              <span className="text-[10px] text-gray-400">
-                Última actualización: {fmtUltimaActualizacion(ultimaActualizacionMetricas)}
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
-              title="Desocupación"
-              subtitle="BCCh trimestre móvil"
-              value={desocValor != null ? `${desocValor.toFixed(1)}%` : metricsLoading ? '…' : 'N/D'}
-              trend={desocTrend}
-              trendLabel="vs mes anterior"
-              trendDown={true}
-              sparkData={desocSparkData}
-              sparkColor="#EF4444"
-              period={desocPeriodo}
-              comparison={desocNac != null && desocDelta != null ? `Nac: ${desocNac.toFixed(1)}% (${desocDelta > 0 ? '+' : ''}${desocDelta.toFixed(1)} pp)` : undefined}
-              comparisonGood={desocDelta != null ? desocDelta < 0 : null}
-              ranking={desocRanking}
-            />
-            <MetricCard
-              title="PIB Regional"
-              subtitle="BCCh · Nominal anual"
-              value={pibBillNom != null ? `$${pibBillNom.toLocaleString('es-CL', { maximumFractionDigits: 2, minimumFractionDigits: 2 })} bill.` : metricsLoading ? '…' : 'N/D'}
-              valueNote={pibPctNacionalNominal != null ? `${pibPctNacionalNominal.toFixed(1)}% del PIB nacional (nominal)` : undefined}
-              trend={pibCrecimientoReal}
-              trendLabel="crecimiento PIB real anual"
-              trendSuffix="%"
-              trendDown={false}
-              sparkData={pibSparkData}
-              sparkColor="#3B82F6"
-              ranking={pibRanking}
-            />
-            <SeguridadSplitCard
-              subtitle={regionLeystop?.semana ? `Sem. ${regionLeystop.semana} · LeyStop` : 'LeyStop · año a la fecha'}
-              tasaDelitos={tasaDelitos100k}
-              varDelitosAnual={varDelitosAnual}
-              top3Delitos={top3Delitos}
-              tasaDmcs={tasaDmcs}
-              varDmcs={varDmcsAnual}
-              dmcsRanking={dmcsRanking}
-              pctDmcs={pctDmcs}
-            />
-            <MetricCard
-              title="Inversión"
-              subtitle="Iniciativas región"
-              value={invTotal > 0 ? `$${Math.round(invTotal).toLocaleString('es-CL')} MM` : '—'}
-              valueNote={invPerCapita != null ? `$${Math.round(invPerCapita).toLocaleString('es-CL')} per cápita · ${regionIniciativasConMonto.length} iniciativas` : `${regionIniciativasConMonto.length} iniciativas`}
-              trend={null}
-              trendLabel=""
-              trendDown={false}
-            />
-          </div>
+          <MetricasClaveSection region={region} />
+          {/* Tarjeta "Inversión" — deshabilitada visualmente (se sacó de Métricas
+              clave al unificar con la pestaña Métricas), pero se deja lista por si
+              se decide reincorporarla: solo hay que cambiar SHOW_INVERSION_CARD. */}
+          {SHOW_INVERSION_CARD && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 mt-3">
+              <MetricCard
+                title="Inversión"
+                subtitle="Iniciativas región"
+                value={invTotal > 0 ? `$${Math.round(invTotal).toLocaleString('es-CL')} MM` : '—'}
+                comparisonLabel={invPerCapita != null ? `$${Math.round(invPerCapita).toLocaleString('es-CL')} per cápita · ${regionIniciativasConMonto.length} iniciativas` : `${regionIniciativasConMonto.length} iniciativas`}
+                trend={null}
+                trendDown={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Sección 5: Pipeline externo ──────────────────────────────────────── */}
