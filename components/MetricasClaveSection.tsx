@@ -223,7 +223,7 @@ export default function MetricasClaveSection({ region, compact, onVerMasIndicado
   const { rows: delitosRows } = useColegaDelitosAll()
   const { periodos: empPeriodos, datos: empDatosTodas, loading: empLoading } = useMetricasEmpleoTodas()
   const { rows: pibRowsReg, loading: pibRegLoading } = useMetricasPibRegion(region?.nombre ?? null)
-  const { valores: pibNacVal, valoresNom: pibNacValNom } = useMetricasPibNacional()
+  const { valores: pibNacVal } = useMetricasPibNacional()
   const { fecha: ultimaActualizacionMetricas } = useUltimaActualizacionMetricas()
 
   const metricsLoading = empLoading || pibRegLoading
@@ -274,10 +274,14 @@ export default function MetricasClaveSection({ region, compact, onVerMasIndicado
   const pibValNom = pibLastYear ? (pibAnualNom.find(r => r.year === pibLastYear)?.val ?? null) : null
   const pibBillNom = pibValNom != null ? pibValNom / 1000 : null
 
-  const pibNacTotalNom = pibLastYear
-    ? Object.values(pibNacValNom).reduce((s, rv) => s + (rv[pibLastYear] ?? 0), 0)
+  // % del PIB nacional: se calcula sobre la serie REAL (encadenada), igual que la
+  // pestaña Métricas (MetricasView: pibLast/nacTotal sobre PIB_UNIDAD_ENC). Usar
+  // nominal acá daba un número distinto al del tab para regiones con brecha
+  // real↔nominal marcada (mineras) — rompía la unificación que busca esta sección.
+  const pibNacTotalReal = pibLastYear
+    ? Object.values(pibNacVal).reduce((s, rv) => s + (rv[pibLastYear] ?? 0), 0)
     : 0
-  const pibPctNacionalNominal = pibValNom != null && pibNacTotalNom > 0 ? pibValNom / pibNacTotalNom * 100 : null
+  const pibPctNacional = pibValReal != null && pibNacTotalReal > 0 ? pibValReal / pibNacTotalReal * 100 : null
 
   const pibRanking = (() => {
     if (!pibLastYear || pibValReal == null) return null
@@ -371,7 +375,7 @@ export default function MetricasClaveSection({ region, compact, onVerMasIndicado
           trendLabel="crecimiento real vs año anterior"
           trendSuffix="%"
           trendDown={false}
-          comparisonLabel={pibPctNacionalNominal != null ? `${pibPctNacionalNominal.toFixed(1)}% del PIB nacional` : undefined}
+          comparisonLabel={pibPctNacional != null ? `${pibPctNacional.toFixed(1)}% del PIB nacional` : undefined}
           ranking={pibRanking}
           compact={compact}
         />
