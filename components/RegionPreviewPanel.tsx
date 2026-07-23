@@ -6,14 +6,14 @@
  * con polígonos arriba) — ahora es síntesis ejecutiva con perspectiva nacional.
  *
  * Estructura:
- *   1. Header: nombre + zona + capital + N iniciativas + barra avance con
- *      delta vs promedio nacional + 4 chips RAG + PREGO dots + label de
- *      fase actual.
- *   2. 3 KPI cards: Atención (suma de alertas) / Próximo hito ≤7d /
- *      Última actividad (con nombre de iniciativa).
- *   3. Avance por eje (TODOS los ejes en barras horizontales) — sin cutoff
- *      a top 3 para no esconder problemas.
- *   4. Footer con CTAs: "Ver N iniciativas en Kanban" + "Ver Mi Región".
+ *   1. Header: nombre + zona + capital + N iniciativas + botón de descarga
+ *      de la Minuta de Contexto Regional (si ya fue generada en Mi Región).
+ *   2. Avance por eje estratégico — misma grid que Mi Región. Al hacer click
+ *      en un eje, la grid es reemplazada (mismo espacio) por la lista de
+ *      iniciativas de prioridad alta de ese eje, con un botón de volver.
+ *   3. Métricas clave — misma sección que Mi Región (Desocupación, PIB,
+ *      Seguridad), en modo compacto para que todo entre sin scroll.
+ *   4. Footer con CTA "Ver Mi Región".
  *
  * Sin botones de escritura — todo es lectura. El usuario que quiera actuar
  * usa el CTA "Ver Mi Región" para saltar al dashboard completo (VistaRegional).
@@ -26,53 +26,20 @@
 import { useEffect, useState, useMemo } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { PregoRow, PregoEstado } from '@/lib/types'
-import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
-import { getSupabase } from '@/lib/supabase'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { splitMinisterio } from '@/lib/ministerios'
+import MetricasClaveSection from './MetricasClaveSection'
 import {
-  diasHastaHito,
   iniciativasDeRegion,
-  iniciativasEnRojo,
-  iniciativasConHitoCritico,
-  iniciativasSinActividad,
   ejeBreakdownFor,
-  ultimaActividadConIniciativa,
 } from '@/lib/regionSummary'
 
 type Props = {
-  region:           Region
-  projects:         Iniciativa[]
-  actividad:        Record<number, string | null>
-  /** Promedio nacional de avance — usado para mostrar delta vs región. */
-  nationalAvgPct:   number
-  onClose:          () => void
-  onGoToKanban:     () => void
-  onGoToDashboard:  () => void
-}
-
-// ── PREGO helper ──────────────────────────────────────────────────────────────
-
-/**
- * Fase actual del PREGO según prioridad: primer bloqueado, después primer
- * en_curso, después primer pendiente. Si todas están completadas, devuelve
- * "Todo completo". Si no hay info, null.
- */
-function pregoFaseActual(prego: PregoRow | null): { fase: string; estado: PregoEstado | 'todo_completo' } | null {
-  if (!prego) return null
-  const buscar = (estado: PregoEstado) => {
-    for (const f of PREGO_FASES) {
-      if (prego[f.key] === estado) return f
-    }
-    return null
-  }
-  const bloqueado = buscar('bloqueado')
-  if (bloqueado) return { fase: `${bloqueado.label} ${bloqueado.sublabel}`, estado: 'bloqueado' }
-  const enCurso = buscar('en_curso')
-  if (enCurso) return { fase: `${enCurso.label} ${enCurso.sublabel}`, estado: 'en_curso' }
-  const pendiente = buscar('pendiente')
-  if (pendiente) return { fase: `${pendiente.label} ${pendiente.sublabel}`, estado: 'pendiente' }
-  return { fase: 'Todo completo', estado: 'todo_completo' }
+  region:                 Region
+  projects:               Iniciativa[]
+  onClose:                () => void
+  onGoToDashboard:        () => void
+  onVerMasIndicadores?:   (region: Region) => void
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -80,77 +47,61 @@ function pregoFaseActual(prego: PregoRow | null): { fase: string; estado: PregoE
 export default function RegionPreviewPanel({
   region,
   projects,
-  actividad,
-  nationalAvgPct,
   onClose,
-  onGoToKanban,
   onGoToDashboard,
+  onVerMasIndicadores,
 }: Props) {
-  const [prego, setPrego] = useState<PregoRow | null>(null)
   const { ejes: regionEjes } = useRegionEjes(region.cod)
 
-  // Fetch PREGO para la región — mismo patrón que VistaRegional.
+  // ── Minuta "Contexto Regional" (tipo 'ficha') — descarga la última versión
+  // guardada por "Mi Región" → "Generar Contexto Regional". Panel de solo
+  // lectura: nunca genera, solo descarga si ya existe una versión en caché.
+  const [fichaCached, setFichaCached] = useState(false)
+  const [downloadingFicha, setDownloadingFicha] = useState(false)
+
   useEffect(() => {
     let cancelled = false
-    setPrego(null)
-    getSupabase()
-      .from('prego_monitoreo')
-      .select('*')
-      .eq('region_cod', region.cod)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setPrego(data as PregoRow | null)
-      })
+    setFichaCached(false)
+    fetch(`/api/minuta?region_cod=${region.cod}&tipo=ficha`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setFichaCached(!!data?.cached) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [region.cod])
+
+  async function descargarContextoRegional() {
+    if (downloadingFicha) return
+    setDownloadingFicha(true)
+    try {
+      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+      const now = new Date()
+      const fecha = `${meses[now.getMonth()]} ${now.getFullYear()}`
+      const res = await fetch('/api/minuta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ region, fecha, tipo: 'ficha' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `minuta-${region.nombre.toLowerCase().replace(/\s+/g, '-')}-contexto-regional.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // Best-effort: sin toast en este panel de preview (solo lectura, sin infra de errores hoy).
+    } finally {
+      setDownloadingFicha(false)
+    }
+  }
 
   // ── Cómputos ───────────────────────────────────────────────────────────────
 
   const regionIniciativas = useMemo(
     () => iniciativasDeRegion(region.cod, projects),
     [region.cod, projects],
-  )
-
-  const avgPct = regionIniciativas.length > 0
-    ? Math.round(regionIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / regionIniciativas.length)
-    : 0
-  const deltaPct = avgPct - nationalAvgPct  // positivo = región va mejor que el promedio
-
-  const semaforo = useMemo(() => ({
-    verde: regionIniciativas.filter(p => p.estado_semaforo === 'verde').length,
-    ambar: regionIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
-    rojo:  regionIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
-    gris:  regionIniciativas.filter(p => p.estado_semaforo === 'gris').length,
-  }), [regionIniciativas])
-
-  const pregoCompletadas = prego
-    ? PREGO_FASES.filter(f => prego[f.key] === 'completado').length
-    : 0
-  const faseActual = pregoFaseActual(prego)
-
-  // Alertas (counts agregados para la KPI card de Atención).
-  const alertaRojo = useMemo(
-    () => iniciativasEnRojo(region.cod, projects),
-    [region.cod, projects],
-  )
-  const alertaHitos = useMemo(
-    () => iniciativasConHitoCritico(region.cod, projects),
-    [region.cod, projects],
-  )
-  const alertaSinActividad = useMemo(
-    () => iniciativasSinActividad(region.cod, projects, actividad),
-    [region.cod, projects, actividad],
-  )
-  const totalAlertas = alertaRojo.length + alertaHitos.length + alertaSinActividad.length
-
-  // Próximo hito más urgente (primero en la lista ordenada por urgencia ASC).
-  const proximoHito = alertaHitos[0] ?? null
-  const proximoHitoDias = proximoHito ? diasHastaHito(proximoHito.fecha_proximo_hito) : null
-
-  // Última actividad con nombre de iniciativa.
-  const ultimaActividad = useMemo(
-    () => ultimaActividadConIniciativa(region.cod, projects, actividad),
-    [region.cod, projects, actividad],
   )
 
   // Breakdown completo de ejes (TODOS, no cutoff a 3). Ordenado por número
@@ -160,19 +111,45 @@ export default function RegionPreviewPanel({
     [region.cod, projects, regionEjes],
   )
 
+  // Eje seleccionado en la grid → reemplaza la grid (mismo espacio, sin abrir
+  // nada nuevo) por solo las iniciativas de prioridad alta de ese eje.
+  const [selectedEjeId, setSelectedEjeId] = useState<number | null>(null)
+  const selectedEje = selectedEjeId != null ? regionEjes.find(re => re.id === selectedEjeId) ?? null : null
+  const iniciativasAltaDelEje = useMemo(
+    () => selectedEjeId != null
+      ? regionIniciativas.filter(p => p.eje_id === selectedEjeId && p.prioridad === 'Alta')
+      : [],
+    [selectedEjeId, regionIniciativas],
+  )
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="relative h-full bg-white border-l border-gray-200 flex flex-col overflow-hidden">
       {/* Header strip */}
-      <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="px-4 pt-3 pb-2.5 border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <h2 className="text-fluid-xl font-bold text-slate-900 truncate">{region.nombre}</h2>
-              <span className="text-xs text-gray-400 shrink-0">{region.zona}</span>
+              <h2 className="text-fluid-lg font-bold text-slate-900 truncate">{region.nombre}</h2>
+              <span className="text-[11px] text-gray-400 shrink-0">{region.zona}</span>
             </div>
-            <p className="text-xs text-gray-400">{regionIniciativas.length} iniciativas · {region.capital}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-gray-400 truncate">{regionIniciativas.length} iniciativas · {region.capital}</p>
+              {fichaCached && (
+                <button
+                  onClick={descargarContextoRegional}
+                  disabled={downloadingFicha}
+                  className="flex items-center gap-1.5 px-2 py-1 border border-gray-200 text-gray-600 text-[10px] font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors shrink-0"
+                  title="Descarga la última Minuta de Contexto Regional generada en Mi Región"
+                >
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 1v7M3 5l3 3 3-3M1 11h10"/>
+                  </svg>
+                  {downloadingFicha ? 'Descargando…' : 'Minuta Contexto Regional'}
+                </button>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -185,205 +162,129 @@ export default function RegionPreviewPanel({
             </svg>
           </button>
         </div>
-
-        {/* Avance bar + delta vs nacional */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-            <div
-              className="h-2.5 rounded-full bg-blue-500 transition-all"
-              style={{ width: `${avgPct}%` }}
-            />
-          </div>
-          <span className="text-fluid-xl font-bold text-slate-800 tabular-nums w-12 text-right">{avgPct}%</span>
-        </div>
-        <div className="flex items-center gap-2 mb-3 text-[11px]">
-          <DeltaBadge delta={deltaPct} />
-          <span className="text-gray-400">vs nacional {nationalAvgPct}%</span>
-        </div>
-
-        {/* Semáforo */}
-        <div className="flex items-center gap-3 text-xs mb-3">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-500"/>
-            <span className="text-green-700 font-semibold">{semaforo.verde}</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400"/>
-            <span className="text-amber-700 font-semibold">{semaforo.ambar}</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500"/>
-            <span className="text-red-700 font-semibold">{semaforo.rojo}</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-gray-300"/>
-            <span className="text-gray-500 font-semibold">{semaforo.gris}</span>
-          </span>
-        </div>
-
-        {/* PREGO pills + label fase actual */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mr-1">PREGO</span>
-            {PREGO_FASES.map((f) => {
-              const estado = prego?.[f.key] ?? 'pendiente'
-              const cfg = PREGO_ESTADO_CONFIG[estado]
-              return (
-                <div
-                  key={f.key}
-                  title={`${f.label} ${f.sublabel}: ${cfg.label}`}
-                  className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${cfg.pill}`}
-                >
-                  {cfg.dot}
-                </div>
-              )
-            })}
-            <span className="text-[11px] text-gray-400 ml-1 tabular-nums">{pregoCompletadas}/{PREGO_FASES.length}</span>
-          </div>
-          {faseActual && (
-            <span className="text-[11px] text-gray-500 truncate">
-              <span className="text-gray-400">Fase actual:</span>{' '}
-              <span className={`font-medium ${
-                faseActual.estado === 'bloqueado' ? 'text-red-700'
-                : faseActual.estado === 'en_curso' ? 'text-amber-700'
-                : faseActual.estado === 'todo_completo' ? 'text-green-700'
-                : 'text-slate-700'
-              }`}>
-                {faseActual.fase}
-                {faseActual.estado === 'bloqueado' && ' (bloqueada)'}
-                {faseActual.estado === 'en_curso' && ' (en curso)'}
-              </span>
-            </span>
-          )}
-        </div>
       </div>
 
-      {/* Cuerpo scrolleable */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {/* 3 KPI cards */}
-        <section className="grid grid-cols-3 gap-2">
-          {/* KPI 1: Atención */}
-          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Atención</p>
-            <p className={`text-fluid-2xl font-bold tabular-nums leading-none ${totalAlertas > 0 ? 'text-red-700' : 'text-slate-400'}`}>
-              {totalAlertas}
-            </p>
-            <p className="text-[10px] text-gray-400 mt-1">
-              {totalAlertas === 0
-                ? 'Sin alertas'
-                : `${alertaRojo.length}R · ${alertaHitos.length}H · ${alertaSinActividad.length}SA`}
-            </p>
-          </div>
-
-          {/* KPI 2: Próximo hito */}
-          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Próximo hito</p>
-            {proximoHito && proximoHitoDias !== null ? (
-              <>
-                <p className={`text-fluid-2xl font-bold tabular-nums leading-none ${
-                  proximoHitoDias < 0 ? 'text-red-700'
-                  : proximoHitoDias <= 2 ? 'text-amber-700'
-                  : 'text-slate-700'
-                }`}>
-                  {proximoHitoDias < 0 ? `-${Math.abs(proximoHitoDias)}d` : `${proximoHitoDias}d`}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-1 truncate" title={proximoHito.nombre}>
-                  {proximoHito.nombre}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
-                <p className="text-[10px] text-gray-400 mt-1">Sin hitos próximos</p>
-              </>
-            )}
-          </div>
-
-          {/* KPI 3: Última actividad */}
-          <div className="rounded-xl border border-gray-100 bg-slate-50/60 p-3">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Última actividad</p>
-            {ultimaActividad ? (
-              <>
-                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-700">
-                  {ultimaActividad.dias === 0 ? 'Hoy' : ultimaActividad.dias === 1 ? '1d' : `${ultimaActividad.dias}d`}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-1 truncate" title={ultimaActividad.iniciativa.nombre}>
-                  {ultimaActividad.iniciativa.nombre}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-fluid-2xl font-bold tabular-nums leading-none text-slate-400">—</p>
-                <p className="text-[10px] text-gray-400 mt-1">Sin registros</p>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* Avance por eje — TODOS los ejes */}
+      {/* Cuerpo — pensado para caber en una sola pantalla sin scroll (letra
+          chica en ambos módulos); overflow-y-auto queda como resguardo. */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {/* Avance por eje estratégico — misma grid que Mi Región. Al hacer
+            click en un eje, la grid desaparece y en el mismo espacio se
+            muestran solo las iniciativas de prioridad alta de ese eje. */}
         <section>
-          <div className="flex items-baseline justify-between mb-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Avance por eje</h3>
-            <span className="text-[11px] text-gray-400">{ejes.length}</span>
-          </div>
-          {ejes.length === 0 ? (
-            <div className="text-xs text-gray-400 italic px-2 py-3">
-              Esta región todavía no tiene ejes catalogados.
-            </div>
+          {selectedEjeId == null ? (
+            <>
+              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Avance por eje estratégico</h3>
+              {ejes.length === 0 ? (
+                <p className="text-[11px] text-gray-400 italic px-2 py-2">
+                  {regionEjes.length === 0
+                    ? 'Esta región aún no tiene ejes en el catálogo.'
+                    : 'El catálogo está definido pero no hay iniciativas asociadas todavía.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
+                  {ejes.map(e => {
+                    const barColor = e.avgPct >= 70 ? 'bg-green-500' : e.avgPct >= 40 ? 'bg-amber-400' : 'bg-red-400'
+                    return (
+                      <div
+                        key={e.ejeId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedEjeId(e.ejeId)}
+                        onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setSelectedEjeId(e.ejeId) } }}
+                        className="p-2 rounded-lg text-left cursor-pointer border border-gray-100 bg-white hover:border-slate-300 transition-colors"
+                        title="Ver iniciativas de prioridad alta de este eje"
+                      >
+                        <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 mb-1">
+                          Eje {e.numero}
+                        </span>
+                        <p className="text-[10px] font-semibold text-slate-700 mb-1 leading-tight line-clamp-2">{e.nombre}</p>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <div className="flex-1 bg-gray-100 rounded-full h-1">
+                            <div className={`${barColor} h-1 rounded-full transition-all`} style={{ width: `${e.avgPct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-800 tabular-nums">{e.avgPct}%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-gray-400">
+                          <div className="flex items-center gap-1">
+                            {e.rojo  > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-red-500"/>{e.rojo}</span>}
+                            {e.ambar > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-amber-400"/>{e.ambar}</span>}
+                            {e.verde > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-green-500"/>{e.verde}</span>}
+                          </div>
+                          <span>{e.total} init.</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="space-y-1.5">
-              {ejes.map(e => {
-                const necesitaAtencion = e.total > 0 && e.avgPct < 30
-                const barColor = e.total === 0 ? 'bg-gray-200'
-                              : e.avgPct >= 60 ? 'bg-blue-500'
-                              : e.avgPct >= 30 ? 'bg-amber-400'
-                              : 'bg-red-400'
-                return (
-                  <div
-                    key={e.ejeId}
-                    className="flex items-center gap-2 text-[11px]"
-                  >
-                    {/* Número + nombre del eje */}
-                    <div className="flex items-baseline gap-1.5 w-32 min-w-0 shrink-0">
-                      <span className="text-gray-400 tabular-nums w-3 text-right">{e.numero}</span>
-                      <span className={`truncate ${e.total === 0 ? 'text-gray-400' : 'text-slate-700 font-medium'}`} title={e.nombre}>
-                        {e.nombre}
-                      </span>
-                    </div>
-                    {/* Barra */}
-                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 min-w-0">
-                      <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${e.avgPct}%` }} />
-                    </div>
-                    {/* % + count + RAG */}
-                    <span className="tabular-nums w-8 text-right text-slate-700 font-semibold">
-                      {e.avgPct}%
-                    </span>
-                    <span className="tabular-nums text-gray-400 w-3 text-right">{e.total}</span>
-                    {necesitaAtencion && (
-                      <span className="text-red-600 font-medium text-[10px] shrink-0">atención</span>
-                    )}
-                  </div>
-                )
-              })}
+            <div>
+              <button
+                onClick={() => setSelectedEjeId(null)}
+                className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-slate-700 font-medium mb-1.5 transition-colors"
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7.5 2.5L3 6l4.5 3.5"/>
+                </svg>
+                Volver
+              </button>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 truncate">
+                Prioridad alta{selectedEje ? ` — Eje ${selectedEje.numero}: ${selectedEje.nombre}` : ''}
+              </p>
+              <div className="space-y-1.5">
+                {iniciativasAltaDelEje.length === 0 ? (
+                  <p className="text-[11px] text-gray-400 italic text-center py-4">
+                    Sin iniciativas de prioridad alta en este eje.
+                  </p>
+                ) : (
+                  iniciativasAltaDelEje.map(p => {
+                    const barColor = p.estado_semaforo === 'verde' ? 'bg-green-500'
+                      : p.estado_semaforo === 'ambar' ? 'bg-amber-400'
+                      : p.estado_semaforo === 'rojo'  ? 'bg-red-500'
+                      : 'bg-gray-300'
+                    const pct = p.pct_avance ?? 0
+                    const ministerios = splitMinisterio(p.ministerio).join(' / ')
+                    const comunas = (p.comuna ?? '').split(';').map(c => c.trim()).filter(Boolean).join(' / ')
+                    return (
+                      <div key={p.n} className="bg-slate-50/70 border border-gray-100 rounded-lg p-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[11px] font-medium text-slate-800 leading-snug">{p.nombre}</p>
+                          <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 ${barColor}`} />
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className="text-[9px] text-gray-400 truncate flex-1 min-w-0">
+                            {comunas || 'Sin comuna'} · {ministerios || 'Sin asignar'}
+                          </p>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <div className="w-10 bg-gray-200 rounded-full h-1">
+                              <div className={`${barColor} h-1 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[9px] font-semibold text-slate-600 tabular-nums w-7 text-right">{pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
             </div>
           )}
         </section>
+
+        {/* Métricas clave — misma sección que Mi Región (Desocupación, PIB, Seguridad), en modo compacto */}
+        <MetricasClaveSection
+          region={region}
+          compact
+          onVerMasIndicadores={onVerMasIndicadores ? () => onVerMasIndicadores(region) : undefined}
+        />
       </div>
 
-      {/* Footer con CTAs */}
-      <div className="border-t border-gray-100 px-5 py-3 bg-white space-y-2">
-        <button
-          onClick={onGoToKanban}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          <span>Ver {regionIniciativas.length} {regionIniciativas.length === 1 ? 'iniciativa' : 'iniciativas'} en Gabinete</span>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M5 3l4 4-4 4"/>
-          </svg>
-        </button>
+      {/* Footer con CTA */}
+      <div className="border-t border-gray-100 px-4 py-2.5 bg-white">
         <button
           onClick={onGoToDashboard}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
         >
           <span>Ver Mi Región</span>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -392,24 +293,5 @@ export default function RegionPreviewPanel({
         </button>
       </div>
     </div>
-  )
-}
-
-// ── DeltaBadge ────────────────────────────────────────────────────────────────
-
-/** Badge de delta vs nacional. Color verde si la región va mejor (positivo
- *  con `betterIsHigher` true), rojo si va peor. Gris si delta == 0. */
-function DeltaBadge({ delta }: { delta: number }) {
-  const rounded = Math.round(delta)
-  if (rounded === 0) {
-    return <span className="text-gray-500 font-medium">= nacional</span>
-  }
-  const isUp = rounded > 0
-  const color = isUp ? 'text-green-700' : 'text-red-700'
-  const arrow = isUp ? '↑' : '↓'
-  return (
-    <span className={`font-semibold ${color}`}>
-      {arrow} {Math.abs(rounded)}pp
-    </span>
   )
 }

@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useColegaSeguridadRegion, useColegaSeguridadAll } from '@/lib/hooks/useColegaSeguridad'
-import { useV2Dashboard } from '@/lib/hooks/useV2Dashboard'
 import { perCapita } from '@/lib/indicatorUtils'
 import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
 import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
-import { REGIONS, INE_CODE } from '@/lib/regions'
+import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
@@ -19,6 +17,7 @@ import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
 import RegionEjesPanel from './RegionEjesPanel'
 import AlertCard from './AlertCard'
+import MetricasClaveSection, { MetricCard } from './MetricasClaveSection'
 import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import {
@@ -28,87 +27,6 @@ import {
 } from '@/lib/regionSummary'
 
 const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
-
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-
-function Sparkline({ data, color = '#3B82F6', height = 30 }: { data: number[]; color?: string; height?: number }) {
-  if (data.length < 2) return null
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const range = max - min || 1
-  const W = 72
-  const pad = 2
-  const pts = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (W - pad * 2)
-    const y = pad + ((max - v) / range) * (height - pad * 2)
-    return `${x},${y}`
-  })
-  return (
-    <svg width={W} height={height} viewBox={`0 0 ${W} ${height}`} className="overflow-visible flex-shrink-0">
-      <polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({ title, subtitle, value, valueNote, trend, trendLabel, trendDown, trendSuffix = 'pp', sparkData, sparkColor, extra, period, comparison, comparisonGood, ranking }: {
-  title: string
-  subtitle: string
-  value: string
-  valueNote?: string
-  trend: number | null
-  trendLabel: string
-  trendDown: boolean      // true = going down is good (desocupación, criminalidad)
-  trendSuffix?: string
-  sparkData?: number[]
-  sparkColor?: string
-  extra?: string
-  period?: string
-  comparison?: string
-  comparisonGood?: boolean | null
-  ranking?: string | null
-}) {
-  const trendGood = trend === null ? null : (trendDown ? trend < 0 : trend > 0)
-  const trendIcon = trend === null ? null : trend > 0 ? '↑' : trend < 0 ? '↓' : '→'
-  const trendCls  = trendGood === null ? '' : trendGood ? 'text-green-600' : 'text-red-600'
-  const compCls   = comparisonGood == null ? 'text-gray-500' : comparisonGood ? 'text-green-600' : 'text-red-600'
-
-  return (
-    <div className="bg-slate-50/70 rounded-xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-gray-700 truncate">{title}</p>
-          <p className="text-[10px] text-gray-400 truncate">{subtitle}</p>
-        </div>
-        {sparkData && sparkData.length >= 2 && (
-          <Sparkline data={sparkData} color={sparkColor} />
-        )}
-      </div>
-      <p className="text-fluid-2xl font-bold text-slate-900 leading-tight">{value}</p>
-      {valueNote && <p className="text-[10px] text-gray-400">{valueNote}</p>}
-      {trend !== null && (
-        <p className={`text-xs mt-1 ${trendCls}`}>
-          {trendIcon} {Math.abs(trend).toFixed(1)}{trendSuffix} {trendLabel}
-        </p>
-      )}
-      {(comparison || ranking) && (
-        <p className={`text-[10px] mt-1 font-medium ${compCls}`}>
-          {comparison}{comparison && ranking ? ' · ' : ''}{ranking}
-        </p>
-      )}
-      {extra && <p className="text-[10px] text-gray-400 mt-1 truncate">{extra}</p>}
-      {period && <p className="text-[10px] text-gray-300 mt-1">{period.slice(0, 7)}</p>}
-    </div>
-  )
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -120,6 +38,9 @@ type Props = {
   activeRegionName: string
   onActiveRegionChange: (regionName: string) => void
 }
+
+// Ver comentario junto a su uso en la Sección 4 (Métricas clave).
+const SHOW_INVERSION_CARD = false
 
 export default function VistaRegional({ iniciativas, actividad, profile, activeRegionName, onActiveRegionChange }: Props) {
   // Determine accessible region codes for this user
@@ -237,13 +158,26 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   )
 
   // External data hooks
-  const V2_SERIES = ['EMP_DESOC_TASA', 'ECO_PIB_ANUAL', 'ECO_PIB_REG']
-  const { indicadores: v2Ind, series: v2Series, allRegionsUltimos, loading: metricsLoading } = useV2Dashboard(selectedCod ?? undefined, V2_SERIES)
-  const { history: leystopHistory } = useColegaSeguridadRegion(selectedCod ?? '')
-  const { rows: allLeystop } = useColegaSeguridadAll()
-  const leystop = leystopHistory.at(-1) ?? null
   const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
   const { proyectos: mopProjects, total: mopTotal } = useMopProjects(selectedCod ?? '')
+
+  // Población de la región activa (para Inversión per cápita) — misma tabla
+  // que usa la pestaña Métricas para el PIB per cápita.
+  const [poblacionRegion, setPoblacionRegion] = useState<number | null>(null)
+  useEffect(() => {
+    if (!selectedCod) { setPoblacionRegion(null); return }
+    let cancelled = false
+    getSupabase()
+      .from('region_metrics')
+      .select('poblacion_total')
+      .eq('region_cod', selectedCod)
+      .single()
+      .then(({ data }) => {
+        if (cancelled) return
+        setPoblacionRegion(data ? (data as { poblacion_total: number | null }).poblacion_total : null)
+      })
+    return () => { cancelled = true }
+  }, [selectedCod])
 
   // ── Computed values ──────────────────────────────────────────────────────────
 
@@ -294,31 +228,10 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     [selectedCod, iniciativas, regionEjes],
   )
 
-  // Metric series from v2
-  const desocCtx = v2Ind.get('EMP_DESOC_TASA')
-  const pibAnualCtx = v2Ind.get('ECO_PIB_ANUAL')
-  const pibPctCtx = v2Ind.get('ECO_PCT_PIB')
-  const pibSerie = v2Series.get('ECO_PIB_ANUAL')
-  const desocSerie = v2Series.get('EMP_DESOC_TASA')
-  const pobCtx = v2Ind.get('DEM_POB_TOTAL')
-
   const invTotal = regionIniciativas.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
-
-  // ── Comparison context for Métricas Clave ─────────────────────────────────
-  const regionLeystop = allLeystop.find(r => INE_CODE[selectedCod ?? ''] === r.id_region)
-  const leystopAvgTasa = allLeystop.length > 0
-    ? allLeystop.reduce((s, r) => s + (r.tasa_registro ?? 0), 0) / allLeystop.filter(r => r.tasa_registro != null).length
-    : null
-  const leystopRank = (() => {
-    if (!regionLeystop || allLeystop.length === 0) return null
-    const sorted = [...allLeystop].filter(r => r.tasa_registro != null).sort((a, b) => (b.tasa_registro ?? 0) - (a.tasa_registro ?? 0))
-    const idx = sorted.findIndex(r => r.id_region === regionLeystop.id_region)
-    return idx === -1 ? null : `${idx + 1}°/${sorted.length}`
-  })()
-  const leystopIsGood = regionLeystop?.tasa_registro != null && leystopAvgTasa != null ? regionLeystop.tasa_registro < leystopAvgTasa : null
-
-  const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, pobCtx?.valor)
-
+  // Solo iniciativas con monto asignado cuentan en el total mostrado en la tarjeta.
+  const regionIniciativasConMonto = regionIniciativas.filter(p => p.inversion_mm != null && p.inversion_mm > 0)
+  const invPerCapita = perCapita(invTotal > 0 ? invTotal : null, poblacionRegion)
   // Mostramos el selector cada vez que el usuario tiene acceso a más de una
   // región. Vale para admin/editor (todas), viewer sin asignaciones (todas),
   // regional con varias regiones, y viewer con varias asignadas.
@@ -863,60 +776,22 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
 
         {/* ── Sección 4: Métricas clave ────────────────────────────────────────── */}
         <div className="mb-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Métricas clave</h3>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
-              title="Desocupación"
-              subtitle="BCCh trimestre móvil"
-              value={desocCtx?.valor != null ? `${desocCtx.valor.toFixed(1)}%` : metricsLoading ? '…' : 'N/D'}
-              trend={desocSerie?.data && desocSerie.data.length >= 2 ? desocSerie.data.at(-1)!.valor - desocSerie.data.at(-2)!.valor : null}
-              trendLabel="vs mes anterior"
-              trendDown={true}
-              sparkData={desocSerie?.data.slice(-8).map(d => d.valor)}
-              sparkColor="#EF4444"
-              period={desocCtx?.periodo ?? undefined}
-              comparison={desocCtx?.delta ? `Nac: ${desocCtx.nacional?.toFixed(1)}% (${desocCtx.delta})` : undefined}
-              comparisonGood={desocCtx?.deltaGood ?? null}
-              ranking={desocCtx?.ranking ?? undefined}
-            />
-            <MetricCard
-              title="Seguridad"
-              subtitle={leystop ? `Sem. ${leystop.semana ?? ''} · LeyStop` : 'Semanal LeyStop'}
-              value={regionLeystop?.tasa_registro != null ? `Tasa: ${regionLeystop.tasa_registro.toFixed(0)}` : leystop?.casos_ultima_semana != null ? `${leystop.casos_ultima_semana.toLocaleString('es-CL')} casos` : metricsLoading ? '…' : 'N/D'}
-              valueNote={regionLeystop?.tasa_registro != null ? 'casos cada 100 mil hab.' : undefined}
-              trend={leystop?.var_ultima_semana ?? null}
-              trendLabel="var. semana"
-              trendDown={true}
-              sparkData={undefined}
-              comparison={leystopAvgTasa != null ? `Prom: ${leystopAvgTasa.toFixed(0)}` : undefined}
-              comparisonGood={leystopIsGood}
-              ranking={leystopRank}
-              extra={[leystop?.mayor_registro_1, leystop?.mayor_registro_2].filter(Boolean).join(' · ') || undefined}
-            />
-            <MetricCard
-              title="PIB Regional"
-              subtitle="BCCh · Nominal anual"
-              value={pibPctCtx?.valor != null ? `${pibPctCtx.valor.toFixed(1)}% del PIB nacional` : pibAnualCtx?.valor != null ? `$${Math.round(pibAnualCtx.valor).toLocaleString('es-CL')} MM` : metricsLoading ? '…' : 'N/D'}
-              valueNote={pibAnualCtx?.valor != null ? `$${Math.round(pibAnualCtx.valor).toLocaleString('es-CL')} miles de MM CLP` : undefined}
-              trend={null}
-              trendLabel=""
-              trendSuffix=""
-              trendDown={false}
-              sparkData={pibSerie?.data.slice(-8).map(d => d.valor)}
-              sparkColor="#3B82F6"
-              period={pibAnualCtx?.periodo ?? undefined}
-              ranking={pibPctCtx?.ranking ?? pibAnualCtx?.ranking ?? undefined}
-            />
-            <MetricCard
-              title="Inversión"
-              subtitle="Iniciativas región"
-              value={invTotal > 0 ? `$${Math.round(invTotal).toLocaleString('es-CL')} MM` : '—'}
-              valueNote={invPerCapita != null ? `$${invPerCapita.toFixed(1)} MM per cápita · ${regionIniciativas.length} iniciativas` : `${regionIniciativas.length} iniciativas`}
-              trend={null}
-              trendLabel=""
-              trendDown={false}
-            />
-          </div>
+          <MetricasClaveSection region={region} />
+          {/* Tarjeta "Inversión" — deshabilitada visualmente (se sacó de Métricas
+              clave al unificar con la pestaña Métricas), pero se deja lista por si
+              se decide reincorporarla: solo hay que cambiar SHOW_INVERSION_CARD. */}
+          {SHOW_INVERSION_CARD && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 mt-3">
+              <MetricCard
+                title="Inversión"
+                subtitle="Iniciativas región"
+                value={invTotal > 0 ? `$${Math.round(invTotal).toLocaleString('es-CL')} MM` : '—'}
+                comparisonLabel={invPerCapita != null ? `$${Math.round(invPerCapita).toLocaleString('es-CL')} per cápita · ${regionIniciativasConMonto.length} iniciativas` : `${regionIniciativasConMonto.length} iniciativas`}
+                trend={null}
+                trendDown={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Sección 5: Pipeline externo ──────────────────────────────────────── */}

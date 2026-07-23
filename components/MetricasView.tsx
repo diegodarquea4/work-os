@@ -211,8 +211,8 @@ const Contenido = ({ children }: { children: React.ReactNode }) => (
 // ══════════════════════════════════════════════════════════════
 // RESUMEN EJECUTIVO
 // ══════════════════════════════════════════════════════════════
-function ResumenModule() {
-  const [regionNombre, setRegionNombre]   = useState('')
+function ResumenModule({ initialRegionNombre }: { initialRegionNombre?: string } = {}) {
+  const [regionNombre, setRegionNombre]   = useState(initialRegionNombre ?? '')
   const [empDesdeAnio, setEmpDesdeAnio]   = useState('')
   const [empHastaAnio, setEmpHastaAnio]   = useState('')
   const [pibDesde, setPibDesde]           = useState('')
@@ -2803,7 +2803,7 @@ function CasenModule() {
 // ══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════
-export default function MetricasView() {
+export default function MetricasView({ initialRegionNombre }: { initialRegionNombre?: string } = {}) {
   const [activeModule, setActiveModule] = useState<ModuleId>('resumen')
 
   return (
@@ -2814,7 +2814,7 @@ export default function MetricasView() {
       <ModuleNav active={activeModule} onSelect={setActiveModule} />
       <UltimaActualizacionBar />
       <div className="flex-1 overflow-auto">
-        {activeModule === 'resumen'   && <ResumenModule />}
+        {activeModule === 'resumen'   && <ResumenModule initialRegionNombre={initialRegionNombre} />}
         {activeModule === 'seguridad' && <SeguridadModule />}
         {activeModule === 'pib'       && <PibModule />}
         {activeModule === 'censo'     && <CensoModule />}
