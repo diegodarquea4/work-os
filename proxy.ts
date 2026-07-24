@@ -37,6 +37,9 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isLoginPage     = pathname.startsWith('/login')
   const isAuthCallback  = pathname.startsWith('/auth/callback')
+  // Activación de cuenta: la usa un usuario SIN sesión (define su clave con un
+  // código). Debe ser accesible sin redirigir a /login.
+  const isPublicAccount = pathname.startsWith('/api/account/activate')
   const isCronRoute     =
     pathname.startsWith('/api/ine-sync')      ||
     pathname.startsWith('/api/ine-discover')  ||
@@ -56,7 +59,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/seed-fase3')   ||
     pathname.startsWith('/api/v2/')
 
-  if (!user && !isLoginPage && !isAuthCallback && !isCronRoute) {
+  if (!user && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

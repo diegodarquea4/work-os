@@ -144,6 +144,9 @@ export default function AdminUsersView() {
   const [inviting, setInviting]         = useState(false)
   const [inviteError, setInviteError]   = useState<string | null>(null)
 
+  // Modal que muestra un código (activación o recuperación) una sola vez.
+  const [codeModal, setCodeModal]       = useState<{ email: string; codigo: string } | null>(null)
+
   useEffect(() => { loadUsers() }, [])
 
   async function loadUsers() {
@@ -197,17 +200,38 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
-  async function handleResetPassword(id: string, email: string) {
-    if (!confirm(`Resetear la clave de ${email} a "DCI2026"?`)) return
+  // Recuperación (olvidó la clave): genera un código NUEVO, bloquea la clave
+  // anterior y cierra sesiones. El código se muestra una vez para entregarlo.
+  async function handleRecuperar(id: string, email: string) {
+    if (!confirm(`Generar código de recuperación para ${email}?\n\nLa clave actual dejará de funcionar de inmediato; el usuario solo entra con el código nuevo.`)) return
     setSaving(id)
     const res = await fetch(`/api/admin/users/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reset_password: true }),
+      body: JSON.stringify({ recuperar: true }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (res.ok && body.codigo) {
+      setCodeModal({ email, codigo: body.codigo })
+    } else {
+      setError(body.error ?? 'Error al generar el código de recuperación')
+    }
+    setSaving(null)
+  }
+
+  // Forzar cambio (recuerda su clave): marca que debe crear una nueva y cierra
+  // sesiones. No genera código — el usuario entra con su clave actual una vez.
+  async function handleForzarCambio(id: string, email: string) {
+    if (!confirm(`Forzar a ${email} a cambiar su clave?\n\nEntra una vez con su clave actual y deberá crear una nueva antes de usar el panel.`)) return
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ forzar_cambio: true }),
     })
     if (!res.ok) {
-      const body = await res.json()
-      setError(body.error ?? 'Error al resetear contraseña')
+      const body = await res.json().catch(() => ({}))
+      setError(body.error ?? 'Error al forzar el cambio de clave')
     }
     setSaving(null)
   }
@@ -226,13 +250,15 @@ export default function AdminUsersView() {
         region_cods: (inviteRole === 'regional' || inviteRole === 'viewer') ? inviteRegions : [],
       }),
     })
-    if (res.ok) {
+    const body = await res.json().catch(() => ({}))
+    if (res.ok && body.codigo) {
+      const email = inviteEmail.trim()
       setShowInvite(false)
       setInviteEmail(''); setInviteName(''); setInviteRole('viewer'); setInviteRegions([])
       await loadUsers()
+      setCodeModal({ email, codigo: body.codigo })   // muestra el código de activación
     } else {
-      const body = await res.json()
-      setInviteError(body.error ?? 'Error al invitar usuario')
+      setInviteError(body.error ?? 'Error al crear el usuario')
     }
     setInviting(false)
   }
@@ -329,10 +355,20 @@ export default function AdminUsersView() {
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => handleResetPassword(u.id, u.email)}
+                          onClick={() => handleForzarCambio(u.id, u.email)}
+                          disabled={saving === u.id}
+                          className="p-1.5 text-gray-300 hover:text-slate-600 transition-colors rounded hover:bg-slate-100 disabled:opacity-40"
+                          title="Forzar cambio de clave (el usuario recuerda su clave)"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3v3H9M2 11V8h3"/><path d="M11.5 6A4.5 4.5 0 0 0 3 5.5M2.5 8A4.5 4.5 0 0 0 11 8.5"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleRecuperar(u.id, u.email)}
                           disabled={saving === u.id}
                           className="p-1.5 text-gray-300 hover:text-amber-500 transition-colors rounded hover:bg-amber-50 disabled:opacity-40"
-                          title="Resetear clave a DCI2026"
+                          title="Recuperación: generar código nuevo (bloquea la clave anterior)"
                         >
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                             <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
@@ -442,9 +478,10 @@ export default function AdminUsersView() {
                   </div>
                 </div>
               )}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-amber-700">
-                  El usuario quedará activo inmediatamente. <span className="font-semibold">Clave inicial: DCI2026</span>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Se generará un <span className="font-semibold">código de activación</span> que verás una sola vez.
+                  Entrégaselo al usuario por un canal de confianza: con ese código y su correo, define su propia clave.
                 </p>
               </div>
               {inviteError && (
@@ -470,6 +507,52 @@ export default function AdminUsersView() {
           </div>
         </div>
       )}
+
+      {codeModal && (
+        <CodeModalView email={codeModal.email} codigo={codeModal.codigo} onClose={() => setCodeModal(null)} />
+      )}
+    </div>
+  )
+}
+
+/** Muestra un código (activación/recuperación) una sola vez, grande y con Copiar. */
+function CodeModalView({ email, codigo, onClose }: { email: string; codigo: string; onClose: () => void }) {
+  const [copiado, setCopiado] = useState(false)
+  async function copiar() {
+    try { await navigator.clipboard.writeText(codigo); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch {}
+  }
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+          <p className="text-base font-semibold text-gray-900">Código de acceso</p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">Para <span className="font-medium">{email}</span></p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-center text-2xl font-bold tracking-[0.25em] text-slate-900 bg-slate-50 border border-slate-200 rounded-lg py-3 select-all">
+              {codigo}
+            </code>
+            <button
+              onClick={copiar}
+              className="px-3 py-3 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 shrink-0"
+            >
+              {copiado ? 'Copiado ✓' : 'Copiar'}
+            </button>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Este código <span className="font-semibold">no se vuelve a mostrar</span>. Entrégaselo al usuario por un
+              canal de confianza. Con su correo y este código podrá crear su clave. Vence en 72 horas.
+            </p>
+          </div>
+        </div>
+        <div className="px-6 pb-5">
+          <button onClick={onClose} className="w-full py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200">
+            Listo
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
