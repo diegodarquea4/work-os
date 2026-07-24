@@ -12,6 +12,7 @@ import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
+import CambiarClaveModal from './CambiarClaveModal'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -37,6 +38,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [ayudaOpen, setAyudaOpen] = useState(false)
+  const [cambiarClaveOpen, setCambiarClaveOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
@@ -374,6 +376,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return Math.round(list.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / list.length)
   }, [projectsByRegion])
 
+  // Cambio de clave obligatorio: el overlay bloquea el panel ANTES de mostrarlo.
+  // El panel no se rinde hasta que el usuario crea la clave (recarga → flag en false).
+  if (profile?.debe_cambiar_clave) {
+    return <CambiarClaveModal mode="forzado" />
+  }
+
   return (
     <UserProvider
       canEditRegion={canEditRegion}
@@ -492,6 +500,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <circle cx="8" cy="8" r="6.5"/>
                 <path d="M6.3 6a1.8 1.8 0 0 1 3.5 0c0 1.1-1.7 1.4-1.7 2.4"/>
                 <circle cx="8" cy="11.4" r=".4" fill="currentColor"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => setCambiarClaveOpen(true)}
+              className="text-slate-400 hover:text-white transition-colors"
+              title="Cambiar contraseña"
+              aria-label="Cambiar contraseña"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="6" cy="10" r="3"/>
+                <path d="M8 8l6-6M12 2l2 2M11 3l2 2"/>
               </svg>
             </button>
             <button
@@ -718,6 +737,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       )}
     </div>
     <AyudaModal open={ayudaOpen} onClose={() => setAyudaOpen(false)} />
+    {cambiarClaveOpen && <CambiarClaveModal mode="voluntario" onClose={() => setCambiarClaveOpen(false)} />}
     </UserProvider>
   )
 }

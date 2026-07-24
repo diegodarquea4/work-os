@@ -122,13 +122,33 @@ export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
 // ── /api/admin/users/[id] PATCH ──────────────────────────────────────────────
 
 export const adminUsersPatchSchema = z.object({
-  role:           z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
-  region_cods:    z.array(z.string().min(1)).optional(),
-  full_name:      z.string().min(1).optional(),
-  reset_password: z.boolean().optional(),
+  role:          z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
+  region_cods:   z.array(z.string().min(1)).optional(),
+  full_name:     z.string().min(1).optional(),
+  // Reemplazan al viejo reset_password (que ponía DCI2026):
+  recuperar:     z.boolean().optional(),  // emite código nuevo + bloquea la clave anterior + cierra sesiones
+  forzar_cambio: z.boolean().optional(),  // marca debe_cambiar_clave + cierra sesiones (sin código)
 })
 
 export type AdminUsersPatchBody = z.infer<typeof adminUsersPatchSchema>
+
+// ── /api/account/activate (pública, gateada por código) ──────────────────────
+
+export const accountActivateSchema = z.object({
+  email:    emailSchema,
+  codigo:   z.string().min(1),
+  password: z.string().min(1),
+})
+
+export type AccountActivateBody = z.infer<typeof accountActivateSchema>
+
+// ── /api/account/change-password (autenticada) ───────────────────────────────
+
+export const accountChangePasswordSchema = z.object({
+  password: z.string().min(1),
+})
+
+export type AccountChangePasswordBody = z.infer<typeof accountChangePasswordSchema>
 
 // ── /api/desalojos/[n] PATCH ─────────────────────────────────────────────────
 

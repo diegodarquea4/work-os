@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { adminUsersPostSchema } from '@/lib/schemas'
+import { generateCode, hashCode, codeExpiry } from '@/lib/accessCode'
 
 export async function GET() {
   const profile = await requireAuth()
@@ -57,10 +58,11 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin()
 
-  // Create user directly (no email invite) — auto-confirmed with default password
+  // Alta SIN clave y sin correo: email_confirm=true evita el mail de invitación,
+  // y al no pasar `password` la cuenta queda sin clave hasta que el usuario la
+  // define en la activación con el código. createUser falla si el correo ya existe.
   const { data: createData, error: createError } = await db.auth.admin.createUser({
     email,
-    password: 'DCI2026',
     email_confirm: true,
     user_metadata: { full_name: full_name ?? '' },
   })
@@ -82,5 +84,20 @@ export async function POST(request: Request) {
     return Response.json({ error: profileError.message }, { status: 500 })
   }
 
-  return Response.json({ id: userId, email, role, region_cods: region_cods ?? [] })
+  // Código de un solo uso: se guarda solo el hash. Se devuelve en claro UNA vez
+  // para que el admin lo entregue por un canal de confianza (no hay envío de correo).
+  const codigo = generateCode()
+  const { error: codeError } = await db.from('codigos_acceso').upsert({
+    email,
+    codigo_hash: hashCode(codigo),
+    expira:      codeExpiry(new Date()),
+    intentos:    0,
+    created_at:  new Date().toISOString(),
+  })
+  if (codeError) {
+    // La cuenta quedó creada pero sin código; el admin puede reintentar con "Recuperación".
+    return Response.json({ error: `Usuario creado pero no se pudo generar el código: ${codeError.message}` }, { status: 500 })
+  }
+
+  return Response.json({ id: userId, email, role, region_cods: region_cods ?? [], codigo })
 }
