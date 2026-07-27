@@ -36,6 +36,13 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// `fecha` es un date puro YYYY-MM-DD (sin hora). Parsearlo directo con
+// `new Date()` lo interpreta en UTC y puede mostrar el día anterior según
+// el timezone local — se ancla a mediodía para evitar el corrimiento.
+function fmtFechaActividad(fecha: string) {
+  return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function SeguimientoTab({
   prioridadId,
   seguimientos,
@@ -290,7 +297,7 @@ export default function SeguimientoTab({
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
                           {est && <span className={`text-xs px-2 py-0.5 rounded-full ${est.color}`}>{est.label}</span>}
-                          <span className="text-xs text-gray-500 ml-auto">{fmtDate(s.created_at)}</span>
+                          <span className="text-xs text-gray-500 ml-auto">{s.fecha ? fmtFechaActividad(s.fecha) : fmtDate(s.created_at)}</span>
                           {canManage(s) && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import type { Seguimiento, Documento, SemaforoLog } from '@/lib/types'
+import type { Seguimiento, Documento, SemaforoLog, Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
@@ -13,12 +13,13 @@ import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
+import TareasTab      from './modal/TareasTab'
 import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 import { HomeIcon } from './icons/HomeIcon'
 import { CapaBadge } from './CapaBadge'
 
-type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos'
+type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos' | 'tareas'
 
 type Props = {
   prioridad: Iniciativa
@@ -41,6 +42,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
   const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
+  const [tareas, setTareas]             = useState<Tarea[]>([])
   const [loading, setLoading]           = useState(true)
 
   const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
@@ -111,53 +113,25 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
   }, [prioridad.n])
 
-  function calcPctFromHitos(segs: Seguimiento[]): number {
-    const hitos = segs.filter(s => s.tipo === 'hito')
-    if (!hitos.length) return 0
-    return Math.round((hitos.filter(h => h.estado === 'completado').length / hitos.length) * 100)
-  }
-
   async function loadData() {
     setLoading(true)
     const sb = getSupabase()
-    const [segRes, docRes, logRes] = await Promise.all([
+    const [segRes, docRes, logRes, tareasRes] = await Promise.all([
       sb.from('seguimientos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('semaforo_log').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
+      sb.from('tareas').select('*').eq('prioridad_id', prioridad.n).order('fecha_vencimiento', { ascending: true, nullsFirst: false }),
     ])
-    const segsData = (segRes.data ?? []) as Seguimiento[]
-    setSeguimientos(segsData)
+    setSeguimientos((segRes.data ?? []) as Seguimiento[])
     setDocumentos((docRes.data ?? []) as Documento[])
     setSemaforoLog((logRes.data ?? []) as SemaforoLog[])
-
-    const newPct = calcPctFromHitos(segsData)
-    if (newPct !== (prioridad.pct_avance ?? 0)) {
-      const prevPct = prioridad.pct_avance ?? 0
-      setPctAvance(newPct)
-      const sb2 = getSupabase()
-      const { data: { session } } = await sb2.auth.getSession()
-      try {
-        await safeWrite(
-          sb2.from('prioridades_territoriales').update({ pct_avance: newPct }).eq('id', prioridad.id),
-          `pct_avance (auto-hitos) n=${prioridad.n}`,
-        )
-        await logSemaforoChange(prioridad.n, 'pct_avance', prevPct, newPct, session?.user?.email ?? null)
-        onUpdatePrioridad(prioridad.n, { pct_avance: newPct })
-      } catch (err) {
-        // Auto-cálculo silencioso al abrir el modal: rollback sin alert
-        // para no molestar al usuario por una acción que no eligió.
-        setPctAvance(prevPct)
-        console.error('[ProjectTrackerModal] loadData auto-pct rollback:', err)
-      }
-    }
+    setTareas((tareasRes.data ?? []) as Tarea[])
     setLoading(false)
   }
 
-  /** Persiste el % avance que el usuario ajustó manualmente.
-   *  Nota: si después se modifican hitos de seguimiento, `calcPctFromHitos`
-   *  puede sobrescribirlo al reabrir el modal (auto-cálculo). Eso es por
-   *  diseño: hitos completados son la fuente "oficial" del avance. El
-   *  ajuste manual sirve como override puntual entre cambios de hitos. */
+  /** Persiste el % avance que el usuario ajustó manualmente. El % de avance
+   *  es siempre manual — no se recalcula ni se pisa automáticamente al
+   *  reabrir el modal. */
   async function commitPctAvance(newPct: number) {
     const clamped = Math.max(0, Math.min(100, Math.round(newPct)))
     const prevPct = prioridad.pct_avance ?? 0
@@ -1102,9 +1076,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
 
           {/* Tabs */}
           <div className="flex mt-1">
-            {(['seguimiento', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
+            {(['seguimiento', 'tareas', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
               const label =
                 t === 'seguimiento' ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}` :
+                t === 'tareas'      ? `Tareas${tareas.length ? ` (${tareas.length})` : ''}` :
                 t === 'historial'   ? 'Historial' :
                 t === 'calendario'  ? 'Calendario' :
                 `Documentos${documentos.length ? ` (${documentos.length})` : ''}`
@@ -1138,11 +1113,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               canDeleteAny={canEditAny}
               currentUserEmail={currentUserEmail}
             />
+          ) : tab === 'tareas' ? (
+            <TareasTab
+              prioridadId={prioridad.n}
+              tareas={tareas}
+              usuarios={usuarios}
+              onRefresh={loadData}
+              canCreate={!!currentUserEmail}
+              canDeleteAny={canEditAny}
+              currentUserEmail={currentUserEmail}
+            />
           ) : tab === 'historial' ? (
             <HistorialTab seguimientos={seguimientos} semaforoLog={semaforoLog} semaforo={semaforo} pctAvance={pctAvance} />
           ) : tab === 'calendario' ? (
             <CalendarioTab
               seguimientos={seguimientos}
+              tareas={tareas}
+              usuarios={usuarios}
               fechaProximoHito={fechaProximoHito || null}
               proximoHitoTexto={proximoHito || null}
             />

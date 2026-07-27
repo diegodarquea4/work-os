@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Seguimiento } from '@/lib/types'
+import type { Seguimiento, Tarea } from '@/lib/types'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
@@ -17,8 +17,23 @@ const ESTADO_CONFIG = {
   pendiente:  { label: 'Pendiente',  color: 'bg-gray-100 text-gray-600'   },
 } as const
 
+const TAREA_ESTADO_CONFIG = {
+  no_iniciada: { label: 'No iniciada', color: 'bg-gray-100 text-gray-600'   },
+  en_proceso:  { label: 'En proceso',  color: 'bg-blue-100 text-blue-700'   },
+  bloqueada:   { label: 'Bloqueada',   color: 'bg-red-100 text-red-700'     },
+  completada:  { label: 'Completada',  color: 'bg-green-100 text-green-700' },
+} as const
+
+// Las tareas se distinguen de los seguimientos con un dot índigo propio —
+// no comparten paleta con TIPO_CONFIG para que se puedan diferenciar de un
+// vistazo en el mismo día.
+const TAREA_DOT = 'bg-indigo-500'
+
 type Props = {
   seguimientos: Seguimiento[]
+  // Tareas de la iniciativa — se ubican en el calendario por fecha_vencimiento.
+  tareas?: Tarea[]
+  usuarios?: { email: string; name: string }[]
   // Próximo hito declarado en la ficha de la iniciativa abierta. Si la fecha
   // cae en el mes mostrado, se marca con un anillo distintivo en el día —
   // visualmente separado de los dots de seguimientos para distinguir "esto
@@ -27,7 +42,7 @@ type Props = {
   proximoHitoTexto?: string | null
 }
 
-export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoHitoTexto }: Props) {
+export default function CalendarioTab({ seguimientos, tareas = [], usuarios = [], fechaProximoHito, proximoHitoTexto }: Props) {
   const [calMonth, setCalMonth] = useState(() => new Date())
   const [calDay, setCalDay]     = useState<string | null>(null)
 
@@ -35,11 +50,24 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
   const year  = calMonth.getFullYear()
   const month = calMonth.getMonth()
 
+  function responsableLabel(email: string | null) {
+    if (!email) return null
+    return usuarios.find(u => u.email === email)?.name ?? email
+  }
+
   const byDate: Record<string, Seguimiento[]> = {}
   for (const s of seguimientos) {
     const d = s.fecha ? s.fecha.split('T')[0] : s.created_at.split('T')[0]
     if (!byDate[d]) byDate[d] = []
     byDate[d].push(s)
+  }
+
+  const tareasByDate: Record<string, Tarea[]> = {}
+  for (const t of tareas) {
+    if (!t.fecha_vencimiento) continue
+    const d = t.fecha_vencimiento.split('T')[0]
+    if (!tareasByDate[d]) tareasByDate[d] = []
+    tareasByDate[d].push(t)
   }
 
   const firstDow = new Date(year, month, 1).getDay()
@@ -54,6 +82,7 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
   const _mn = calMonth.toLocaleDateString('es-CL', { month: 'long' })
   const monthLabel = `${_mn.charAt(0).toUpperCase() + _mn.slice(1)} ${calMonth.getFullYear()}`
   const selectedEntries = calDay ? (byDate[calDay] ?? []) : []
+  const selectedTareas  = calDay ? (tareasByDate[calDay] ?? []) : []
 
   // Normaliza fecha_proximo_hito a YYYY-MM-DD para matchear contra dateStr
   // de las celdas. Soporta tanto el formato puro ISO como timestamp con hora
@@ -92,7 +121,8 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
       <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
         {cells.map((dateStr, i) => {
           if (!dateStr) return <div key={i} className="bg-white h-16" />
-          const entries    = byDate[dateStr] ?? []
+          const entries      = byDate[dateStr] ?? []
+          const dayTareas    = tareasByDate[dateStr] ?? []
           const isToday    = dateStr === today
           const isSelected = dateStr === calDay
           const isHito     = dateStr === hitoDate
@@ -117,12 +147,21 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
               <div className="flex flex-wrap gap-0.5 mt-0.5">
                 {entries.slice(0, 4).map((s, j) => (
                   <span
-                    key={j}
+                    key={`s${j}`}
                     title={`${TIPO_CONFIG[s.tipo]?.label}: ${s.descripcion}`}
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${TIPO_CONFIG[s.tipo]?.dot ?? 'bg-gray-300'}`}
                   />
                 ))}
-                {entries.length > 4 && <span className="text-xs text-gray-400 leading-none">+{entries.length - 4}</span>}
+                {dayTareas.slice(0, 4 - Math.min(entries.length, 4)).map((t, j) => (
+                  <span
+                    key={`t${j}`}
+                    title={`Tarea: ${t.tarea}`}
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${TAREA_DOT}`}
+                  />
+                ))}
+                {entries.length + dayTareas.length > 4 && (
+                  <span className="text-xs text-gray-400 leading-none">+{entries.length + dayTareas.length - 4}</span>
+                )}
               </div>
             </button>
           )
@@ -136,6 +175,12 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
             <span className="text-xs text-gray-500">{cfg.label}</span>
           </div>
         ))}
+        {tareas.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 rounded-full ${TAREA_DOT}`} />
+            <span className="text-xs text-gray-500">Tarea (vencimiento)</span>
+          </div>
+        )}
         {hitoDate && (
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full ring-2 ring-amber-500" />
@@ -148,7 +193,7 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
         <div className="mt-4 border-t border-gray-100 pt-4">
           <p className="text-xs font-medium text-gray-500 mb-3">
             {new Date(calDay + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            {selectedEntries.length === 0 && calDay !== hitoDate && ' — Sin actividad'}
+            {selectedEntries.length === 0 && selectedTareas.length === 0 && calDay !== hitoDate && ' — Sin actividad'}
           </p>
           {calDay === hitoDate && (
             <div className="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
@@ -174,6 +219,26 @@ export default function CalendarioTab({ seguimientos, fechaProximoHito, proximoH
                       </div>
                       <p className="text-sm text-gray-700 leading-snug">{s.descripcion}</p>
                       {s.autor && <p className="text-xs text-gray-500 mt-0.5">{s.autor}</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {selectedTareas.length > 0 && (
+            <div className={`space-y-2 ${selectedEntries.length > 0 ? 'mt-2' : ''}`}>
+              {selectedTareas.map(t => {
+                const est = TAREA_ESTADO_CONFIG[t.estado] ?? TAREA_ESTADO_CONFIG.no_iniciada
+                return (
+                  <div key={t.id} className="flex gap-3 items-start p-2.5 rounded-lg bg-gray-50">
+                    <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${TAREA_DOT}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Tarea</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${est.color}`}>{est.label}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 leading-snug">{t.tarea}</p>
+                      {responsableLabel(t.responsable) && <p className="text-xs text-gray-500 mt-0.5">{responsableLabel(t.responsable)}</p>}
                     </div>
                   </div>
                 )
