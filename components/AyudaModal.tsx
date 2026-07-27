@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useCanEditAny, useIsAdmin } from '@/lib/context/UserContext'
 import FaqList from './FaqList'
+import { TOUR_CATALOG } from '@/lib/tours'
 
 /**
  * Centro de Ayuda. Modal multi-sección con tabs `Tour | FAQ`.
  *
- * - Tour: iframe del explainer servido desde /tour/explainer.html.
- *   Solo montamos el iframe cuando la tab Tour está activa Y el modal
- *   abierto — el SpeechSynthesis del explainer queda hablando si el
- *   iframe sigue vivo mientras se navega fuera o se cierra.
+ * - Tour: subtabs por sección (catálogo en lib/tours.ts), cada uno un
+ *   iframe autocontenido servido desde /tour/*.html. Solo montamos el
+ *   iframe cuando la tab Tour está activa Y el modal abierto — el
+ *   SpeechSynthesis del explainer queda hablando si el iframe sigue vivo
+ *   mientras se navega fuera o se cierra. Al cambiar de subtab, el
+ *   key={src} remonta el iframe y corta la narración del tour anterior.
  * - FAQ: catálogo filtrado por rol del usuario, con búsqueda y acordeón
  *   (componente reutilizable FaqList).
  *
@@ -26,9 +29,12 @@ type Props = {
 }
 
 export default function AyudaModal({ open, onClose, initialTab = 'tour' }: Props) {
-  const [tab, setTab] = useState<Tab>(initialTab)
+  const [tab, setTab]       = useState<Tab>(initialTab)
+  const [tourId, setTourId] = useState<string>(TOUR_CATALOG[0].id)
   const isAdmin    = useIsAdmin()
   const canEditAny = useCanEditAny()
+
+  const activeTour = TOUR_CATALOG.find(t => t.id === tourId) ?? TOUR_CATALOG[0]
 
   useEffect(() => {
     if (open) setTab(initialTab)
@@ -88,13 +94,34 @@ export default function AyudaModal({ open, onClose, initialTab = 'tour' }: Props
           </button>
         </div>
 
+        {/* Subtabs de tour — un chip por sección (catálogo lib/tours.ts) */}
+        {tab === 'tour' && (
+          <div className="flex items-center gap-1.5 px-5 py-2 border-b border-gray-100 bg-gray-50/60">
+            {TOUR_CATALOG.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTourId(t.id)}
+                title={t.descripcion}
+                className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+                  tourId === t.id
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Body — min-h-0 es crítico: sin eso, flex-1 no permite que el hijo
             overflowee y el FAQ no scrollea / el iframe colapsa a 0 de alto. */}
         <div className="flex-1 min-h-0 overflow-hidden bg-gray-50">
           {tab === 'tour' ? (
             <iframe
-              src="/tour/explainer.html"
-              title="Tour guiado del PSG"
+              key={activeTour.src}
+              src={activeTour.src}
+              title={`Tour guiado — ${activeTour.label}`}
               className="w-full h-full border-0 block"
               allow="fullscreen"
               allowFullScreen

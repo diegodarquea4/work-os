@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import FaqList from '@/components/FaqList'
+import { TOUR_CATALOG } from '@/lib/tours'
 
 /**
  * Página completa del Centro de Ayuda. Mismo contenido que el modal
@@ -20,6 +21,7 @@ type Tab = 'tour' | 'faq'
 
 export default function AyudaPage() {
   const [tab, setTab] = useState<Tab>('tour')
+  const [tourId, setTourId] = useState<string>(TOUR_CATALOG[0].id)
   const [caps, setCaps] = useState<{ isAdmin: boolean; canEditAny: boolean }>({
     isAdmin: false,
     canEditAny: false,
@@ -77,15 +79,43 @@ export default function AyudaPage() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden flex flex-col">
         {tab === 'tour' ? (
-          <iframe
-            src="/tour/explainer.html"
-            title="Tour guiado del PSG"
-            className="w-full h-full border-0 block"
-            allow="fullscreen"
-            allowFullScreen
-          />
+          <>
+            {/* Subtabs de tour — un chip por sección (catálogo lib/tours.ts) */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-6 py-2 border-b border-gray-200 bg-white">
+              {TOUR_CATALOG.map(t => {
+                const active = tourId === t.id
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTourId(t.id)}
+                    title={t.descripcion}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+                      active
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+            {(() => {
+              const activeTour = TOUR_CATALOG.find(t => t.id === tourId) ?? TOUR_CATALOG[0]
+              return (
+                <iframe
+                  key={activeTour.src}
+                  src={activeTour.src}
+                  title={`Tour guiado — ${activeTour.label}`}
+                  className="w-full flex-1 min-h-0 border-0 block"
+                  allow="fullscreen"
+                  allowFullScreen
+                />
+              )
+            })()}
+          </>
         ) : (
           <FaqList isAdmin={caps.isAdmin} canEditAny={caps.canEditAny} />
         )}

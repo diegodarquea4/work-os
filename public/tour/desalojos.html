@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<!--
+  Capacitación PSG — Tour Desalojos v1 · "Mesa Interministerial de Desalojos"
+  Mismo motor y lenguaje visual que explainer.html (meta-frame wine + scenes
+  con paleta del panel). Guion basado en la metodología real de la Mesa
+  (fases PR→F5 por tipología, checklists, capas por polígono, F3+F4
+  simultáneas, financiamiento como regla dura).
+  DATOS DE MUESTRA ILUSTRATIVOS — nombres de casos y sectores FICTICIOS.
+  Controles: ▶/⏸ · ‹ › · ↻ · puntos del índice · barra espaciadora / flechas.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capacitación PSG — Desalojos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;--slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-100:#f1f5f9;--slate-50:#f8fafc;
+    --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;
+    --green-500:#22c55e;--green-600:#16a34a;--green-700:#15803d;--green-50:#f0fdf4;--green-100:#dcfce7;
+    --amber-400:#fbbf24;--amber-500:#f59e0b;--amber-700:#b45309;--amber-50:#fffbeb;--amber-100:#fef3c7;
+    --red-500:#ef4444;--red-600:#dc2626;--red-700:#b91c1c;--red-50:#fef2f2;--red-100:#fee2e2;
+    --blue-500:#3b82f6;--blue-700:#1d4ed8;--blue-50:#eff6ff;
+    --indigo-100:#e0e7ff;--indigo-700:#4338ca;
+    --cream:#fbf9f4;--cream-2:#f4f1e9;
+    --sh-card:0 1px 2px rgba(15,23,42,.04);
+
+    --tour-ink:#0f172a;--tour-ink-2:#1f2937;--tour-rule:#e7e5e0;
+    --tour-bg:#f7f5f2;--tour-surface:#ffffff;
+    --tour-accent:#6b1d2c;--tour-accent-2:#862535;--tour-accent-100:#f1d8dc;
+
+    --ease:cubic-bezier(.2,.7,.2,1);
+    --dur-fast:180ms;--dur-mid:320ms;--dur-slow:520ms;
+    --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#1a1612;font-family:var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{display:flex;align-items:center;justify-content:center;padding:16px;min-height:100vh}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  .player{width:100%;max-width:1040px;aspect-ratio:16/9;position:relative;border-radius:14px;overflow:hidden;
+    background:var(--tour-bg);box-shadow:0 1px 0 rgba(255,255,255,.04),0 30px 80px -20px rgba(0,0,0,.55),0 8px 32px -8px rgba(0,0,0,.35);
+    font-size:clamp(10px,2.55vw,17px);display:flex;flex-direction:column;outline:1px solid rgba(255,255,255,.06)}
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--tour-bg)}
+
+  .chrome{position:absolute;top:0;left:0;right:0;height:3.1em;background:var(--slate-900);display:flex;align-items:center;justify-content:space-between;padding:0 1.1em;z-index:7;transition:opacity .4s var(--ease)}
+  .chrome.hide{opacity:0;pointer-events:none}
+  .abL{display:flex;align-items:center;gap:.6em}
+  .abLogo{width:1.75em;height:1.75em;border-radius:.32em;background:#C5283D;display:flex;align-items:center;justify-content:center}
+  .abLogo svg{width:1.05em;height:1.05em;fill:#fff}
+  .abTitle b{color:#fff;font-weight:700;font-size:.82em;letter-spacing:.04em;display:block;line-height:1.1}
+  .abTitle span{color:var(--slate-400);font-size:.6em;display:block;line-height:1.1}
+  .abNav{display:flex;background:var(--slate-800);border-radius:.45em;padding:.12em;gap:.12em}
+  .abNav b{font-size:.66em;color:var(--slate-300);font-weight:500;padding:.34em .8em;border-radius:.35em;display:flex;align-items:center;gap:.3em}
+  .abNav b.on{background:#fff;color:var(--slate-900);font-weight:600;box-shadow:0 0 0 2px var(--tour-accent),0 0 0 5px rgba(107,29,44,.45),0 4px 14px rgba(107,29,44,.35);animation:nav-glow 2.2s var(--ease) infinite}
+  @keyframes nav-glow{0%,100%{box-shadow:0 0 0 2px var(--tour-accent),0 0 0 5px rgba(107,29,44,.45),0 4px 14px rgba(107,29,44,.35)}50%{box-shadow:0 0 0 2px var(--tour-accent),0 0 0 8px rgba(107,29,44,.18),0 6px 22px rgba(107,29,44,.55)}}
+  .abR{display:flex;align-items:center;gap:.6em}
+  .abAv{width:1.7em;height:1.7em;border-radius:50%;background:#2b6fb8;color:#fff;font-size:.62em;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .abUser{text-align:right}
+  .abUser b{color:#e9eef6;font-size:.6em;font-weight:500;display:block;line-height:1.15}
+  .abUser span{color:var(--slate-400);font-size:.56em;display:block;line-height:1.15;text-transform:capitalize}
+  .abOut{width:1.65em;height:1.65em;border-radius:.35em;background:var(--slate-800);display:flex;align-items:center;justify-content:center;color:var(--slate-400);font-size:.78em}
+
+  .screen.body{position:absolute;top:3.1em;left:0;right:0;bottom:0;background:var(--gray-50);opacity:0;visibility:hidden;transition:opacity .42s var(--ease)}
+  .screen.body.on{opacity:1;visibility:visible}
+  .screen.light{position:absolute;inset:0;z-index:4;opacity:0;visibility:hidden;transition:opacity .5s var(--ease)}
+  .screen.light.on{opacity:1;visibility:visible}
+  .bd{height:100%;overflow:hidden;padding:.95em 1.2em}
+
+  .lbl{font-size:.6em;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em}
+  .cardw{background:#fff;border:1px solid var(--gray-200);border-radius:.6em;box-shadow:var(--sh-card)}
+  .btn{font-size:.62em;font-weight:600;padding:.42em .78em;border-radius:.5em;display:inline-flex;align-items:center;gap:.35em;border:1px solid var(--gray-200);background:#fff;color:var(--slate-700);white-space:nowrap}
+  .btn.dark{background:var(--slate-900);color:#fff;border-color:var(--slate-900)}
+  .s{width:.6em;height:.6em;border-radius:50%;flex:none}
+  .s.v{background:var(--green-500)}.s.a{background:var(--amber-400)}.s.r{background:var(--red-500)}.s.g{background:var(--gray-300)}
+  .bar{height:.36em;background:var(--gray-100);border-radius:1em;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--blue-500);width:0}
+  .screen.on .bar.go>i{animation:grow 1.1s .4s both}
+  .screen.on .u-rise{animation:rise .7s var(--ease) both}
+  .screen.on .u-pop{animation:pop .55s cubic-bezier(.2,1.2,.35,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.84)}to{opacity:1;transform:none}}
+  @keyframes grow{from{width:0}to{width:var(--w,60%)}}
+  @keyframes ring{0%{transform:translate(-50%,-50%) scale(.35);opacity:.55}100%{transform:translate(-50%,-50%) scale(2.2);opacity:0}}
+
+  /* Chips de tipología (paleta real del panel: A=indigo) y badge desalojo */
+  .tipochip{font-size:.52em;font-weight:700;padding:.2em .5em;border-radius:1em;background:var(--indigo-100);color:var(--indigo-700)}
+  .desbadge{font-size:.5em;font-weight:700;padding:.18em .45em;border-radius:.35em;background:var(--red-50);color:var(--red-700);border:1px solid var(--red-100)}
+
+  /* Tablero: sidebar de casos + resumen de la mesa */
+  .deswrap{display:flex;gap:.8em;height:100%}
+  .descol{width:38%;display:flex;flex-direction:column}
+  .desmain{flex:1;min-width:0}
+  .caserow{display:flex;align-items:flex-start;gap:.45em;padding:.5em .55em;border:1px solid var(--gray-200);border-radius:.5em;margin-bottom:.4em;background:#fff;box-shadow:var(--sh-card)}
+  .caserow.sel{border-color:var(--slate-400);background:var(--slate-50)}
+  .caserow .cn{flex:1;min-width:0}
+  .caserow .cn b{font-size:.62em;color:var(--slate-800);font-weight:600;display:block;line-height:1.2}
+  .caserow .cn span{font-size:.5em;color:var(--gray-400)}
+  .minidots{display:flex;gap:.15em;margin-top:.3em}
+  .minidots i{width:.85em;height:.85em;border-radius:50%;background:var(--gray-200);font-style:normal;font-size:.42em;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center}
+  .minidots i.ok{background:var(--green-500)}.minidots i.wa{background:var(--amber-400)}.minidots i.bl{background:var(--red-500)}
+  .caserow .warn{font-size:.6em;color:var(--red-600);font-weight:800;margin-left:auto}
+  .mesa{display:grid;grid-template-columns:repeat(3,1fr);gap:.5em}
+  .mcard{background:#fff;border:1px solid var(--gray-200);border-radius:.55em;padding:.55em .6em;box-shadow:var(--sh-card)}
+  .mcard .mk{font-size:.52em;font-weight:700;color:var(--slate-700);text-transform:uppercase;letter-spacing:.04em}
+  .mcard .mv{font-size:1.05em;font-weight:800;color:var(--slate-900);margin-top:.2em;font-variant-numeric:tabular-nums}
+  .mcard .ms{font-size:.48em;color:var(--gray-400)}
+
+  /* Ficha del caso: header + tabs */
+  .caseh{padding:.7em .9em;border-bottom:1px solid var(--gray-100)}
+  .caseh .row1{display:flex;align-items:center;gap:.45em;flex-wrap:wrap}
+  .caseh .ct{font-size:.8em;font-weight:700;color:var(--slate-900)}
+  .caseh .meta{font-size:.54em;color:var(--gray-500);margin-top:.25em}
+  .ctabs{display:flex;gap:.25em;padding:.5em .9em;border-bottom:1px solid var(--gray-100)}
+  .ctabs b{font-size:.58em;font-weight:600;padding:.35em .6em;border-radius:.4em;background:var(--gray-100);color:var(--gray-500)}
+  .ctabs b.on{background:var(--slate-900);color:#fff}
+  .frow{display:flex;justify-content:space-between;padding:.42em .9em;font-size:.6em;border-bottom:1px dashed var(--gray-100)}
+  .frow .k{color:var(--gray-400)}.frow .vv{font-weight:600;color:var(--slate-800);text-align:right}
+
+  /* Stepper de fases */
+  .stepper{display:flex;align-items:center;gap:.3em;padding:.6em .2em;flex-wrap:wrap}
+  .fase{display:flex;flex-direction:column;align-items:center;gap:.25em;min-width:3.2em}
+  .fase .cir{width:1.7em;height:1.7em;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6em;font-weight:800;color:#fff;background:var(--gray-300)}
+  .fase.ok .cir{background:var(--green-500)}
+  .fase.cur .cir{background:var(--amber-400);box-shadow:0 0 0 .22em var(--amber-100)}
+  .fase.blk .cir{background:var(--red-500)}
+  .fase span{font-size:.46em;font-weight:600;color:var(--gray-500);text-align:center;line-height:1.15}
+  .flink{flex:1;height:2px;background:var(--gray-200);min-width:.6em;margin-bottom:1.1em}
+  .fpar{display:flex;align-items:center;gap:.15em;border:1.5px dashed var(--red-500);border-radius:.6em;padding:.25em .35em}
+  .fpar .tag{font-size:.4em;font-weight:800;color:var(--red-600);text-transform:uppercase;letter-spacing:.04em;writing-mode:vertical-rl;transform:rotate(180deg)}
+
+  /* Checklist */
+  .chk{padding:.35em .55em}
+  .chkrow{display:flex;align-items:flex-start;gap:.45em;padding:.4em .35em;border-bottom:1px dashed var(--gray-100)}
+  .chkrow:last-child{border-bottom:0}
+  .cbx{width:.95em;height:.95em;border-radius:.25em;border:1.5px solid var(--gray-300);flex:none;display:flex;align-items:center;justify-content:center;font-size:.6em;font-weight:800;color:#fff;margin-top:.1em}
+  .cbx.done{background:var(--green-500);border-color:var(--green-500)}
+  .chkrow .ck2{flex:1;min-width:0}
+  .chkrow .ck2 b{font-size:.6em;color:var(--slate-800);font-weight:600;display:block;line-height:1.25}
+  .chkrow .ck2 span{font-size:.5em;color:var(--gray-400)}
+  .docchip{font-size:.48em;font-weight:600;padding:.15em .4em;border-radius:.3em;background:var(--blue-50);color:var(--blue-700);display:inline-block;margin-top:.2em}
+
+  /* Capas por polígono */
+  .capas{display:flex;gap:.8em;height:100%}
+  .capsel{width:34%;display:flex;flex-direction:column;gap:.4em}
+  .caprow{display:flex;align-items:center;gap:.45em;padding:.5em .55em;border:1px solid var(--gray-200);border-radius:.5em;background:#fff;box-shadow:var(--sh-card)}
+  .caprow.sel{border-color:var(--indigo-700);background:var(--blue-50)}
+  .caprow b{font-size:.6em;color:var(--slate-800);font-weight:600;flex:1}
+  .caprow .fin{font-size:.46em;font-weight:700;padding:.15em .4em;border-radius:1em}
+  .fin.ok{background:var(--green-100);color:var(--green-700)}
+  .fin.no{background:var(--red-100);color:var(--red-700)}
+  .capmap{flex:1;background:#e8edf5;border:1px solid var(--gray-200);border-radius:.6em;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .capmap svg{width:82%;height:auto}
+
+  /* Gantt / calendario */
+  .gant{padding:.6em .7em}
+  .grow2{display:flex;align-items:center;gap:.5em;margin-bottom:.45em}
+  .grow2 .gl{width:8.5em;font-size:.54em;font-weight:600;color:var(--slate-700);flex:none}
+  .gtrack{flex:1;height:.85em;background:var(--gray-100);border-radius:.3em;position:relative}
+  .gbar{position:absolute;top:0;height:100%;border-radius:.3em}
+  .gbar.done{background:var(--green-500)}
+  .gbar.cur{background:var(--amber-400)}
+  .gbar.next{background:var(--gray-300)}
+  .ghito{position:absolute;top:-.25em;width:.5em;height:1.35em;background:var(--red-500);border-radius:.15em}
+  .glegend{display:flex;gap:.9em;margin-top:.5em;font-size:.5em;color:var(--gray-500)}
+  .glegend i{display:inline-block;width:.7em;height:.7em;border-radius:.2em;margin-right:.25em;vertical-align:-.08em}
+
+  /* Responsables + matriz jurídica */
+  .resp{display:grid;grid-template-columns:1fr 1fr;gap:.6em;height:100%}
+  .rrow{display:flex;align-items:flex-start;gap:.45em;padding:.42em .5em;border-bottom:1px dashed var(--gray-100)}
+  .rrow:last-child{border-bottom:0}
+  .rrow .av2{width:1.35em;height:1.35em;border-radius:50%;background:var(--slate-100);color:var(--slate-600);font-size:.52em;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none;margin-top:.05em}
+  .rrow .rn{flex:1;min-width:0}
+  .rrow .rn b{font-size:.58em;color:var(--slate-800);font-weight:600;display:block;line-height:1.2}
+  .rrow .rn b em{color:var(--red-600);font-style:normal}
+  .rrow .rn span{font-size:.48em;color:var(--gray-400);line-height:1.3;display:block}
+  .jur{padding:.55em .65em}
+  .jur .jrow{display:flex;justify-content:space-between;gap:.5em;font-size:.56em;padding:.32em 0;border-bottom:1px dashed var(--gray-100)}
+  .jur .jrow:last-child{border-bottom:0}
+  .jur .jk{color:var(--gray-400)}
+  .jur .jv{font-weight:600;color:var(--slate-800);text-align:right}
+  .protonote{background:var(--amber-50);border:1px solid #fde68a;border-radius:.5em;padding:.5em .6em;font-size:.54em;color:var(--gray-700);line-height:1.5;margin-top:.55em}
+
+  /* Heros */
+  .hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2.6em 2.4em;background:radial-gradient(120% 85% at 50% -8%,#ffffff 0%,var(--cream) 58%,var(--cream-2) 100%);color:var(--slate-900)}
+  .emblem{width:3.4em;height:3.4em;border-radius:.85em;background:#fff;border:1px solid var(--gray-200);box-shadow:0 8px 22px rgba(15,23,42,.08);display:flex;align-items:center;justify-content:center;margin-bottom:1.1em}
+  .emblem svg{width:2em;height:2em;fill:var(--tour-accent)}
+  .kicker{font-size:.62em;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--tour-accent);margin-bottom:.85em}
+  .htitle{font-size:1.95em;font-weight:800;color:var(--slate-900);letter-spacing:-.022em;line-height:1.04;margin:0;max-width:14em;text-wrap:balance}
+  .htitle .hl{color:var(--tour-accent)}
+  .hsub{font-size:.92em;color:var(--gray-700);margin-top:1em;max-width:26em;line-height:1.55;text-wrap:pretty}
+  .recap{display:flex;gap:1em;flex-wrap:wrap;justify-content:center;margin-top:1.3em}
+  .rs{width:9em;background:#fff;border:1px solid var(--gray-200);border-radius:.6em;padding:.95em .8em .9em;text-align:center;box-shadow:0 6px 16px rgba(15,23,42,.05)}
+  .rs .nn{width:1.9em;height:1.9em;border-radius:50%;margin:0 auto .55em;background:var(--tour-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78em;font-variant-numeric:tabular-nums}
+  .rs b{font-size:.8em;color:var(--slate-900);font-weight:700}
+  .rs span{display:block;font-size:.6em;color:var(--gray-600);margin-top:.3em;line-height:1.45}
+
+  /* Spot + coach + cursor + caption + controls (idéntico al explainer) */
+  .spot{position:absolute;border-radius:.5em;box-shadow:0 0 0 9999px rgba(15,23,42,.52);transition:left var(--dur-slow) var(--ease),top var(--dur-slow) var(--ease),width var(--dur-slow) var(--ease),height var(--dur-slow) var(--ease),opacity var(--dur-mid);pointer-events:none;z-index:6;outline:1.5px solid rgba(255,255,255,.85);outline-offset:2px}
+  .spot.hide{opacity:0;box-shadow:0 0 0 9999px rgba(15,23,42,0)}
+  .coach{position:absolute;z-index:8;width:16em;max-width:64%;background:var(--tour-surface);border:1px solid rgba(15,23,42,.06);border-radius:.55em;
+    box-shadow:0 14px 36px -8px rgba(40,15,15,.18),0 2px 8px -2px rgba(40,15,15,.10);
+    padding:.95em 1em 1em;transition:left var(--dur-slow) var(--ease),top var(--dur-slow) var(--ease),opacity var(--dur-mid);text-align:left}
+  .coach.center{left:50%;top:50%;transform:translate(-50%,-50%);width:20em;text-align:center;padding:1.1em 1.2em 1.15em}
+  .coach .ck{font-family:var(--font-mono);font-size:.5em;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--tour-accent);display:flex;align-items:center;gap:.55em}
+  .coach .ck::after{content:'';flex:1;height:1px;background:var(--tour-rule);min-width:1.2em}
+  .coach.center .ck{justify-content:center}
+  .coach.center .ck::after{display:none}
+  .coach .ct2{font-size:.86em;font-weight:700;color:var(--tour-ink);margin-top:.55em;line-height:1.2;letter-spacing:-.012em;text-wrap:balance}
+  .coach .cx{font-size:.66em;color:var(--tour-ink-2);margin-top:.45em;line-height:1.55;text-wrap:pretty}
+  .cursor{position:absolute;width:1.15em;height:1.15em;z-index:9;pointer-events:none;transition:left .65s var(--ease),top .65s var(--ease);filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+  .cursor svg{width:100%;height:100%;display:block}
+  .cursor path{fill:#ffffff;stroke:#000000;stroke-width:1.2;stroke-linejoin:round;stroke-linecap:round;paint-order:stroke fill}
+  .clickr{position:absolute;width:1.45em;height:1.45em;border:.16em solid var(--blue-500);border-radius:50%;z-index:9;pointer-events:none;opacity:0;transform:translate(-50%,-50%)}
+  .clickr.go{animation:ring .65s ease both}
+
+  .cap{padding:.6em 1.6em .65em;background:rgba(7,10,17,.78);backdrop-filter:blur(10px) saturate(120%);-webkit-backdrop-filter:blur(10px) saturate(120%);color:#d7e3f4;display:flex;align-items:center;justify-content:center;gap:1.1em;line-height:1.55;text-wrap:pretty;min-height:2.7em;max-height:6em;overflow:hidden}
+  .cap .step{font-family:var(--font-mono);font-size:.58em;font-weight:500;letter-spacing:.04em;color:#9bb4d6;text-transform:uppercase;white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+  .cap .step b{color:#e9f0fb;font-weight:600}
+  .cap .narr{font-size:.72em;color:#e9f0fb;line-height:1.5;overflow-y:auto;max-height:5em;scrollbar-width:thin;scrollbar-color:rgba(233,240,251,.22) transparent}
+  .cap .narr::-webkit-scrollbar{width:.2em}
+  .cap .narr::-webkit-scrollbar-thumb{background:rgba(233,240,251,.22);border-radius:1em}
+
+  .controls{display:flex;align-items:center;gap:.8em;padding:.85em 1.1em;background:#120f0c;border-top:1px solid rgba(255,255,255,.05);z-index:10}
+  .ctrl{appearance:none;border:0;background:rgba(255,255,255,.06);color:#f0e9df;width:2.2em;height:2.2em;border-radius:50%;font-size:.95em;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)}
+  .ctrl:hover{background:rgba(255,255,255,.14)}
+  .ctrl:active{transform:scale(.94)}
+  .ctrl:focus-visible{outline:1.5px solid var(--tour-accent-100);outline-offset:3px}
+  .ctrl.big{width:2.7em;height:2.7em;background:var(--tour-accent);color:#fff}
+  .ctrl.big:hover{background:var(--tour-accent-2)}
+  .counter{font-family:var(--font-mono);font-size:.6em;font-weight:500;color:rgba(240,233,223,.65);min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+  .track{flex:1;display:flex;flex-direction:column;gap:.4em}
+  .dots2{display:flex;gap:.25em}
+  .dots2 b{flex:1;height:.28em;border-radius:1em;background:rgba(240,233,223,.14);cursor:pointer;transition:background var(--dur-fast) var(--ease),height var(--dur-fast) var(--ease)}
+  .dots2 b:hover{background:rgba(240,233,223,.28);height:.38em}
+  .dots2 b:focus-visible{outline:1.5px solid var(--tour-accent-100);outline-offset:3px}
+  .dots2 b.done{background:rgba(193,127,135,.55)}
+  .dots2 b.cur{background:var(--tour-accent);height:.38em}
+  .pbar{height:.16em;background:rgba(240,233,223,.08);border-radius:1em;overflow:hidden}
+  .pbar>i{display:block;height:100%;width:0;background:var(--tour-accent)}
+  @media (max-width:560px){.abTitle span,.abUser{display:none}.mesa{grid-template-columns:repeat(2,1fr)}.coach{width:13em;padding:.7em .8em}.coach .cx{font-size:.62em;line-height:1.45}}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+    .screen.body,.screen.light{transition:opacity .15s linear}
+    .coach,.spot,.cursor{transition:opacity .15s linear}
+    .clickr.go,.screen.on .bar.go>i{animation:none}
+  }
+</style>
+
+<div class="player" id="player">
+  <h2 class="sr-only">Tour guiado de la sección Desalojos del Panel de Seguimiento Gubernamental. Datos de muestra ilustrativos, casos ficticios.</h2>
+  <div class="stage" id="stage">
+
+    <div class="chrome" id="chrome">
+      <div class="abL"><div class="abLogo"><svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.3L21 9l-4.8 4.2L17.6 20 12 16.4 6.4 20l1.4-6.8L3 9l6.4-.7z"/></svg></div><div class="abTitle"><b>PSG</b><span>Panel Seguimiento Gubernamental — Regiones</span></div></div>
+      <div class="abNav"><b>Mapa</b><b id="navDes" class="on">Desalojos</b></div>
+      <div class="abR"><div class="abAv">NA</div><div class="abUser"><b>nombre.apellido@interior.gob.cl</b><span>Regional</span></div><div class="abOut">⏻</div></div>
+    </div>
+
+    <!-- ── Tablero de la Mesa: sidebar de casos + resumen ────────────────── -->
+    <section class="screen body" data-view="tablero">
+      <div class="bd">
+        <div class="deswrap">
+          <div class="descol" id="tb-casos">
+            <div class="lbl" style="margin-bottom:.5em">Casos de desalojo · 3</div>
+            <div class="caserow sel">
+              <span class="s a" style="margin-top:.25em"></span>
+              <div class="cn"><b>Sector Quebrada Alta</b><span>Antofagasta · Tipología A</span>
+                <div class="minidots"><i class="ok">✓</i><i class="wa">!</i><i></i><i></i><i></i><i></i></div>
+              </div>
+              <span class="warn" title="Capa sin financiamiento asegurado">!</span>
+            </div>
+            <div class="caserow">
+              <span class="s v" style="margin-top:.25em"></span>
+              <div class="cn"><b>Sector Portal Norte</b><span>Antofagasta · Tipología C</span>
+                <div class="minidots"><i class="ok">✓</i><i class="ok">✓</i><i class="ok">✓</i><i class="wa">!</i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="caserow">
+              <span class="s r" style="margin-top:.25em"></span>
+              <div class="cn"><b>Sector Estación Vieja</b><span>Antofagasta · Tipología B</span>
+                <div class="minidots"><i class="bl">✕</i><i></i><i></i><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="desmain">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.55em">
+              <div style="font-size:.78em;font-weight:700;color:var(--slate-900)">Tablero de la Mesa</div>
+              <span class="btn">📆 Calendario</span>
+            </div>
+            <div class="mesa" id="tb-mesa">
+              <div class="mcard"><div class="mk">Casos activos</div><div class="mv">3</div><div class="ms">en 1 región</div></div>
+              <div class="mcard"><div class="mk">En fase PR</div><div class="mv">1</div><div class="ms">prerrequisitos</div></div>
+              <div class="mcard"><div class="mk">Alerta financ.</div><div class="mv" style="color:var(--red-600)">1</div><div class="ms">capa sin recursos</div></div>
+              <div class="mcard"><div class="mk">Próx. operativo</div><div class="mv">12d</div><div class="ms">Sector Portal Norte</div></div>
+              <div class="mcard"><div class="mk">Capas totales</div><div class="mv">7</div><div class="ms">polígonos en gestión</div></div>
+              <div class="mcard"><div class="mk">Cerrados 2026</div><div class="mv" style="color:var(--green-700)">2</div><div class="ms">polígonos recuperados</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Ficha del caso · tab Contexto ─────────────────────────────────── -->
+    <section class="screen body" data-view="contexto">
+      <div class="bd" style="display:flex;align-items:center;justify-content:center">
+        <div class="cardw" id="cx-ficha" style="width:min(84%,28em)">
+          <div class="caseh">
+            <div class="row1"><span class="desbadge">🏚 Desalojo</span><span class="tipochip">Tipología A · Fiscal SERVIU</span><span class="s a"></span></div>
+            <div class="ct" style="margin-top:.35em">Sector Quebrada Alta</div>
+            <div class="meta">Antofagasta · Comuna de Antofagasta · 2 capas (polígonos)</div>
+          </div>
+          <div class="ctabs"><b class="on">Contexto</b><b>Avance</b><b>Planificación</b><b>Responsables</b></div>
+          <div class="frow"><span class="k">Tipología</span><span class="vv">A — Fiscal SERVIU (terreno fiscal administrado por SERVIU)</span></div>
+          <div class="frow"><span class="k">Financiamiento por defecto</span><span class="vv">SERVIU · presupuesto habitacional</span></div>
+          <div class="frow"><span class="k">Nudo crítico</span><span class="vv">Financiamiento de demolición</span></div>
+          <div class="frow"><span class="k">Rol del DPR</span><span class="vv">Conduce el operativo · solicita fuerza pública</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Planificación: fases + checklist PR ───────────────────────────── -->
+    <section class="screen body" data-view="planificacion">
+      <div class="bd" style="padding:.7em 1.2em">
+        <div style="font-size:.72em;font-weight:700;color:var(--slate-900);margin-bottom:.2em">Sector Quebrada Alta <span style="color:var(--gray-400);font-weight:500">· Planificación</span></div>
+        <div class="cardw" id="pl-stepper" style="padding:.2em .6em;margin-bottom:.55em">
+          <div class="stepper">
+            <div class="fase ok"><div class="cir">PR</div><span>Prerrequisitos</span></div><div class="flink"></div>
+            <div class="fase cur"><div class="cir">F1</div><span>Interv. policial</span></div><div class="flink"></div>
+            <div class="fase"><div class="cir">F2</div><span>Catastro social</span></div><div class="flink"></div>
+            <div class="fpar">
+              <div class="fase"><div class="cir">F3</div><span>Desalojo</span></div>
+              <div class="fase"><div class="cir">F4</div><span>Demolición</span></div>
+              <span class="tag">Simultáneas</span>
+            </div><div class="flink"></div>
+            <div class="fase"><div class="cir">F5</div><span>Recuperación</span></div>
+          </div>
+        </div>
+        <div class="lbl" style="margin-bottom:.35em">Checklist · Fase PR (Tipología A)</div>
+        <div class="cardw chk" id="pl-chk">
+          <div class="chkrow"><span class="cbx done">✓</span><div class="ck2"><b>Resolución exenta SERVIU publicada en D.O.</b><span>N.º 99/2026 · 14-05-2026</span><span class="docchip">📄 resolucion-99.pdf</span></div></div>
+          <div class="chkrow"><span class="cbx done">✓</span><div class="ck2"><b>Plazo de abandono voluntario definido</b><span>Fecha límite: 30-06-2026</span></div></div>
+          <div class="chkrow"><span class="cbx done">✓</span><div class="ck2"><b>Informe técnico del polígono</b><span class="docchip">📄 informe-tecnico.pdf</span></div></div>
+          <div class="chkrow"><span class="cbx done">✓</span><div class="ck2"><b>SERVIU presentó costo y plazo de demolición</b><span>Costo estimado: 240 MM CLP</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Capas por polígono ─────────────────────────────────────────────── -->
+    <section class="screen body" data-view="capas">
+      <div class="bd">
+        <div style="font-size:.72em;font-weight:700;color:var(--slate-900);margin-bottom:.5em">Sector Quebrada Alta <span style="color:var(--gray-400);font-weight:500">· Capas del polígono</span></div>
+        <div class="capas" style="height:calc(100% - 1.8em)">
+          <div class="capsel" id="cp-sel">
+            <div class="caprow sel"><b>Capa 1 · Manzanas 1–4</b><span class="fin ok">Financiada</span></div>
+            <div style="padding:0 .55em .3em"><div class="bar go" style="--w:62%"><i></i></div><div style="font-size:.48em;color:var(--gray-400);margin-top:.2em">Avance 62% · F1 en curso</div></div>
+            <div class="caprow"><b>Capa 2 · Manzanas 5–9</b><span class="fin no">Sin financiar</span></div>
+            <div style="padding:0 .55em"><div class="bar" style="background:var(--gray-100)"><i style="width:10%;background:var(--gray-300)"></i></div><div style="font-size:.48em;color:var(--red-600);margin-top:.2em;font-weight:600">F4 no se autoriza sin financiamiento</div></div>
+          </div>
+          <div class="capmap" id="cp-map">
+            <svg viewBox="0 0 200 120">
+              <rect x="8" y="8" width="184" height="104" rx="6" fill="#dbe4f0"/>
+              <path d="M20 22 L120 16 L128 62 L36 74 Z" fill="#4338ca" opacity=".55" stroke="#4338ca" stroke-width="2"/>
+              <path d="M126 20 L184 30 L176 92 L134 66 Z" fill="#b91c1c" opacity=".35" stroke="#b91c1c" stroke-width="2" stroke-dasharray="5 3"/>
+              <text x="58" y="48" font-size="11" font-weight="700" fill="#fff">Capa 1</text>
+              <text x="142" y="52" font-size="11" font-weight="700" fill="#7f1d1d">Capa 2</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Avance: semáforo por fase + evidencia ─────────────────────────── -->
+    <section class="screen body" data-view="avance">
+      <div class="bd" style="display:flex;align-items:center;justify-content:center">
+        <div class="cardw" id="av-card" style="width:min(84%,28em)">
+          <div class="caseh"><div class="row1"><span class="tipochip">Capa 1 · Manzanas 1–4</span></div><div class="ct" style="margin-top:.3em;font-size:.72em">Avance por fase</div></div>
+          <div class="frow"><span class="k">PR · Prerrequisitos</span><span class="vv" style="color:var(--green-700)">● Verde — checklist completo</span></div>
+          <div class="frow"><span class="k">F1 · Intervención policial</span><span class="vv" style="color:var(--amber-700)">● En curso — plan operativo en revisión</span></div>
+          <div class="frow"><span class="k">F2 · Catastro social</span><span class="vv" style="color:var(--gray-500)">○ Pendiente — albergue por validar</span></div>
+          <div class="frow"><span class="k">F3+F4 · Desalojo + Demolición</span><span class="vv" style="color:var(--gray-500)">○ Bloqueadas hasta F2</span></div>
+          <div class="frow"><span class="k">F5 · Recuperación</span><span class="vv" style="color:var(--gray-500)">○ Nuevo uso del suelo por definir</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Calendario / Gantt ─────────────────────────────────────────────── -->
+    <section class="screen body" data-view="calendario">
+      <div class="bd" style="padding:.8em 1.2em">
+        <div style="font-size:.72em;font-weight:700;color:var(--slate-900);margin-bottom:.55em">Sector Quebrada Alta <span style="color:var(--gray-400);font-weight:500">· Calendario del caso</span></div>
+        <div class="cardw gant" id="ca-gantt">
+          <div class="grow2"><span class="gl">PR · Prerrequisitos</span><div class="gtrack"><div class="gbar done" style="left:0;width:26%"></div></div></div>
+          <div class="grow2"><span class="gl">F1 · Interv. policial</span><div class="gtrack"><div class="gbar cur" style="left:24%;width:20%"></div></div></div>
+          <div class="grow2"><span class="gl">F2 · Catastro social</span><div class="gtrack"><div class="gbar next" style="left:40%;width:18%"></div></div></div>
+          <div class="grow2"><span class="gl">F3+F4 · Operativo</span><div class="gtrack"><div class="gbar next" style="left:58%;width:14%"></div><div class="ghito" style="left:64%" title="Fecha de operativo"></div></div></div>
+          <div class="grow2"><span class="gl">F5 · Recuperación</span><div class="gtrack"><div class="gbar next" style="left:72%;width:22%"></div></div></div>
+          <div class="glegend">
+            <span><i style="background:var(--green-500)"></i>Completado</span>
+            <span><i style="background:var(--amber-400)"></i>En curso</span>
+            <span><i style="background:var(--gray-300)"></i>Planificado</span>
+            <span><i style="background:var(--red-500)"></i>Hito operativo</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Responsables + matriz jurídica + financiamiento ───────────────── -->
+    <section class="screen body" data-view="responsables">
+      <div class="bd" style="padding:.7em 1.2em">
+        <div style="font-size:.72em;font-weight:700;color:var(--slate-900);margin-bottom:.5em">Sector Quebrada Alta <span style="color:var(--gray-400);font-weight:500">· Responsables y marco</span></div>
+        <div class="resp" style="height:calc(100% - 1.8em)">
+          <div class="cardw" id="rs-roles" style="padding:.3em .4em;overflow:hidden">
+            <div class="lbl" style="padding:.3em .4em">Roles del caso (Tipología A)</div>
+            <div class="rrow"><span class="av2">DP</span><div class="rn"><b>Delegada/o Presidencial Regional <em>*</em></b><span>Conduce el caso. Convoca Comité Caso.</span></div></div>
+            <div class="rrow"><span class="av2">SV</span><div class="rn"><b>Director/a SERVIU regional <em>*</em></b><span>Resolución de desalojo + financiamiento de demolición.</span></div></div>
+            <div class="rrow"><span class="av2">CB</span><div class="rn"><b>Jefatura de Carabineros <em>*</em></b><span>Plan operativo + contingente.</span></div></div>
+            <div class="rrow"><span class="av2">DS</span><div class="rn"><b>SEREMI Desarrollo Social y Familia <em>*</em></b><span>Catastro social + albergues + protocolo 21.430.</span></div></div>
+            <div class="rrow"><span class="av2">MU</span><div class="rn"><b>Municipalidad</b><span>Cierre perimetral, nuevo uso del suelo.</span></div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <div class="cardw jur" id="rs-jur">
+              <div class="lbl" style="margin-bottom:.3em">Matriz jurídica</div>
+              <div class="jrow"><span class="jk">Instrumento habilitante</span><span class="jv">Resolución exenta SERVIU · D.O. 14-05-2026</span></div>
+              <div class="jrow"><span class="jk">Plazo abandono voluntario</span><span class="jv">30-06-2026</span></div>
+              <div class="jrow"><span class="jk">Vínculo MINVU</span><span class="jv">Plan habitacional · convenio en firma</span></div>
+            </div>
+            <div class="protonote" id="rs-proto">
+              <b>Protocolo de financiamiento:</b> la demolición (F4) no se autoriza sin recursos asegurados.
+              Cada capa registra monto y fuente antes del operativo — sin excepciones.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Heros ──────────────────────────────────────────────────────────── -->
+    <section class="screen light" data-view="intro">
+      <div class="hero">
+        <div class="emblem"><svg viewBox="0 0 24 24"><path d="M12 3 3 10h2v10h5v-6h4v6h5V10h2z"/></svg></div>
+        <div class="kicker u-rise">Capacitación · Mesa Interministerial</div>
+        <h1 class="htitle u-rise">La sección <span class="hl">Desalojos</span></h1>
+        <p class="hsub u-rise">Seguimiento de cada caso, fase por fase, con reglas claras. Datos de muestra ilustrativos: los casos de este tour son ficticios.</p>
+      </div>
+    </section>
+
+    <section class="screen light" data-view="recap">
+      <div class="hero">
+        <div class="emblem"><svg viewBox="0 0 24 24"><path d="M12 3 3 10h2v10h5v-6h4v6h5V10h2z"/></svg></div>
+        <div class="kicker u-rise">Para empezar</div>
+        <h2 class="htitle u-rise" style="font-size:1.55em">Tres claves de la sección</h2>
+        <div class="recap">
+          <div class="rs u-rise"><div class="nn">1</div><b>El tablero</b><span>Tus casos, su fase y sus alertas de un vistazo</span></div>
+          <div class="rs u-rise" style="animation-delay:.12s"><div class="nn">2</div><b>Las reglas</b><span>PR habilita F1 · F3 y F4 van juntas · F4 exige financiamiento</span></div>
+          <div class="rs u-rise" style="animation-delay:.24s"><div class="nn">3</div><b>Tu acceso</b><span>La división gestiona; tu región consulta en solo lectura</span></div>
+        </div>
+        <p class="hsub u-rise" style="animation-delay:.36s;margin-top:1.2em">Cualquier duda adicional está en el FAQ del Centro de Ayuda, junto a este tour.</p>
+      </div>
+    </section>
+
+    <div class="spot hide" id="spot"></div>
+    <div class="coach" id="coach"><div class="ck" id="coachKick"></div><div class="ct2" id="coachTitle"></div><div class="cx" id="coachText"></div></div>
+    <div class="cursor" id="cursor"><svg viewBox="0 0 24 24"><path d="M4.5 3 L4.5 18.3 L8.5 15 L11 21 L13.5 20 L11 14 L16.5 14 Z"/></svg></div>
+    <div class="clickr" id="clickr"></div>
+  </div>
+
+  <div class="cap" id="cap">
+    <div class="step" id="capStep"></div>
+    <div class="narr" id="capNarr"></div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl" id="prev" title="Anterior (←)" aria-label="Anterior">‹</button>
+    <button class="ctrl big" id="play" title="Reproducir / Pausar (espacio)" aria-label="Reproducir o pausar">⏸</button>
+    <button class="ctrl" id="next" title="Siguiente (→)" aria-label="Siguiente">›</button>
+    <button class="ctrl" id="restart" title="Reiniciar" aria-label="Reiniciar">↻</button>
+    <span class="counter" id="counter">1 / 10</span>
+    <div class="track"><div class="dots2" id="dots"></div><div class="pbar"><i id="pfill"></i></div></div>
+    <button class="ctrl" id="fs" title="Pantalla completa (F)" aria-label="Pantalla completa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg></button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var steps=[
+    {view:'intro', t:null, kick:'Desalojos', title:'', text:'', dur:13000,
+     narr:'Este es el tour de la sección Desalojos: el espacio donde la Mesa Interministerial de Desalojos hace seguimiento de cada caso. Un caso es un polígono ocupado que requiere un operativo coordinado entre la Delegación, SERVIU, Carabineros, Desarrollo Social y el municipio. Todo lo que ves en este tour usa datos de muestra: los sectores y casos son ficticios.'},
+    {view:'tablero', t:'tb-casos', kick:'Tus casos', title:'La lista de casos', text:'Semáforo general, tipología y el avance de fases en mini-puntos.', dur:12500,
+     narr:'Al entrar ves la lista de casos de tu región. Cada fila muestra el semáforo general del caso, su tipología, y una hilera de mini-puntos con el estado de cada fase. El signo de exclamación rojo es la alerta que más importa: hay una capa sin financiamiento asegurado.'},
+    {view:'tablero', t:'tb-mesa', kick:'La mesa', title:'Tablero de la Mesa', text:'El resumen ejecutivo: casos activos, alertas y próximos operativos.', dur:10500,
+     narr:'A la derecha, el Tablero de la Mesa resume lo ejecutivo: cuántos casos hay activos, en qué fases están, cuántas alertas de financiamiento existen y cuándo viene el próximo operativo. Es la vista con la que la Mesa abre su sesión.'},
+    {view:'contexto', t:'cx-ficha', kick:'La ficha', title:'Contexto del caso', text:'La tipología define el método: fases, checklist y roles.', dur:14000,
+     narr:'Al hacer clic en un caso se abre su ficha, partiendo por el Contexto. Lo más importante aquí es la tipología: A es terreno fiscal SERVIU, B es fiscal de otro servicio, C es privado con fallo judicial firme y D es privado sin solución judicial. La tipología define todo el método: qué fases aplican, qué checklist exige cada una y qué roles deben estar cubiertos.'},
+    {view:'planificacion', t:'pl-stepper', kick:'Las fases', title:'De PR a F5, con reglas duras', text:'PR habilita F1. F3 y F4 son simultáneas: sin demolición hay retoma.', dur:15000,
+     narr:'La pestaña Planificación muestra el flujo de fases. PR son los prerrequisitos jurídicos y de financiamiento: sin PR en verde y su checklist completo, F1 no se autoriza. Le siguen la intervención policial, el catastro social, y luego la regla más importante de la metodología: el desalojo F3 y la demolición F4 son simultáneas — sin demolición inmediata, el polígono se retoma. F5 cierra con la recuperación del terreno.'},
+    {view:'planificacion', t:'pl-chk', kick:'El checklist', title:'Cada fase exige evidencia', text:'Los items obligatorios piden documento, fecha o monto — no basta marcar.', dur:12500,
+     narr:'Cada fase tiene su checklist según la tipología. Y el chequeo es honesto: los items obligatorios piden la evidencia concreta — la resolución publicada, la fecha límite, el costo de demolición. Si falta el documento o el dato, el item no cuenta como completo aunque esté marcado.'},
+    {view:'capas', t:'cp-sel', kick:'Las capas', title:'Un caso, varios polígonos', text:'Cada capa avanza a su ritmo y lleva su propio financiamiento.', dur:13000,
+     narr:'Un caso grande se divide en capas: polígonos que se gestionan por separado, manzana a manzana. Cada capa lleva su propio avance de fases y — clave — su propio financiamiento. En el ejemplo, la Capa 1 está financiada y avanza; la Capa 2 no tiene recursos asegurados, y por eso su demolición no se puede autorizar.'},
+    {view:'calendario', t:'ca-gantt', kick:'El calendario', title:'Las fases en el tiempo', text:'La carta Gantt del caso, con la fecha del operativo como hito.', dur:10500,
+     narr:'La vista de calendario ordena las fases en el tiempo, como carta Gantt. La marca roja es la fecha del operativo: el día en que F3 y F4 parten juntas. Sirve para que toda la Mesa vea el mismo cronograma.'},
+    {view:'responsables', t:'rs-roles', kick:'Los responsables', title:'Roles, marco jurídico y recursos', text:'Roles obligatorios con asterisco. La matriz jurídica y el protocolo de financiamiento cierran el marco.', dur:14500,
+     narr:'La pestaña Responsables muestra quién cubre cada rol del caso: los marcados con asterisco son obligatorios según la tipología — Delegación, SERVIU, Carabineros y Desarrollo Social en este ejemplo. Al lado, la matriz jurídica registra el instrumento habilitante y los plazos, y el protocolo de financiamiento recuerda la regla dura: la demolición no se autoriza sin recursos asegurados, sin excepciones.'},
+    {view:'recap', t:null, kick:'Para empezar', title:'', text:'', dur:12000,
+     narr:'En resumen: el tablero te muestra tus casos con sus fases y alertas; la metodología tiene tres reglas duras — PR habilita F1, F3 y F4 van juntas, y F4 exige financiamiento asegurado; y el acceso es según tu rol: la división gestiona los casos, y las regiones los consultan en solo lectura. Si te queda alguna duda, el FAQ del Centro de Ayuda la cubre en detalle.'}
+  ];
+
+  var stage=document.getElementById('stage');
+  var screens={}; stage.querySelectorAll('.screen').forEach(function(s){ screens[s.getAttribute('data-view')]=s; });
+  var chrome=document.getElementById('chrome');
+  var spot=document.getElementById('spot'), coach=document.getElementById('coach');
+  var coachKick=document.getElementById('coachKick'), coachTitle=document.getElementById('coachTitle'), coachText=document.getElementById('coachText');
+  var cursor=document.getElementById('cursor'), clickr=document.getElementById('clickr');
+  var capStepEl=document.getElementById('capStep'), capNarrEl=document.getElementById('capNarr'), pfill=document.getElementById('pfill');
+  var dotsWrap=document.getElementById('dots'), counter=document.getElementById('counter');
+  var playBtn=document.getElementById('play');
+  var idx=0,playing=false,raf=null,sceneStart=0,pausedElapsed=0,ended=false;
+
+  steps.forEach(function(s,i){
+    var b=document.createElement('b');
+    b.title=s.title||s.kick;
+    b.setAttribute('role','button');
+    b.setAttribute('tabindex','0');
+    b.setAttribute('aria-label','Ir a paso '+(i+1)+(s.kick?': '+s.kick:''));
+    b.addEventListener('click',function(){ goTo(i); });
+    b.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); goTo(i); } });
+    dotsWrap.appendChild(b);
+  });
+  var dotEls=dotsWrap.querySelectorAll('b');
+  function updateDots(){ dotEls.forEach(function(d,i){ d.className=''; if(i<idx)d.classList.add('done'); if(i===idx)d.classList.add('cur'); }); }
+  function updatePlayBtn(){ playBtn.textContent=ended?'↻':(playing?'⏸':'▶'); }
+
+  // El chrome solo se oculta en los heros (intro / recap).
+  function setChrome(view){
+    chrome.classList.toggle('hide', view==='intro'||view==='recap');
+  }
+
+  function place(){
+    var st=steps[idx], sr=stage.getBoundingClientRect();
+    var scr=screens[st.view], target=st.t?scr.querySelector('#'+st.t):null;
+    if(!target){ spot.classList.add('hide'); cursor.style.opacity='0';
+      if(!st.title && !st.text){ coach.style.display='none'; return; }
+      coach.style.display='block'; coach.classList.add('center');
+      coachKick.textContent=st.kick; coachTitle.textContent=st.title||''; coachText.textContent=st.text||'';
+      coachTitle.style.display=st.title?'block':'none'; coachText.style.display=st.text?'block':'none'; return; }
+    coach.style.display='block'; coach.classList.remove('center');
+    var tr=target.getBoundingClientRect(), pad=6;
+    var x=tr.left-sr.left, y=tr.top-sr.top, w=tr.width, h=tr.height;
+    spot.classList.remove('hide');
+    spot.style.left=(x-pad)+'px'; spot.style.top=(y-pad)+'px'; spot.style.width=(w+pad*2)+'px'; spot.style.height=(h+pad*2)+'px';
+    cursor.style.opacity='1';
+    var cx=x+Math.min(w*0.5,w-8), cy=y+Math.min(h*0.5,h-8);
+    cursor.style.left=cx+'px'; cursor.style.top=cy+'px';
+    clickr.style.left=cx+'px'; clickr.style.top=cy+'px'; clickr.classList.remove('go'); void clickr.offsetWidth; clickr.classList.add('go');
+    coachKick.textContent='Paso '+(idx+1)+' · '+st.kick;
+    coachTitle.textContent=st.title||''; coachText.textContent=st.text||'';
+    coachTitle.style.display='block'; coachText.style.display='block';
+    var cw=coach.offsetWidth||220, ch=coach.offsetHeight||110, gap=14, sw=sr.width, sh=sr.height, ctop, cleft;
+    var chromeBlock=document.querySelector('.chrome');
+    var chromeFloor=(chromeBlock && chromeBlock.offsetHeight ? chromeBlock.offsetHeight : 50) + gap;
+    var placed=false;
+    if(y+h+gap+ch<=sh-6){
+      ctop=y+h+gap;
+      cleft=Math.max(8,Math.min(sw-cw-8,x+w/2-cw/2));
+      placed=true;
+    } else if(y-gap-ch>=chromeFloor){
+      ctop=y-gap-ch;
+      cleft=Math.max(8,Math.min(sw-cw-8,x+w/2-cw/2));
+      placed=true;
+    } else if(x+w+gap+cw<=sw-8){
+      cleft=x+w+gap;
+      ctop=Math.max(chromeFloor,Math.min(sh-ch-6,y+h/2-ch/2));
+      placed=true;
+    } else if(x-gap-cw>=8){
+      cleft=x-gap-cw;
+      ctop=Math.max(chromeFloor,Math.min(sh-ch-6,y+h/2-ch/2));
+      placed=true;
+    }
+    if(!placed){
+      var tcx=x+w/2, tcy=y+h/2;
+      cleft=(tcx<sw/2)?(sw-cw-8):8;
+      ctop=(tcy<sh/2)?(sh-ch-8):chromeFloor;
+    }
+    coach.style.left=cleft+'px'; coach.style.top=ctop+'px';
+  }
+
+  function show(i){
+    idx=Math.max(0,Math.min(steps.length-1,i));
+    ended=false; pausedElapsed=0; sceneStart=performance.now();
+    var st=steps[idx];
+    Object.keys(screens).forEach(function(k){ screens[k].classList.toggle('on', k===st.view); });
+    setChrome(st.view);
+    capStepEl.innerHTML='Paso <b>'+(idx+1)+'</b> / '+steps.length+(st.kick?'  ·  '+st.kick:'');
+    capNarrEl.textContent=st.narr;
+    counter.textContent=(idx+1)+'/'+steps.length;
+    updateDots(); updatePlayBtn(); pfill.style.width='0%'; coach.style.opacity='0';
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ place(); coach.style.opacity='1'; }); });
+  }
+  function tick(now){ if(!playing)return; var dur=steps[idx].dur, ratio=(now-sceneStart)/dur;
+    if(ratio>=1){ if(idx<steps.length-1){ show(idx+1); raf=requestAnimationFrame(tick); return; } pfill.style.width='100%'; playing=false; ended=true; updatePlayBtn(); return; }
+    pfill.style.width=(ratio*100)+'%'; raf=requestAnimationFrame(tick); }
+  function play(){ if(ended)show(0); playing=true; updatePlayBtn(); sceneStart=performance.now()-(pausedElapsed||0); pausedElapsed=0;
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(tick); }
+  function pause(){ playing=false; updatePlayBtn(); cancelAnimationFrame(raf); pausedElapsed=performance.now()-sceneStart; }
+  function toggle(){ playing?pause():play(); }
+  function goTo(i){ var w=playing; show(i); if(w)play(); }
+  function next(){ if(idx<steps.length-1) goTo(idx+1); }
+  function prev(){ if(idx>0) goTo(idx-1); }
+
+  playBtn.addEventListener('click',toggle);
+  document.getElementById('next').addEventListener('click',next);
+  document.getElementById('prev').addEventListener('click',prev);
+  document.getElementById('restart').addEventListener('click',function(){ show(0); play(); });
+  var fsBtn=document.getElementById('fs');
+  function toggleFs(){
+    var player=document.getElementById('player');
+    var req=player.requestFullscreen||player.webkitRequestFullscreen||player.mozRequestFullScreen||player.msRequestFullscreen;
+    var exit=document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen||document.msExitFullscreen;
+    var inFs=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+    try{
+      if(!inFs && req){
+        var p=req.call(player);
+        if(p && p.catch){ p.catch(function(err){ console.warn('Fullscreen denegado:',err); }); }
+      } else if(inFs && exit){
+        exit.call(document);
+      }
+    }catch(e){ console.warn('Fullscreen error:',e); }
+  }
+  fsBtn.addEventListener('click',toggleFs);
+  document.addEventListener('keydown',function(e){
+    if(e.code==='Space'){e.preventDefault();toggle();}
+    else if(e.code==='ArrowRight'){next();}
+    else if(e.code==='ArrowLeft'){prev();}
+    else if(e.key==='f'||e.key==='F'){toggleFs();}
+  });
+  document.addEventListener('fullscreenchange',function(){ place(); });
+  document.addEventListener('webkitfullscreenchange',function(){ place(); });
+  window.addEventListener('resize',function(){ place(); });
+
+  show(0); setTimeout(play,1000);
+})();
+</script>
