@@ -147,6 +147,12 @@ export default function AdminUsersView() {
   // Modal que muestra un código (activación o recuperación) una sola vez.
   const [codeModal, setCodeModal]       = useState<{ email: string; codigo: string } | null>(null)
 
+  // Drawer de gestión de usuarios: cerrado por defecto. En la sección
+  // "Permisos" el cuerpo muestra solo Documentos.
+  const [usuariosOpen, setUsuariosOpen] = useState(false)
+  // Búsqueda dentro del drawer: filtra la tabla por nombre o correo.
+  const [userSearch, setUserSearch]     = useState('')
+
   useEffect(() => { loadUsers() }, [])
 
   async function loadUsers() {
@@ -263,151 +269,224 @@ export default function AdminUsersView() {
     setInviting(false)
   }
 
+  // Filtro de la tabla por nombre o correo (case-insensitive).
+  const term = userSearch.trim().toLowerCase()
+  const filteredUsers = term
+    ? users.filter(u =>
+        (u.full_name ?? '').toLowerCase().includes(term) ||
+        u.email.toLowerCase().includes(term)
+      )
+    : users
+
   return (
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-      {/* Header */}
+      {/* Header — sección Permisos */}
       <div className="flex-shrink-0 px-8 py-5 bg-white border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Gestión de Usuarios</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Administra accesos y roles del sistema</p>
+          <h2 className="text-lg font-bold text-gray-900">Permisos</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Documentos regionales del sistema</p>
         </div>
         <button
-          onClick={() => setShowInvite(true)}
+          onClick={() => setUsuariosOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M7 2v10M2 7h10"/>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7">
+            <circle cx="5" cy="4" r="2"/>
+            <path d="M1.5 11.5c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5"/>
+            <circle cx="10.5" cy="4.5" r="1.5"/>
+            <path d="M10.5 8.5c1.7 0 2.8 1.2 2.8 3"/>
           </svg>
-          Agregar usuario
+          Gestión de usuarios
         </button>
       </div>
 
-      {error && (
-        <div className="mx-8 mt-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          {error}
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">✕</button>
-        </div>
-      )}
-
-      {/* Table */}
+      {/* Cuerpo: Documentos regionales (lo principal visible en Permisos).
+          La gestión de usuarios vive en el drawer lateral derecho. */}
       <div className="flex-1 overflow-auto px-8 py-6">
-        {loading ? (
-          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Cargando usuarios...</div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
-                  <th className="px-5 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {users.map(u => (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="font-medium text-gray-900">{u.full_name ?? u.email}</div>
-                      {u.full_name && <div className="text-xs text-gray-400">{u.email}</div>}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role]}`}>
-                          {ROLE_LABELS[u.role]}
-                        </span>
-                        <select
-                          value={u.role}
-                          disabled={saving === u.id}
-                          onChange={e => handleRoleChange(u.id, e.target.value as UserRole)}
-                          className="text-xs border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
-                        >
-                          <option value="admin">Administrador</option>
-                          <option value="editor">Editor</option>
-                          <option value="regional">Regional</option>
-                          <option value="viewer">Solo lectura</option>
-                        </select>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {(u.role === 'regional' || u.role === 'viewer') ? (
-                        <RegionPicker
-                          value={u.region_cods}
-                          disabled={saving === u.id}
-                          onChange={cods => handleRegionsChange(u.id, cods)}
-                        />
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {(() => {
-                        const { label, color, sub } = formatUltimoAcceso(u.last_sign_in_at)
-                        return (
-                          <div className="flex flex-col" title={u.last_sign_in_at ?? 'Nunca'}>
-                            <span className={`text-xs font-medium ${color}`}>{label}</span>
-                            {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
-                          </div>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleForzarCambio(u.id, u.email)}
-                          disabled={saving === u.id}
-                          className="p-1.5 text-gray-300 hover:text-slate-600 transition-colors rounded hover:bg-slate-100 disabled:opacity-40"
-                          title="Forzar cambio de clave (el usuario recuerda su clave)"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 3v3H9M2 11V8h3"/><path d="M11.5 6A4.5 4.5 0 0 0 3 5.5M2.5 8A4.5 4.5 0 0 0 11 8.5"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleRecuperar(u.id, u.email)}
-                          disabled={saving === u.id}
-                          className="p-1.5 text-gray-300 hover:text-amber-500 transition-colors rounded hover:bg-amber-50 disabled:opacity-40"
-                          title="Recuperación: generar código nuevo (bloquea la clave anterior)"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                            <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(u.id, u.email)}
-                          disabled={saving === u.id}
-                          className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded hover:bg-red-50 disabled:opacity-40"
-                          title="Eliminar acceso"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Documentos regionales</h2>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <DocumentosRegionalesPanel />
           </div>
-        )}
-
-        {/* ── Documentos regionales: Planes (izq) + Propuestas (der) ───── */}
-        <div className="mt-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">Documentos regionales</h2>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <DocumentosRegionalesPanel />
-            </div>
-            <div>
-              <ImportProposalsPanel />
-            </div>
+          <div>
+            <ImportProposalsPanel />
           </div>
         </div>
       </div>
+
+      {/* Drawer de gestión de usuarios — overlay desde la derecha */}
+      {usuariosOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setUsuariosOpen(false)} />
+          <aside className="fixed inset-y-0 right-0 z-40 w-[75vw] bg-gray-50 shadow-2xl flex flex-col">
+            <header className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Gestión de usuarios</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Administra accesos y roles del sistema</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M7 2v10M2 7h10"/>
+                  </svg>
+                  Agregar usuario
+                </button>
+                <button
+                  onClick={() => setUsuariosOpen(false)}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-auto px-6 py-5">
+              {error && (
+                <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+                  {error}
+                  <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">✕</button>
+                </div>
+              )}
+              {!loading && (
+                <div className="relative mb-4 max-w-sm">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13" strokeLinecap="round"/>
+                  </svg>
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder="Buscar por nombre o correo..."
+                    className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+                  />
+                  {userSearch && (
+                    <button
+                      onClick={() => setUserSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                      aria-label="Limpiar búsqueda"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+              {loading ? (
+                <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Cargando usuarios...</div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+                  {users.length === 0 ? 'No hay usuarios registrados.' : `Sin resultados para "${userSearch}".`}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
+                        <th className="px-5 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <div className="font-medium text-gray-900">{u.full_name ?? u.email}</div>
+                            {u.full_name && <div className="text-xs text-gray-400">{u.email}</div>}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role]}`}>
+                                {ROLE_LABELS[u.role]}
+                              </span>
+                              <select
+                                value={u.role}
+                                disabled={saving === u.id}
+                                onChange={e => handleRoleChange(u.id, e.target.value as UserRole)}
+                                className="text-xs border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
+                              >
+                                <option value="admin">Administrador</option>
+                                <option value="editor">Editor</option>
+                                <option value="regional">Regional</option>
+                                <option value="viewer">Solo lectura</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {(u.role === 'regional' || u.role === 'viewer') ? (
+                              <RegionPicker
+                                value={u.region_cods}
+                                disabled={saving === u.id}
+                                onChange={cods => handleRegionsChange(u.id, cods)}
+                              />
+                            ) : (
+                              <span className="text-gray-300 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {(() => {
+                              const { label, color, sub } = formatUltimoAcceso(u.last_sign_in_at)
+                              return (
+                                <div className="flex flex-col" title={u.last_sign_in_at ?? 'Nunca'}>
+                                  <span className={`text-xs font-medium ${color}`}>{label}</span>
+                                  {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+                                </div>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleForzarCambio(u.id, u.email)}
+                                disabled={saving === u.id}
+                                className="p-1.5 text-gray-300 hover:text-slate-600 transition-colors rounded hover:bg-slate-100 disabled:opacity-40"
+                                title="Forzar cambio de clave (el usuario recuerda su clave)"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 3v3H9M2 11V8h3"/><path d="M11.5 6A4.5 4.5 0 0 0 3 5.5M2.5 8A4.5 4.5 0 0 0 11 8.5"/>
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleRecuperar(u.id, u.email)}
+                                disabled={saving === u.id}
+                                className="p-1.5 text-gray-300 hover:text-amber-500 transition-colors rounded hover:bg-amber-50 disabled:opacity-40"
+                                title="Recuperación: generar código nuevo (bloquea la clave anterior)"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                                  <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(u.id, u.email)}
+                                disabled={saving === u.id}
+                                className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded hover:bg-red-50 disabled:opacity-40"
+                                title="Eliminar acceso"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                  <path d="M2 4h10M5 4V2h4v2M5.5 7v4M8.5 7v4M3 4l1 8h6l1-8"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* Invite modal */}
       {showInvite && (

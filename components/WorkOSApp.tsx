@@ -475,7 +475,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                   <circle cx="9" cy="4" r="1.5"/>
                   <path d="M9 7.5c1.5 0 2.5 1 2.5 2.5"/>
                 </svg>
-                Usuarios
+                Permisos
               </button>
             )}
           </div>
