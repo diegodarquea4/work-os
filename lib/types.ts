@@ -482,6 +482,13 @@ export type Metrica = {
   objetivo: number
   valor_actual: number | null
   unidad: string | null
+  // Módulo Sesiones (mig 044): 'suma' incrementa valor_actual en cada cierre
+  // de sesión (barra de progreso vs objetivo); 'pulso' lo reemplaza (foto
+  // semanal sin meta — objetivo queda en 0 y la UI lo ignora).
+  tipo: 'suma' | 'pulso'
+  // true → aparece precargada en el formulario de indicadores de la sesión y
+  // su valor_actual NO se edita inline (entra por cierre de sesión).
+  se_reporta_en_sesion: boolean
   created_at: string
   updated_at: string
   created_by_email: string | null
@@ -499,9 +506,88 @@ export type RegionEje = {
   region_cod: string
   numero: number
   nombre: string
+  // Módulo Sesiones (mig 044): flag por (región, eje). true → el drawer de
+  // métricas muestra el módulo de sesiones (Comité Policial u otra instancia).
+  sesiones_habilitadas: boolean
+  // Label de la instancia en UI/acta, ej. 'Comité Policial'.
+  sesiones_nombre: string | null
   created_at: string
   updated_at: string
   created_by_email: string | null
+}
+
+// ── Sesiones de eje (Comité Policial — mig 044) ──────────────────────────────
+// Una sesión captura: verificación de compromisos → asistencia → indicadores
+// (alimentan metricas_eje al cerrar) → apuntes por institución → compromisos
+// nuevos. RLS restrictiva: staff todo, regional sus regiones, viewer nada.
+
+export type EjeSesion = {
+  id: number
+  region_cod: string
+  eje_id: number
+  provincia_cod: string | null   // NULL = sesión regional (capa DPP futura)
+  fecha: string                  // date puro YYYY-MM-DD
+  lugar: string | null
+  estado: 'borrador' | 'cerrada'
+  // Idempotencia del cierre: true tras aplicar suma/pulso a metricas_eje.
+  metricas_aplicadas: boolean
+  acta_path: string | null       // path relativo en bucket comite-docs
+  created_by_email: string | null
+  closed_by_email: string | null
+  created_at: string
+  closed_at: string | null
+}
+
+export type SesionNomina = {
+  id: number
+  region_cod: string
+  eje_id: number
+  provincia_cod: string | null
+  nombre: string
+  cargo: string | null
+  institucion: string
+  calidad: 'titular' | 'suplente'
+  activo: boolean
+  created_at: string
+}
+
+export type SesionAsistencia = {
+  id: number
+  sesion_id: number
+  nomina_id: number | null           // miembro de nómina…
+  invitado_nombre: string | null     // …o invitado (exactamente uno)
+  invitado_institucion: string | null
+  presente: boolean
+}
+
+export type SesionValor = {
+  id: number
+  sesion_id: number
+  metrica_id: number
+  valor: number
+}
+
+export type SesionApunte = {
+  id: number
+  sesion_id: number
+  institucion: string
+  texto: string
+}
+
+export type SesionCompromiso = {
+  id: number
+  region_cod: string
+  eje_id: number
+  sesion_origen_id: number
+  descripcion: string
+  responsable_institucion: string
+  responsable_nombre: string | null
+  plazo: string | null               // date puro YYYY-MM-DD
+  estado: 'pendiente' | 'en_curso' | 'cumplido'
+  estado_updated_at: string | null
+  estado_updated_by_email: string | null
+  cerrado_en_sesion_id: number | null
+  created_at: string
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────

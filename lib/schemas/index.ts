@@ -200,3 +200,9 @@ export const poligonoPatchSchema = z.object({
 
 export type PoligonoPostBody  = z.infer<typeof poligonoPostSchema>
 export type PoligonoPatchBody = z.infer<typeof poligonoPatchSchema>
+
+// ── /api/sesiones/[id]/* — Módulo Sesiones (Comité Policial, mig 044) ────────
+// Las rutas /cerrar y /acta no llevan body (el borrador ya está persistido
+// client-side vía safeWrite); solo se valida el param dinámico.
+
+export const sesionIdSchema = z.coerce.number().int().positive()
