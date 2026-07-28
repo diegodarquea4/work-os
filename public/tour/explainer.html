@@ -386,8 +386,8 @@
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.3em;margin-bottom:.65em">
               <div style="background:#fff;border:1px solid var(--gray-200);border-radius:.4em;padding:.35em .4em;box-shadow:var(--sh-card)">
                 <div style="font-size:.46em;color:var(--gray-500);font-weight:600">Atención</div>
-                <div style="font-size:.85em;font-weight:800;color:var(--red-600)">8</div>
-                <div style="font-size:.44em;color:var(--gray-400)">alertas activas</div>
+                <div style="font-size:.85em;font-weight:800;color:var(--amber-700)">5</div>
+                <div style="font-size:.44em;color:var(--gray-400)">en foco</div>
               </div>
               <div style="background:#fff;border:1px solid var(--gray-200);border-radius:.4em;padding:.35em .4em;box-shadow:var(--sh-card)">
                 <div style="font-size:.46em;color:var(--gray-500);font-weight:600">Próx. hito</div>
@@ -439,11 +439,6 @@
             </div>
           </div>
         </div>
-        <div class="sect">Alertas activas</div>
-        <div class="alert" id="mr-alertas">
-          <div class="ar"><span class="ic">📅</span> 13 hitos próximos (≤ 7 días) <span class="ago">empieza por aquí</span></div>
-          <div class="ar"><span class="ic">🕒</span> 44 iniciativas sin actividad hace +15 días</div>
-        </div>
         <div class="sect">Avance por eje estratégico</div>
         <div class="ejes" id="mr-ejes">
           <div class="eje"><span class="lbl" style="font-size:.5em">Eje 1</span><div class="nm">Seguridad Pública, Fronteras y Control del Crimen Organizado</div><div class="bar go" style="--w:34%"><i></i></div><div class="ft"><span class="inv">42 init · $29.864 MM</span><span class="pct">34%</span></div></div>
@@ -458,6 +453,12 @@
           <div class="kpi"><div class="k">Seguridad</div><div class="ks">LeyStop · sem. 22</div><div class="v countup" data-val="1228" data-thou="1">0</div><div class="vn">casos / 100 mil</div></div>
           <div class="kpi"><div class="k">PIB regional</div><div class="ks">BCCh · anual</div><div class="v countup" data-val="12.8" data-dec="1" data-suf="%">0%</div><div class="vn">del PIB nacional</div></div>
           <div class="kpi"><div class="k">Inversión</div><div class="ks">iniciativas región</div><div class="v">$950 MM</div><div class="vn">325 iniciativas</div></div>
+        </div>
+        <div class="sect">En foco <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--gray-400)">— iniciativas que el equipo está revisando</span></div>
+        <div id="mr-foco" style="background:#fff;border:1px solid var(--gray-200);border-radius:.55em;box-shadow:var(--sh-card);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:.5em;padding:.45em .6em;border-bottom:1px solid var(--gray-100);font-size:.52em"><span style="color:#f59e0b">🚩</span><span style="width:.55em;height:.55em;border-radius:50%;background:var(--red-500);flex:none"></span><span style="flex:1;font-weight:600;color:var(--slate-800)">Hospital Regional — normalización</span><span style="color:var(--red-600);font-weight:700">Vencido 3d</span><span style="font-weight:700;color:var(--slate-700)">45%</span></div>
+          <div style="display:flex;align-items:center;gap:.5em;padding:.45em .6em;border-bottom:1px solid var(--gray-100);font-size:.52em"><span style="color:#f59e0b">🚩</span><span style="width:.55em;height:.55em;border-radius:50%;background:var(--amber-400);flex:none"></span><span style="flex:1;font-weight:600;color:var(--slate-800)">Plan Frontera Norte — fase 2</span><span style="color:var(--amber-700);font-weight:600">En 5d</span><span style="font-weight:700;color:var(--slate-700)">62%</span></div>
+          <div style="display:flex;align-items:center;gap:.5em;padding:.45em .6em;font-size:.52em"><span style="color:#f59e0b">🚩</span><span style="width:.55em;height:.55em;border-radius:50%;background:var(--green-500);flex:none"></span><span style="flex:1;font-weight:600;color:var(--slate-800)">Desaladora comunas costeras</span><span style="color:var(--gray-400)">En 12d</span><span style="font-weight:700;color:var(--slate-700)">78%</span></div>
         </div>
       </div>
     </section>
@@ -611,7 +612,7 @@
         <h2 class="htitle u-rise" style="font-size:1.55em">Tres pasos para partir</h2>
         <div class="recap">
           <div class="rs u-rise"><div class="nn">1</div><b>Ingresa</b><span>El mapa te lleva a tu región</span></div>
-          <div class="rs u-rise" style="animation-delay:.12s"><div class="nn">2</div><b>Lee tu tablero</b><span>Mira tus alertas primero</span></div>
+          <div class="rs u-rise" style="animation-delay:.12s"><div class="nn">2</div><b>Lee tu tablero</b><span>Parte por lo que está en foco</span></div>
           <div class="rs u-rise" style="animation-delay:.24s"><div class="nn">3</div><b>Mantén al día</b><span>Un Excel por semana</span></div>
         </div>
         <p class="hsub u-rise" style="animation-delay:.36s;margin-top:1.2em">Si te falta contexto en algún paso, el Centro de Ayuda — el botón ? arriba a la derecha del panel — tiene este mismo tour y un FAQ por rol.</p>
@@ -712,12 +713,12 @@ const CHILE=[
      narr:'A la derecha se abre la previsualización de la región: avance promedio con delta vs nacional, fase PREGO, los KPIs claves de atención, y los ejes en barras compactas. Es para decidir rápido si vale la pena entrar al Dashboard sin perder de vista el mapa. Abajo, el botón Ver Mi Región te lleva directo al tablero de la región con un clic.'},
     {view:'miregion', t:'mr-head', kick:'Mi Región', title:'Tu tablero, de un vistazo', text:'Avance, semáforo y fase PREGO. Botones: Proponer, Indicadores y minutas.', dur:17000,
      narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. El contador PREGO muestra tu Plan Regional de Gobierno: 9 fases que estructuran el compromiso con la región. La división central evalúa cada fase; tú reportas la evidencia de cumplimiento. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y descargas las minutas de tu región — ejecutiva, contexto y kit de viaje. La versión vigente de cada minuta la genera y actualiza la división.'},
-    {view:'miregion', t:'mr-alertas', kick:'Lo urgente', title:'Empieza por las alertas', text:'Lo bloqueado o sin actividad es tu prioridad del día.', dur:10500,
-     narr:'Lo más importante son las alertas activas: los hitos próximos a vencer y lo que lleva días sin movimiento. Comienza tu día por aquí; lo bloqueado o sin actividad es tu prioridad.'},
     {view:'miregion', t:'mr-ejes', kick:'Tu cartera', title:'Avance por eje estratégico', text:'Los ejes los define tu región en su catálogo formal.', dur:11500,
      narr:'Más abajo, tu cartera agrupada por los ejes estratégicos de tu región. Cada región tiene su propio catálogo formal, acordado entre la Delegación y la división. Pueden ser cuatro, cinco o más, según el plan regional. Si necesitas un eje nuevo, pídelo a tu contraparte de la división. Cada tarjeta muestra el avance y la inversión del eje.'},
     {view:'metricas', t:'me-cards', kick:'Métricas por eje', title:'La meta y el valor actual', text:'La división define qué medir y la meta; tú reportas el valor actual.', dur:13000,
      narr:'Al hacer clic en un eje se abren sus métricas de seguimiento. Aquí está el modelo de compromiso del plan: la división central define qué medir y la meta, y tú reportas el valor actual cada semana. Así se mide el cumplimiento de los compromisos de tu región.'},
+    {view:'miregion', t:'mr-foco', kick:'Lo prioritario', title:'En foco: lo que el equipo vigila', text:'Las iniciativas con bandera de tu región, con su próximo hito a la vista.', dur:12000,
+     narr:'De vuelta en el tablero, al final está la sección En foco: las iniciativas de tu región marcadas con la bandera, ordenadas por urgencia del próximo hito. Es la lista corta que se conversa con el equipo. Haz clic en cualquiera para abrir su ficha, o quita la bandera cuando deje de ser prioridad. Empieza tu día por aquí.'},
     {view:'dashboard', t:'db-table', kick:'Dashboard', title:'La tabla maestra', text:'Todas tus iniciativas en una lista: filtra, ordena y exporta a Excel.', dur:11500,
      narr:'El Dashboard es la tabla maestra: todas tus iniciativas en una lista, con su estado, avance, próximo hito e inversión. Filtras por estado o región, ordenas la columna que quieras y exportas todo a Excel con un clic.'},
     {view:'ficha', t:'fi-modal', kick:'El detalle', title:'Tu ficha de iniciativa', text:'Etiquetas, etapas como Prefactibilidad, y foco directo desde el header.', dur:15000,
@@ -733,7 +734,7 @@ const CHILE=[
     {view:'atencion', t:'at-foco', kick:'Prioriza', title:'Revisa solo lo que importa ahora', text:'Marca en foco lo prioritario y míralo junto antes de una reunión.', dur:12000,
      narr:'No todo necesita tu atención hoy. Marca con la bandera lo que importa ahora y se reúne en tu Bandeja de Atención: tu lista corta para revisar lo prioritario, antes de una reunión o cuando algo urge. Más abajo, la lista de sugerencias automáticas se expande al hacer clic y te propone qué más conviene vigilar.'},
     {view:'recap', t:null, kick:'Para empezar hoy', title:'', text:'', dur:12500,
-     narr:'Para empezar, recuerda lo esencial: ingresa al panel, lee tu tablero comenzando por las alertas, y mantén tu cartera al día con tu carga semanal. Si en algún paso te falta contexto, abre el Centro de Ayuda con el botón signo de pregunta de la cabecera: tiene este tour, tours por sección — como el de Desalojos, que tu región consulta en solo lectura — y un FAQ por rol. Bienvenido al PSG.'}
+     narr:'Para empezar, recuerda lo esencial: ingresa al panel, lee tu tablero partiendo por lo que está en foco, y mantén tu cartera al día con tu carga semanal. Si en algún paso te falta contexto, abre el Centro de Ayuda con el botón signo de pregunta de la cabecera: tiene este tour, tours por sección — como el de Desalojos, que tu región consulta en solo lectura — y un FAQ por rol. Bienvenido al PSG.'}
   ];
 
   var NAVMAP={ map:['mapa','Seguimiento ▾',false], miregion:['seg','Mi Región ▾',true], metricas:['seg','Mi Región ▾',true], proponer:['seg','Mi Región ▾',true], misPropuestas:['seg','Mi Región ▾',true],

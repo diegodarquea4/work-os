@@ -1,27 +1,28 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { perCapita } from '@/lib/indicatorUtils'
-import { useSeiaProjects } from '@/lib/hooks/useSeiaProjects'
-import { useMopProjects } from '@/lib/hooks/useMopProjects'
 import { getSupabase } from '@/lib/supabase'
+import { safeWrite } from '@/lib/dbWrite'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
+import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
 import RegionEjesPanel from './RegionEjesPanel'
-import AlertCard from './AlertCard'
+import ProjectTrackerModal from './ProjectTrackerModal'
+import DesalojoBadge from './DesalojoBadge'
+import { FlagIcon } from './icons/FlagIcon'
 import MetricasClaveSection, { MetricCard } from './MetricasClaveSection'
 import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import {
-  diasSinActividad,
   diasHastaHito,
   ejeBreakdownFor,
 } from '@/lib/regionSummary'
@@ -32,17 +33,20 @@ const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
 
 type Props = {
   iniciativas: Iniciativa[]
-  actividad: Record<number, string | null>
   profile: UserProfile | null
   // Región activa (state global) — sincronizada con Kanban/Atención/Mapa.
   activeRegionName: string
   onActiveRegionChange: (regionName: string) => void
+  // Mutaciones de iniciativas — mismas referencias que usa Atención/Kanban,
+  // para que la sección "En foco" abra la ficha y propague cambios global.
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
+  onDeletePrioridad?: (n: number) => void
 }
 
 // Ver comentario junto a su uso en la Sección 4 (Métricas clave).
 const SHOW_INVERSION_CARD = false
 
-export default function VistaRegional({ iniciativas, actividad, profile, activeRegionName, onActiveRegionChange }: Props) {
+export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad }: Props) {
   // Determine accessible region codes for this user
   const allowedCods: string[] = useMemo(() => {
     if (!profile) return []
@@ -103,6 +107,8 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   const [numeroInput, setNumeroInput] = useState('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [prego, setPrego] = useState<PregoRow | null>(null)
+  // Ficha abierta desde la sección "En foco" (mismo modal que Atención/Kanban).
+  const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
 
   // (El default de región ahora viene del state global activeRegionName,
   // sincronizado en WorkOSApp y persistido en localStorage. El useMemo de
@@ -157,10 +163,6 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     [iniciativas, selectedCod]
   )
 
-  // External data hooks
-  const { proyectos: seiaProjects, total: seiaTotal } = useSeiaProjects(selectedCod ?? '')
-  const { proyectos: mopProjects, total: mopTotal } = useMopProjects(selectedCod ?? '')
-
   // Población de la región activa (para Inversión per cápita) — misma tabla
   // que usa la pestaña Métricas para el PIB per cápita.
   const [poblacionRegion, setPoblacionRegion] = useState<number | null>(null)
@@ -196,27 +198,22 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
     ? PREGO_FASES.filter(f => prego[f.key] === 'completado').length
     : 0
 
-  // Alert: sin actividad
-  const alertaSinActividad = regionIniciativas.filter(p => {
-    const dias = diasSinActividad(actividad[p.n])
-    return dias === null || dias > 15
-  })
-
-  // Alert: hitos en <= 7 días o vencidos
-  const alertaHitos = regionIniciativas
-    .filter(p => {
-      const dias = diasHastaHito(p.fecha_proximo_hito)
-      return dias !== null && dias <= 7
-    })
-    .sort((a, b) => (diasHastaHito(a.fecha_proximo_hito) ?? 999) - (diasHastaHito(b.fecha_proximo_hito) ?? 999))
-
-  // Alert: en rojo
-  const alertaRojo = regionIniciativas.filter(p => p.estado_semaforo === 'rojo')
-
-  // Alert: PREGO bloqueado
-  const alertaPregoFases = prego
-    ? PREGO_FASES.filter(f => prego[f.key] === 'bloqueado')
-    : []
+  // Iniciativas en foco de la región — misma sección principal de la Bandeja
+  // de Atención, acotada a la región activa. Orden por urgencia de hito
+  // (vencidos primero, luego fecha ascendente; sin hito al final).
+  const enFoco = useMemo(() => {
+    const TODAY = new Date().toLocaleDateString('en-CA')
+    return regionIniciativas
+      .filter(p => p.en_foco === true)
+      .sort((a, b) => {
+        const aFecha = a.fecha_proximo_hito ?? '9999-12-31'
+        const bFecha = b.fecha_proximo_hito ?? '9999-12-31'
+        const aVencido = aFecha < TODAY
+        const bVencido = bFecha < TODAY
+        if (aVencido !== bVencido) return aVencido ? -1 : 1
+        return aFecha.localeCompare(bFecha)
+      })
+  }, [regionIniciativas])
 
   // Eje breakdown — extraído a lib/regionSummary.ts::ejeBreakdownFor para
   // compartir con el preview del Mapa (RegionPreviewPanel). Iteramos el
@@ -307,6 +304,30 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
   function closeMinutaPreview() {
     if (minutaPreview?.url) URL.revokeObjectURL(minutaPreview.url)
     setMinutaPreview(null)
+  }
+
+  // ── Handlers de la sección "En foco" ─────────────────────────────────────────
+
+  // Quitar la bandera desde la fila — optimistic + safeWrite + revert.
+  // Mutación por `id` (PK estable), patrón etapa 5.
+  const handleQuitarFoco = useCallback(async (n: number, id: number) => {
+    onUpdatePrioridad(n, { en_foco: false })
+    setSelectedIniciativa(prev => prev && prev.n === n ? { ...prev, en_foco: false } : prev)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({ en_foco: false }).eq('id', id),
+        `VistaRegional.quitarFoco n=${n}`,
+      )
+    } catch (err) {
+      onUpdatePrioridad(n, { en_foco: true })
+      setSelectedIniciativa(prev => prev && prev.n === n ? { ...prev, en_foco: true } : prev)
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [onUpdatePrioridad])
+
+  function handleUpdateAndRefresh(n: number, patch: Partial<Iniciativa>) {
+    onUpdatePrioridad(n, patch)
+    if (selectedIniciativa?.n === n) setSelectedIniciativa(prev => prev ? { ...prev, ...patch } : null)
   }
 
   // Abre el modal de N° DCI antes de generar/regenerar Contexto Regional.
@@ -571,73 +592,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
           onRetry={() => setProposeModalOpen(true)}
         />
 
-        {/* ── Sección 2: Alertas ───────────────────────────────────────────────── */}
-        <div className="mb-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Alertas activas</h3>
-          {alertaSinActividad.length === 0 && alertaHitos.length === 0 && alertaRojo.length === 0 && alertaPregoFases.length === 0 ? (
-            <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round">
-                <circle cx="9" cy="9" r="7"/>
-                <path d="M6 9l2 2 4-4"/>
-              </svg>
-              <span className="text-sm text-green-700 font-medium">Todo en orden — sin alertas activas</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {alertaRojo.length > 0 && (
-                <AlertCard
-                  icon="🔴"
-                  title={`${alertaRojo.length} iniciativa${alertaRojo.length !== 1 ? 's' : ''} bloqueada${alertaRojo.length !== 1 ? 's' : ''}`}
-                  color="red"
-                  items={alertaRojo.map(p => ({
-                    label: p.nombre,
-                    sub: `${p.ministerio ?? 'Sin asignar'} · ${p.pct_avance ?? 0}% avance`,
-                  }))}
-                />
-              )}
-              {alertaHitos.length > 0 && (
-                <AlertCard
-                  icon="📅"
-                  title={`${alertaHitos.length} hito${alertaHitos.length !== 1 ? 's' : ''} próximo${alertaHitos.length !== 1 ? 's' : ''} (≤7 días)`}
-                  color="amber"
-                  items={alertaHitos.map(p => {
-                    const dias = diasHastaHito(p.fecha_proximo_hito)
-                    const subLabel = dias !== null && dias < 0
-                      ? `Vencido hace ${Math.abs(dias)}d`
-                      : dias === 0
-                      ? 'Hoy'
-                      : `En ${dias}d — ${p.proximo_hito ?? ''}`
-                    return { label: p.nombre, sub: subLabel, isUrgent: dias !== null && dias <= 0 }
-                  })}
-                />
-              )}
-              {alertaSinActividad.length > 0 && (
-                <AlertCard
-                  icon="🕐"
-                  title={`${alertaSinActividad.length} sin actividad (+15 días)`}
-                  color="gray"
-                  items={alertaSinActividad.map(p => {
-                    const dias = diasSinActividad(actividad[p.n])
-                    return {
-                      label: p.nombre,
-                      sub: dias === null ? 'Sin actividad registrada' : `Hace ${dias} días`,
-                    }
-                  })}
-                />
-              )}
-              {alertaPregoFases.length > 0 && (
-                <AlertCard
-                  icon="🚧"
-                  title={`PREGO: ${alertaPregoFases.length} fase${alertaPregoFases.length !== 1 ? 's' : ''} bloqueada${alertaPregoFases.length !== 1 ? 's' : ''}`}
-                  color="red"
-                  items={alertaPregoFases.map(f => ({ label: `${f.label}: ${f.sublabel}`, sub: 'Estado: bloqueado' }))}
-                />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Sección 3: Avance por eje (con split lateral cuando se selecciona uno) ──
+        {/* ── Sección 2: Avance por eje (con split lateral cuando se selecciona uno) ──
             Render incondicional para que el botón "Gestionar ejes" siga visible
             aunque la región no tenga catálogo todavía (caso región nueva, sin
             iniciativas todavía cargadas). */}
@@ -774,7 +729,7 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
           </div>
         )}
 
-        {/* ── Sección 4: Métricas clave ────────────────────────────────────────── */}
+        {/* ── Sección 3: Métricas clave ────────────────────────────────────────── */}
         <div className="mb-4">
           <MetricasClaveSection region={region} />
           {/* Tarjeta "Inversión" — deshabilitada visualmente (se sacó de Métricas
@@ -794,58 +749,108 @@ export default function VistaRegional({ iniciativas, actividad, profile, activeR
           )}
         </div>
 
-        {/* ── Sección 5: Pipeline externo ──────────────────────────────────────── */}
+        {/* ── Sección 4: En foco ───────────────────────────────────────────────
+            Espejo regional de la sección principal de la Bandeja de Atención:
+            las iniciativas con bandera de la región activa, clickeables a la
+            ficha. La bandera se quita desde acá igual que en Atención. */}
         <div className="mb-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Pipeline externo</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {/* SEIA */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">🌿</span>
-                <span className="text-xs font-semibold text-gray-700">SEIA — Evaluación Ambiental</span>
-              </div>
-              <p className="text-fluid-2xl font-bold text-slate-800 tabular-nums">{seiaTotal}</p>
-              <p className="text-xs text-gray-400 mt-0.5">proyectos en evaluación</p>
-              {seiaProjects.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Inversión: ${Math.round(
-                    seiaProjects.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
-                  ).toLocaleString('es-CL')} MM
-                </p>
-              )}
-              <p className="text-[10px] text-gray-300 mt-3">Sync: lunes 8am UTC</p>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">En foco</h3>
+              <span className="text-xs text-gray-400 normal-case">— iniciativas que el equipo está revisando</span>
             </div>
-
-            {/* MOP */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">🏗</span>
-                <span className="text-xs font-semibold text-gray-700">MOP — Obras Públicas</span>
-              </div>
-              <p className="text-fluid-2xl font-bold text-slate-800 tabular-nums">{mopTotal}</p>
-              <p className="text-xs text-gray-400 mt-0.5">proyectos de infraestructura</p>
-              {mopProjects.length > 0 && (() => {
-                const etapas: Record<string, number> = {}
-                for (const p of mopProjects) {
-                  if (p.etapa) etapas[p.etapa] = (etapas[p.etapa] ?? 0) + 1
-                }
-                const top2 = Object.entries(etapas).sort((a, b) => b[1] - a[1]).slice(0, 2)
-                return top2.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {top2.map(([etapa, n]) => (
-                      <span key={etapa} className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
-                        {etapa} ({n})
-                      </span>
-                    ))}
-                  </div>
-                ) : null
-              })()}
-              <p className="text-[10px] text-gray-300 mt-3">Sync: lunes 9am UTC</p>
-            </div>
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
+              enFoco.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
+            }`}>
+              <FlagIcon filled={enFoco.length > 0} className="w-3 h-3" />
+              {enFoco.length === 0 ? 'Sin foco' : `${enFoco.length} en foco`}
+            </span>
           </div>
+
+          {enFoco.length === 0 ? (
+            <div className="text-center py-8 px-6 bg-white rounded-xl border border-gray-100">
+              <FlagIcon className="w-7 h-7 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 mb-1 font-medium">Sin iniciativas en foco en esta región</p>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                Marca iniciativas con la bandera desde el Gabinete, la Bandeja de Atención o la ficha para verlas acá.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              {enFoco.map(p => {
+                const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+                const pc = prioridadColor(p.prioridad)
+                const dias = diasHastaHito(p.fecha_proximo_hito)
+                const hitoUrgent = dias !== null && dias <= 7
+                return (
+                  <div key={p.n} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/40 transition-colors border-b border-gray-50 last:border-b-0">
+                    {canPropose ? (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleQuitarFoco(p.n, p.id) }}
+                        className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-colors p-1 -m-1 rounded"
+                        title="Quitar del foco"
+                      >
+                        <FlagIcon filled className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <span className="flex-shrink-0 text-amber-500 p-1 -m-1" title="En foco">
+                        <FlagIcon filled className="w-4 h-4" />
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => setSelectedIniciativa(p)}
+                      className="flex-1 text-left flex items-center gap-3 min-w-0 group"
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {p.es_desalojo && <DesalojoBadge size="sm" />}
+                          <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
+                            {p.nombre}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 flex-wrap">
+                          <span className="truncate max-w-[240px]">{p.ministerio ?? 'Sin asignar'}</span>
+                          <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
+                            {p.eje}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex-shrink-0 w-24 text-right">
+                        <div className="text-xs font-semibold text-gray-700 tabular-nums">{p.pct_avance ?? 0}%</div>
+                        {p.fecha_proximo_hito && (
+                          <div className={`text-xs ${hitoUrgent ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                            {dias !== null && dias < 0
+                              ? `Vencido ${Math.abs(dias)}d`
+                              : dias === 0 ? 'Hoy' : `En ${dias}d`}
+                          </div>
+                        )}
+                      </div>
+
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
+                        {p.prioridad}
+                      </span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
       </div>
+
+      {/* ── Ficha de iniciativa (desde "En foco") ──────────────────────────── */}
+      {selectedIniciativa && (
+        <ProjectTrackerModal
+          prioridad={selectedIniciativa}
+          onClose={() => setSelectedIniciativa(null)}
+          onUpdatePrioridad={handleUpdateAndRefresh}
+          onDeletePrioridad={onDeletePrioridad}
+        />
+      )}
 
       {/* ── Modal: N° de Minuta DCI (Contexto Regional) ────────────────────── */}
       {numeroModalOpen && (

@@ -41,9 +41,9 @@ export const FAQ_CATALOG: FaqEntry[] = [
 
 1. Mira el tour guiado completo desde este mismo Centro de Ayuda. Son 16 pasos con narración, te toma 5 minutos.
 2. Abre el Mapa y haz clic en tu región. Vas a ver tu cartera completa de iniciativas.
-3. Entra a Mi Región. Ahí tienes tu tablero: avance promedio, semáforo, alertas activas y avance por eje.
-4. Lee primero las "Alertas activas". Lo que está bloqueado o sin actividad es lo que merece tu atención inmediata.
-5. Marca con la bandera (🚩) las 3 o 4 iniciativas que necesitas vigilar esta semana — se reúnen en tu Bandeja de Atención.
+3. Entra a Mi Región. Ahí tienes tu tablero: avance promedio, semáforo, avance por eje y las iniciativas en foco.
+4. Marca con la bandera (🚩) las 3 o 4 iniciativas que necesitas vigilar esta semana — aparecen en la sección "En foco" de Mi Región y en tu Bandeja de Atención.
+5. Revisa la Bandeja de Atención: además de tu foco, te sugiere automáticamente qué mirar (hitos vencidos, bloqueadas, sin actividad).
 
 Si te pierdes en cualquier momento, vuelve a tocar el ? del header.`,
     relacionadas: ['inicio-rutina-semanal', 'inicio-orden-revision', 'foco-marcar'],
@@ -78,12 +78,9 @@ VIERNES (5 min)
     categoria: 'Primeros pasos',
     pregunta: '¿Por dónde empiezo a revisar mi cartera cada día?',
     respuesta:
-`Empieza siempre por las "Alertas activas" en Mi Región. Te muestra dos cosas:
+`Empieza siempre por la sección "En foco" de Mi Región: la lista corta de lo que tú (o el equipo) marcaron como prioritario, con el próximo hito de cada una a la vista.
 
-- Hitos próximos a vencer (≤ 7 días).
-- Iniciativas sin actividad hace +15 días.
-
-Después la Bandeja de Atención: la lista corta de lo que tú marcaste como prioritario. Si una iniciativa está en rojo (bloqueada), esa es tu prioridad de la semana — no avanza sin tu gestión.
+Después la Bandeja de Atención: además de tu foco, las sugerencias automáticas te muestran hitos vencidos o próximos, iniciativas bloqueadas y las sin actividad hace +15 días. Si una iniciativa está en rojo (bloqueada), esa es tu prioridad de la semana — no avanza sin tu gestión.
 
 Si te sobra tiempo, revisa el avance por eje. Te da contexto agregado de qué área del plan regional está al día y cuál atrasada.`,
     relacionadas: ['inicio-rutina-semanal', 'foco-marcar', 'semaforo-vs-avance'],
@@ -1380,7 +1377,7 @@ Tipos disponibles:
 - Nota: para apuntes libres que quieras dejar registrados.
 - Riesgo: para flaggear algo que puede impactar el avance.
 
-Los hitos con fecha próxima (≤ 7 días) aparecen automáticamente en tus "Alertas activas" de Mi Región. La pestaña "Calendario" de la ficha muestra todos los hitos en línea de tiempo.`,
+Los hitos con fecha próxima (≤ 14 días) aparecen automáticamente en las sugerencias de la Bandeja de Atención. La pestaña "Calendario" de la ficha muestra todos los hitos en línea de tiempo.`,
     relacionadas: ['atencion-alertas-email', 'inicio-orden-revision'],
     ultima_revision: '2026-06-08',
   },
@@ -1570,7 +1567,7 @@ Atajos:
 Código de color:
 - Negro/normal (≤7 días): actividad reciente, todo bien.
 - Ámbar (8-15 días): tibio. Revisa si la iniciativa sigue avanzando o se quedó.
-- Rojo (>15 días): sin actividad por más de dos semanas. Aparece en las "Alertas activas" de Mi Región. Probablemente bloqueada, sin gestión o terminada (y nadie la cerró).
+- Rojo (>15 días): sin actividad por más de dos semanas. Aparece en las sugerencias automáticas de la Bandeja de Atención. Probablemente bloqueada, sin gestión o terminada (y nadie la cerró).
 
 Cuándo es legítimo que esté "sin actividad":
 - Iniciativa terminada pero no marcada como tal — corrígelo (etapa = Terminado).
@@ -1663,7 +1660,7 @@ Al hacer clic en el día del hito, el panel inferior del calendario muestra el t
 
 Cuándo aparece:
 - Si la ficha tiene "Próximo hito" con fecha definida, el día se marca con el anillo ámbar.
-- Cuando llegas a ≤7 días del hito, también aparece en las "Alertas activas" de Mi Región para que no se te pase.
+- Cuando llegas a ≤14 días del hito, también aparece en las sugerencias de la Bandeja de Atención para que no se te pase. Si la iniciativa está en foco, el hito se ve directo en la sección "En foco" de Mi Región.
 - Si actualizas el próximo hito a uno nuevo (porque el anterior se cumplió), el anillo se mueve al nuevo día.
 
 Tip: usa el campo Próximo hito con disciplina. Iniciativas sin próximo hito son las que más pasan desapercibidas.`,

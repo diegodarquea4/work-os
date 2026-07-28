@@ -611,10 +611,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         <div className="flex-1 overflow-hidden flex">
           <VistaRegional
             iniciativas={visibleIniciativas}
-            actividad={actividad}
             profile={profile}
             activeRegionName={activeRegionName}
             onActiveRegionChange={setActiveRegionName}
+            onUpdatePrioridad={handleUpdatePrioridad}
+            onDeletePrioridad={handleDeletePrioridad}
           />
         </div>
       )}
