@@ -5,9 +5,11 @@ import dynamic from 'next/dynamic'
 import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import { REGIONS } from '@/lib/regions'
+import { REGIONS, INE_CODE } from '@/lib/regions'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
+import ComunasSidebar from './ComunasSidebar'
+import { computeComunaStats } from '@/lib/comunaStats'
 import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
@@ -213,6 +215,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const [summarySidebarWidth, setSummarySidebarWidth] = useState<number>(384)
   const summaryDragStart = useRef<{ x: number; w: number } | null>(null)
 
+  // ── Mapa: drill-down comunal ───────────────────────────────────────────────
+  // Nivel comunal dentro de una región (doble click en el polígono o CTA
+  // "Ver detalle comunal" del preview). Ortogonal a selectedRegion/mapaMode:
+  // al entrar se cierra el preview (setSelectedRegion(null)) para no pelear
+  // con el effect que deriva mapaMode. NO se persiste en localStorage (igual
+  // que selectedRegion) y muere al salir de la vista Mapa.
+  type MapDrill = { region: Region; comuna: { cut: number; nombre: string } | null }
+  const [mapDrill, setMapDrill] = useState<MapDrill | null>(null)
+
+  // El drill muere al salir de la vista Mapa.
+  useEffect(() => {
+    if (view !== 'mapa') setMapDrill(null)
+  }, [view])
+
   // Restaurar el ancho del sidebar default desde localStorage al hidratar.
   // Si no hay valor persistido, calcular un default proporcional al viewport.
   useEffect(() => {
@@ -352,11 +368,62 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   function handleSelectRegion(regionName: string, cod: string) {
     const found = REGIONS.find(r => r.cod === cod)
     if (!found) return
+    // Click simple durante el drill comunal: sale del drill y sigue el flujo
+    // normal (abre el preview de la región clickeada).
+    setMapDrill(null)
     // Toggle del panel del mapa, pero NO toggle del filtro global: al clickear
     // siempre actualizamos activeRegionName (para que las otras vistas hereden).
     setSelectedRegion(prev => prev?.cod === cod ? null : found)
     setActiveRegionName(found.nombre)
   }
+
+  // ── Drill comunal: transiciones ────────────────────────────────────────────
+
+  const enterDrill = useCallback((region: Region) => {
+    if (lockedRegions.includes(region.cod)) return
+    setMapDrill({ region, comuna: null })
+    setSelectedRegion(null)
+    setActiveRegionName(region.nombre)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile])
+
+  function handleRegionDoubleClick(_regionName: string, cod: string) {
+    const found = REGIONS.find(r => r.cod === cod)
+    if (found) enterDrill(found)
+  }
+
+  const selectComuna = useCallback((cut: number, nombre: string) => {
+    setMapDrill(d => d ? { ...d, comuna: { cut, nombre } } : d)
+  }, [])
+
+  // Retrocede UN nivel: comuna → lista comunal → mapa de Chile.
+  const drillBack = useCallback(() => {
+    setMapDrill(d => (d?.comuna ? { ...d, comuna: null } : null))
+  }, [])
+
+  // Esc retrocede un nivel del drill. Solo activo en el mapa con drill
+  // abierto; respeta inputs con foco (patrón del atajo `?`).
+  useEffect(() => {
+    if (view !== 'mapa' || !mapDrill) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      drillBack()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [view, mapDrill, drillBack])
+
+  // Conteos del nivel comunal — derivados client-side de lo ya cargado
+  // (comuna_cods + inversion_mm), sin endpoint nuevo. Keyed por la región
+  // drilled (no por mapDrill entero: seleccionar comuna no recalcula).
+  const drillRegion = mapDrill?.region ?? null
+  const comunaStats = useMemo(
+    () => drillRegion ? computeComunaStats(projectsByRegion[drillRegion.nombre] ?? [], drillRegion.cod) : null,
+    [drillRegion, projectsByRegion],
+  )
 
   // RAG counts per region (for sidebar). useCallback keyed on projectsByRegion
   // para que MapaSummarySidebar (que llama ragFor/avgPctFor por las 16 regiones)
@@ -628,13 +695,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
          anima 48% → 100% antes del setView). */}
       {view === 'mapa' && (
         <div className="flex flex-1 overflow-hidden">
-          {/* Mapa */}
+          {/* Mapa. Layout: con preview abierto el mapa cede el ancho del
+              panel; en summary y en el drill comunal crece a full. */}
           <div
             className="relative min-w-0 transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
-              flexGrow:   mapaMode === 'summary' ? 1 : 0,
+              flexGrow:   !mapDrill && mapaMode === 'preview' ? 0 : 1,
               flexShrink: 1,
-              flexBasis:  mapaMode === 'summary' ? 'auto' : `calc(100% - min(${previewWidthPct}vw, 900px))`,
+              flexBasis:  !mapDrill && mapaMode === 'preview' ? `calc(100% - min(${previewWidthPct}vw, 900px))` : 'auto',
             }}
           >
             <ChileMap
@@ -642,12 +710,35 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               selectedCod={selectedRegion?.cod ?? hoveredCod}
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
+              onRegionDoubleClick={handleRegionDoubleClick}
+              drill={mapDrill && comunaStats ? {
+                regionIne:      INE_CODE[mapDrill.region.cod],
+                regionCod:      mapDrill.region.cod,
+                regionNombre:   mapDrill.region.nombre,
+                selectedCut:    mapDrill.comuna?.cut ?? null,
+                statsByCut:     comunaStats.statsByCut,
+                onSelectComuna: selectComuna,
+              } : null}
               lockedRegions={lockedRegions}
             />
           </div>
 
+          {/* Lateral del drill comunal (reemplaza al resumen mientras se está
+              dentro de una región) */}
+          {mapDrill && comunaStats && (
+            <ComunasSidebar
+              regionNombre={mapDrill.region.nombre}
+              regionCod={mapDrill.region.cod}
+              stats={comunaStats}
+              selectedCut={mapDrill.comuna?.cut ?? null}
+              onSelectComuna={selectComuna}
+              onBack={drillBack}
+              width={summarySidebarWidth}
+            />
+          )}
+
           {/* Preview regional */}
-          {mapaMode === 'preview' && selectedRegion && (
+          {!mapDrill && mapaMode === 'preview' && selectedRegion && (
             <div
               className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
               style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
@@ -663,7 +754,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           )}
 
           {/* Sidebar resumen (default) */}
-          {mapaMode === 'summary' && (
+          {!mapDrill && mapaMode === 'summary' && (
             <MapaSummarySidebar
               projects={localIniciativas}
               actividad={actividad}

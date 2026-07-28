@@ -68,6 +68,8 @@ function makeIniciativa(overrides: Partial<Iniciativa> = {}): Iniciativa {
     tags:               [],
     es_desalojo:        false,
     capa:               'lll',
+    comuna_cods:        [],
+    alcance_regional:   false,
     ...overrides,
   }
 }
