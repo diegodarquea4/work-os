@@ -237,7 +237,11 @@ export default function TareasTab({
               {tareas.map(t => {
                 const isEditing = editingId === t.id
                 const est = ESTADO_CONFIG[t.estado] ?? ESTADO_CONFIG.no_iniciada
-                const vencido = !!t.fecha_vencimiento && t.estado !== 'completada' && t.fecha_vencimiento < new Date().toISOString().split('T')[0]
+                // Fecha local (en-CA → YYYY-MM-DD), no UTC: con toISOString(),
+                // desde las ~20-21h de Chile la fecha UTC ya es "mañana" y una
+                // tarea que vence hoy se marcaría vencida antes de tiempo.
+                // Mismo patrón que AttentionTray.diasHastaHito.
+                const vencido = !!t.fecha_vencimiento && t.estado !== 'completada' && t.fecha_vencimiento < new Date().toLocaleDateString('en-CA')
 
                 if (isEditing) {
                   return (
