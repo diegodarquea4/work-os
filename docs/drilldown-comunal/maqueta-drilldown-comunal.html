@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maqueta — Drill-down comunal · Vista Mapa (PSG)</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink2:#475569; --muted:#94a3b8; --line:#e2e8f0;
+    --bg:#f8fafc; --card:#fff; --soft:#f1f5f9;
+    --green:#22c55e; --blue:#3b82f6; --amber:#f59e0b; --red:#ef4444;
+    --new:#7c3aed; --new-soft:#f5f3ff; --new-line:#ddd6fe;
+    --regV:#0f766e; --regV-soft:#ccfbf1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  .proposal-bar{background:#1e1b4b;color:#e0e7ff;padding:14px 24px}
+  .proposal-bar h1{font-size:15px;font-weight:600;color:#fff;display:inline;margin-right:18px}
+  .proposal-bar p{font-size:12.5px;color:#c7d2fe;display:inline}
+  .chip-new{display:inline-block;background:var(--new);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:99px;vertical-align:middle}
+
+  .frame{max-width:1220px;margin:20px auto;padding:0 20px}
+  .topbar{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+  .crumb{font-size:13px;color:var(--muted)}
+  .crumb b{color:var(--ink);font-weight:600}
+  .crumb .lvl{color:var(--new);font-weight:600}
+  .btn-back{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font-size:12.5px;color:var(--ink2);cursor:pointer;display:none}
+  .btn-back:hover{border-color:#94a3b8}
+  .hintbar{margin-left:auto;font-size:12px;color:var(--muted)}
+  .hintbar b{color:var(--new)}
+
+  .layout{display:grid;grid-template-columns:1fr 400px;gap:18px;align-items:start}
+  .mapbox{background:#eef4f8;border:1px solid var(--line);border-radius:14px;height:660px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .mapnote{position:absolute;bottom:10px;left:12px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.85);border-radius:8px;padding:4px 10px}
+  svg path{cursor:pointer;transition:fill-opacity .12s, stroke-width .12s}
+
+  .tooltip{position:fixed;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 14px rgba(15,23,42,.13);padding:7px 11px;font-size:12px;display:none;z-index:60}
+  .tooltip b{font-weight:600}
+  .tooltip span{color:var(--ink2)}
+
+  /* sidebar */
+  .side{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;max-height:660px;display:flex;flex-direction:column}
+  .side-head{padding:15px 18px;border-bottom:1px solid var(--line)}
+  .side-head h3{font-size:15px;font-weight:700}
+  .side-head p{font-size:12px;color:var(--ink2);margin-top:2px}
+  .side-body{overflow-y:auto;flex:1}
+  .srow{display:flex;align-items:center;gap:10px;padding:9px 18px;border-bottom:1px solid var(--soft);font-size:13px;cursor:pointer}
+  .srow:hover{background:var(--soft)}
+  .srow .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .srow b{font-weight:600}
+  .srow .n{margin-left:auto;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .srow .chev{color:#cbd5e1}
+  .srow.bucket{background:#fafafa;font-style:normal}
+  .srow.bucket .tagb{font-size:9.5px;font-weight:700;letter-spacing:.04em;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink2)}
+  .divider{padding:7px 18px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted);background:var(--soft)}
+
+  /* preview región (existente) */
+  .prev{padding:16px 18px}
+  .prev .kpis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0}
+  .kpi{background:var(--soft);border-radius:10px;padding:9px;text-align:center}
+  .kpi b{display:block;font-size:17px}
+  .kpi span{font-size:10.5px;color:var(--ink2)}
+  .cta{display:block;width:100%;text-align:center;background:var(--ink);color:#fff;border:0;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
+  .hint-dbl{margin-top:10px;border:1px dashed var(--new-line);background:var(--new-soft);color:var(--new);border-radius:10px;padding:9px;font-size:12px;text-align:center;font-weight:600;cursor:pointer}
+
+  /* detalle comuna */
+  .card-ini{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 18px}
+  .card-ini h4{font-size:13px;font-weight:600;display:flex;gap:8px;align-items:flex-start}
+  .card-ini h4 .dot{margin-top:4px;flex-shrink:0}
+  .card-ini p{font-size:11.5px;color:var(--ink2);margin-top:4px}
+  .dot{width:9px;height:9px;border-radius:99px;display:inline-block}
+  .d-verde{background:var(--green)} .d-ambar{background:var(--amber)} .d-rojo{background:var(--red)} .d-gris{background:#cbd5e1}
+  .ejemplo{font-size:10.5px;color:var(--muted);text-align:center;padding:6px 0 12px}
+  .filterline{padding:10px 18px;border-bottom:1px solid var(--soft);font-size:11.5px;color:var(--ink2)}
+  .filterline code{background:var(--new-soft);color:var(--new);border-radius:5px;padding:1px 6px;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="proposal-bar">
+  <h1>Maqueta · Drill-down comunal en Mapa</h1>
+  <p>Geografía y conteos <b>reales</b> (Región de Valparaíso, base productiva 28-jul). Lo <span class="chip-new">violeta</span> es nuevo; el resto existe. <b>Doble click</b> en Valparaíso para bajar a comunas.</p>
+</div>
+
+<div class="frame">
+  <div class="topbar">
+    <button class="btn-back" id="back" onclick="goBack()">←</button>
+    <p class="crumb" id="crumb">PSG · <b>Mapa</b> · Chile</p>
+    <p class="hintbar" id="hint">Click: seleccionar región (como hoy) · <b>Doble click: bajar a comunas</b></p>
+  </div>
+
+  <div class="layout">
+    <div class="mapbox">
+      <svg id="svgNac" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="svgCom" xmlns="http://www.w3.org/2000/svg" style="display:none"></svg>
+      <p class="mapnote" id="mapnote">Maqueta: solo Valparaíso tiene drill-down habilitado. En producción: las 16 regiones.</p>
+    </div>
+
+    <aside class="side">
+      <!-- Estado A: resumen nacional (existente, simplificado) -->
+      <div id="sideNac">
+        <div class="side-head"><h3>Resumen nacional</h3><p>16 regiones · semáforo agregado (como hoy)</p></div>
+        <div class="side-body" id="listNac"></div>
+      </div>
+
+      <!-- Estado A2: preview región (existente) + acceso comunal nuevo -->
+      <div id="sidePrev" style="display:none">
+        <div class="side-head"><h3>Región de Valparaíso</h3><p>Preview regional — componente existente</p></div>
+        <div class="prev">
+          <div class="kpis">
+            <div class="kpi"><b>760</b><span>iniciativas</span></div>
+            <div class="kpi"><b>62%</b><span>avance prom.</span></div>
+            <div class="kpi"><b>38</b><span>comunas c/iniciativas</span></div>
+          </div>
+          <button class="cta">Ver Mi Región →</button>
+          <div class="hint-dbl" onclick="enterComunal()">⌖ Ver detalle comunal (doble click en el mapa) <span class="chip-new">NUEVO</span></div>
+        </div>
+      </div>
+
+      <!-- Estado B: lista comunal (nuevo) -->
+      <div id="sideCom" style="display:none">
+        <div class="side-head" style="border-left:3px solid var(--new)">
+          <h3>Valparaíso · nivel comunal <span class="chip-new">NUEVO</span></h3>
+          <p id="comSub"></p>
+        </div>
+        <div class="side-body" id="listCom"></div>
+      </div>
+
+      <!-- Estado C: detalle de una comuna (nuevo — mismo detalle regional, filtrado) -->
+      <div id="sideDet" style="display:none">
+        <div class="side-head" style="border-left:3px solid var(--new)">
+          <h3 id="detTitle"></h3>
+          <p id="detSub"></p>
+        </div>
+        <div class="filterline">Mismo componente del detalle regional, filtrado por <code id="detFiltro"></code></div>
+        <div class="side-body" id="detBody"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="tooltip" id="tt"></div>
+
+<script>
+const DATA = {"nacional": [{"name": "Región de Arica y Parinacota", "cod": 15, "d": "M76.57 15.57L77.82 14.84L76.25 9.47L76.15 5.26L73.55 4.19L72.91 1.47L71.4 0.0L67.32 1.6L68.09 4.43L66.88 6.52L65.44 7.67L61.59 8.15L61.77 9.74L61.11 13.71L62.16 17.78L61.97 18.74L66.58 16.5L71.9 16.39L74.11 17.18L76.64 16.13L76.57 15.57Z"}, {"name": "Región de Tarapacá", "cod": 1, "d": "M71.9 16.39L65.79 16.7L61.97 18.75L63.52 24.45L63.77 31.06L63.15 31.83L63.22 39.46L64.51 42.68L64.59 44.14L67.79 44.28L67.96 44.02L70.44 46.45L73.19 43.77L78.42 42.47L82.16 39.93L81.96 36.05L83.28 35.04L79.82 32.91L80.22 29.17L81.81 28.22L82.25 25.85L80.31 24.62L83.67 20.9L81.19 19.28L77.38 15.37L76.57 15.57L76.64 16.13L74.11 17.18L71.9 16.39Z"}, {"name": "Región de Antofagasta", "cod": 2, "d": "M80.76 88.84L82.49 87.28L84.39 86.62L83.36 84.25L81.79 82.98L83.84 79.45L85.5 78.37L96.16 74.2L100.0 62.26L97.81 60.12L93.33 61.08L89.71 60.33L90.28 57.43L89.01 55.13L88.75 51.34L87.52 50.51L87.65 48.07L86.26 46.15L86.28 42.67L83.59 38.42L82.16 39.93L78.42 42.47L73.19 43.77L70.44 46.45L67.96 44.02L64.74 44.09L64.32 44.77L64.18 46.02L63.53 46.74L63.61 48.98L62.59 52.68L61.62 60.01L61.92 61.27L60.6 63.22L58.58 63.22L58.35 68.1L59.78 67.67L60.74 69.34L59.19 72.21L59.09 76.66L58.59 82.25L59.88 85.29L60.06 89.69L57.8 91.46L57.92 92.79L56.76 94.86L58.17 97.55L61.79 95.68L64.39 96.48L66.32 95.66L70.89 96.32L72.42 95.5L73.72 95.35L75.67 94.6L76.13 93.74L75.82 92.08L76.95 89.69L79.98 89.84L80.59 89.51L80.76 88.84Z"}, {"name": "Región de Magallanes y Antártica Chilena", "cod": 12, "d": "M82.42 430.71L79.03 431.43L73.56 431.63L72.46 431.91L66.26 432.65L67.72 435.56L73.85 436.96L74.2 434.5L77.35 434.84L77.76 436.9L82.7 436.9L83.91 435.13L86.31 434.77L82.42 430.71ZM60.15 430.95L55.06 432.18L61.83 433.06L60.15 430.95ZM88.57 430.33L86.35 431.47L87.02 434.15L89.22 433.72L96.66 435.38L99.37 433.38L97.68 431.09L91.68 430.87L88.57 430.33ZM69.07 430.18L65.99 430.62L66.07 432.36L71.13 431.98L73.59 431.47L73.47 430.92L69.07 430.18ZM46.92 419.27L45.98 422.7L52.04 424.63L54.07 423.23L53.71 421.07L46.92 419.27ZM43.1 418.23L41.38 419.41L38.88 419.08L38.26 420.69L36.25 422.09L36.08 423.5L40.8 422.48L45.05 423.14L46.23 419.16L43.1 418.23ZM59.75 415.01L57.01 416.54L54.78 418.66L55.56 421.43L57.35 422.3L61.42 420.27L59.75 415.01ZM30.17 412.82L28.03 414.29L30.34 415.15L32.18 416.95L30.13 418.96L34.26 421.08L38.29 420.42L38.12 418.29L40.44 417.56L37.75 415.86L30.17 412.82ZM11.17 405.19L10.86 406.16L15.41 409.94L20.83 409.57L25.97 412.12L26.39 410.72L18.65 408.19L14.91 407.76L14.15 406.51L11.17 405.19ZM48.32 404.54L46.01 404.99L39.85 405.05L37.2 406.42L34.31 405.29L31.74 406.69L30.53 406.81L31.76 407.58L31.07 407.78L31.62 408.52L30.48 410.44L27.64 410.57L35.76 414.7L37.32 411.47L41.9 410.01L43.81 408.51L48.1 406.6L49.16 405.27L48.32 404.54ZM22.27 401.79L18.72 403.76L20.2 405.63L22.37 404.4L22.27 401.79ZM57.13 424.09L53.76 425.29L49.62 424.26L46.83 425.72L45.35 424.6L41.97 425.98L43.21 427.49L46.75 426.99L48.03 427.93L53.08 427.63L55.43 429.56L58.35 429.11L63.32 430.11L67.93 429.65L75.86 431.16L81.32 430.33L81.34 404.55L79.16 403.66L75.36 405.01L72.43 402.39L69.86 403.23L68.74 405.62L66.19 406.69L63.62 405.38L62.27 406.89L64.24 407.65L62.41 409.2L60.44 408.63L59.91 411.99L62.79 413.99L66.58 412.86L72.52 412.61L73.21 414.07L69.06 415.94L66.34 416.11L63.25 418.11L64.79 420.67L69.75 424.24L64.32 422.95L62.93 423.94L59.47 423.3L55.7 421.66L55.19 422.98L57.13 424.09ZM8.34 394.71L6.82 397.16L9.06 397.99L10.05 395.38L8.34 394.71ZM18.49 391.52L18.11 394.48L20.16 394.32L18.49 391.52ZM6.16 388.26L3.53 392.18L5.65 392.27L6.68 389.6L6.16 388.26ZM12.09 387.58L9.89 387.81L8.36 390.11L13.09 389.52L12.09 387.58ZM11.76 382.05L12.11 383.05L11.74 384.2L8.83 386.0L12.04 386.34L14.8 384.09L11.76 382.05ZM9.59 381.41L8.16 382.95L9.61 384.03L11.18 384.29L11.76 383.28L9.59 381.41ZM3.29 379.22L1.67 381.55L3.23 382.99L5.8 380.43L3.29 379.22ZM16.4 383.65L17.11 382.48L13.76 379.34L12.78 381.89L16.4 383.65ZM4.13 373.78L2.75 374.16L2.02 377.48L5.59 378.33L9.98 375.55L6.82 375.35L4.13 373.78ZM1.34 370.41L0.65 371.78L5.76 372.0L4.37 370.13L1.34 370.41ZM0.81 364.05L4.82 363.16L3.65 361.8L0.81 364.05ZM4.93 359.65L1.25 360.03L0.51 361.43L2.39 362.75L3.87 361.29L5.17 362.99L7.64 361.52L4.93 359.65ZM28.99 364.77L19.43 359.03L17.32 358.87L15.34 359.38L14.43 360.06L15.36 361.27L14.28 363.04L15.13 366.04L14.6 366.82L17.24 368.56L15.56 369.76L14.98 373.57L10.96 376.2L15.01 378.53L18.75 383.68L16.28 384.78L17.66 387.5L22.45 388.75L20.33 389.65L21.25 393.55L24.11 397.15L26.26 398.48L23.73 400.39L24.74 404.97L26.29 405.37L26.95 407.94L29.09 409.81L30.77 409.36L31.33 408.52L30.93 407.84L31.29 407.39L30.43 406.88L30.53 406.73L31.55 406.34L32.13 406.37L34.43 404.79L37.21 404.73L40.36 402.95L46.36 403.6L47.27 403.44L49.29 405.25L49.45 406.21L51.76 406.29L52.37 407.44L49.6 409.9L45.17 410.89L38.63 411.4L36.66 413.09L40.91 416.38L50.32 418.82L54.05 417.55L54.6 415.25L53.86 412.98L55.86 408.56L55.8 405.71L59.19 405.32L66.95 402.56L69.06 403.15L71.22 401.42L71.19 398.7L65.32 396.95L43.07 396.93L42.78 395.49L38.75 393.47L38.2 391.41L39.07 388.68L37.47 386.64L39.12 385.78L39.33 383.99L36.5 380.8L33.77 380.95L30.62 382.67L26.82 380.44L26.46 377.33L24.63 375.63L25.62 373.98L25.03 371.69L27.07 370.81L28.14 370.04L30.02 367.69L28.99 364.77ZM4.64 369.45L6.09 372.16L9.08 374.18L11.78 374.54L14.41 372.73L14.61 370.16L13.57 368.25L14.63 365.79L13.68 358.81L12.57 359.23L11.22 358.32L7.59 359.63L8.66 362.2L10.23 363.27L9.09 365.82L7.27 365.05L2.5 365.52L3.08 367.92L4.64 369.45ZM7.5 357.66L4.99 359.47L6.97 360.32L7.5 357.66Z"}, {"name": "Región de Aysén del Gral.Ibañez del Campo", "cod": 11, "d": "M4.0 356.39L0.81 356.1L2.23 358.64L4.86 357.24L4.0 356.39ZM11.14 352.11L10.28 355.14L7.89 356.28L8.02 357.33L12.8 358.77L12.81 354.71L11.14 352.11ZM5.61 351.55L5.9 353.34L7.79 355.89L9.61 354.74L10.61 352.73L5.61 351.55ZM3.94 350.74L1.42 351.81L4.24 355.19L5.54 358.73L7.48 357.62L7.33 356.21L3.94 350.74ZM7.76 349.26L6.57 351.38L9.53 351.75L7.76 349.26ZM18.7 349.31L16.98 348.24L13.69 349.49L16.11 350.36L18.7 349.31ZM20.65 327.65L20.0 328.75L22.24 330.12L23.19 328.56L20.65 327.65ZM24.54 326.11L23.3 327.41L23.66 330.26L26.52 326.79L24.54 326.11ZM22.59 325.47L20.66 326.04L20.22 327.57L23.02 328.03L22.59 325.47ZM14.6 321.3L13.5 323.2L14.88 325.1L17.05 323.42L14.6 321.3ZM22.9 321.18L21.49 323.88L24.2 323.6L22.9 321.18ZM21.33 315.98L17.06 316.53L16.62 318.11L19.38 319.11L22.82 318.4L21.33 315.98ZM17.89 311.46L14.45 311.75L16.38 313.93L19.42 312.8L17.89 311.46ZM30.95 308.82L25.7 312.03L26.13 314.02L27.61 315.35L30.16 314.77L32.72 313.08L34.23 310.84L30.95 308.82ZM14.11 347.58L15.46 348.22L18.87 348.09L20.5 348.82L22.76 347.96L23.82 350.78L20.13 351.24L18.28 350.39L15.76 350.77L13.46 349.95L12.08 350.76L14.84 352.94L19.05 355.26L14.95 357.55L16.3 359.07L17.25 358.72L19.27 358.9L28.99 364.77L29.0 364.4L30.59 363.05L31.55 361.58L32.99 361.95L36.06 359.97L35.4 356.46L39.54 354.52L38.66 352.38L36.09 350.05L37.33 346.87L40.68 343.04L42.22 342.64L43.8 340.76L42.7 340.13L42.98 337.45L46.28 335.59L44.74 329.98L46.59 327.09L44.47 324.45L44.94 322.59L48.3 321.87L47.63 320.68L49.88 318.94L48.12 317.81L47.26 315.9L43.58 315.68L42.11 313.68L46.07 313.71L48.29 313.13L51.36 313.28L52.23 310.05L49.26 309.06L46.0 309.34L44.65 308.44L44.6 305.25L44.41 304.1L43.22 303.94L41.67 303.88L39.95 302.79L39.41 302.39L38.33 300.85L33.36 301.96L32.87 300.44L32.31 301.62L31.86 301.59L30.13 302.85L28.52 307.48L30.88 307.87L34.45 310.49L33.57 313.24L29.52 315.59L26.53 315.63L26.45 316.93L28.23 318.92L24.96 321.55L24.15 325.17L26.99 326.53L24.07 331.18L20.7 329.26L19.67 329.36L19.75 328.09L18.26 325.54L15.18 325.32L13.26 325.95L10.78 325.6L6.67 326.27L6.89 328.39L8.98 329.02L8.49 330.36L1.74 333.74L0.0 335.97L2.46 338.89L4.63 338.12L3.96 335.03L7.03 334.92L7.94 336.28L11.44 337.07L15.41 336.32L18.38 339.07L13.96 343.31L13.84 344.57L11.19 347.21L14.11 347.58Z"}, {"name": "Región de Atacama", "cod": 3, "d": "M65.82 137.29L65.02 135.3L65.8 133.69L67.72 133.01L68.36 127.86L69.23 125.77L71.53 122.09L73.25 121.45L74.06 119.58L75.38 118.82L76.2 115.55L78.11 113.02L78.62 110.27L79.37 109.56L82.78 109.91L85.31 107.48L81.56 102.56L81.92 100.18L83.95 98.94L82.84 93.44L80.76 88.84L80.47 89.6L79.32 89.99L78.86 89.61L76.95 89.69L75.82 92.08L76.13 93.74L75.71 94.54L73.94 95.27L72.42 95.5L70.89 96.32L66.32 95.66L64.39 96.48L61.79 95.68L58.17 97.55L57.2 101.4L57.39 103.46L55.64 107.02L56.16 108.37L54.02 110.41L54.1 112.71L54.9 115.59L52.8 117.39L51.62 121.17L51.94 122.61L50.49 127.27L47.7 130.55L48.93 133.63L51.41 133.64L51.61 134.78L53.63 135.19L54.02 133.55L56.91 132.16L58.92 132.03L59.97 135.91L61.81 135.85L63.28 137.58L65.82 137.29Z"}, {"name": "Región de Coquimbo", "cod": 4, "d": "M48.93 133.63L50.23 136.69L49.74 140.22L50.29 142.48L47.97 146.19L45.87 147.05L45.47 151.31L46.23 154.31L46.01 156.49L47.89 163.47L47.92 168.22L49.82 168.47L51.16 167.59L54.28 166.68L54.53 167.05L57.29 166.86L57.68 166.76L57.82 167.73L60.0 168.11L60.47 169.38L61.53 169.29L62.03 164.79L59.94 164.33L59.87 162.68L58.73 161.51L59.22 156.77L60.62 156.53L63.01 148.72L66.46 147.13L67.47 144.73L66.26 143.34L66.68 139.88L65.82 137.29L63.28 137.58L61.81 135.85L59.97 135.91L58.92 132.03L56.91 132.16L54.02 133.55L53.63 135.19L51.61 134.78L51.41 133.64L48.93 133.63Z"}, {"name": "Región de Valparaíso", "cod": 5, "d": "M47.92 168.22L49.02 170.71L48.22 172.15L48.75 173.53L47.4 175.46L47.87 176.65L45.55 179.97L45.53 182.57L46.76 183.94L46.08 185.86L44.56 186.59L44.39 188.14L47.31 187.73L48.77 186.77L49.84 184.67L49.76 182.47L51.15 181.97L51.24 180.37L53.74 179.97L53.39 178.64L54.43 177.36L55.55 176.77L57.1 177.22L59.39 178.7L60.95 178.88L62.95 178.95L63.46 178.97L65.39 176.53L63.57 174.54L63.84 172.31L62.67 169.84L60.47 169.38L60.0 168.11L57.82 167.73L57.68 166.76L57.29 166.86L54.53 167.05L54.28 166.68L51.16 167.59L49.82 168.47L47.92 168.22Z"}, {"name": "Región Metropolitana de Santiago", "cod": 13, "d": "M57.1 177.22L55.55 176.77L54.43 177.36L53.39 178.64L53.74 179.97L51.24 180.37L51.15 181.97L49.76 182.47L49.84 184.67L48.77 186.77L47.31 187.73L46.95 189.6L48.55 189.37L50.25 189.56L51.59 191.03L54.71 190.88L57.09 188.11L58.34 187.99L59.46 187.63L60.93 187.87L63.37 191.04L65.6 192.09L67.32 189.36L66.37 186.6L66.74 183.91L67.92 181.79L65.23 181.38L63.46 178.97L62.95 178.95L60.95 178.88L59.39 178.7L57.1 177.22Z"}, {"name": "Región de Los Lagos", "cod": 10, "d": "M20.48 279.02L18.44 279.67L18.78 282.32L17.1 284.63L16.79 287.48L17.69 288.99L16.5 293.4L14.4 296.09L15.65 296.85L19.95 297.35L23.35 294.44L25.01 290.68L21.55 288.59L23.27 287.85L22.92 286.0L26.53 285.44L25.86 282.38L23.85 279.15L21.52 280.14L20.48 279.02ZM22.89 261.65L22.38 264.86L21.02 266.15L19.72 269.82L21.05 273.85L20.78 275.35L23.13 276.95L22.31 278.42L25.1 279.22L28.79 279.12L30.2 278.12L29.52 276.83L31.34 275.45L34.46 277.11L34.69 278.43L32.05 280.54L36.81 283.2L33.69 284.13L32.33 288.69L32.56 291.17L33.96 292.07L31.63 294.58L32.13 295.76L29.91 296.8L29.59 298.47L31.86 301.59L32.31 301.62L32.87 300.44L33.36 301.96L38.33 300.85L39.41 302.39L39.95 302.79L41.67 303.88L43.22 303.94L44.41 304.1L44.6 305.25L46.23 303.98L45.02 302.17L47.02 300.6L43.6 299.41L43.3 296.78L44.95 294.98L42.95 294.25L40.28 290.76L42.07 287.17L40.67 285.97L40.16 283.17L43.64 283.32L45.35 282.8L44.56 281.1L45.03 279.05L43.51 276.99L44.1 273.13L43.49 271.85L42.53 265.78L41.58 265.72L39.88 266.21L35.18 266.31L33.17 265.34L31.71 263.54L29.74 262.44L25.95 262.35L25.4 261.57L22.89 261.65Z"}, {"name": "Región de Los Ríos", "cod": 14, "d": "M32.57 250.56L31.26 250.57L28.79 251.71L25.97 254.92L26.02 257.01L22.83 258.04L22.89 261.65L25.4 261.57L25.95 262.35L29.74 262.44L31.71 263.54L33.17 265.34L35.18 266.31L39.88 266.21L41.58 265.72L42.53 265.78L44.2 263.3L46.14 262.65L44.15 260.96L45.67 259.82L46.89 257.44L45.5 255.27L44.93 252.78L43.79 251.93L40.82 252.81L39.64 252.3L38.22 252.79L36.04 251.92L32.29 251.49L31.79 251.31L32.57 250.56Z"}, {"name": "Región de La Araucanía", "cod": 9, "d": "M33.79 231.06L29.72 231.63L29.45 232.21L30.36 232.14L30.1 233.57L29.26 234.9L29.71 236.48L29.74 237.41L29.05 237.86L28.08 238.51L27.09 239.7L27.07 240.13L27.47 241.03L26.23 239.98L24.65 240.93L25.01 242.95L26.96 246.77L28.79 251.71L31.26 250.57L32.57 250.56L31.79 251.31L32.29 251.49L36.04 251.92L38.22 252.79L39.64 252.3L40.82 252.81L43.79 251.93L44.93 252.78L47.92 254.26L48.45 251.21L49.41 250.17L48.72 246.09L52.61 244.09L54.59 244.18L55.55 241.59L53.91 240.35L53.78 237.35L52.74 236.41L50.46 236.64L45.54 238.44L45.67 236.34L41.62 235.53L39.35 233.96L37.55 233.55L36.48 231.29L34.65 231.0L33.79 231.06Z"}, {"name": "Región del Bío-Bío", "cod": 8, "d": "M27.09 239.7L28.08 238.51L29.05 237.86L29.74 237.41L29.71 236.48L29.26 234.9L30.1 233.57L30.36 232.14L29.45 232.21L29.72 231.63L33.79 231.06L34.65 231.0L36.48 231.29L37.55 233.55L39.35 233.96L41.62 235.53L45.67 236.34L45.54 238.44L50.46 236.64L52.74 236.41L52.28 233.32L51.29 231.78L52.37 229.47L50.61 225.11L47.84 223.88L47.24 225.38L44.52 225.09L43.35 225.97L40.81 225.9L39.17 224.9L38.42 223.61L37.74 222.82L36.98 222.77L36.21 223.13L35.37 220.76L32.97 219.28L32.83 217.6L31.83 217.44L30.73 220.75L29.42 220.62L27.48 226.44L23.15 226.17L23.83 229.15L22.95 232.16L25.4 236.32L24.54 239.84L26.23 239.98L27.47 241.03L27.07 240.13L27.09 239.7Z"}, {"name": "Región de Ñuble", "cod": 16, "d": "M37.74 222.82L38.42 223.61L39.17 224.9L40.81 225.9L43.35 225.97L44.52 225.09L47.24 225.38L47.84 223.88L50.61 225.11L51.79 223.8L53.04 216.76L51.13 217.63L49.65 218.2L48.33 217.05L45.63 216.36L44.36 215.23L38.28 214.66L36.49 213.12L35.45 213.19L34.62 212.83L32.78 213.36L32.83 217.6L32.97 219.28L35.37 220.76L36.21 223.13L36.98 222.77L37.74 222.82Z"}, {"name": "Región del Maule", "cod": 7, "d": "M43.19 198.62L41.42 197.24L40.1 199.54L39.83 202.02L37.76 203.3L36.55 206.09L34.82 207.7L35.64 209.92L33.12 212.0L34.62 212.83L35.45 213.19L36.49 213.12L38.28 214.66L44.36 215.23L45.63 216.36L48.33 217.05L49.65 218.2L51.13 217.63L53.04 216.76L54.02 218.08L57.44 216.78L57.13 215.43L59.15 213.94L60.4 214.09L60.4 210.86L61.66 210.13L60.38 208.15L60.28 204.43L60.95 202.71L60.47 200.57L58.08 200.61L56.38 199.12L52.58 198.77L51.26 198.85L45.53 200.02L44.28 198.92L43.19 198.62Z"}, {"name": "Región del Libertador Bernardo O'Higgins", "cod": 6, "d": "M44.39 188.14L42.08 190.73L42.5 192.66L41.53 197.14L43.19 198.62L44.28 198.92L45.53 200.02L51.26 198.85L52.58 198.77L56.38 199.12L58.08 200.61L60.47 200.57L62.4 198.43L62.75 196.27L65.16 193.76L64.67 191.82L63.37 191.04L60.93 187.87L59.46 187.63L58.34 187.99L57.09 188.11L54.71 190.88L51.59 191.03L50.25 189.56L48.55 189.37L46.95 189.6L44.39 188.14Z"}, {"name": "Zona sin demarcar", "cod": 0, "d": "M23.24 364.26L23.21 371.48L32.08 371.7L32.11 364.27L23.24 364.26Z"}], "nacionalH": 437.0, "comunasV": [{"name": "Rinconada", "cut": 5303, "d": "M63.78 43.22L61.0 41.85L57.89 43.23L60.49 50.14L62.79 47.57L63.78 43.22Z", "n": 7, "inv": 6915}, {"name": "Cabildo", "cut": 5402, "d": "M56.03 22.53L63.89 23.81L66.32 18.5L75.97 16.74L77.16 14.15L75.01 10.69L71.06 12.56L57.88 13.98L50.13 16.99L46.26 15.92L39.65 18.34L40.23 21.3L38.06 22.29L37.68 24.81L38.64 26.62L42.83 28.44L42.33 32.44L47.98 32.66L51.14 31.41L55.1 32.64L57.06 28.15L56.03 22.53Z", "n": 5, "inv": 4648}, {"name": "Petorca", "cut": 5404, "d": "M71.06 12.56L74.79 9.99L64.06 5.8L59.94 0.0L49.09 2.86L43.64 2.55L35.49 7.82L36.81 14.81L39.65 18.34L46.26 15.92L50.13 16.99L57.88 13.98L71.06 12.56Z", "n": 10, "inv": 8519}, {"name": "Panquehue", "cut": 5704, "d": "M48.13 41.9L48.16 43.15L57.45 43.41L59.3 39.38L57.29 38.14L48.13 41.9Z", "n": 14, "inv": 7407}, {"name": "Olmué", "cut": 5803, "d": "M33.58 51.2L37.96 59.21L43.24 57.86L45.28 55.37L43.83 52.06L33.58 51.2Z", "n": 17, "inv": 22554}, {"name": "Cartagena", "cut": 5603, "d": "M19.5 78.37L17.47 80.72L11.4 82.53L23.14 85.63L27.53 84.13L24.14 77.27L21.67 79.12L19.5 78.37Z", "n": 10, "inv": 20610}, {"name": "Catemu", "cut": 5702, "d": "M55.1 32.64L51.18 31.42L46.37 32.73L44.27 31.73L42.37 33.1L43.53 34.92L42.44 38.62L45.22 43.38L46.39 41.89L48.17 43.15L48.13 41.9L53.29 40.29L52.31 38.15L55.1 32.64Z", "n": 10, "inv": 7806}, {"name": "Llaillay", "cut": 5703, "d": "M43.16 43.83L44.56 51.4L50.38 49.19L53.88 48.46L60.03 48.57L57.95 43.23L50.01 43.67L47.17 41.77L43.16 43.83Z", "n": 16, "inv": 18472}, {"name": "San Felipe", "cut": 5701, "d": "M59.52 36.18L54.77 33.58L52.32 38.11L53.29 40.29L57.96 38.22L59.57 39.57L58.21 41.91L60.86 41.13L60.88 42.74L63.78 43.22L65.11 41.87L62.42 40.53L63.52 35.83L59.16 37.21L59.52 36.18Z", "n": 24, "inv": 42701}, {"name": "Santa María", "cut": 5706, "d": "M68.77 32.9L71.62 31.3L69.21 29.51L65.81 31.61L62.47 39.0L62.42 40.53L66.22 37.81L68.77 32.9Z", "n": 8, "inv": 11488}, {"name": "Villa Alemana", "cut": 5804, "d": "M23.74 53.37L23.78 55.16L25.93 57.97L28.93 59.2L31.27 58.47L29.35 53.27L27.43 55.07L23.74 53.37Z", "n": 31, "inv": 254651}, {"name": "Santo Domingo", "cut": 5606, "d": "M2.32 95.24L0.0 102.63L6.39 104.37L13.91 99.55L15.23 99.84L16.3 93.1L12.91 86.85L11.2 85.99L9.14 91.46L2.32 95.24Z", "n": 6, "inv": 14334}, {"name": "San Antonio", "cut": 5601, "d": "M11.5 85.27L17.02 94.71L25.7 93.71L21.64 89.43L23.1 85.63L11.5 85.27Z", "n": 41, "inv": 387827}, {"name": "El Tabo", "cut": 5605, "d": "M13.25 77.62L14.08 81.45L17.71 80.59L19.5 78.37L13.25 77.62Z", "n": 11, "inv": 8730}, {"name": "El Quisco", "cut": 5604, "d": "M7.97 76.37L13.38 76.07L13.46 74.28L10.08 74.45L7.97 76.37Z", "n": 11, "inv": 18270}, {"name": "Algarrobo", "cut": 5602, "d": "M15.71 74.03L16.47 66.8L10.39 66.87L9.89 68.76L9.87 71.76L7.73 72.8L10.13 74.46L15.71 74.03Z", "n": 12, "inv": 7655}, {"name": "Casablanca", "cut": 5102, "d": "M11.64 61.25L9.19 67.79L13.12 66.28L16.82 67.15L15.71 74.03L13.25 77.62L21.67 79.12L24.14 77.27L33.27 72.84L34.75 69.49L32.88 65.74L26.61 63.7L25.45 62.16L16.3 64.22L11.64 61.25Z", "n": 8, "inv": 43723}, {"name": "Valparaíso", "cut": 5101, "d": "M15.91 58.3L10.34 53.75L7.13 60.94L11.64 61.25L16.3 64.22L15.91 58.3Z", "n": 88, "inv": 249222}, {"name": "Viña del Mar", "cut": 5109, "d": "M21.38 52.76L15.62 49.84L13.57 54.19L15.91 58.3L21.38 52.76Z", "n": 62, "inv": 542235}, {"name": "Concón", "cut": 5103, "d": "M21.38 52.76L23.24 49.15L17.87 48.1L15.33 49.52L21.38 52.76Z", "n": 16, "inv": 84019}, {"name": "Quintero", "cut": 5107, "d": "M20.2 41.88L20.86 46.75L22.51 44.13L20.2 41.88Z", "n": 10, "inv": 34393}, {"name": "Puchuncaví", "cut": 5105, "d": "M25.31 35.18L19.94 36.98L20.2 41.88L22.51 44.13L29.48 40.97L28.38 38.28L30.29 36.32L25.31 35.18Z", "n": 18, "inv": 38416}, {"name": "Zapallar", "cut": 5405, "d": "M24.41 28.46L25.31 35.18L28.56 34.95L34.45 31.25L29.05 25.49L24.41 28.46Z", "n": 7, "inv": 14246}, {"name": "Papudo", "cut": 5403, "d": "M27.72 20.38L23.15 20.74L20.83 27.63L24.41 28.46L29.05 25.49L27.96 22.45L27.72 20.38Z", "n": 4, "inv": 9490}, {"name": "La Ligua", "cut": 5401, "d": "M36.81 14.81L34.36 5.78L27.02 9.54L19.49 6.95L19.86 17.22L27.72 20.38L27.96 22.45L28.02 23.82L34.45 31.25L36.62 30.53L40.94 31.95L42.84 28.45L37.77 25.12L38.06 22.29L40.23 21.3L36.81 14.81Z", "n": 14, "inv": 102045}, {"name": "Limache", "cut": 5802, "d": "M25.1 48.22L21.89 52.72L27.43 55.07L29.35 53.27L29.52 56.15L32.53 60.44L34.74 61.4L38.11 60.12L33.58 51.2L27.38 50.04L25.1 48.22Z", "n": 13, "inv": 18113}, {"name": "Quillota", "cut": 5501, "d": "M37.46 45.51L29.3 43.52L20.86 46.75L25.1 48.22L32.06 51.24L38.86 50.2L37.11 48.84L37.46 45.51Z", "n": 17, "inv": 262670}, {"name": "Calera", "cut": 5502, "d": "M32.89 41.24L34.85 42.64L37.46 45.48L38.42 44.29L39.38 41.68L34.62 40.0L32.89 41.24Z", "n": 18, "inv": 30250}, {"name": "Nogales", "cut": 5506, "d": "M34.62 40.0L38.03 40.21L42.89 38.3L42.37 31.01L40.52 32.16L36.93 30.9L32.77 31.23L28.08 35.14L30.29 36.32L28.38 38.28L32.21 42.47L34.62 40.0Z", "n": 6, "inv": 6623}, {"name": "Calle Larga", "cut": 5302, "d": "M77.43 52.72L71.96 46.21L67.58 44.71L63.78 43.2L62.79 47.57L67.25 49.82L71.95 57.49L77.43 52.72Z", "n": 6, "inv": 4668}, {"name": "La Cruz", "cut": 5504, "d": "M32.21 42.47L37.46 45.51L33.9 41.85L32.89 41.24L32.21 42.47Z", "n": 3, "inv": 4169}, {"name": "Putaendo", "cut": 5705, "d": "M85.53 24.19L87.4 16.16L79.84 12.3L73.67 17.82L66.29 18.51L64.89 23.47L57.37 21.78L56.03 22.53L57.06 28.15L55.0 33.47L59.52 36.18L59.23 37.22L64.66 34.9L68.3 29.38L71.64 31.14L78.38 31.32L85.53 24.19Z", "n": 12, "inv": 12262}, {"name": "San Esteban", "cut": 5304, "d": "M79.8 47.79L90.12 40.18L92.6 29.67L92.12 24.95L85.53 24.19L78.38 31.32L68.77 32.9L66.22 37.81L66.57 42.56L77.23 45.38L79.8 47.79Z", "n": 8, "inv": 11226}, {"name": "Los Andes", "cut": 5301, "d": "M77.43 52.72L78.58 57.71L84.71 59.77L90.99 58.77L98.35 53.05L100.0 47.15L89.98 40.33L79.8 47.79L77.23 45.38L71.97 46.22L77.43 52.72Z", "n": 21, "inv": 137545}, {"name": "Hijuelas", "cut": 5503, "d": "M38.42 44.29L37.62 49.46L40.09 51.45L44.46 51.45L43.16 43.83L45.22 43.38L42.12 38.36L39.38 41.68L38.42 44.29Z", "n": 6, "inv": 5497}, {"name": "Quilpué", "cut": 5801, "d": "M23.74 53.37L22.03 52.78L18.87 55.58L20.23 61.11L25.45 62.16L26.61 63.7L33.12 65.99L45.49 63.34L43.75 57.2L34.64 61.39L30.87 58.96L25.91 57.96L23.64 56.31L23.74 53.37Z", "n": 29, "inv": 73086}], "comunasVH": 104.4, "bucketRegional": 25, "islas": [{"name": "Isla de Pascua", "cut": 5201, "n": 12, "inv": 16735}, {"name": "Juan Fernández", "cut": 5104, "n": 6, "inv": 24457}], "bucketRegionalInv": 53588, "sinComuna": {"n": 104, "inv": 772601}};
+
+const fmtMM = v => 'MM$ ' + Math.round(v).toLocaleString('es-CL');
+const svgNS = 'http://www.w3.org/2000/svg';
+const tt = document.getElementById('tt');
+let nivel = 'nacional';      // nacional | comunal | comuna
+let comunaSel = null;
+
+// ── paleta simple por región para la vista nacional (maqueta) ──
+function regColor(i){ return `hsl(${(i*47)%360} 32% 62%)`; }
+
+// ── SVG nacional ──
+const sN = document.getElementById('svgNac');
+sN.setAttribute('viewBox', `0 0 100 ${DATA.nacionalH}`);
+sN.style.height = '640px';
+sN.style.width = (640*100/DATA.nacionalH) + 'px';
+DATA.nacional.forEach((r,i)=>{
+  const p = document.createElementNS(svgNS,'path');
+  p.setAttribute('d', r.d);
+  const esV = r.cod === 5;
+  p.setAttribute('fill', esV ? 'var(--regV)' : regColor(i));
+  p.setAttribute('fill-opacity', esV ? .85 : .55);
+  p.setAttribute('stroke', '#fff');
+  p.setAttribute('stroke-width', .35);
+  p.addEventListener('mousemove', e=>showTT(e, r.name || 'Región', esV ? '760 iniciativas · doble click para comunas' : 'iniciativas de la región'));
+  p.addEventListener('mouseleave', hideTT);
+  p.addEventListener('click', ()=>{ if(esV) showPrev(); });
+  p.addEventListener('dblclick', e=>{ e.preventDefault(); if(esV) enterComunal(); });
+  sN.appendChild(p);
+});
+
+// ── SVG comunal V ──
+const sC = document.getElementById('svgCom');
+sC.setAttribute('viewBox', `-2 -2 104 ${DATA.comunasVH+4}`);
+sC.style.height = '620px';
+sC.style.maxWidth = '100%';
+DATA.comunasV.forEach(c=>{
+  const p = document.createElementNS(svgNS,'path');
+  p.setAttribute('d', c.d);
+  p.setAttribute('fill', 'var(--regV)');          // color de la región: decisión de Diego
+  p.setAttribute('fill-opacity', .28);
+  p.setAttribute('stroke', '#fff');
+  p.setAttribute('stroke-width', .5);
+  p.dataset.cut = c.cut;
+  p.addEventListener('mousemove', e=>showTT(e, c.name, `${c.n} iniciativas · ${fmtMM(c.inv)}`));
+  p.addEventListener('mouseleave', ()=>{ hideTT(); if(comunaSel!==c.cut){p.setAttribute('fill-opacity',.28);p.setAttribute('stroke-width',.5);} });
+  p.addEventListener('mouseenter', ()=>{ if(comunaSel!==c.cut){p.setAttribute('fill-opacity',.5);p.setAttribute('stroke-width',.8);} });
+  p.addEventListener('click', ()=>showComuna(c));
+  sC.appendChild(p);
+});
+
+function showTT(e, title, sub){
+  tt.innerHTML = `<b>${title}</b><br><span>${sub}</span>`;
+  tt.style.display = 'block';
+  tt.style.left = (e.clientX+14)+'px';
+  tt.style.top = (e.clientY+10)+'px';
+}
+function hideTT(){ tt.style.display='none'; }
+
+// ── sidebar nacional (mock del existente) ──
+const filas = [['Valparaíso',760,'d-ambar'],['Metropolitana',684,'d-verde'],['Biobío',612,'d-verde'],['Maule',498,'d-ambar'],['O’Higgins',471,'d-rojo'],['Ñuble',280,'d-verde'],['Antofagasta',263,'d-gris']];
+document.getElementById('listNac').innerHTML =
+  filas.map(f=>`<div class="srow"><span class="dot ${f[2]}"></span><b>${f[0]}</b><span class="n">${f[1]}</span><span class="chev">›</span></div>`).join('')
+  + `<p class="ejemplo">(existente — abreviado en la maqueta)</p>`;
+
+// ── lista comunal ──
+// Isla de Pascua y Juan Fernández tienen iniciativas pero quedan fuera del encuadre continental
+const todas = [...DATA.comunasV, ...DATA.islas].sort((a,b)=>b.n-a.n);
+document.getElementById('comSub').textContent =
+  `${todas.length} comunas · n° iniciativas · inversión (multi-comuna cuenta completa en cada una)`;
+document.getElementById('listCom').innerHTML =
+  todas.map(c=>`<div class="srow" onclick='showComuna(${JSON.stringify(c)})'><b>${c.name}</b><span class="n">${c.n} · ${fmtMM(c.inv)}</span><span class="chev">›</span></div>`).join('')
+  + `<div class="divider">FUERA DEL NIVEL COMUNAL</div>`
+  + `<div class="srow bucket"><span class="tagb">REGIONAL</span><b>Alcance regional</b><span class="n">${DATA.bucketRegional} · ${fmtMM(DATA.bucketRegionalInv)}</span><span class="chev">›</span></div>`
+  + `<div class="srow bucket"><span class="tagb">S/D</span><b>Sin comuna</b><span class="n">${DATA.sinComuna.n} · ${fmtMM(DATA.sinComuna.inv)}</span><span class="chev">›</span></div>`;
+
+// ── estados ──
+function setSide(id){ ['sideNac','sidePrev','sideCom','sideDet'].forEach(x=>document.getElementById(x).style.display = x===id?'block':'none'); }
+function setCrumb(html){ document.getElementById('crumb').innerHTML = html; }
+
+function showPrev(){       // click simple: comportamiento actual
+  if(nivel!=='nacional') return;
+  setSide('sidePrev');
+  setCrumb('PSG · <b>Mapa</b> · Región de Valparaíso');
+}
+function enterComunal(){   // doble click: NUEVO
+  nivel='comunal'; comunaSel=null;
+  document.getElementById('svgNac').style.display='none';
+  document.getElementById('svgCom').style.display='block';
+  document.getElementById('mapnote').textContent='Comunas delimitadas · relleno = color de la región · Isla de Pascua y Juan Fernández: en la lista, fuera del encuadre.';
+  document.getElementById('back').style.display='inline-block';
+  document.getElementById('hint').innerHTML='Click en comuna: detalle · <b>← o Esc: volver</b>';
+  setSide('sideCom');
+  setCrumb('PSG · <b>Mapa</b> · Valparaíso · <span class="lvl">nivel comunal</span>');
+}
+function showComuna(c){
+  nivel='comuna'; comunaSel=c.cut;
+  sC.querySelectorAll('path').forEach(p=>{
+    const on = Number(p.dataset.cut)===c.cut;
+    p.setAttribute('fill-opacity', on? .75 : .18);
+    p.setAttribute('stroke-width', on? 1 : .5);
+    p.setAttribute('stroke', on? '#1e293b' : '#fff');
+  });
+  setSide('sideDet');
+  setCrumb(`PSG · <b>Mapa</b> · Valparaíso · <span class="lvl">${c.name}</span>`);
+  document.getElementById('detTitle').innerHTML = `${c.name} <span class="chip-new">NUEVO</span>`;
+  document.getElementById('detSub').textContent = `${c.n} iniciativas · ${fmtMM(c.inv)} de inversión asociada · CUT ${c.cut}`;
+  document.getElementById('detFiltro').textContent = `comuna_cods @> {${c.cut}}`;
+  const ejemplos = [
+    ['d-verde','Mejoramiento de luminarias y espacios públicos','Eje Seguridad · SUBDERE · 68% avance'],
+    ['d-ambar','Reposición de infraestructura de salud primaria','Eje Salud · MINSAL · hito próximo 15-ago'],
+    ['d-rojo','Plan de pavimentación participativa','Eje Infraestructura · MINVU · bloqueada — sin RS'],
+  ];
+  document.getElementById('detBody').innerHTML =
+    ejemplos.map(e=>`<div class="card-ini"><h4><span class="dot ${e[0]}"></span>${e[1]}</h4><p>${e[2]}</p></div>`).join('')
+    + `<p class="ejemplo">Tarjetas de ejemplo — en producción: las ${c.n} iniciativas reales, mismo componente del panel regional.</p>`;
+}
+function goBack(){
+  if(nivel==='comuna'){ enterComunal(); return; }
+  nivel='nacional'; comunaSel=null;
+  document.getElementById('svgCom').style.display='none';
+  document.getElementById('svgNac').style.display='block';
+  document.getElementById('mapnote').textContent='Maqueta: solo Valparaíso tiene drill-down habilitado. En producción: las 16 regiones.';
+  document.getElementById('back').style.display='none';
+  document.getElementById('hint').innerHTML='Click: seleccionar región (como hoy) · <b>Doble click: bajar a comunas</b>';
+  setSide('sideNac');
+  setCrumb('PSG · <b>Mapa</b> · Chile');
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') goBack(); });
+</script>
+</body>
+</html>
