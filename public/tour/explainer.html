@@ -435,7 +435,7 @@
             </div>
             <div>
               <div class="prego"><div class="pl">PREGO</div><div class="dots"><i class="ok">✓</i><i class="ok">✓</i><i class="ok">✓</i><i class="warn">!</i><i></i><i></i><i></i><i></i><i></i><b>4/9</b></div></div>
-              <div class="btns"><span class="btn">＋ Proponer actualización</span><span class="btn">📊 Indicadores</span><span class="btn dark">📄 Generar ejecutiva ▾</span></div>
+              <div class="btns"><span class="btn">＋ Proponer actualización</span><span class="btn">📊 Indicadores</span><span class="btn dark">📄 Minutas ▾</span></div>
             </div>
           </div>
         </div>
@@ -518,7 +518,7 @@
 
     <section class="screen body" data-view="kanbanEje">
       <div class="bd">
-        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b class="on">Por eje</b><b>Por ministerio</b><b>Por tag</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" style="margin-left:auto">⬇️ Descargar cartera</span></div>
+        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b class="on">Ejes</b><b>Ministerios</b><b>Tags</b><b>Capa</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" style="margin-left:auto">⬇️ Descargar cartera</span></div>
         <div class="kcols" id="ke-cols">
           <div class="kc"><div class="kh"><span>Eje 1: Seguridad y Fronteras</span><span>42</span></div>
             <div class="kcard"><span class="et">Diseño</span><b>Paso Fronterizo Ruta 21-Ch</b><div class="kf"><span class="pri alta">Alta</span><span class="s g"></span></div></div>
@@ -546,7 +546,7 @@
 
     <section class="screen body" data-view="kanbanMin">
       <div class="bd">
-        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b>Por eje</b><b class="on">Por ministerio</b><b>Por tag</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" id="km-dl" style="margin-left:auto">⬇️ Descargar cartera por ministerio (PDF)</span></div>
+        <div class="kbar"><span class="selct">Antofagasta ▾</span><span class="kseg"><b>Ejes</b><b class="on">Ministerios</b><b>Tags</b><b>Capa</b></span><span style="font-size:.56em;color:var(--gray-400)">325 iniciativas</span><span class="btn" id="km-dl" style="margin-left:auto">⬇️ Descargar cartera por ministerio (PDF)</span></div>
         <div id="km-list">
           <div class="ksec"><div class="sh">▾ Ministerio de Obras Públicas <span class="cnt">128 iniciativas</span></div>
             <div class="srow"><span class="fl on">🚩</span><span class="s a"></span><span style="flex:1">Concesión Ruta 5 Caldera - Antofagasta</span><span class="ejn">Eje 2</span><span class="pri alta">Alta</span></div>
@@ -599,6 +599,7 @@
           <span class="lgf">Contraseña</span>
           <div class="lgi">••••••••••</div>
           <div class="lgbtn">Ingresar</div>
+          <div style="text-align:center;margin-top:.7em;font-size:.56em;color:var(--blue-700);font-weight:600">¿Tienes un código? Activa tu cuenta o crea tu clave</div>
         </div>
       </div>
     </section>
@@ -703,14 +704,14 @@ const CHILE=[
   var steps=[
     {view:'intro', t:null, kick:'Lo esencial', title:'', text:'', dur:14000,
      narr:'Te damos la bienvenida al Panel de Seguimiento Gubernamental, el PSG. Es el panel donde tu región hace seguimiento de sus iniciativas prioritarias: cada obra, proyecto o compromiso que sigue de cerca. Existe para que tu Delegación y la División de Coordinación Interministerial del Ministerio del Interior vean el avance real en un solo lugar, sin pedir reportes por correo. Tu rol: mantener esa información al día. El panel reporta el estado; no ejecuta las obras.'},
-    {view:'login', t:'lg-form', kick:'Acceso', title:'Ingresa con tu correo', text:'El panel reconoce tu región automáticamente.', dur:8000,
-     narr:'Para empezar, ingresas con tu correo institucional y el panel reconoce tu región.'},
+    {view:'login', t:'lg-form', kick:'Acceso', title:'Ingresa con tu correo', text:'Primer ingreso: activa tu cuenta con el código que te entrega la división.', dur:10000,
+     narr:'Para empezar, ingresas con tu correo institucional y el panel reconoce tu región. Si es tu primer ingreso, usa el botón Activa tu cuenta: con el código que te entregó la división defines tu propia clave.'},
     {view:'map', t:'mp-map', kick:'Tu región', title:'El mapa te ubica en tu región', text:'El globo resume tu cartera: 325 iniciativas, 47 de prioridad alta.', dur:10500,
      narr:'Al entrar, el mapa te ubica en tu región y la resalta. El globo resume tu cartera, el conjunto de tus iniciativas: 325 en total, 47 de prioridad alta y 277 media.'},
     {view:'map', t:'mp-panel', kick:'Previsualización', title:'KPIs y avance por eje', text:'Decide rápido si entrar a la región. CTA directo a Mi Región.', dur:12500,
      narr:'A la derecha se abre la previsualización de la región: avance promedio con delta vs nacional, fase PREGO, los KPIs claves de atención, y los ejes en barras compactas. Es para decidir rápido si vale la pena entrar al Dashboard sin perder de vista el mapa. Abajo, el botón Ver Mi Región te lleva directo al tablero de la región con un clic.'},
     {view:'miregion', t:'mr-head', kick:'Mi Región', title:'Tu tablero, de un vistazo', text:'Avance, semáforo y fase PREGO. Botones: Proponer, Indicadores y minutas.', dur:17000,
-     narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. El contador PREGO muestra tu Plan Regional de Gobierno: 9 fases que estructuran el compromiso con la región. La división central evalúa cada fase; tú reportas la evidencia de cumplimiento. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y generas la minuta en tres formatos: ejecutiva, reporte completo y kit de viaje.'},
+     narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. El contador PREGO muestra tu Plan Regional de Gobierno: 9 fases que estructuran el compromiso con la región. La división central evalúa cada fase; tú reportas la evidencia de cumplimiento. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y descargas las minutas de tu región — ejecutiva, contexto y kit de viaje. La versión vigente de cada minuta la genera y actualiza la división.'},
     {view:'miregion', t:'mr-alertas', kick:'Lo urgente', title:'Empieza por las alertas', text:'Lo bloqueado o sin actividad es tu prioridad del día.', dur:10500,
      narr:'Lo más importante son las alertas activas: los hitos próximos a vencer y lo que lleva días sin movimiento. Comienza tu día por aquí; lo bloqueado o sin actividad es tu prioridad.'},
     {view:'miregion', t:'mr-ejes', kick:'Tu cartera', title:'Avance por eje estratégico', text:'Los ejes los define tu región en su catálogo formal.', dur:11500,
@@ -725,18 +726,18 @@ const CHILE=[
      narr:'La tarea clave de cada semana: mantener tu cartera al día con un solo Excel. Descarga tus iniciativas, modifica solo lo que cambió, súbelo y envía tu propuesta. El Excel incluye una hoja Ejes válidos con los ejes de tu región; úsala como referencia. Si subes un eje que no existe en tu región, el panel te avisa antes y te indica cuál pedir a la división que cree. Hazlo cada lunes: un editor de la división revisa tu propuesta antes de que quede firme.'},
     {view:'misPropuestas', t:'mp-list', kick:'Mis propuestas', title:'El estado de tus cargas', text:'Pendiente, aprobada, rechazada con motivo, o aplicada con avisos.', dur:12500,
      narr:'Después de enviar, sigues el estado de cada carga en Mis propuestas: pendiente, aprobada, rechazada con el motivo del revisor, o aplicada con avisos si alguna fila tuvo errores. Así cierras el ciclo de tu carga semanal.'},
-    {view:'kanbanEje', t:'ke-cols', kick:'Kanban · por eje', title:'Tres modos y filtros nuevos', text:'Por eje, por ministerio o por tag. Marca foco directo desde la card.', dur:12500,
-     narr:'El Kanban ordena tu cartera en columnas. Tienes tres modos: por eje, por ministerio, o por tag — este último genera una columna por cada etiqueta presente en tu cartera. De un vistazo ves cuántas iniciativas tiene cada área y en qué estado están. Los filtros de arriba son multi-select con búsqueda, y la marca en foco la activas desde cualquier card sin tener que abrir la ficha.'},
-    {view:'kanbanMin', t:'km-dl', kick:'Kanban · por ministerio', title:'Descarga la cartera de cada ministerio', text:'Cada SEREMI llega al gabinete semanal con el detalle de su cartera en PDF.', dur:15000,
-     narr:'Y el formato por ministerio agrupa tu cartera por SEREMI. Aquí está el gran apoyo para tus reuniones: descargas la cartera de cada ministerio en un PDF, y así cada SEREMI llega al gabinete semanal con el detalle de su cartera. La reunión se vuelve mucho más eficiente.'},
+    {view:'kanbanEje', t:'ke-cols', kick:'Gabinete · por eje', title:'Cuatro modos y filtros', text:'Ejes, Ministerios, Tags o Capa de importancia. Marca foco directo desde la card.', dur:12500,
+     narr:'La vista Gabinete ordena tu cartera en columnas. Tienes cuatro modos: por eje, por ministerio, por tag — una columna por cada etiqueta de tu cartera — o por capa de importancia, que separa las prioridades (Capa I y II) de la cartera regular. Los filtros de arriba son multi-select con búsqueda, y la marca en foco la activas desde cualquier card sin tener que abrir la ficha.'},
+    {view:'kanbanMin', t:'km-dl', kick:'Gabinete · por ministerio', title:'Descarga la cartera de cada ministerio', text:'Cada SEREMI llega al gabinete semanal con el detalle de su cartera en PDF.', dur:15000,
+     narr:'Y el formato por ministerio agrupa tu cartera por SEREMI, en el orden institucional con que se conduce la mesa. Aquí está el gran apoyo para tus reuniones: descargas la cartera de cada ministerio en un PDF, y así cada SEREMI llega al gabinete semanal con el detalle de su cartera. La reunión se vuelve mucho más eficiente.'},
     {view:'atencion', t:'at-foco', kick:'Prioriza', title:'Revisa solo lo que importa ahora', text:'Marca en foco lo prioritario y míralo junto antes de una reunión.', dur:12000,
      narr:'No todo necesita tu atención hoy. Marca con la bandera lo que importa ahora y se reúne en tu Bandeja de Atención: tu lista corta para revisar lo prioritario, antes de una reunión o cuando algo urge. Más abajo, la lista de sugerencias automáticas se expande al hacer clic y te propone qué más conviene vigilar.'},
     {view:'recap', t:null, kick:'Para empezar hoy', title:'', text:'', dur:12500,
-     narr:'Para empezar, recuerda lo esencial: ingresa al panel, lee tu tablero comenzando por las alertas, y mantén tu cartera al día con tu carga semanal. Si en algún paso te falta contexto, abre el Centro de Ayuda con el botón signo de pregunta de la cabecera: tiene este mismo tour y un FAQ por rol. Bienvenido al PSG.'}
+     narr:'Para empezar, recuerda lo esencial: ingresa al panel, lee tu tablero comenzando por las alertas, y mantén tu cartera al día con tu carga semanal. Si en algún paso te falta contexto, abre el Centro de Ayuda con el botón signo de pregunta de la cabecera: tiene este tour, tours por sección — como el de Desalojos, que tu región consulta en solo lectura — y un FAQ por rol. Bienvenido al PSG.'}
   ];
 
   var NAVMAP={ map:['mapa','Seguimiento ▾',false], miregion:['seg','Mi Región ▾',true], metricas:['seg','Mi Región ▾',true], proponer:['seg','Mi Región ▾',true], misPropuestas:['seg','Mi Región ▾',true],
-    dashboard:['seg','Dashboard ▾',true], ficha:['seg','Dashboard ▾',true], kanbanEje:['seg','Kanban ▾',true], kanbanMin:['seg','Kanban ▾',true], atencion:['seg','Atención ▾',true] };
+    dashboard:['seg','Dashboard ▾',true], ficha:['seg','Dashboard ▾',true], kanbanEje:['seg','Gabinete ▾',true], kanbanMin:['seg','Gabinete ▾',true], atencion:['seg','Atención ▾',true] };
 
   var stage=document.getElementById('stage');
   var screens={}; stage.querySelectorAll('.screen').forEach(function(s){ screens[s.getAttribute('data-view')]=s; });
