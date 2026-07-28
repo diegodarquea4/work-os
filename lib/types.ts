@@ -454,6 +454,18 @@ export type Documento = {
   created_at: string
 }
 
+export type Tarea = {
+  id: number
+  prioridad_id: number
+  tarea: string
+  responsable: string | null
+  estado: 'completada' | 'en_proceso' | 'bloqueada' | 'no_iniciada'
+  fecha_vencimiento: string | null
+  comentarios: string | null
+  autor: string | null
+  created_at: string
+}
+
 // ── Métricas por eje (planificación cuantitativa por región) ─────────────────
 // Admin/editor crea la métrica con su objetivo. Cualquier autenticado puede
 // actualizar valor_actual (modelo "compromiso": DCI fija, regional reporta).
