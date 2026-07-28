@@ -116,6 +116,25 @@ BEGIN
 END;
 $$;
 
+-- ── 2b. Policy acotada: "+ indicador no contemplado" desde la sesión ────────
+-- El INSERT de metricas_eje era solo admin/editor (mig 014), pero el flujo
+-- de sesión permite al regional crear un indicador ad-hoc (spec §7 zona 3 /
+-- regla 4). Se abre SOLO ese caso: su región + se_reporta_en_sesion=true +
+-- eje con sesiones habilitadas. La definición de métricas normales sigue
+-- siendo de admin/editor, y el trigger de UPDATE le impide editarla después.
+DROP POLICY IF EXISTS metricas_eje_regional_insert_sesion ON public.metricas_eje;
+CREATE POLICY metricas_eje_regional_insert_sesion ON public.metricas_eje
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    metricas_eje.se_reporta_en_sesion = true
+    AND EXISTS (
+      SELECT 1 FROM public.user_profiles up
+      WHERE up.id = auth.uid() AND up.role = 'regional'
+        AND metricas_eje.region_cod = ANY(up.region_cods))
+    AND EXISTS (
+      SELECT 1 FROM public.region_ejes re
+      WHERE re.id = metricas_eje.eje_id AND re.sesiones_habilitadas));
+
 -- ── 3. Tablas nuevas ────────────────────────────────────────────────────────
 
 -- Sesión de la instancia (Comité Policial u otra futura)

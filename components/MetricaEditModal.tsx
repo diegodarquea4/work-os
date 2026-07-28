@@ -30,6 +30,12 @@ type Props = {
   ejeLabel?: string
   currentUserEmail: string
   onSaved: () => void   // dispara reload del drawer padre
+  // Módulo Sesiones (mig 044): si el eje tiene sesiones habilitadas, el
+  // formulario muestra tipo (suma/pulso) + "se reporta en sesión". Con
+  // false el modal es idéntico al histórico (cero regresión).
+  sesionesOn?: boolean
+  // "+ indicador no contemplado" desde SesionModal: prefija el checkbox.
+  defaultsSesion?: { se_reporta_en_sesion: boolean }
 }
 
 export default function MetricaEditModal({
@@ -41,6 +47,8 @@ export default function MetricaEditModal({
   ejeLabel,
   currentUserEmail,
   onSaved,
+  sesionesOn = false,
+  defaultsSesion,
 }: Props) {
   const displayLabel = ejeLabel ?? composeEjeLabel(eje.numero, eje.nombre)
   const isEdit = !!metrica
@@ -48,6 +56,8 @@ export default function MetricaEditModal({
   const [descripcion, setDescripcion] = useState('')
   const [objetivo, setObjetivo]       = useState('')
   const [unidad, setUnidad]           = useState('')
+  const [tipo, setTipo]               = useState<'suma' | 'pulso'>('suma')
+  const [enSesion, setEnSesion]       = useState(false)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
@@ -58,8 +68,10 @@ export default function MetricaEditModal({
     setDescripcion(metrica?.descripcion ?? '')
     setObjetivo(metrica?.objetivo != null ? String(metrica.objetivo) : '')
     setUnidad(metrica?.unidad ?? '')
+    setTipo(metrica?.tipo ?? 'suma')
+    setEnSesion(metrica?.se_reporta_en_sesion ?? defaultsSesion?.se_reporta_en_sesion ?? false)
     setError(null)
-  }, [open, metrica])
+  }, [open, metrica, defaultsSesion])
 
   if (!open) return null
 
@@ -68,10 +80,14 @@ export default function MetricaEditModal({
     onClose()
   }
 
+  const esPulso = sesionesOn && tipo === 'pulso'
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!titulo.trim() || !objetivo.trim()) return
-    const objetivoNum = parseFloat(objetivo.replace(',', '.'))
+    // Pulso no lleva meta: objetivo queda en 0 (columna NOT NULL) y la UI
+    // lo ignora — decisión documentada en mig 044.
+    if (!titulo.trim() || (!esPulso && !objetivo.trim())) return
+    const objetivoNum = esPulso ? 0 : parseFloat(objetivo.replace(',', '.'))
     if (isNaN(objetivoNum)) {
       setError('El objetivo debe ser un número válido.')
       return
@@ -84,6 +100,10 @@ export default function MetricaEditModal({
       descripcion: descripcion.trim() || null,
       objetivo:    objetivoNum,
       unidad:      unidad.trim() || null,
+      // Con sesiones apagadas el estado conserva los valores existentes
+      // (o los defaults suma/false) — el payload es idéntico al histórico.
+      tipo,
+      se_reporta_en_sesion: enSesion,
       updated_at:  new Date().toISOString(),
     }
     // En INSERT: setea eje_id (FK) Y eje string denormalizado (compat).
@@ -173,22 +193,66 @@ export default function MetricaEditModal({
             />
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Objetivo <span className="text-red-500">*</span>
+          {/* Tipo + reporte en sesión — solo con el módulo Sesiones activo */}
+          {sesionesOn && (
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de métrica</label>
+                <div className="flex items-center gap-0.5 border border-slate-200 rounded-lg p-0.5 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setTipo('suma')}
+                    className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                      tipo === 'suma' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Acumula hacia una meta — cada sesión incrementa el valor"
+                  >
+                    Suma (con meta)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipo('pulso')}
+                    className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                      tipo === 'pulso' ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Foto semanal sin meta — cada sesión reemplaza el valor"
+                  >
+                    Pulso (foto semanal)
+                  </button>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  checked={enSesion}
+                  onChange={e => setEnSesion(e.target.checked)}
+                  className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
+                />
+                <span className="text-xs text-slate-700">
+                  Se reporta en sesión <span className="text-gray-400">(aparece precargada en el formulario del comité)</span>
+                </span>
               </label>
-              <input
-                type="number"
-                value={objetivo}
-                onChange={e => setObjetivo(e.target.value)}
-                required
-                step="any"
-                placeholder="Ej: 95"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
-              />
             </div>
-            <div className="w-28">
+          )}
+
+          <div className="flex gap-2">
+            {!esPulso && (
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Objetivo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={objetivo}
+                  onChange={e => setObjetivo(e.target.value)}
+                  required
+                  step="any"
+                  placeholder="Ej: 95"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+              </div>
+            )}
+            <div className={esPulso ? 'flex-1' : 'w-28'}>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Unidad
               </label>
@@ -201,6 +265,11 @@ export default function MetricaEditModal({
               />
             </div>
           </div>
+          {esPulso && (
+            <p className="text-[11px] text-gray-400 -mt-1">
+              Las métricas pulso no llevan meta: cada sesión registra la foto de la semana y la card muestra la tendencia.
+            </p>
+          )}
 
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</p>
@@ -217,7 +286,7 @@ export default function MetricaEditModal({
             </button>
             <button
               type="submit"
-              disabled={saving || !titulo.trim() || !objetivo.trim()}
+              disabled={saving || !titulo.trim() || (!esPulso && !objetivo.trim())}
               className="flex-1 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50"
             >
               {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear métrica'}

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maqueta — Sesiones Comité Policial · Avance por Eje (PSG)</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink2:#475569; --muted:#94a3b8; --line:#e2e8f0;
+    --bg:#f8fafc; --card:#ffffff; --soft:#f1f5f9;
+    --green:#22c55e; --blue:#3b82f6; --amber:#f59e0b; --red:#ef4444;
+    --new:#7c3aed; --new-soft:#f5f3ff; --new-line:#ddd6fe;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+
+  /* ── Barra explicativa de la maqueta ── */
+  .proposal-bar{background:#1e1b4b;color:#e0e7ff;padding:14px 24px;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline}
+  .proposal-bar h1{font-size:15px;font-weight:600;color:#fff}
+  .proposal-bar p{font-size:12.5px;color:#c7d2fe}
+  .chip-new{display:inline-block;background:var(--new);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:99px;vertical-align:middle}
+
+  .frame{max-width:1180px;margin:26px auto;padding:0 20px}
+  .crumb{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .crumb b{color:var(--ink2);font-weight:600}
+  h2.section{font-size:17px;font-weight:700;margin-bottom:14px}
+
+  .layout{display:grid;grid-template-columns:1fr 400px;gap:18px;align-items:start}
+
+  /* ── Grid de ejes ── */
+  .ejes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .eje{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;transition:border-color .15s}
+  .eje:hover{border-color:#cbd5e1}
+  .eje.sel{border:2px dashed var(--green);background:#f0fdf4}
+  .eje .num{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+  .eje h3{font-size:14.5px;font-weight:600;margin:3px 0 10px}
+  .eje .meta{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between}
+  .minibar{height:6px;background:var(--soft);border-radius:99px;overflow:hidden;margin-top:8px}
+  .minibar i{display:block;height:100%;border-radius:99px}
+  .badge-ses{font-size:10.5px;font-weight:600;color:var(--new);background:var(--new-soft);border:1px solid var(--new-line);border-radius:99px;padding:1px 8px}
+
+  /* ── Drawer ── */
+  .drawer{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 3px rgba(15,23,42,.06);overflow:hidden}
+  .drawer .x{display:flex;justify-content:flex-end;padding:8px 10px 0}
+  .drawer .x button{border:0;background:none;color:#cbd5e1;font-size:14px;cursor:pointer;padding:4px}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:2px 16px 12px}
+  .btn-dashed{border:2px dashed var(--line);background:none;color:var(--ink2);font-weight:500;font-size:13px;border-radius:10px;padding:10px;cursor:pointer}
+  .btn-dashed:hover{border-color:#94a3b8;color:var(--ink)}
+  .btn-sesion{border:0;background:var(--new);color:#fff;font-weight:600;font-size:13px;border-radius:10px;padding:10px;cursor:pointer;position:relative}
+  .btn-sesion:hover{background:#6d28d9}
+  .strip{display:flex;gap:14px;padding:0 16px 12px;font-size:12px;color:var(--ink2)}
+  .strip b{color:var(--ink)}
+  .strip .dot{width:7px;height:7px;border-radius:99px;background:var(--amber);display:inline-block;margin-right:5px}
+  .mlist{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px;max-height:560px;overflow-y:auto}
+  .mcard{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .mcard.fed{border-color:var(--new-line)}
+  .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px}
+  .mhead h4{font-size:13.5px;font-weight:600}
+  .tag{font-size:9.5px;font-weight:700;letter-spacing:.05em;border-radius:5px;padding:2px 6px;white-space:nowrap}
+  .tag.suma{color:var(--new);background:var(--new-soft);border:1px solid var(--new-line)}
+  .tag.foto{color:#0369a1;background:#f0f9ff;border:1px solid #bae6fd}
+  .bar{height:7px;background:var(--soft);border-radius:99px;overflow:hidden;margin:8px 0 7px}
+  .bar i{display:block;height:100%;border-radius:99px}
+  .vals{display:flex;align-items:baseline;gap:7px;font-size:13.5px}
+  .vals .cur{font-weight:700}
+  .vals .obj{color:var(--ink2)}
+  .vals .un{font-size:11.5px;color:var(--muted)}
+  .vals .pct{margin-left:auto;font-size:11.5px;color:var(--ink2)}
+  .trend-up{color:var(--red);font-weight:600;font-size:12px}
+  .trend-down{color:var(--green);font-weight:600;font-size:12px}
+  .foot{font-size:10.5px;color:var(--muted);margin-top:7px}
+  .foot .fed-note{color:var(--new)}
+  .spark{margin-left:auto}
+
+  /* ── Historial de sesiones ── */
+  .seshead{display:flex;justify-content:space-between;align-items:baseline;padding:12px 16px 6px;border-top:1px solid var(--line)}
+  .seshead h4{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--ink2)}
+  .seshead a{font-size:11.5px;color:var(--new);text-decoration:none;font-weight:600}
+  .sesrow{display:flex;gap:10px;align-items:center;padding:8px 16px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+  .sesrow:hover{background:var(--soft)}
+  .sesrow b{color:var(--ink);font-weight:600}
+  .sesrow .ok{color:var(--green);font-size:11px;margin-left:auto}
+  .sesrow .warn{color:var(--amber);font-size:11px;margin-left:auto}
+
+  /* ── Modal sesión ── */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:16px;max-width:860px;width:100%;overflow:hidden}
+  .mo-head{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;position:sticky;top:0;background:#fff}
+  .mo-head .ico{width:38px;height:38px;border-radius:10px;background:var(--new-soft);color:var(--new);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .mo-head h3{font-size:16px;font-weight:700}
+  .mo-head p{font-size:12px;color:var(--ink2)}
+  .mo-head .close{margin-left:auto;border:0;background:none;font-size:18px;color:#94a3b8;cursor:pointer}
+  .mo-body{padding:20px 24px;display:flex;flex-direction:column;gap:22px}
+  .zone>header{display:flex;align-items:baseline;gap:9px;margin-bottom:10px}
+  .zone .n{width:20px;height:20px;border-radius:99px;background:var(--ink);color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transform:translateY(3px)}
+  .zone h4{font-size:14px;font-weight:700}
+  .zone .hint{font-size:11.5px;color:var(--muted)}
+
+  .comp-prev{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .comp-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);align-items:center}
+  .comp-row:last-child{border-bottom:0}
+  .comp-row .txt b{font-weight:600;font-size:13px}
+  .comp-row .txt p{font-size:11.5px;color:var(--ink2);margin-top:2px}
+  .estados{display:flex;gap:5px}
+  .est{border:1px solid var(--line);background:#fff;border-radius:8px;font-size:11px;padding:5px 9px;cursor:pointer;color:var(--ink2)}
+  .est.on-ok{background:#f0fdf4;border-color:var(--green);color:#15803d;font-weight:600}
+  .est.on-curso{background:#fffbeb;border-color:var(--amber);color:#b45309;font-weight:600}
+  .est.on-pend{background:#fef2f2;border-color:var(--red);color:#b91c1c;font-weight:600}
+
+  .nomina{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .asist{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:10px;padding:8px 11px;cursor:pointer;font-size:12.5px}
+  .asist input{accent-color:var(--new)}
+  .asist .rol{color:var(--muted);font-size:11px}
+  .asist .ts{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+
+  .inds{border:1px solid var(--new-line);background:var(--new-soft);border-radius:12px;padding:6px 14px}
+  .ind-row{display:grid;grid-template-columns:1.4fr 110px 1fr;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--new-line)}
+  .ind-row:last-child{border-bottom:0}
+  .ind-row label{font-size:12.5px;font-weight:600}
+  .ind-row label span{display:block;font-weight:400;font-size:10.5px;color:var(--ink2)}
+  .ind-row input{border:1px solid #c4b5fd;border-radius:8px;padding:7px 9px;font-size:13px;width:100%;background:#fff}
+  .ind-row .feeds{font-size:10.5px;color:var(--new)}
+
+  .tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:8px 8px 0 0;font-size:12px;padding:6px 12px;cursor:pointer;color:var(--ink2)}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+  textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:0 10px 10px 10px;padding:11px;font-size:12.5px;font-family:inherit;color:var(--ink);resize:vertical}
+
+  .comp-new{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .cn-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:0;font-size:12px}
+  .cn-grid>div{padding:9px 12px;border-bottom:1px solid var(--line)}
+  .cn-grid .h{background:var(--soft);font-weight:700;font-size:10.5px;letter-spacing:.05em;color:var(--ink2)}
+  .add-comp{width:100%;border:0;background:none;color:var(--new);font-weight:600;font-size:12.5px;padding:10px;cursor:pointer}
+  .add-comp:hover{background:var(--new-soft)}
+
+  .mo-foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;background:#fafafa}
+  .mo-foot .note{font-size:11.5px;color:var(--ink2);max-width:360px}
+  .btn-ghost{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 16px;font-size:13px;color:var(--ink2);cursor:pointer}
+  .btn-primary{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{background:#1e293b}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#052e16;color:#dcfce7;border-radius:12px;padding:13px 20px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);transition:transform .3s;z-index:99}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+
+  /* ── Historial modal ── */
+  .hist-modal{background:#fff;border-radius:16px;max-width:640px;width:100%;overflow:hidden}
+  .h-row{border-bottom:1px solid var(--line)}
+  .h-row:last-child{border-bottom:0}
+  .h-row-head{display:flex;gap:12px;align-items:center;padding:13px 20px;cursor:pointer;font-size:13px;color:var(--ink2)}
+  .h-row-head:hover{background:var(--soft)}
+  .h-row-head b{color:var(--ink);font-weight:700}
+  .h-row-head .st{margin-left:auto;font-size:11px}
+  .st.ok{color:var(--green)} .st.warn{color:var(--amber)}
+  .h-det{display:none;background:var(--soft);padding:14px 20px 16px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--line)}
+  .h-row.open .h-det{display:block}
+  .h-det h5{font-size:10.5px;letter-spacing:.05em;color:var(--muted);margin:10px 0 3px}
+  .h-det h5:first-child{margin-top:0}
+  .btn-acta{margin-top:12px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;color:var(--ink)}
+  .btn-acta:hover{border-color:#94a3b8}
+
+  /* ── Agregar en caliente ── */
+  .add-inline{border:1px dashed var(--new-line);background:none;color:var(--new);font-weight:600;font-size:12px;border-radius:10px;padding:8px;cursor:pointer;width:100%;margin-top:8px}
+  .add-inline:hover{background:var(--new-soft)}
+  .ts.inv{color:var(--new);border-color:var(--new-line)}
+  .inp-hot{border:1px dashed #c4b5fd;border-radius:8px;padding:5px 9px;font-size:12px;background:#fff}
+
+  @media(max-width:900px){.layout{grid-template-columns:1fr}.nomina{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="proposal-bar">
+  <h1>Maqueta · Sesiones del Comité Policial en «Avance por Eje»</h1>
+  <p>Todo lo marcado en <span class="chip-new">violeta</span> es lo nuevo que se propone — el resto existe hoy en el PSG. Datos de ejemplo: Región de Valparaíso, sesión real del 18-may-2026.</p>
+</div>
+
+<div class="frame">
+  <p class="crumb">PSG · <b>Mi Región</b> · Región de Valparaíso</p>
+  <h2 class="section">Avance por eje estratégico</h2>
+
+  <div class="layout">
+    <!-- ══ Grid de ejes (existe hoy) ══ -->
+    <div class="ejes">
+      <div class="eje sel">
+        <div class="num">EJE 1</div>
+        <h3>Seguridad</h3>
+        <div class="meta"><span>6 métricas</span><span class="badge-ses">Sesiones activas · Comité Policial</span></div>
+        <div class="minibar"><i style="width:62%;background:var(--amber)"></i></div>
+      </div>
+      <div class="eje">
+        <div class="num">EJE 2</div>
+        <h3>Infraestructura</h3>
+        <div class="meta"><span>4 métricas</span></div>
+        <div class="minibar"><i style="width:78%;background:var(--blue)"></i></div>
+      </div>
+      <div class="eje">
+        <div class="num">EJE 3</div>
+        <h3>Desarrollo Económico</h3>
+        <div class="meta"><span>3 métricas</span></div>
+        <div class="minibar"><i style="width:45%;background:var(--amber)"></i></div>
+      </div>
+      <div class="eje">
+        <div class="num">EJE 4</div>
+        <h3>Desarrollo Social</h3>
+        <div class="meta"><span>5 métricas</span></div>
+        <div class="minibar"><i style="width:88%;background:var(--blue)"></i></div>
+      </div>
+    </div>
+
+    <!-- ══ Drawer del eje Seguridad ══ -->
+    <aside class="drawer">
+      <div class="x"><button title="Cerrar panel">✕</button></div>
+
+      <div class="actions">
+        <button class="btn-dashed">＋ Nueva métrica</button>
+        <button class="btn-sesion" onclick="openModal()">▸ Nueva sesión <span style="position:absolute;top:-8px;right:-6px" class="chip-new">NUEVO</span></button>
+      </div>
+
+      <div class="strip">
+        <span><span class="dot"></span><b>3</b> compromisos abiertos</span>
+        <span>Última sesión: <b>21 jul</b></span>
+      </div>
+
+      <div class="mlist">
+        <!-- Métrica acumulativa alimentada por sesión -->
+        <div class="mcard fed">
+          <div class="mhead"><h4>Armas de fuego incautadas 2026</h4><span class="tag suma">SESIÓN · SUMA</span></div>
+          <div class="bar"><i style="width:55%;background:var(--amber)"></i></div>
+          <div class="vals"><span class="cur">219</span><span style="color:var(--muted)">/</span><span class="obj">400</span><span class="un">armas</span><span class="pct">55%</span></div>
+          <p class="foot"><span class="fed-note">＋12 en sesión del 21 jul</span> · serie: 52 sesiones</p>
+        </div>
+
+        <div class="mcard fed">
+          <div class="mhead"><h4>Droga incautada 2026</h4><span class="tag suma">SESIÓN · SUMA</span></div>
+          <div class="bar"><i style="width:76%;background:var(--blue)"></i></div>
+          <div class="vals"><span class="cur">2.284</span><span style="color:var(--muted)">/</span><span class="obj">3.000</span><span class="un">kg</span><span class="pct">76%</span></div>
+          <p class="foot"><span class="fed-note">＋48 kg en sesión del 21 jul</span> · serie: 52 sesiones</p>
+        </div>
+
+        <!-- Métrica pulso -->
+        <div class="mcard fed">
+          <div class="mhead"><h4>Detenidos última semana</h4><span class="tag foto">SESIÓN · PULSO</span></div>
+          <div class="vals" style="margin-top:2px">
+            <span class="cur" style="font-size:19px">855</span>
+            <span class="trend-up">▲ +6% vs sesión anterior</span>
+            <svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-label="serie de detenidos, últimas 6 sesiones">
+              <polyline points="2,16 19,10 36,13 53,7 70,11 84,4" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="84" cy="4" r="3" fill="#7c3aed"/>
+            </svg>
+          </div>
+          <p class="foot">Sin meta — se lee como tendencia semanal</p>
+        </div>
+
+        <div class="mcard fed">
+          <div class="mhead"><h4>Homicidios año a la fecha</h4><span class="tag foto">SESIÓN · PULSO</span></div>
+          <div class="vals" style="margin-top:2px">
+            <span class="cur" style="font-size:19px">44</span>
+            <span class="trend-up">▲ +47% vs 2025 (30)</span>
+          </div>
+          <p class="foot">Reportado por Carabineros en sesión</p>
+        </div>
+
+        <!-- Métrica manual (como hoy) -->
+        <div class="mcard">
+          <div class="mhead"><h4>Cámaras de televigilancia instaladas</h4></div>
+          <div class="bar"><i style="width:40%;background:var(--amber)"></i></div>
+          <div class="vals"><span class="cur">120</span><span style="color:var(--muted)">/</span><span class="obj">300</span><span class="un">cámaras</span><span class="pct">40%</span></div>
+          <p class="foot">Actualizada manualmente — las métricas de siempre no cambian</p>
+        </div>
+      </div>
+
+      <!-- Historial de sesiones (colapsado — el detalle vive en su propio modal) -->
+      <div class="seshead" style="padding-bottom:16px"><h4>SESIONES DEL COMITÉ POLICIAL</h4><a href="#" onclick="openHist();return false">Ver historial →</a></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: NUEVA SESIÓN ══════════ -->
+<div class="overlay" id="ov">
+  <div class="modal">
+    <div class="mo-head">
+      <div class="ico">▸</div>
+      <div>
+        <h3>Comité Policial — Nueva sesión</h3>
+        <p>Región de Valparaíso · martes 28 de julio de 2026 · Sala de Reuniones DPR</p>
+      </div>
+      <button class="close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="mo-body">
+
+      <!-- 1. Compromisos anteriores -->
+      <section class="zone">
+        <header><span class="n">1</span><h4>Compromisos de sesiones anteriores</h4><span class="hint">se verifican antes de abrir temas nuevos</span></header>
+        <div class="comp-prev">
+          <div class="comp-row">
+            <div class="txt"><b>Informe sobre brecha entre detenidos y su ingreso a penales</b><p>Seremi de Justicia y DD.HH. (Rafael González) · comprometido 18-may</p></div>
+            <div class="estados" data-est><button class="est">Cumplido</button><button class="est on-curso">En curso</button><button class="est">Pendiente</button></div>
+          </div>
+          <div class="comp-row">
+            <div class="txt"><b>Reforzar controles vehiculares sector El Melón, Ruta 5 Norte</b><p>Carabineros (Prefectura Aconcagua) · plazo 7 días · vencía 28-jul</p></div>
+            <div class="estados" data-est><button class="est on-ok">Cumplido</button><button class="est">En curso</button><button class="est">Pendiente</button></div>
+          </div>
+          <div class="comp-row">
+            <div class="txt"><b>Remitir antecedentes de homicidio frustrado (Gómez Carreño) a Fiscalía</b><p>PDI · plazo 48 hrs · vencido</p></div>
+            <div class="estados" data-est><button class="est">Cumplido</button><button class="est">En curso</button><button class="est on-pend">Pendiente</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Asistencia -->
+      <section class="zone">
+        <header><span class="n">2</span><h4>Asistencia</h4><span class="hint">nómina fija — titulares y suplentes designados por oficio</span></header>
+        <div class="nomina">
+          <label class="asist"><input type="checkbox" checked><span>Manuel Millones <span class="rol">· Delegado Presidencial</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox" checked><span>Hernán Silva <span class="rol">· Seremi Seguridad</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox" checked><span>Cnel. Jorge Guaita <span class="rol">· Carabineros</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox" checked><span>Pref. Guillermo Gálvez <span class="rol">· PDI</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox"><span>Carlos Cerda <span class="rol">· Gobernación Marítima</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox" checked><span>Cnel. Pablo Torres <span class="rol">· Gendarmería</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox" checked><span>Rafael González <span class="rol">· Seremi Justicia</span></span><span class="ts">T</span></label>
+          <label class="asist"><input type="checkbox"><span>Mayor K. Villanueva <span class="rol">· Carabineros Ops.</span></span><span class="ts">S</span></label>
+        </div>
+        <button class="add-inline" onclick="addAsist()">＋ Agregar asistente extraordinario — no modifica la nómina fija</button>
+      </section>
+
+      <!-- 3. Indicadores -->
+      <section class="zone">
+        <header><span class="n">3</span><h4>Indicadores de la sesión</h4><span class="hint">precargados desde las métricas del eje · alimentan automático</span></header>
+        <div class="inds">
+          <div class="ind-row">
+            <label>Detenidos última semana <span>Carabineros · sesión anterior: 806</span></label>
+            <input type="number" placeholder="855">
+            <span class="feeds">→ actualiza «Detenidos última semana» (pulso)</span>
+          </div>
+          <div class="ind-row">
+            <label>Droga incautada en la semana (kg) <span>Carabineros / PDI · sesión anterior: 31</span></label>
+            <input type="number" placeholder="48">
+            <span class="feeds">→ suma a «Droga incautada 2026» (2.284 → 2.332)</span>
+          </div>
+          <div class="ind-row">
+            <label>Armas de fuego incautadas en la semana <span>Carabineros · sesión anterior: 9</span></label>
+            <input type="number" placeholder="12">
+            <span class="feeds">→ suma a «Armas incautadas 2026» (219 → 231)</span>
+          </div>
+          <div class="ind-row">
+            <label>Homicidios en la semana <span>Carabineros · año a la fecha: 44</span></label>
+            <input type="number" placeholder="1">
+            <span class="feeds">→ actualiza «Homicidios año a la fecha»</span>
+          </div>
+          <div class="ind-row">
+            <label>Controles de identidad y vehiculares <span>Carabineros · sesión anterior: 8.740</span></label>
+            <input type="number" placeholder="9.030">
+            <span class="feeds">→ actualiza «Controles semanales» (pulso)</span>
+          </div>
+          <button class="add-inline" id="addIndBtn" style="margin:10px 0" onclick="addInd()">＋ Agregar indicador no contemplado — se crea como métrica del eje</button>
+        </div>
+      </section>
+
+      <!-- 4. Apuntes -->
+      <section class="zone">
+        <header><span class="n">4</span><h4>Apuntes por institución</h4><span class="hint">texto libre — como el punteo de siempre</span></header>
+        <div class="tabs" id="tabs">
+          <button class="tab on" onclick="switchTab(this,'t1')">Carabineros</button>
+          <button class="tab" onclick="switchTab(this,'t2')">PDI</button>
+          <button class="tab" onclick="switchTab(this,'t3')">Gendarmería</button>
+          <button class="tab" onclick="switchTab(this,'t4')">Armada</button>
+          <button class="tab" onclick="switchTab(this,'t5')">Otros</button>
+          <button class="tab" id="addInstBtn" style="color:var(--new);border-style:dashed;border-color:var(--new-line)" onclick="addInst(this)">＋ Institución</button>
+        </div>
+        <textarea id="t1" class="apunte">Ronda impacto última semana: 30 detenidos (14 OO.JJ.), 728 controles, 111 infracciones.
+OS7 incauta 15 kilos de cannabis en bus interregional, Ruta 5 Norte (Hijuelas), 1 detenido.
+Variación DMCS zona: -7,9% (semana 18). Preocupación por alza de homicidios en Marga Marga.</textarea>
+        <textarea id="t2" class="apunte" style="display:none">183 controles migratorios en la semana. 6 detenidos (1.136 a la fecha).
+Identificados y detenidos los 3 imputados del homicidio frustrado de Valparaíso (sector Gómez Carreño).</textarea>
+        <textarea id="t3" class="apunte" style="display:none">128 ingresos al sistema carcelario esta semana. Población penal: 5.696 (417 extranjeros).
+Hallazgos en allanamientos: 27 celulares, 30 armas cortopunzantes.</textarea>
+        <textarea id="t4" class="apunte" style="display:none"></textarea>
+        <textarea id="t5" class="apunte" style="display:none"></textarea>
+      </section>
+
+      <!-- 5. Compromisos nuevos -->
+      <section class="zone">
+        <header><span class="n">5</span><h4>Compromisos nuevos</h4><span class="hint">qué · quién · para cuándo</span></header>
+        <div class="comp-new">
+          <div class="cn-grid">
+            <div class="h">COMPROMISO</div><div class="h">RESPONSABLE</div><div class="h">PLAZO</div>
+            <div>Plan de patrullaje focalizado en Prefectura Marga Marga por alza de homicidios</div><div>Carabineros — Cnel. Guaita</div><div>Próxima sesión (04-ago)</div>
+          </div>
+          <button class="add-comp" onclick="addComp()">＋ Agregar compromiso</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="mo-foot">
+      <p class="note">Al cerrar: se genera el <b>acta estándar</b> (IA ordena los apuntes), se despacha a la nómina y se actualizan las métricas del eje.</p>
+      <button class="btn-ghost" onclick="closeModal()">Guardar borrador</button>
+      <button class="btn-primary" onclick="finishSession()">Cerrar sesión y generar acta →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: HISTORIAL DE SESIONES ══════════ -->
+<div class="overlay" id="hov">
+  <div class="hist-modal">
+    <div class="mo-head">
+      <div class="ico">≡</div>
+      <div>
+        <h3>Historial de sesiones</h3>
+        <p>Comité Policial · Región de Valparaíso · 2026 — click en una sesión para ver su detalle</p>
+      </div>
+      <button class="close" onclick="closeHist()">✕</button>
+    </div>
+
+    <div class="h-row open">
+      <div class="h-row-head" onclick="toggleH(this.parentElement)"><b>Martes 21 jul</b><span>9 asistentes · 3 compromisos</span><span class="st ok">acta ✓</span></div>
+      <div class="h-det">
+        <h5>ASISTENCIA</h5>
+        <p>9 de 10 titulares — ausente: Gobernación Marítima (sin suplente).</p>
+        <h5>INDICADORES REPORTADOS</h5>
+        <p>Detenidos 806 · Droga 31 kg · Armas de fuego 9 · Homicidios semana 2 · Controles 8.740</p>
+        <h5>COMPROMISOS</h5>
+        <p>🟢 Controles El Melón — Carabineros (cumplido) · 🟡 Informe brecha penales — Seremi Justicia (en curso) · 🔴 Antecedentes a Fiscalía — PDI (pendiente)</p>
+        <button class="btn-acta">⬇ Descargar acta (PDF)</button>
+      </div>
+    </div>
+
+    <div class="h-row">
+      <div class="h-row-head" onclick="toggleH(this.parentElement)"><b>Martes 14 jul</b><span>11 asistentes · 1 compromiso</span><span class="st ok">acta ✓</span></div>
+      <div class="h-det">
+        <h5>ASISTENCIA</h5><p>10 titulares + 1 invitado (Fiscalía Regional).</p>
+        <h5>INDICADORES REPORTADOS</h5><p>Detenidos 830 · Droga 12 kg · Armas de fuego 14 · Homicidios semana 0 · Controles 9.310</p>
+        <h5>COMPROMISOS</h5><p>🟡 Informe brecha penales — Seremi Justicia (en curso)</p>
+        <button class="btn-acta">⬇ Descargar acta (PDF)</button>
+      </div>
+    </div>
+
+    <div class="h-row">
+      <div class="h-row-head" onclick="toggleH(this.parentElement)"><b>Martes 07 jul</b><span>8 asistentes · 2 compromisos</span><span class="st warn">1 pendiente</span></div>
+      <div class="h-det">
+        <h5>ASISTENCIA</h5><p>8 de 10 titulares — ausentes: Aduanas, Gendarmería (asistió suplente PDI).</p>
+        <h5>INDICADORES REPORTADOS</h5><p>Detenidos 795 · Droga 64 kg · Armas de fuego 11 · Homicidios semana 1 · Controles 8.120</p>
+        <h5>COMPROMISOS</h5><p>🟢 Ronda impacto Marga Marga — Carabineros (cumplido) · 🔴 Antecedentes a Fiscalía — PDI (pendiente desde esta sesión)</p>
+        <button class="btn-acta">⬇ Descargar acta (PDF)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">✓ Acta generada y despachada a la nómina · 5 métricas del eje actualizadas · compromisos quedan para la sesión del 04-ago</div>
+
+<script>
+  function openModal(){document.getElementById('ov').classList.add('open')}
+  function closeModal(){document.getElementById('ov').classList.remove('open')}
+  function switchTab(btn,id){
+    document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.remove('on'));
+    btn.classList.add('on');
+    document.querySelectorAll('.apunte').forEach(t=>t.style.display='none');
+    document.getElementById(id).style.display='block';
+  }
+
+  /* ── Historial ── */
+  function openHist(){document.getElementById('hov').classList.add('open')}
+  function closeHist(){document.getElementById('hov').classList.remove('open')}
+  function toggleH(row){row.classList.toggle('open')}
+  document.getElementById('hov').addEventListener('click',e=>{if(e.target.id==='hov')closeHist()});
+
+  /* ── Flexibilidad: agregar en caliente ── */
+  function addAsist(){
+    const d=document.createElement('div'); d.className='asist';
+    d.innerHTML='<input type="checkbox" checked style="accent-color:var(--new)">'+
+      '<input class="inp-hot" placeholder="Nombre" style="width:110px">'+
+      '<input class="inp-hot" placeholder="Institución / cargo" style="flex:1">'+
+      '<span class="ts inv">INV</span>';
+    document.querySelector('.nomina').appendChild(d);
+    d.querySelectorAll('input')[1].focus();
+  }
+  let indN=0;
+  function addInd(){
+    const row=document.createElement('div'); row.className='ind-row';
+    row.innerHTML='<input class="inp-hot" placeholder="Nombre del indicador… ('+(++indN)+')" style="padding:7px 9px;font-size:12.5px">'+
+      '<input type="number" placeholder="valor">'+
+      '<span class="feeds">se crea como métrica del eje → <select style="border:1px solid #c4b5fd;border-radius:6px;font-size:10.5px;color:var(--new);padding:2px;background:#fff"><option>SUMA (con meta)</option><option>PULSO (semanal)</option></select></span>';
+    document.querySelector('.inds').insertBefore(row,document.getElementById('addIndBtn'));
+    row.querySelector('input').focus();
+  }
+  let instN=0;
+  function addInst(plusBtn){
+    const inp=document.createElement('input');
+    inp.className='inp-hot'; inp.placeholder='Institución… (Enter)'; inp.style.width='150px';
+    plusBtn.style.display='none';
+    plusBtn.parentElement.insertBefore(inp,plusBtn);
+    inp.focus();
+    let finished=false;
+    function done(){
+      if(finished)return; finished=true;
+      const v=inp.value.trim();
+      inp.remove(); plusBtn.style.display='';
+      if(!v)return;
+      const id='tx'+(++instN);
+      const ta=document.createElement('textarea');
+      ta.id=id; ta.className='apunte'; ta.style.display='none';
+      document.getElementById('t5').after(ta);
+      const tab=document.createElement('button');
+      tab.className='tab'; tab.textContent=v;
+      tab.onclick=function(){switchTab(tab,id)};
+      plusBtn.parentElement.insertBefore(tab,plusBtn);
+      switchTab(tab,id);
+    }
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter')done();
+      if(e.key==='Escape'){finished=true;inp.remove();plusBtn.style.display=''}
+    });
+    inp.addEventListener('blur',done);
+  }
+  document.querySelectorAll('[data-est]').forEach(g=>{
+    g.querySelectorAll('.est').forEach(b=>b.addEventListener('click',()=>{
+      g.querySelectorAll('.est').forEach(x=>x.className='est');
+      b.className='est '+(b.textContent==='Cumplido'?'on-ok':b.textContent==='En curso'?'on-curso':'on-pend');
+    }));
+  });
+  function addComp(){
+    const grid=document.querySelector('.cn-grid');
+    ['<input style="border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;width:100%;font-size:12px" placeholder="Descripción del compromiso">',
+     '<input style="border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;width:100%;font-size:12px" placeholder="Institución / persona">',
+     '<input style="border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;width:100%;font-size:12px" placeholder="dd-mm">'
+    ].forEach(h=>{const d=document.createElement('div');d.innerHTML=h;grid.appendChild(d)});
+  }
+  function finishSession(){
+    closeModal();
+    const t=document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),4200);
+  }
+  document.getElementById('ov').addEventListener('click',e=>{if(e.target.id==='ov')closeModal()});
+</script>
+</body>
+</html>
