@@ -29,6 +29,7 @@ import type { Iniciativa } from '@/lib/projects'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { splitMinisterio } from '@/lib/ministerios'
 import MetricasClaveSection from './MetricasClaveSection'
+import { fmtMM } from '@/lib/comunaStats'
 import {
   iniciativasDeRegion,
   ejeBreakdownFor,
@@ -40,6 +41,13 @@ type Props = {
   onClose:                () => void
   onGoToDashboard:        () => void
   onVerMasIndicadores?:   (region: Region) => void
+  // Modo detalle comunal (drill del Mapa): mismo panel, filtrado por CUT
+  // (`comuna_cods @> {cut}`), con header propio. Oculta Métricas clave y
+  // Minuta (artefactos regionales sin equivalente comunal).
+  comuna?:                { cut: number; nombre: string } | null
+  // CTA "Ver detalle comunal" — solo en modo región (equivale al doble click
+  // en el polígono; regla 6 del spec del drill).
+  onVerDetalleComunal?:   () => void
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -50,6 +58,8 @@ export default function RegionPreviewPanel({
   onClose,
   onGoToDashboard,
   onVerMasIndicadores,
+  comuna = null,
+  onVerDetalleComunal,
 }: Props) {
   const { ejes: regionEjes } = useRegionEjes(region.cod)
 
@@ -60,6 +70,7 @@ export default function RegionPreviewPanel({
   const [downloadingFicha, setDownloadingFicha] = useState(false)
 
   useEffect(() => {
+    if (comuna) return // modo comuna: sin botón de minuta, no consultar
     let cancelled = false
     setFichaCached(false)
     fetch(`/api/minuta?region_cod=${region.cod}&tipo=ficha`)
@@ -67,7 +78,7 @@ export default function RegionPreviewPanel({
       .then(data => { if (!cancelled) setFichaCached(!!data?.cached) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [region.cod])
+  }, [region.cod, comuna])
 
   async function descargarContextoRegional() {
     if (downloadingFicha) return
@@ -99,16 +110,24 @@ export default function RegionPreviewPanel({
 
   // ── Cómputos ───────────────────────────────────────────────────────────────
 
-  const regionIniciativas = useMemo(
-    () => iniciativasDeRegion(region.cod, projects),
-    [region.cod, projects],
+  // En modo comuna, el universo del panel completo se acota por CUT — el
+  // desglose por eje y la lista de prioridad alta operan sobre el subconjunto.
+  const regionIniciativas = useMemo(() => {
+    const deRegion = iniciativasDeRegion(region.cod, projects)
+    return comuna ? deRegion.filter(p => p.comuna_cods.includes(comuna.cut)) : deRegion
+  }, [region.cod, projects, comuna])
+
+  const comunaInvMM = useMemo(
+    () => comuna ? regionIniciativas.reduce((s, p) => s + (p.inversion_mm ?? 0), 0) : 0,
+    [comuna, regionIniciativas],
   )
 
   // Breakdown completo de ejes (TODOS, no cutoff a 3). Ordenado por número
-  // ascendente para mantener el orden estructural del catálogo.
+  // ascendente para mantener el orden estructural del catálogo. En modo
+  // comuna se calcula sobre el subconjunto (regionIniciativas ya filtrado).
   const ejes = useMemo(
-    () => ejeBreakdownFor(region.cod, projects, regionEjes),
-    [region.cod, projects, regionEjes],
+    () => ejeBreakdownFor(region.cod, regionIniciativas, regionEjes),
+    [region.cod, regionIniciativas, regionEjes],
   )
 
   // Eje seleccionado en la grid → reemplaza la grid (mismo espacio, sin abrir
@@ -131,12 +150,22 @@ export default function RegionPreviewPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <h2 className="text-fluid-lg font-bold text-slate-900 truncate">{region.nombre}</h2>
-              <span className="text-[11px] text-gray-400 shrink-0">{region.zona}</span>
+              <h2 className="text-fluid-lg font-bold text-slate-900 truncate">{comuna ? comuna.nombre : region.nombre}</h2>
+              <span className="text-[11px] text-gray-400 shrink-0">{comuna ? region.nombre : region.zona}</span>
             </div>
+            {comuna && (
+              <>
+                <p className="text-[11px] text-gray-500 truncate">
+                  {regionIniciativas.length} iniciativa{regionIniciativas.length === 1 ? '' : 's'} · {fmtMM(comunaInvMM)} de inversión asociada · CUT {comuna.cut}
+                </p>
+                <p className="text-[10px] text-gray-400 truncate">Las iniciativas multi-comuna se cuentan completas en cada comuna.</p>
+              </>
+            )}
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-gray-400 truncate">{regionIniciativas.length} iniciativas · {region.capital}</p>
-              {fichaCached && (
+              {!comuna && (
+                <p className="text-[11px] text-gray-400 truncate">{regionIniciativas.length} iniciativas · {region.capital}</p>
+              )}
+              {!comuna && fichaCached && (
                 <button
                   onClick={descargarContextoRegional}
                   disabled={downloadingFicha}
@@ -272,16 +301,30 @@ export default function RegionPreviewPanel({
           )}
         </section>
 
-        {/* Métricas clave — misma sección que Mi Región (Desocupación, PIB, Seguridad), en modo compacto */}
-        <MetricasClaveSection
-          region={region}
-          compact
-          onVerMasIndicadores={onVerMasIndicadores ? () => onVerMasIndicadores(region) : undefined}
-        />
+        {/* Métricas clave — misma sección que Mi Región (Desocupación, PIB,
+            Seguridad), en modo compacto. Son indicadores REGIONALES: en el
+            detalle de comuna se ocultan (no hay equivalente comunal). */}
+        {!comuna && (
+          <MetricasClaveSection
+            region={region}
+            compact
+            onVerMasIndicadores={onVerMasIndicadores ? () => onVerMasIndicadores(region) : undefined}
+          />
+        )}
       </div>
 
       {/* Footer con CTA */}
       <div className="border-t border-gray-100 px-4 py-2.5 bg-white">
+        {!comuna && onVerDetalleComunal && (
+          <button
+            onClick={onVerDetalleComunal}
+            className="w-full mb-1.5 flex items-center justify-between gap-2 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+            title="Equivale al doble click sobre la región en el mapa"
+          >
+            <span>Ver detalle comunal</span>
+            <span className="text-[10px] text-gray-400">o doble click en el mapa</span>
+          </button>
+        )}
         <button
           onClick={onGoToDashboard}
           className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"

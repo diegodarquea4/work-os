@@ -9,6 +9,7 @@ import { REGIONS, INE_CODE } from '@/lib/regions'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
+import MapaDrillBreadcrumb from './MapaDrillBreadcrumb'
 import { computeComunaStats } from '@/lib/comunaStats'
 import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
 import { getSupabase } from '@/lib/supabase'
@@ -700,11 +701,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           <div
             className="relative min-w-0 transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
-              flexGrow:   !mapDrill && mapaMode === 'preview' ? 0 : 1,
+              flexGrow:   (mapDrill ? mapDrill.comuna != null : mapaMode === 'preview') ? 0 : 1,
               flexShrink: 1,
-              flexBasis:  !mapDrill && mapaMode === 'preview' ? `calc(100% - min(${previewWidthPct}vw, 900px))` : 'auto',
+              flexBasis:  (mapDrill ? mapDrill.comuna != null : mapaMode === 'preview')
+                ? `calc(100% - min(${previewWidthPct}vw, 900px))`
+                : 'auto',
             }}
           >
+            {mapDrill && (
+              <MapaDrillBreadcrumb
+                regionNombre={mapDrill.region.nombre}
+                comunaNombre={mapDrill.comuna?.nombre ?? null}
+                onBack={drillBack}
+              />
+            )}
             <ChileMap
               geoData={geoData}
               selectedCod={selectedRegion?.cod ?? hoveredCod}
@@ -723,18 +733,32 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             />
           </div>
 
-          {/* Lateral del drill comunal (reemplaza al resumen mientras se está
-              dentro de una región) */}
-          {mapDrill && comunaStats && (
+          {/* Lateral del drill comunal: lista de comunas, y al seleccionar
+              una, el mismo panel del preview regional filtrado por CUT. */}
+          {mapDrill && comunaStats && !mapDrill.comuna && (
             <ComunasSidebar
               regionNombre={mapDrill.region.nombre}
               regionCod={mapDrill.region.cod}
               stats={comunaStats}
-              selectedCut={mapDrill.comuna?.cut ?? null}
+              selectedCut={null}
               onSelectComuna={selectComuna}
               onBack={drillBack}
               width={summarySidebarWidth}
             />
+          )}
+          {mapDrill?.comuna && (
+            <div
+              className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
+            >
+              <RegionPreviewPanel
+                region={mapDrill.region}
+                comuna={mapDrill.comuna}
+                projects={projectsByRegion[mapDrill.region.nombre] ?? []}
+                onClose={drillBack}
+                onGoToDashboard={() => setView('vista-regional')}
+              />
+            </div>
           )}
 
           {/* Preview regional */}
@@ -749,6 +773,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 onClose={() => setSelectedRegion(null)}
                 onGoToDashboard={() => setView('vista-regional')}
                 onVerMasIndicadores={(r) => { setMetricasInitialRegion(r.nombre); setView('metricas') }}
+                onVerDetalleComunal={() => enterDrill(selectedRegion)}
               />
             </div>
           )}
