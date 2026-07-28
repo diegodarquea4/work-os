@@ -1,0 +1,1727 @@
+[
+ {
+  "cut": 1101,
+  "nombre": "Iquique",
+  "regionIne": 1
+ },
+ {
+  "cut": 1107,
+  "nombre": "Alto Hospicio",
+  "regionIne": 1
+ },
+ {
+  "cut": 1401,
+  "nombre": "Pozo Almonte",
+  "regionIne": 1
+ },
+ {
+  "cut": 1402,
+  "nombre": "Camiña",
+  "regionIne": 1
+ },
+ {
+  "cut": 1403,
+  "nombre": "Colchane",
+  "regionIne": 1
+ },
+ {
+  "cut": 1404,
+  "nombre": "Huara",
+  "regionIne": 1
+ },
+ {
+  "cut": 1405,
+  "nombre": "Pica",
+  "regionIne": 1
+ },
+ {
+  "cut": 2101,
+  "nombre": "Antofagasta",
+  "regionIne": 2
+ },
+ {
+  "cut": 2102,
+  "nombre": "Mejillones",
+  "regionIne": 2
+ },
+ {
+  "cut": 2103,
+  "nombre": "Sierra Gorda",
+  "regionIne": 2
+ },
+ {
+  "cut": 2104,
+  "nombre": "Taltal",
+  "regionIne": 2
+ },
+ {
+  "cut": 2201,
+  "nombre": "Calama",
+  "regionIne": 2
+ },
+ {
+  "cut": 2202,
+  "nombre": "Ollagüe",
+  "regionIne": 2
+ },
+ {
+  "cut": 2203,
+  "nombre": "San Pedro de Atacama",
+  "regionIne": 2
+ },
+ {
+  "cut": 2301,
+  "nombre": "Tocopilla",
+  "regionIne": 2
+ },
+ {
+  "cut": 2302,
+  "nombre": "María Elena",
+  "regionIne": 2
+ },
+ {
+  "cut": 3101,
+  "nombre": "Copiapó",
+  "regionIne": 3
+ },
+ {
+  "cut": 3102,
+  "nombre": "Caldera",
+  "regionIne": 3
+ },
+ {
+  "cut": 3103,
+  "nombre": "Tierra Amarilla",
+  "regionIne": 3
+ },
+ {
+  "cut": 3201,
+  "nombre": "Chañaral",
+  "regionIne": 3
+ },
+ {
+  "cut": 3202,
+  "nombre": "Diego de Almagro",
+  "regionIne": 3
+ },
+ {
+  "cut": 3301,
+  "nombre": "Vallenar",
+  "regionIne": 3
+ },
+ {
+  "cut": 3302,
+  "nombre": "Alto del Carmen",
+  "regionIne": 3
+ },
+ {
+  "cut": 3303,
+  "nombre": "Freirina",
+  "regionIne": 3
+ },
+ {
+  "cut": 3304,
+  "nombre": "Huasco",
+  "regionIne": 3
+ },
+ {
+  "cut": 4101,
+  "nombre": "La Serena",
+  "regionIne": 4
+ },
+ {
+  "cut": 4102,
+  "nombre": "Coquimbo",
+  "regionIne": 4
+ },
+ {
+  "cut": 4103,
+  "nombre": "Andacollo",
+  "regionIne": 4
+ },
+ {
+  "cut": 4104,
+  "nombre": "La Higuera",
+  "regionIne": 4
+ },
+ {
+  "cut": 4105,
+  "nombre": "Paihuano",
+  "regionIne": 4
+ },
+ {
+  "cut": 4106,
+  "nombre": "Vicuña",
+  "regionIne": 4
+ },
+ {
+  "cut": 4201,
+  "nombre": "Illapel",
+  "regionIne": 4
+ },
+ {
+  "cut": 4202,
+  "nombre": "Canela",
+  "regionIne": 4
+ },
+ {
+  "cut": 4203,
+  "nombre": "Los Vilos",
+  "regionIne": 4
+ },
+ {
+  "cut": 4204,
+  "nombre": "Salamanca",
+  "regionIne": 4
+ },
+ {
+  "cut": 4301,
+  "nombre": "Ovalle",
+  "regionIne": 4
+ },
+ {
+  "cut": 4302,
+  "nombre": "Combarbalá",
+  "regionIne": 4
+ },
+ {
+  "cut": 4303,
+  "nombre": "Monte Patria",
+  "regionIne": 4
+ },
+ {
+  "cut": 4304,
+  "nombre": "Punitaqui",
+  "regionIne": 4
+ },
+ {
+  "cut": 4305,
+  "nombre": "Río Hurtado",
+  "regionIne": 4
+ },
+ {
+  "cut": 5101,
+  "nombre": "Valparaíso",
+  "regionIne": 5
+ },
+ {
+  "cut": 5102,
+  "nombre": "Casablanca",
+  "regionIne": 5
+ },
+ {
+  "cut": 5103,
+  "nombre": "Concón",
+  "regionIne": 5
+ },
+ {
+  "cut": 5104,
+  "nombre": "Juan Fernández",
+  "regionIne": 5
+ },
+ {
+  "cut": 5105,
+  "nombre": "Puchuncaví",
+  "regionIne": 5
+ },
+ {
+  "cut": 5107,
+  "nombre": "Quintero",
+  "regionIne": 5
+ },
+ {
+  "cut": 5109,
+  "nombre": "Viña del Mar",
+  "regionIne": 5
+ },
+ {
+  "cut": 5201,
+  "nombre": "Isla de Pascua",
+  "regionIne": 5
+ },
+ {
+  "cut": 5301,
+  "nombre": "Los Andes",
+  "regionIne": 5
+ },
+ {
+  "cut": 5302,
+  "nombre": "Calle Larga",
+  "regionIne": 5
+ },
+ {
+  "cut": 5303,
+  "nombre": "Rinconada",
+  "regionIne": 5
+ },
+ {
+  "cut": 5304,
+  "nombre": "San Esteban",
+  "regionIne": 5
+ },
+ {
+  "cut": 5401,
+  "nombre": "La Ligua",
+  "regionIne": 5
+ },
+ {
+  "cut": 5402,
+  "nombre": "Cabildo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5403,
+  "nombre": "Papudo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5404,
+  "nombre": "Petorca",
+  "regionIne": 5
+ },
+ {
+  "cut": 5405,
+  "nombre": "Zapallar",
+  "regionIne": 5
+ },
+ {
+  "cut": 5501,
+  "nombre": "Quillota",
+  "regionIne": 5
+ },
+ {
+  "cut": 5502,
+  "nombre": "Calera",
+  "regionIne": 5
+ },
+ {
+  "cut": 5503,
+  "nombre": "Hijuelas",
+  "regionIne": 5
+ },
+ {
+  "cut": 5504,
+  "nombre": "La Cruz",
+  "regionIne": 5
+ },
+ {
+  "cut": 5506,
+  "nombre": "Nogales",
+  "regionIne": 5
+ },
+ {
+  "cut": 5601,
+  "nombre": "San Antonio",
+  "regionIne": 5
+ },
+ {
+  "cut": 5602,
+  "nombre": "Algarrobo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5603,
+  "nombre": "Cartagena",
+  "regionIne": 5
+ },
+ {
+  "cut": 5604,
+  "nombre": "El Quisco",
+  "regionIne": 5
+ },
+ {
+  "cut": 5605,
+  "nombre": "El Tabo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5606,
+  "nombre": "Santo Domingo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5701,
+  "nombre": "San Felipe",
+  "regionIne": 5
+ },
+ {
+  "cut": 5702,
+  "nombre": "Catemu",
+  "regionIne": 5
+ },
+ {
+  "cut": 5703,
+  "nombre": "Llaillay",
+  "regionIne": 5
+ },
+ {
+  "cut": 5704,
+  "nombre": "Panquehue",
+  "regionIne": 5
+ },
+ {
+  "cut": 5705,
+  "nombre": "Putaendo",
+  "regionIne": 5
+ },
+ {
+  "cut": 5706,
+  "nombre": "Santa María",
+  "regionIne": 5
+ },
+ {
+  "cut": 5801,
+  "nombre": "Quilpué",
+  "regionIne": 5
+ },
+ {
+  "cut": 5802,
+  "nombre": "Limache",
+  "regionIne": 5
+ },
+ {
+  "cut": 5803,
+  "nombre": "Olmué",
+  "regionIne": 5
+ },
+ {
+  "cut": 5804,
+  "nombre": "Villa Alemana",
+  "regionIne": 5
+ },
+ {
+  "cut": 6101,
+  "nombre": "Rancagua",
+  "regionIne": 6
+ },
+ {
+  "cut": 6102,
+  "nombre": "Codegua",
+  "regionIne": 6
+ },
+ {
+  "cut": 6103,
+  "nombre": "Coinco",
+  "regionIne": 6
+ },
+ {
+  "cut": 6104,
+  "nombre": "Coltauco",
+  "regionIne": 6
+ },
+ {
+  "cut": 6105,
+  "nombre": "Doñihue",
+  "regionIne": 6
+ },
+ {
+  "cut": 6106,
+  "nombre": "Graneros",
+  "regionIne": 6
+ },
+ {
+  "cut": 6107,
+  "nombre": "Las Cabras",
+  "regionIne": 6
+ },
+ {
+  "cut": 6108,
+  "nombre": "Machalí",
+  "regionIne": 6
+ },
+ {
+  "cut": 6109,
+  "nombre": "Malloa",
+  "regionIne": 6
+ },
+ {
+  "cut": 6110,
+  "nombre": "Mostazal",
+  "regionIne": 6
+ },
+ {
+  "cut": 6111,
+  "nombre": "Olivar",
+  "regionIne": 6
+ },
+ {
+  "cut": 6112,
+  "nombre": "Peumo",
+  "regionIne": 6
+ },
+ {
+  "cut": 6113,
+  "nombre": "Pichidegua",
+  "regionIne": 6
+ },
+ {
+  "cut": 6114,
+  "nombre": "Quinta de Tilcoco",
+  "regionIne": 6
+ },
+ {
+  "cut": 6115,
+  "nombre": "Rengo",
+  "regionIne": 6
+ },
+ {
+  "cut": 6116,
+  "nombre": "Requínoa",
+  "regionIne": 6
+ },
+ {
+  "cut": 6117,
+  "nombre": "San Vicente",
+  "regionIne": 6
+ },
+ {
+  "cut": 6201,
+  "nombre": "Pichilemu",
+  "regionIne": 6
+ },
+ {
+  "cut": 6202,
+  "nombre": "La Estrella",
+  "regionIne": 6
+ },
+ {
+  "cut": 6203,
+  "nombre": "Litueche",
+  "regionIne": 6
+ },
+ {
+  "cut": 6204,
+  "nombre": "Marchigüe",
+  "regionIne": 6
+ },
+ {
+  "cut": 6205,
+  "nombre": "Navidad",
+  "regionIne": 6
+ },
+ {
+  "cut": 6206,
+  "nombre": "Paredones",
+  "regionIne": 6
+ },
+ {
+  "cut": 6301,
+  "nombre": "San Fernando",
+  "regionIne": 6
+ },
+ {
+  "cut": 6302,
+  "nombre": "Chépica",
+  "regionIne": 6
+ },
+ {
+  "cut": 6303,
+  "nombre": "Chimbarongo",
+  "regionIne": 6
+ },
+ {
+  "cut": 6304,
+  "nombre": "Lolol",
+  "regionIne": 6
+ },
+ {
+  "cut": 6305,
+  "nombre": "Nancagua",
+  "regionIne": 6
+ },
+ {
+  "cut": 6306,
+  "nombre": "Palmilla",
+  "regionIne": 6
+ },
+ {
+  "cut": 6307,
+  "nombre": "Peralillo",
+  "regionIne": 6
+ },
+ {
+  "cut": 6308,
+  "nombre": "Placilla",
+  "regionIne": 6
+ },
+ {
+  "cut": 6309,
+  "nombre": "Pumanque",
+  "regionIne": 6
+ },
+ {
+  "cut": 6310,
+  "nombre": "Santa Cruz",
+  "regionIne": 6
+ },
+ {
+  "cut": 7101,
+  "nombre": "Talca",
+  "regionIne": 7
+ },
+ {
+  "cut": 7102,
+  "nombre": "Constitución",
+  "regionIne": 7
+ },
+ {
+  "cut": 7103,
+  "nombre": "Curepto",
+  "regionIne": 7
+ },
+ {
+  "cut": 7104,
+  "nombre": "Empedrado",
+  "regionIne": 7
+ },
+ {
+  "cut": 7105,
+  "nombre": "Maule",
+  "regionIne": 7
+ },
+ {
+  "cut": 7106,
+  "nombre": "Pelarco",
+  "regionIne": 7
+ },
+ {
+  "cut": 7107,
+  "nombre": "Pencahue",
+  "regionIne": 7
+ },
+ {
+  "cut": 7108,
+  "nombre": "Río Claro",
+  "regionIne": 7
+ },
+ {
+  "cut": 7109,
+  "nombre": "San Clemente",
+  "regionIne": 7
+ },
+ {
+  "cut": 7110,
+  "nombre": "San Rafael",
+  "regionIne": 7
+ },
+ {
+  "cut": 7201,
+  "nombre": "Cauquenes",
+  "regionIne": 7
+ },
+ {
+  "cut": 7202,
+  "nombre": "Chanco",
+  "regionIne": 7
+ },
+ {
+  "cut": 7203,
+  "nombre": "Pelluhue",
+  "regionIne": 7
+ },
+ {
+  "cut": 7301,
+  "nombre": "Curicó",
+  "regionIne": 7
+ },
+ {
+  "cut": 7302,
+  "nombre": "Hualañé",
+  "regionIne": 7
+ },
+ {
+  "cut": 7303,
+  "nombre": "Licantén",
+  "regionIne": 7
+ },
+ {
+  "cut": 7304,
+  "nombre": "Molina",
+  "regionIne": 7
+ },
+ {
+  "cut": 7305,
+  "nombre": "Rauco",
+  "regionIne": 7
+ },
+ {
+  "cut": 7306,
+  "nombre": "Romeral",
+  "regionIne": 7
+ },
+ {
+  "cut": 7307,
+  "nombre": "Sagrada Familia",
+  "regionIne": 7
+ },
+ {
+  "cut": 7308,
+  "nombre": "Teno",
+  "regionIne": 7
+ },
+ {
+  "cut": 7309,
+  "nombre": "Vichuquén",
+  "regionIne": 7
+ },
+ {
+  "cut": 7401,
+  "nombre": "Linares",
+  "regionIne": 7
+ },
+ {
+  "cut": 7402,
+  "nombre": "Colbún",
+  "regionIne": 7
+ },
+ {
+  "cut": 7403,
+  "nombre": "Longaví",
+  "regionIne": 7
+ },
+ {
+  "cut": 7404,
+  "nombre": "Parral",
+  "regionIne": 7
+ },
+ {
+  "cut": 7405,
+  "nombre": "Retiro",
+  "regionIne": 7
+ },
+ {
+  "cut": 7406,
+  "nombre": "San Javier",
+  "regionIne": 7
+ },
+ {
+  "cut": 7407,
+  "nombre": "Villa Alegre",
+  "regionIne": 7
+ },
+ {
+  "cut": 7408,
+  "nombre": "Yerbas Buenas",
+  "regionIne": 7
+ },
+ {
+  "cut": 8101,
+  "nombre": "Concepción",
+  "regionIne": 8
+ },
+ {
+  "cut": 8102,
+  "nombre": "Coronel",
+  "regionIne": 8
+ },
+ {
+  "cut": 8103,
+  "nombre": "Chiguayante",
+  "regionIne": 8
+ },
+ {
+  "cut": 8104,
+  "nombre": "Florida",
+  "regionIne": 8
+ },
+ {
+  "cut": 8105,
+  "nombre": "Hualqui",
+  "regionIne": 8
+ },
+ {
+  "cut": 8106,
+  "nombre": "Lota",
+  "regionIne": 8
+ },
+ {
+  "cut": 8107,
+  "nombre": "Penco",
+  "regionIne": 8
+ },
+ {
+  "cut": 8108,
+  "nombre": "San Pedro de la Paz",
+  "regionIne": 8
+ },
+ {
+  "cut": 8109,
+  "nombre": "Santa Juana",
+  "regionIne": 8
+ },
+ {
+  "cut": 8110,
+  "nombre": "Talcahuano",
+  "regionIne": 8
+ },
+ {
+  "cut": 8111,
+  "nombre": "Tomé",
+  "regionIne": 8
+ },
+ {
+  "cut": 8112,
+  "nombre": "Hualpén",
+  "regionIne": 8
+ },
+ {
+  "cut": 8201,
+  "nombre": "Lebu",
+  "regionIne": 8
+ },
+ {
+  "cut": 8202,
+  "nombre": "Arauco",
+  "regionIne": 8
+ },
+ {
+  "cut": 8203,
+  "nombre": "Cañete",
+  "regionIne": 8
+ },
+ {
+  "cut": 8204,
+  "nombre": "Contulmo",
+  "regionIne": 8
+ },
+ {
+  "cut": 8205,
+  "nombre": "Curanilahue",
+  "regionIne": 8
+ },
+ {
+  "cut": 8206,
+  "nombre": "Los Alamos",
+  "regionIne": 8
+ },
+ {
+  "cut": 8207,
+  "nombre": "Tirúa",
+  "regionIne": 8
+ },
+ {
+  "cut": 8301,
+  "nombre": "Los Angeles",
+  "regionIne": 8
+ },
+ {
+  "cut": 8302,
+  "nombre": "Antuco",
+  "regionIne": 8
+ },
+ {
+  "cut": 8303,
+  "nombre": "Cabrero",
+  "regionIne": 8
+ },
+ {
+  "cut": 8304,
+  "nombre": "Laja",
+  "regionIne": 8
+ },
+ {
+  "cut": 8305,
+  "nombre": "Mulchén",
+  "regionIne": 8
+ },
+ {
+  "cut": 8306,
+  "nombre": "Nacimiento",
+  "regionIne": 8
+ },
+ {
+  "cut": 8307,
+  "nombre": "Negrete",
+  "regionIne": 8
+ },
+ {
+  "cut": 8308,
+  "nombre": "Quilaco",
+  "regionIne": 8
+ },
+ {
+  "cut": 8309,
+  "nombre": "Quilleco",
+  "regionIne": 8
+ },
+ {
+  "cut": 8310,
+  "nombre": "San Rosendo",
+  "regionIne": 8
+ },
+ {
+  "cut": 8311,
+  "nombre": "Santa Bárbara",
+  "regionIne": 8
+ },
+ {
+  "cut": 8312,
+  "nombre": "Tucapel",
+  "regionIne": 8
+ },
+ {
+  "cut": 8313,
+  "nombre": "Yumbel",
+  "regionIne": 8
+ },
+ {
+  "cut": 8314,
+  "nombre": "Alto Biobío",
+  "regionIne": 8
+ },
+ {
+  "cut": 9101,
+  "nombre": "Temuco",
+  "regionIne": 9
+ },
+ {
+  "cut": 9102,
+  "nombre": "Carahue",
+  "regionIne": 9
+ },
+ {
+  "cut": 9103,
+  "nombre": "Cunco",
+  "regionIne": 9
+ },
+ {
+  "cut": 9104,
+  "nombre": "Curarrehue",
+  "regionIne": 9
+ },
+ {
+  "cut": 9105,
+  "nombre": "Freire",
+  "regionIne": 9
+ },
+ {
+  "cut": 9106,
+  "nombre": "Galvarino",
+  "regionIne": 9
+ },
+ {
+  "cut": 9107,
+  "nombre": "Gorbea",
+  "regionIne": 9
+ },
+ {
+  "cut": 9108,
+  "nombre": "Lautaro",
+  "regionIne": 9
+ },
+ {
+  "cut": 9109,
+  "nombre": "Loncoche",
+  "regionIne": 9
+ },
+ {
+  "cut": 9110,
+  "nombre": "Melipeuco",
+  "regionIne": 9
+ },
+ {
+  "cut": 9111,
+  "nombre": "Nueva Imperial",
+  "regionIne": 9
+ },
+ {
+  "cut": 9112,
+  "nombre": "Padre Las Casas",
+  "regionIne": 9
+ },
+ {
+  "cut": 9113,
+  "nombre": "Perquenco",
+  "regionIne": 9
+ },
+ {
+  "cut": 9114,
+  "nombre": "Pitrufquén",
+  "regionIne": 9
+ },
+ {
+  "cut": 9115,
+  "nombre": "Pucón",
+  "regionIne": 9
+ },
+ {
+  "cut": 9116,
+  "nombre": "Saavedra",
+  "regionIne": 9
+ },
+ {
+  "cut": 9117,
+  "nombre": "Teodoro Schmidt",
+  "regionIne": 9
+ },
+ {
+  "cut": 9118,
+  "nombre": "Toltén",
+  "regionIne": 9
+ },
+ {
+  "cut": 9119,
+  "nombre": "Vilcún",
+  "regionIne": 9
+ },
+ {
+  "cut": 9120,
+  "nombre": "Villarrica",
+  "regionIne": 9
+ },
+ {
+  "cut": 9121,
+  "nombre": "Cholchol",
+  "regionIne": 9
+ },
+ {
+  "cut": 9201,
+  "nombre": "Angol",
+  "regionIne": 9
+ },
+ {
+  "cut": 9202,
+  "nombre": "Collipulli",
+  "regionIne": 9
+ },
+ {
+  "cut": 9203,
+  "nombre": "Curacautín",
+  "regionIne": 9
+ },
+ {
+  "cut": 9204,
+  "nombre": "Ercilla",
+  "regionIne": 9
+ },
+ {
+  "cut": 9205,
+  "nombre": "Lonquimay",
+  "regionIne": 9
+ },
+ {
+  "cut": 9206,
+  "nombre": "Los Sauces",
+  "regionIne": 9
+ },
+ {
+  "cut": 9207,
+  "nombre": "Lumaco",
+  "regionIne": 9
+ },
+ {
+  "cut": 9208,
+  "nombre": "Purén",
+  "regionIne": 9
+ },
+ {
+  "cut": 9209,
+  "nombre": "Renaico",
+  "regionIne": 9
+ },
+ {
+  "cut": 9210,
+  "nombre": "Traiguén",
+  "regionIne": 9
+ },
+ {
+  "cut": 9211,
+  "nombre": "Victoria",
+  "regionIne": 9
+ },
+ {
+  "cut": 10101,
+  "nombre": "Puerto Montt",
+  "regionIne": 10
+ },
+ {
+  "cut": 10102,
+  "nombre": "Calbuco",
+  "regionIne": 10
+ },
+ {
+  "cut": 10103,
+  "nombre": "Cochamó",
+  "regionIne": 10
+ },
+ {
+  "cut": 10104,
+  "nombre": "Fresia",
+  "regionIne": 10
+ },
+ {
+  "cut": 10105,
+  "nombre": "Frutillar",
+  "regionIne": 10
+ },
+ {
+  "cut": 10106,
+  "nombre": "Los Muermos",
+  "regionIne": 10
+ },
+ {
+  "cut": 10107,
+  "nombre": "Llanquihue",
+  "regionIne": 10
+ },
+ {
+  "cut": 10108,
+  "nombre": "Maullín",
+  "regionIne": 10
+ },
+ {
+  "cut": 10109,
+  "nombre": "Puerto Varas",
+  "regionIne": 10
+ },
+ {
+  "cut": 10201,
+  "nombre": "Castro",
+  "regionIne": 10
+ },
+ {
+  "cut": 10202,
+  "nombre": "Ancud",
+  "regionIne": 10
+ },
+ {
+  "cut": 10203,
+  "nombre": "Chonchi",
+  "regionIne": 10
+ },
+ {
+  "cut": 10204,
+  "nombre": "Curaco de Vélez",
+  "regionIne": 10
+ },
+ {
+  "cut": 10205,
+  "nombre": "Dalcahue",
+  "regionIne": 10
+ },
+ {
+  "cut": 10206,
+  "nombre": "Puqueldón",
+  "regionIne": 10
+ },
+ {
+  "cut": 10207,
+  "nombre": "Queilén",
+  "regionIne": 10
+ },
+ {
+  "cut": 10208,
+  "nombre": "Quellón",
+  "regionIne": 10
+ },
+ {
+  "cut": 10209,
+  "nombre": "Quemchi",
+  "regionIne": 10
+ },
+ {
+  "cut": 10210,
+  "nombre": "Quinchao",
+  "regionIne": 10
+ },
+ {
+  "cut": 10301,
+  "nombre": "Osorno",
+  "regionIne": 10
+ },
+ {
+  "cut": 10302,
+  "nombre": "Puerto Octay",
+  "regionIne": 10
+ },
+ {
+  "cut": 10303,
+  "nombre": "Purranque",
+  "regionIne": 10
+ },
+ {
+  "cut": 10304,
+  "nombre": "Puyehue",
+  "regionIne": 10
+ },
+ {
+  "cut": 10305,
+  "nombre": "Río Negro",
+  "regionIne": 10
+ },
+ {
+  "cut": 10306,
+  "nombre": "San Juan de la Costa",
+  "regionIne": 10
+ },
+ {
+  "cut": 10307,
+  "nombre": "San Pablo",
+  "regionIne": 10
+ },
+ {
+  "cut": 10401,
+  "nombre": "Chaitén",
+  "regionIne": 10
+ },
+ {
+  "cut": 10402,
+  "nombre": "Futaleufú",
+  "regionIne": 10
+ },
+ {
+  "cut": 10403,
+  "nombre": "Hualaihué",
+  "regionIne": 10
+ },
+ {
+  "cut": 10404,
+  "nombre": "Palena",
+  "regionIne": 10
+ },
+ {
+  "cut": 11101,
+  "nombre": "Coyhaique",
+  "regionIne": 11
+ },
+ {
+  "cut": 11102,
+  "nombre": "Lago Verde",
+  "regionIne": 11
+ },
+ {
+  "cut": 11201,
+  "nombre": "Aysén",
+  "regionIne": 11
+ },
+ {
+  "cut": 11202,
+  "nombre": "Cisnes",
+  "regionIne": 11
+ },
+ {
+  "cut": 11203,
+  "nombre": "Guaitecas",
+  "regionIne": 11
+ },
+ {
+  "cut": 11301,
+  "nombre": "Cochrane",
+  "regionIne": 11
+ },
+ {
+  "cut": 11302,
+  "nombre": "O'Higgins",
+  "regionIne": 11
+ },
+ {
+  "cut": 11303,
+  "nombre": "Tortel",
+  "regionIne": 11
+ },
+ {
+  "cut": 11401,
+  "nombre": "Chile Chico",
+  "regionIne": 11
+ },
+ {
+  "cut": 11402,
+  "nombre": "Río Ibáñez",
+  "regionIne": 11
+ },
+ {
+  "cut": 12101,
+  "nombre": "Punta Arenas",
+  "regionIne": 12
+ },
+ {
+  "cut": 12102,
+  "nombre": "Laguna Blanca",
+  "regionIne": 12
+ },
+ {
+  "cut": 12103,
+  "nombre": "Río Verde",
+  "regionIne": 12
+ },
+ {
+  "cut": 12104,
+  "nombre": "San Gregorio",
+  "regionIne": 12
+ },
+ {
+  "cut": 12201,
+  "nombre": "Cabo de Hornos",
+  "regionIne": 12
+ },
+ {
+  "cut": 12301,
+  "nombre": "Porvenir",
+  "regionIne": 12
+ },
+ {
+  "cut": 12302,
+  "nombre": "Primavera",
+  "regionIne": 12
+ },
+ {
+  "cut": 12303,
+  "nombre": "Timaukel",
+  "regionIne": 12
+ },
+ {
+  "cut": 12401,
+  "nombre": "Natales",
+  "regionIne": 12
+ },
+ {
+  "cut": 12402,
+  "nombre": "Torres del Paine",
+  "regionIne": 12
+ },
+ {
+  "cut": 13101,
+  "nombre": "Santiago",
+  "regionIne": 13
+ },
+ {
+  "cut": 13102,
+  "nombre": "Cerrillos",
+  "regionIne": 13
+ },
+ {
+  "cut": 13103,
+  "nombre": "Cerro Navia",
+  "regionIne": 13
+ },
+ {
+  "cut": 13104,
+  "nombre": "Conchalí",
+  "regionIne": 13
+ },
+ {
+  "cut": 13105,
+  "nombre": "El Bosque",
+  "regionIne": 13
+ },
+ {
+  "cut": 13106,
+  "nombre": "Estación Central",
+  "regionIne": 13
+ },
+ {
+  "cut": 13107,
+  "nombre": "Huechuraba",
+  "regionIne": 13
+ },
+ {
+  "cut": 13108,
+  "nombre": "Independencia",
+  "regionIne": 13
+ },
+ {
+  "cut": 13109,
+  "nombre": "La Cisterna",
+  "regionIne": 13
+ },
+ {
+  "cut": 13110,
+  "nombre": "La Florida",
+  "regionIne": 13
+ },
+ {
+  "cut": 13111,
+  "nombre": "La Granja",
+  "regionIne": 13
+ },
+ {
+  "cut": 13112,
+  "nombre": "La Pintana",
+  "regionIne": 13
+ },
+ {
+  "cut": 13113,
+  "nombre": "La Reina",
+  "regionIne": 13
+ },
+ {
+  "cut": 13114,
+  "nombre": "Las Condes",
+  "regionIne": 13
+ },
+ {
+  "cut": 13115,
+  "nombre": "Lo Barnechea",
+  "regionIne": 13
+ },
+ {
+  "cut": 13116,
+  "nombre": "Lo Espejo",
+  "regionIne": 13
+ },
+ {
+  "cut": 13117,
+  "nombre": "Lo Prado",
+  "regionIne": 13
+ },
+ {
+  "cut": 13118,
+  "nombre": "Macul",
+  "regionIne": 13
+ },
+ {
+  "cut": 13119,
+  "nombre": "Maipú",
+  "regionIne": 13
+ },
+ {
+  "cut": 13120,
+  "nombre": "Ñuñoa",
+  "regionIne": 13
+ },
+ {
+  "cut": 13121,
+  "nombre": "Pedro Aguirre Cerda",
+  "regionIne": 13
+ },
+ {
+  "cut": 13122,
+  "nombre": "Peñalolén",
+  "regionIne": 13
+ },
+ {
+  "cut": 13123,
+  "nombre": "Providencia",
+  "regionIne": 13
+ },
+ {
+  "cut": 13124,
+  "nombre": "Pudahuel",
+  "regionIne": 13
+ },
+ {
+  "cut": 13125,
+  "nombre": "Quilicura",
+  "regionIne": 13
+ },
+ {
+  "cut": 13126,
+  "nombre": "Quinta Normal",
+  "regionIne": 13
+ },
+ {
+  "cut": 13127,
+  "nombre": "Recoleta",
+  "regionIne": 13
+ },
+ {
+  "cut": 13128,
+  "nombre": "Renca",
+  "regionIne": 13
+ },
+ {
+  "cut": 13129,
+  "nombre": "San Joaquín",
+  "regionIne": 13
+ },
+ {
+  "cut": 13130,
+  "nombre": "San Miguel",
+  "regionIne": 13
+ },
+ {
+  "cut": 13131,
+  "nombre": "San Ramón",
+  "regionIne": 13
+ },
+ {
+  "cut": 13132,
+  "nombre": "Vitacura",
+  "regionIne": 13
+ },
+ {
+  "cut": 13201,
+  "nombre": "Puente Alto",
+  "regionIne": 13
+ },
+ {
+  "cut": 13202,
+  "nombre": "Pirque",
+  "regionIne": 13
+ },
+ {
+  "cut": 13203,
+  "nombre": "San José de Maipo",
+  "regionIne": 13
+ },
+ {
+  "cut": 13301,
+  "nombre": "Colina",
+  "regionIne": 13
+ },
+ {
+  "cut": 13302,
+  "nombre": "Lampa",
+  "regionIne": 13
+ },
+ {
+  "cut": 13303,
+  "nombre": "Tiltil",
+  "regionIne": 13
+ },
+ {
+  "cut": 13401,
+  "nombre": "San Bernardo",
+  "regionIne": 13
+ },
+ {
+  "cut": 13402,
+  "nombre": "Buin",
+  "regionIne": 13
+ },
+ {
+  "cut": 13403,
+  "nombre": "Calera de Tango",
+  "regionIne": 13
+ },
+ {
+  "cut": 13404,
+  "nombre": "Paine",
+  "regionIne": 13
+ },
+ {
+  "cut": 13501,
+  "nombre": "Melipilla",
+  "regionIne": 13
+ },
+ {
+  "cut": 13502,
+  "nombre": "Alhué",
+  "regionIne": 13
+ },
+ {
+  "cut": 13503,
+  "nombre": "Curacaví",
+  "regionIne": 13
+ },
+ {
+  "cut": 13504,
+  "nombre": "María Pinto",
+  "regionIne": 13
+ },
+ {
+  "cut": 13505,
+  "nombre": "San Pedro",
+  "regionIne": 13
+ },
+ {
+  "cut": 13601,
+  "nombre": "Talagante",
+  "regionIne": 13
+ },
+ {
+  "cut": 13602,
+  "nombre": "El Monte",
+  "regionIne": 13
+ },
+ {
+  "cut": 13603,
+  "nombre": "Isla de Maipo",
+  "regionIne": 13
+ },
+ {
+  "cut": 13604,
+  "nombre": "Padre Hurtado",
+  "regionIne": 13
+ },
+ {
+  "cut": 13605,
+  "nombre": "Peñaflor",
+  "regionIne": 13
+ },
+ {
+  "cut": 14101,
+  "nombre": "Valdivia",
+  "regionIne": 14
+ },
+ {
+  "cut": 14102,
+  "nombre": "Corral",
+  "regionIne": 14
+ },
+ {
+  "cut": 14103,
+  "nombre": "Lanco",
+  "regionIne": 14
+ },
+ {
+  "cut": 14104,
+  "nombre": "Los Lagos",
+  "regionIne": 14
+ },
+ {
+  "cut": 14105,
+  "nombre": "Máfil",
+  "regionIne": 14
+ },
+ {
+  "cut": 14106,
+  "nombre": "Mariquina",
+  "regionIne": 14
+ },
+ {
+  "cut": 14107,
+  "nombre": "Paillaco",
+  "regionIne": 14
+ },
+ {
+  "cut": 14108,
+  "nombre": "Panguipulli",
+  "regionIne": 14
+ },
+ {
+  "cut": 14201,
+  "nombre": "La Unión",
+  "regionIne": 14
+ },
+ {
+  "cut": 14202,
+  "nombre": "Futrono",
+  "regionIne": 14
+ },
+ {
+  "cut": 14203,
+  "nombre": "Lago Ranco",
+  "regionIne": 14
+ },
+ {
+  "cut": 14204,
+  "nombre": "Río Bueno",
+  "regionIne": 14
+ },
+ {
+  "cut": 15101,
+  "nombre": "Arica",
+  "regionIne": 15
+ },
+ {
+  "cut": 15102,
+  "nombre": "Camarones",
+  "regionIne": 15
+ },
+ {
+  "cut": 15201,
+  "nombre": "Putre",
+  "regionIne": 15
+ },
+ {
+  "cut": 15202,
+  "nombre": "General Lagos",
+  "regionIne": 15
+ },
+ {
+  "cut": 16101,
+  "nombre": "Chillán",
+  "regionIne": 16
+ },
+ {
+  "cut": 16102,
+  "nombre": "Bulnes",
+  "regionIne": 16
+ },
+ {
+  "cut": 16103,
+  "nombre": "Chillán Viejo",
+  "regionIne": 16
+ },
+ {
+  "cut": 16104,
+  "nombre": "El Carmen",
+  "regionIne": 16
+ },
+ {
+  "cut": 16105,
+  "nombre": "Pemuco",
+  "regionIne": 16
+ },
+ {
+  "cut": 16106,
+  "nombre": "Pinto",
+  "regionIne": 16
+ },
+ {
+  "cut": 16107,
+  "nombre": "Quillón",
+  "regionIne": 16
+ },
+ {
+  "cut": 16108,
+  "nombre": "San Ignacio",
+  "regionIne": 16
+ },
+ {
+  "cut": 16109,
+  "nombre": "Yungay",
+  "regionIne": 16
+ },
+ {
+  "cut": 16201,
+  "nombre": "Quirihue",
+  "regionIne": 16
+ },
+ {
+  "cut": 16202,
+  "nombre": "Cobquecura",
+  "regionIne": 16
+ },
+ {
+  "cut": 16203,
+  "nombre": "Coelemu",
+  "regionIne": 16
+ },
+ {
+  "cut": 16204,
+  "nombre": "Ninhue",
+  "regionIne": 16
+ },
+ {
+  "cut": 16205,
+  "nombre": "Portezuelo",
+  "regionIne": 16
+ },
+ {
+  "cut": 16206,
+  "nombre": "Ranquil",
+  "regionIne": 16
+ },
+ {
+  "cut": 16207,
+  "nombre": "Treguaco",
+  "regionIne": 16
+ },
+ {
+  "cut": 16301,
+  "nombre": "San Carlos",
+  "regionIne": 16
+ },
+ {
+  "cut": 16302,
+  "nombre": "Coihueco",
+  "regionIne": 16
+ },
+ {
+  "cut": 16303,
+  "nombre": "Ñiquén",
+  "regionIne": 16
+ },
+ {
+  "cut": 16304,
+  "nombre": "San Fabián",
+  "regionIne": 16
+ },
+ {
+  "cut": 16305,
+  "nombre": "San Nicolás",
+  "regionIne": 16
+ }
+]

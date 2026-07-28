@@ -47,6 +47,12 @@ export type Iniciativa = {
   // Nivel de importancia (migración 024). l = las prioridades, ll = más
   // importante, lll = menos importante (default). Solo admin/editor edita.
   capa: Capa
+  // CUT oficiales derivados del texto `comuna` (migración 045). La llave del
+  // drill-down comunal del Mapa: multi-comuna = varios CUT, sin prorrateo.
+  comuna_cods: number[]
+  // true si `comuna` es "Regional/Varias/..." o viene vacía — buckets del
+  // nivel comunal ("Alcance regional" / "Sin comuna").
+  alcance_regional: boolean
 }
 
 export type Capa = 'l' | 'll' | 'lll'
@@ -134,5 +140,7 @@ function parseCSV(content: string): Iniciativa[] {
     tags: [],
     es_desalojo: false,
     capa: 'lll' as const,
+    comuna_cods: [],
+    alcance_regional: false,
   }))
 }

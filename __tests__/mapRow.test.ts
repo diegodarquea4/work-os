@@ -46,6 +46,8 @@ function makeRow(overrides: Partial<Prioridad> = {}): Prioridad {
     tags: [],
     es_desalojo: false,
     capa: 'lll',
+    comuna_cods: [],
+    alcance_regional: false,
     ...overrides,
   }
 }
@@ -108,5 +110,17 @@ describe('mapRow', () => {
   it('preserva capa = "l" y capa = "ll" cuando vienen seteadas', () => {
     expect(mapRow(makeRow({ capa: 'l' })).capa).toBe('l')
     expect(mapRow(makeRow({ capa: 'll' })).capa).toBe('ll')
+  })
+
+  it('defaultea comuna_cods a [] y alcance_regional a false si faltan (pre-migración 045)', () => {
+    const out = mapRow(makeRow({ comuna_cods: undefined, alcance_regional: undefined }))
+    expect(out.comuna_cods).toEqual([])
+    expect(out.alcance_regional).toBe(false)
+  })
+
+  it('preserva comuna_cods multi-comuna y alcance_regional = true', () => {
+    const out = mapRow(makeRow({ comuna_cods: [5101, 5109], alcance_regional: true }))
+    expect(out.comuna_cods).toEqual([5101, 5109])
+    expect(out.alcance_regional).toBe(true)
   })
 })

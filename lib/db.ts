@@ -49,6 +49,10 @@ export function mapRow(row: Prioridad): Iniciativa {
     // (cartera regular). La BD tiene NOT NULL DEFAULT 'lll' — post-deploy
     // siempre vendrá seteado.
     capa:                   (row.capa ?? 'lll') as Iniciativa['capa'],
+    // Defensive: pre-migración 045 las filas vienen sin comuna_cods /
+    // alcance_regional. Ambas con NOT NULL DEFAULT en BD.
+    comuna_cods:            row.comuna_cods ?? [],
+    alcance_regional:       row.alcance_regional ?? false,
   }
 }
 
@@ -59,7 +63,7 @@ const PRIORIDAD_COLS =
   'id,n,region,cod,capital,zona,eje,eje_id,eje_gobierno,nombre,descripcion,ministerio,' +
   'prioridad,etapa_actual,estado_termino_gobierno,proximo_hito,fecha_proximo_hito,' +
   'fuente_financiamiento,codigo_bip,inversion_mm,comuna,rat,estado_semaforo,pct_avance,' +
-  'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa'
+  'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa,comuna_cods,alcance_regional'
 
 /**
  * All iniciativas — used for the initial page load.

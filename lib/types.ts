@@ -47,6 +47,11 @@ export type Prioridad = {
   // importante, 'lll' = menos importante (default). Solo admin/editor edita —
   // queda fuera de la whitelist regional del trigger 023.
   capa?: 'l' | 'll' | 'lll'
+  // CUT oficiales derivados del texto `comuna` (migración 045, matcher
+  // lib/comunas.ts). Los escribe solo el importador/backfill — bloqueados
+  // para regional en el trigger. Opcionales para tolerar lecturas pre-ALTER.
+  comuna_cods?: number[]
+  alcance_regional?: boolean
 }
 
 // ── Desalojos (migración 017) ────────────────────────────────────────────────
