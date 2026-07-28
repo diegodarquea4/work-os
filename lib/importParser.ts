@@ -22,6 +22,7 @@ import type { RegionEje } from './types'
 import { parseEjeString, composeEjeLabel } from './ejes'
 import { TEMPLATE_COLS } from './templateExcel'
 import { canonizeMinisterio } from './ministeriosCanon'
+import { matchComunas, sugerirComuna } from './comunas'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 
@@ -298,6 +299,10 @@ export function parseImportWorkbook(
     target: Record<string, unknown>,
     rowErrors: string[],
     isUpdate: boolean,
+    // Región de la fila (cod romano + nombre) — la necesita el matcher de
+    // comunas. En INSERT viene del Excel; en UPDATE, de la iniciativa en BD.
+    regionCod: string,
+    regionNombre: string,
   ) {
     const ejeGobierno = col(row, 'Eje Gobierno')
     if (ejeGobierno) {
@@ -479,6 +484,37 @@ export function parseImportWorkbook(
       const normalized = multiValueCols.has(dbCol) && val !== ''
         ? normalizeMultiValueString(val, dbCol === 'ministerio' ? canonizeMinisterio : undefined)
         : val
+      // Comuna deriva comuna_cods + alcance_regional (migración 045). Los tres
+      // campos viajan JUNTOS o ninguno: una comuna no reconocida es error de
+      // fila (nunca entra silenciosa — el CUT es la llave del drill comunal).
+      if (dbCol === 'comuna') {
+        if (normalized === '') {
+          if (!isUpdate) {
+            // INSERT sin comuna → bucket "Sin comuna" del nivel comunal.
+            target.comuna = null
+            target.comuna_cods = []
+            target.alcance_regional = true
+          }
+          // UPDATE vacío: skip total — no toca comuna ni derivados.
+          continue
+        }
+        const m = matchComunas(normalized, regionCod)
+        if (m.noMatcheados.length > 0) {
+          for (const nm of m.noMatcheados) {
+            const sug = sugerirComuna(nm, regionCod)
+            rowErrors.push(
+              `Comuna «${nm}» no existe en ${regionNombre || 'la región'} ni en el catálogo nacional.` +
+              (sug ? ` ¿Quisiste decir «${sug}»?` : '') +
+              ' Separa varias comunas con «;».'
+            )
+          }
+          continue
+        }
+        target.comuna = normalized
+        target.comuna_cods = m.cods
+        target.alcance_regional = m.alcanceRegional
+        continue
+      }
       if (isUpdate) {
         // skip-si-vacío en UPDATE: no se incluye en el patch.
         if (normalized !== '') target[dbCol] = normalized
@@ -566,7 +602,7 @@ export function parseImportWorkbook(
         // encuentra una capa válida en la columna correspondiente.
         capa:              'lll',
       }
-      parseOptionalFields(row, insertData, rowErrors, /* isUpdate */ false)
+      parseOptionalFields(row, insertData, rowErrors, /* isUpdate */ false, regionObj?.cod ?? '', regionNombre)
       rows.push({
         n:          newN,
         excelRow,
@@ -603,7 +639,7 @@ export function parseImportWorkbook(
     }
 
     const patch: Record<string, unknown> = {}
-    parseOptionalFields(row, patch, rowErrors, /* isUpdate */ true)
+    parseOptionalFields(row, patch, rowErrors, /* isUpdate */ true, project.cod, project.region)
 
     // Eje en UPDATE: skip-si-vacío. Si viene relleno, validar contra catálogo
     // de la región de la iniciativa (no la del Excel — la real en BD).

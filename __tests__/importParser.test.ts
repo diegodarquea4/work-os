@@ -113,3 +113,59 @@ describe('summarizeImportErrors — banner de columna faltante', () => {
     expect(summary.banner!.title).toContain('Nombre Iniciativa')
   })
 })
+
+// ── Comuna → comuna_cods (migración 045, matcher lib/comunas.ts) ─────────────
+
+const HEADERS_COMUNA = [...HEADERS, 'Comuna']
+
+function parseComunaRow(cells: Partial<Record<string, string>>) {
+  const row = HEADERS_COMUNA.map(h => cells[h] ?? '')
+  const buf = buildWorkbook(HEADERS_COMUNA, [row])
+  return parseImportWorkbook(buf, existing, new Map())
+}
+
+describe('parseImportWorkbook — comuna deriva comuna_cods + alcance_regional', () => {
+  it('comuna válida en UPDATE → texto + CUT + alcance false, sin errores', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Comuna': 'La Florida' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.comuna).toBe('La Florida')
+    expect(rows[0].patch.comuna_cods).toEqual([13110])
+    expect(rows[0].patch.alcance_regional).toBe(false)
+  })
+
+  it('multi-comuna con «;» → un CUT por comuna', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Comuna': 'Santiago;San Bernardo' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.comuna_cods).toEqual([13101, 13401])
+  })
+
+  it('"Regional" → alcance_regional true, sin cods', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Comuna': 'Regional' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.comuna_cods).toEqual([])
+    expect(rows[0].patch.alcance_regional).toBe(true)
+  })
+
+  it('comuna inexistente → error de fila con sugerencia, NADA entra al patch', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Comuna': 'Puente Altooos' })
+    expect(rows[0].errors).toHaveLength(1)
+    expect(rows[0].errors[0]).toContain('Comuna «puente altooos» no existe')
+    expect(rows[0].errors[0]).toContain('Puente Alto')
+    expect(rows[0].patch.comuna).toBeUndefined()
+    expect(rows[0].patch.comuna_cods).toBeUndefined()
+  })
+
+  it('UPDATE con celda vacía NO toca comuna ni derivados (skip-si-vacío)', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Semáforo': 'verde' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.comuna).toBeUndefined()
+    expect(rows[0].patch.comuna_cods).toBeUndefined()
+    expect(rows[0].patch.alcance_regional).toBeUndefined()
+  })
+
+  it('el error clasifica como comuna-invalida (badge del preview)', () => {
+    const { rows } = parseComunaRow({ '#': '1', 'Comuna': 'Comunia Falsa' })
+    expect(rows[0].errors.length).toBeGreaterThan(0)
+    expect(classifyError(rows[0].errors[0]).family).toBe('comuna-invalida')
+  })
+})

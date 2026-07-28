@@ -23,6 +23,7 @@ export type ErrorFamily =
   | 'valor-invalido'
   | 'region-invalida'
   | 'eje-invalido'
+  | 'comuna-invalida'
   | 'region-mismatch'
   | 'permiso-denegado'
   | 'duplicado'
@@ -71,6 +72,12 @@ export function classifyError(raw: string): ClassifiedError {
   if (/la\s+iniciativa\s+#\d+\s+es\s+de\s+la\s+región/i.test(raw)
       || /el\s+#\s*\d+\s+corresponde\s+a\s+la\s+región/i.test(raw)) {
     return { raw, family: 'region-mismatch', fila }
+  }
+
+  // Comuna no reconocida por el matcher (migración 045 — el CUT es la llave
+  // del drill comunal; una comuna mal escrita rechaza la fila).
+  if (/comuna\s+«[^»]+»\s+no\s+existe/i.test(raw)) {
+    return { raw, family: 'comuna-invalida', fila }
   }
 
   // Eje mal formateado o fuera del catálogo de su región.
@@ -194,6 +201,18 @@ function bannerForDominant(
         action:
           `Verifica que el número y nombre del eje coincidan con los ejes oficiales de esa región. ` +
           `Si la región aún no tiene ese eje en su catálogo, pide a un administrador que lo agregue antes de cargar.`,
+      }
+
+    case 'comuna-invalida':
+      return {
+        title: `${count} filas con comuna no reconocida`,
+        body:
+          `El sistema resuelve cada comuna al catálogo oficial (CUT) para ubicar la iniciativa en el mapa comunal. ` +
+          `Si el texto trae una comuna mal escrita o una localidad que no es comuna, el parser no puede asignarla ` +
+          `y rechaza la fila para que el dato no entre a medias.`,
+        action:
+          `Corrige la ortografía usando el nombre oficial de la comuna (el error sugiere la más parecida). ` +
+          `Separa varias comunas con «;». Para iniciativas de alcance regional escribe "Regional".`,
       }
 
     case 'region-mismatch':

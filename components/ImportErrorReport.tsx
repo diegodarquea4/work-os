@@ -89,6 +89,7 @@ function FamilyBadge({ family }: { family: ClassifiedError['family'] }) {
     'header-faltante':   { label: 'header',      cls: 'bg-orange-100 text-orange-700' },
     'region-invalida':   { label: 'región',      cls: 'bg-rose-100   text-rose-700'   },
     'eje-invalido':      { label: 'eje',         cls: 'bg-rose-100   text-rose-700'   },
+    'comuna-invalida':   { label: 'comuna',      cls: 'bg-rose-100   text-rose-700'   },
     'region-mismatch':   { label: 'región/#',    cls: 'bg-rose-100   text-rose-700'   },
     'valor-invalido':    { label: 'valor',       cls: 'bg-amber-100  text-amber-700'  },
     'permiso-denegado':  { label: 'permisos',    cls: 'bg-purple-100 text-purple-700' },

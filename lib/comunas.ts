@@ -262,6 +262,28 @@ function greedyPorVentana(
 }
 
 /**
+ * Sugerencia "¿Quisiste decir…?" para el reporte de errores del importador:
+ * la comuna de la región más cercana (Levenshtein ≤ 3, sin empates). Más
+ * permisiva que el fuzzy del matcher — acá solo sugiere, no asigna.
+ */
+export function sugerirComuna(token: string, regionCod: string): string | null {
+  const regionIne = INE_CODE[regionCod]
+  if (regionIne === undefined) return null
+  const norm = normalizeComunaText(token)
+  if (norm.length < 4) return null
+  let best: { nombre: string; d: number } | null = null
+  let empate = false
+  for (const [nombreNorm, cut] of porRegion.get(regionIne) ?? []) {
+    const d = levenshtein(norm, nombreNorm, 3)
+    if (d <= 3) {
+      if (best === null || d < best.d) { best = { nombre: nombrePorCut.get(cut)!, d }; empate = false }
+      else if (d === best.d && nombrePorCut.get(cut) !== best.nombre) empate = true
+    }
+  }
+  return best !== null && !empate ? best.nombre : null
+}
+
+/**
  * Resuelve el texto libre del campo `comuna` a CUTs oficiales.
  *
  * - Texto vacío o de alcance regional → { cods: [], alcanceRegional: true }.
