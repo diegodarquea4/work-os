@@ -14,6 +14,7 @@ import {
   type OrigenCompromisoGabinete,
 } from '@/lib/sesiones/helpers'
 import { SEMAFORO_CONFIG } from '@/lib/config'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import MetricaEditModal from './MetricaEditModal'
 
 /**
@@ -91,6 +92,12 @@ export default function SesionModal(props: Props) {
 
   const [sesion, setSesion]     = useState<EjeSesion | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
+
+  // "Escalar a gabinete" (subsidiariedad, spec gabinete §7.3): solo en
+  // sesiones de COMITÉ y solo si la región tiene el gabinete habilitado.
+  // region_config es SELECT any-auth — la query es segura para todo rol.
+  const { config: regionConfig } = useRegionConfig(region.cod)
+  const puedeEscalar = !esGabinete && !!regionConfig?.gabinete_habilitado
 
   const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
@@ -345,6 +352,38 @@ export default function SesionModal(props: Props) {
       )
     } catch (err) {
       setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado: prevEstado } : x))
+      window.alert((err as Error).message)
+    }
+  }
+
+  // Escalar/des-escalar una traba al gabinete. No cambia la instancia: el
+  // comité la sigue gestionando; el gabinete la ve ADEMÁS (bandeja de
+  // Preparación + zona 1 de su sesión). Registra la sesión donde se marcó.
+  async function toggleEscalado(c: SesionCompromiso, lista: 'anteriores' | 'nuevos') {
+    if (!sesion) return
+    const next = !c.escalado_a_gabinete
+    if (next && !confirm('¿Escalar este compromiso al Gabinete Regional?\n\nAparecerá en su bandeja de preparación y en su próxima sesión. El comité lo sigue viendo y gestionando.')) return
+    // Los dos states tienen genéricos distintos (anteriores lleva origenTipo)
+    // — se aplica por rama en vez de unificar el setter.
+    const aplicar = (v: boolean) => {
+      if (lista === 'anteriores') {
+        setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, escalado_a_gabinete: v } : x))
+      } else {
+        setCompNuevos(prev => prev.map(x => x.id === c.id ? { ...x, escalado_a_gabinete: v } : x))
+      }
+    }
+    aplicar(next)
+    try {
+      await safeWrite(
+        getSupabase().from('sesion_compromisos').update({
+          escalado_a_gabinete: next,
+          escalado_at: next ? new Date().toISOString() : null,
+          escalado_en_sesion_id: next ? sesion.id : null,
+        }).eq('id', c.id),
+        `sesion_compromisos escalar id=${c.id}`,
+      )
+    } catch (err) {
+      aplicar(c.escalado_a_gabinete)
       window.alert((err as Error).message)
     }
   }
@@ -807,6 +846,21 @@ export default function SesionModal(props: Props) {
                             {ESTADO_COMPROMISO[est].label}
                           </button>
                         ))}
+                        {puedeEscalar && (
+                          <button
+                            onClick={() => toggleEscalado(c, 'anteriores')}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
+                              c.escalado_a_gabinete
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
+                            }`}
+                            title={c.escalado_a_gabinete
+                              ? 'Escalada al gabinete — click para revertir'
+                              : 'Escalar al Gabinete Regional (la traba excede a este comité)'}
+                          >
+                            {c.escalado_a_gabinete ? '⬆ Escalada' : '⬆ Escalar'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1067,17 +1121,34 @@ export default function SesionModal(props: Props) {
                       : null
                     const esMandato = esGabinete && c.instancia === 'eje' && c.eje_id != null
                     return (
-                      <div key={c.id} className="px-3 py-2 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          {esMandato && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato: se gestiona en la próxima sesión de ese comité">
-                              → {comiteNombre(c.eje_id)}
-                            </span>
-                          )}
-                          <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
-                          {vinculada && <span className="truncate">· 🔗 {vinculada.nombre}</span>}
-                        </p>
+                      <div key={c.id} className="px-3 py-2 bg-gray-50 rounded-lg flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {esMandato && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato: se gestiona en la próxima sesión de ese comité">
+                                → {comiteNombre(c.eje_id)}
+                              </span>
+                            )}
+                            <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
+                            {vinculada && <span className="truncate">· 🔗 {vinculada.nombre}</span>}
+                          </p>
+                        </div>
+                        {puedeEscalar && (
+                          <button
+                            onClick={() => toggleEscalado(c, 'nuevos')}
+                            className={`flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
+                              c.escalado_a_gabinete
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
+                            }`}
+                            title={c.escalado_a_gabinete
+                              ? 'Escalada al gabinete — click para revertir'
+                              : 'Escalar al Gabinete Regional'}
+                          >
+                            {c.escalado_a_gabinete ? '⬆ Escalada' : '⬆ Escalar'}
+                          </button>
+                        )}
                       </div>
                     )
                   })}
