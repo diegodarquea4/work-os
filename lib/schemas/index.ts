@@ -201,8 +201,11 @@ export const poligonoPatchSchema = z.object({
 export type PoligonoPostBody  = z.infer<typeof poligonoPostSchema>
 export type PoligonoPatchBody = z.infer<typeof poligonoPatchSchema>
 
-// ── /api/sesiones/[id]/* — Módulo Sesiones (Comité Policial, mig 044) ────────
+// ── /api/sesiones/[id]/* — Módulo Sesiones (comités mig 044 + gabinete 046) ──
 // Las rutas /cerrar y /acta no llevan body (el borrador ya está persistido
-// client-side vía safeWrite); solo se valida el param dinámico.
+// client-side vía safeWrite); solo se valida el param dinámico. Por lo mismo
+// NO hay schema zod para `instancia` ('eje'|'gabinete'): el enforcement es el
+// CHECK de BD (mig 046) sobre los inserts client-side — un enum acá sería
+// código muerto mientras no exista una ruta que reciba ese campo en el body.
 
 export const sesionIdSchema = z.coerce.number().int().positive()
