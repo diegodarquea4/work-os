@@ -86,6 +86,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const [dropPos, setDropPos]                  = useState({ top: 0, left: 0 })
   const viewDropRef                            = useRef<HTMLDivElement>(null)
   const viewDropBtnRef                         = useRef<HTMLButtonElement>(null)
+  // Menú de configuración (tuerca): PREGO / Permisos / Cambiar clave / Cerrar
+  // sesión. Saca del header los accesos de baja frecuencia. Anclado a la
+  // derecha (right, no left — el botón vive en el borde derecho del header).
+  const [gearOpen, setGearOpen]                = useState(false)
+  const [gearPos, setGearPos]                  = useState({ top: 0, right: 0 })
+  const gearMenuRef                            = useRef<HTMLDivElement>(null)
+  const gearBtnRef                             = useRef<HTMLButtonElement>(null)
   const [selectedRegion, setSelectedRegion]   = useState<Region | null>(null)
 
   // Región activa global compartida entre Kanban/Atención/Mi Región. Persiste
@@ -190,6 +197,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       setDropPos({ top: rect.bottom + 4, left: rect.left })
     }
     setViewDropOpen(prev => !prev)
+  }
+
+  function handleGearToggle() {
+    if (!gearOpen && gearBtnRef.current) {
+      const rect = gearBtnRef.current.getBoundingClientRect()
+      setGearPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+    }
+    setGearOpen(prev => !prev)
   }
   const [localIniciativas, setLocalIniciativas]     = useState<Iniciativa[]>(projects)
 
@@ -299,6 +314,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
+
+  // Cerrar el menú tuerca al clickear fuera (mismo patrón del dropdown de vistas).
+  useEffect(() => {
+    if (!gearOpen) return
+    function onClickOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (gearMenuRef.current?.contains(target)) return
+      if (gearBtnRef.current?.contains(target)) return
+      setGearOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [gearOpen])
 
   // Auto-select region for single-region users (regional or filtered viewer)
   // Also auto-redirect to vista-regional for single-region users
@@ -521,20 +549,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 </svg>
               </button>
             </div>
-            {(profile?.role === 'admin' || profile?.role === 'editor') && (
-            <button
-              onClick={() => setView('prego')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors animate-in fade-in duration-300 ${
-                view === 'prego' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="1" y="1" width="10" height="10" rx="1"/>
-                <path d="M1 4h10M1 7h10M4 4v7" strokeLinecap="round"/>
-              </svg>
-              PREGO
-            </button>
-            )}
             <button
               onClick={() => { setMetricasInitialRegion(undefined); setView('metricas') }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -547,22 +561,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Métricas
             </button>
-            {profile?.role === 'admin' && (
-              <button
-                onClick={() => setView('usuarios')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors animate-in fade-in duration-300 ${
-                  view === 'usuarios' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="4.5" cy="3.5" r="2"/>
-                  <path d="M1 10c0-2 1.5-3.5 3.5-3.5S8 8 8 10"/>
-                  <circle cx="9" cy="4" r="1.5"/>
-                  <path d="M9 7.5c1.5 0 2.5 1 2.5 2.5"/>
-                </svg>
-                Permisos
-              </button>
-            )}
+            {/* PREGO y Permisos viven en el menú tuerca (configuración) —
+                accesos de baja frecuencia fuera de la barra principal. */}
           </div>
 
           {/* User info — logout siempre visible, email/rol aparece al cargar perfil */}
@@ -587,26 +587,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <circle cx="8" cy="11.4" r=".4" fill="currentColor"/>
               </svg>
             </button>
+            {/* Tuerca: PREGO / Permisos / Cambiar clave / Cerrar sesión */}
             <button
-              onClick={() => setCambiarClaveOpen(true)}
-              className="text-slate-400 hover:text-white transition-colors"
-              title="Cambiar contraseña"
-              aria-label="Cambiar contraseña"
+              ref={gearBtnRef}
+              onClick={handleGearToggle}
+              className={`transition-colors ${
+                gearOpen || view === 'prego' || view === 'usuarios' ? 'text-white' : 'text-slate-400 hover:text-white'
+              }`}
+              title="Configuración"
+              aria-label="Abrir menú de configuración"
+              aria-expanded={gearOpen}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="6" cy="10" r="3"/>
-                <path d="M8 8l6-6M12 2l2 2M11 3l2 2"/>
-              </svg>
-            </button>
-            <button
-              onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
-              className="text-slate-400 hover:text-white transition-colors"
-              title="Cerrar sesión"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
-                <path d="M11 11l3-3-3-3"/>
-                <path d="M14 8H6"/>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
             </button>
           </div>
@@ -868,6 +862,75 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               {v.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Menú tuerca — a nivel raíz por la misma razón que el dropdown de
+          vistas (escapar el stacking context del header). Anclado a la derecha. */}
+      {gearOpen && (
+        <div
+          ref={gearMenuRef}
+          style={{ position: 'fixed', top: gearPos.top, right: gearPos.right, zIndex: 9999, minWidth: 176 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
+        >
+          {(profile?.role === 'admin' || profile?.role === 'editor') && (
+            <button
+              onClick={() => { setView('prego'); setGearOpen(false) }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === 'prego'
+                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+                <rect x="1" y="1" width="10" height="10" rx="1"/>
+                <path d="M1 4h10M1 7h10M4 4v7" strokeLinecap="round"/>
+              </svg>
+              PREGO
+            </button>
+          )}
+          {profile?.role === 'admin' && (
+            <button
+              onClick={() => { setView('usuarios'); setGearOpen(false) }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === 'usuarios'
+                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+                <circle cx="4.5" cy="3.5" r="2"/>
+                <path d="M1 10c0-2 1.5-3.5 3.5-3.5S8 8 8 10"/>
+                <circle cx="9" cy="4" r="1.5"/>
+                <path d="M9 7.5c1.5 0 2.5 1 2.5 2.5"/>
+              </svg>
+              Permisos
+            </button>
+          )}
+          {(profile?.role === 'admin' || profile?.role === 'editor') && (
+            <div className="my-1 border-t border-gray-100" />
+          )}
+          <button
+            onClick={() => { setCambiarClaveOpen(true); setGearOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="6" cy="10" r="3"/>
+              <path d="M8 8l6-6M12 2l2 2M11 3l2 2"/>
+            </svg>
+            Cambiar clave
+          </button>
+          <button
+            onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0">
+              <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
+              <path d="M11 11l3-3-3-3"/>
+              <path d="M14 8H6"/>
+            </svg>
+            Cerrar sesión
+          </button>
         </div>
       )}
     </div>

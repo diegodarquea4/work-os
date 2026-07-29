@@ -1178,7 +1178,7 @@ Lo importante: una métrica con un número que nadie sabe de dónde sale es peor
     categoria: 'Métricas y PREGO',
     pregunta: '¿Cómo avanzo a una región a la siguiente fase del PREGO?',
     respuesta:
-`En la vista PREGO (acceso solo admin/editor desde el menú superior):
+`En la vista PREGO (acceso solo admin/editor desde el menú de configuración — la tuerca arriba a la derecha):
 
 1. Selecciona la región.
 2. Abre la fase actual → revisa la evidencia cargada por el equipo regional.
