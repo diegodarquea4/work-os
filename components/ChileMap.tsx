@@ -38,6 +38,14 @@ function regionFocusBounds(feature: Feature): L.LatLngBounds | null {
   return bounds
 }
 
+// Zoom con el que Chile completo cabe en el contenedor ACTUAL del mapa. Es el
+// minZoom (no dejar alejarse más allá del país) y el destino de la vuelta a
+// Chile. Se recalcula en cada cambio de tamaño — cada usuario tiene una
+// pantalla distinta y el contenedor cambia cuando el panel lateral abre/cierra.
+function chileFitZoom(map: L.Map): number {
+  return map.getBoundsZoom(L.latLngBounds(CHILE_BOUNDS), false, L.point(20, 20))
+}
+
 function MapController({ drillActive, focusBounds }: { drillActive: boolean; focusBounds: L.LatLngBounds | null }) {
   const map = useMap()
   const initialized = useRef(false)
@@ -55,13 +63,17 @@ function MapController({ drillActive, focusBounds }: { drillActive: boolean; foc
     if (initialized.current) return
     initialized.current = true
     map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] })
-    // Espera a que el ajuste termine y congela ese zoom como mínimo
-    map.once('moveend', () => { map.setMinZoom(map.getZoom()) })
+    // minZoom calculado directo, NO esperando el primer 'moveend' del fit:
+    // si el MapContainer ya monta fitteado, ese fit no produce movimiento y
+    // el once() quedaba armado hasta el primer vuelo del drill — congelaba el
+    // minZoom en el zoom de la región y la vuelta a Chile quedaba clampeada.
+    map.setMinZoom(chileFitZoom(map))
   }, [map])
 
   // Re-encuadra el nivel vigente cuando cambia el tamaño — salvo durante el
   // drill comunal (pisaría el encuadre de ComunasLayer) o con un vuelo agendado.
   useMapEvent('resize', () => {
+    map.setMinZoom(chileFitZoom(map))
     if (drillRef.current || flyPendingRef.current) return
     if (focusRef.current) map.fitBounds(focusRef.current, { padding: [30, 30] })
     else map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] })
@@ -86,6 +98,7 @@ function MapController({ drillActive, focusBounds }: { drillActive: boolean; foc
     flyPendingRef.current = true
     const t = setTimeout(() => {
       map.invalidateSize()
+      map.setMinZoom(chileFitZoom(map))
       flyPendingRef.current = false
       if (target) map.flyToBounds(target, { padding: [30, 30], duration: 0.8 })
       else map.flyToBounds(CHILE_BOUNDS, { padding: [20, 20], duration: 0.8 })
