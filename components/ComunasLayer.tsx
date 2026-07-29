@@ -111,19 +111,13 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
     return () => { cancelled = true }
   }, [regionIne])
 
-  // Encuadre al entrar (datos listos) y vuelta a Chile al desmontar.
+  // Encuadre al entrar (datos listos). La vuelta a Chile al salir del drill
+  // la maneja MapController (ChileMap) — cámara centralizada por intención.
   useEffect(() => {
     if (!fc) return
     const bounds = boundsSinTerritoriosLejanos(fc, regionIne)
     if (bounds) map.flyToBounds(bounds, { padding: [30, 30], duration: 0.8 })
   }, [fc, regionIne, map])
-
-  useEffect(() => {
-    return () => {
-      // CHILE_BOUNDS de ChileMap — el minZoom congelado lo permite (es el fit).
-      map.flyToBounds([[-56, -76], [-17, -66]], { padding: [20, 20], duration: 0.8 })
-    }
-  }, [map])
 
   // Re-estilo in-place al cambiar selección o conteos.
   useEffect(() => {

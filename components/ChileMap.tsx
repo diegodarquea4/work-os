@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvent } from 'react-leaflet'
-import type { GeoJsonObject, Feature } from 'geojson'
+import L from 'leaflet'
+import type { GeoJsonObject, Feature, FeatureCollection, Position } from 'geojson'
 import type { Layer, LeafletMouseEvent, PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getRegionColor } from '@/lib/regionColors'
@@ -18,11 +19,37 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [[-62, -82], [-14, -60]
 // comunal. Costo asumido de tener dblclick con semántica propia.
 const DBLCLICK_MS = 250
 
-function MapController({ drillActive }: { drillActive: boolean }) {
+// Encuadre de una región para el focus de cámara: excluye del cálculo los
+// territorios lejanos que arruinan el flyToBounds — Rapa Nui / Juan Fernández /
+// Desventuradas (lon < -76) y la Antártica (lat < -57). Mismo criterio que
+// boundsSinTerritoriosLejanos de ComunasLayer, pero a nivel de coordenadas
+// porque cada región es un solo (Multi)Polygon.
+function regionFocusBounds(feature: Feature): L.LatLngBounds | null {
+  let bounds: L.LatLngBounds | null = null
+  const extend = (pos: Position) => {
+    const [lng, lat] = pos
+    if (lng < -76 || lat < -57) return
+    if (bounds) bounds.extend([lat, lng])
+    else bounds = L.latLngBounds([lat, lng], [lat, lng])
+  }
+  const g = feature.geometry
+  if (g.type === 'Polygon') g.coordinates.forEach(ring => ring.forEach(extend))
+  else if (g.type === 'MultiPolygon') g.coordinates.forEach(poly => poly.forEach(ring => ring.forEach(extend)))
+  return bounds
+}
+
+function MapController({ drillActive, focusBounds }: { drillActive: boolean; focusBounds: L.LatLngBounds | null }) {
   const map = useMap()
   const initialized = useRef(false)
   const drillRef = useRef(drillActive)
-  useEffect(() => { drillRef.current = drillActive })
+  const focusRef = useRef(focusBounds)
+  // true mientras hay un vuelo agendado — el handler de resize no debe pisar
+  // el invalidateSize+fly del timeout (invalidateSize dispara 'resize').
+  const flyPendingRef = useRef(false)
+  useEffect(() => {
+    drillRef.current = drillActive
+    focusRef.current = focusBounds
+  })
 
   useEffect(() => {
     if (initialized.current) return
@@ -32,11 +59,42 @@ function MapController({ drillActive }: { drillActive: boolean }) {
     map.once('moveend', () => { map.setMinZoom(map.getZoom()) })
   }, [map])
 
-  // Re-ajusta Chile cuando el contenedor cambia de tamaño — salvo durante el
-  // drill comunal (pisaría el encuadre de la región).
+  // Re-encuadra el nivel vigente cuando cambia el tamaño — salvo durante el
+  // drill comunal (pisaría el encuadre de ComunasLayer) o con un vuelo agendado.
   useMapEvent('resize', () => {
-    if (!drillRef.current) map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] })
+    if (drillRef.current || flyPendingRef.current) return
+    if (focusRef.current) map.fitBounds(focusRef.current, { padding: [30, 30] })
+    else map.fitBounds(CHILE_BOUNDS, { padding: [20, 20] })
   })
+
+  // Cámara del nivel país/región. El drill tiene cámara propia (ComunasLayer
+  // vuela al encuadre comunal cuando llega su geojson); acá van las
+  // transiciones hacia una región enfocada y las vueltas a la visual de todo
+  // Chile — incluida la salida del drill, que antes vivía en un cleanup de
+  // desmontaje de ComunasLayer y competía con el reacomodo del layout.
+  const intentRef = useRef<'init' | 'chile' | 'region' | 'drill'>('init')
+  useEffect(() => {
+    const prev = intentRef.current
+    const next = drillActive ? 'drill' : focusBounds ? 'region' : 'chile'
+    intentRef.current = next
+    if (next === 'drill') return
+    if (prev === 'init') return // el primer encuadre lo hace el fit inicial
+    if (next === 'chile' && prev === 'chile') return
+    const target = next === 'region' ? focusBounds : null
+    // El panel lateral abre/cierra con transition de 300ms — esperar el tamaño
+    // final del contenedor antes de volar, o el encuadre queda corrido.
+    flyPendingRef.current = true
+    const t = setTimeout(() => {
+      map.invalidateSize()
+      flyPendingRef.current = false
+      if (target) map.flyToBounds(target, { padding: [30, 30], duration: 0.8 })
+      else map.flyToBounds(CHILE_BOUNDS, { padding: [20, 20], duration: 0.8 })
+    }, 320)
+    return () => {
+      clearTimeout(t)
+      flyPendingRef.current = false
+    }
+  }, [drillActive, focusBounds, map])
 
   return null
 }
@@ -59,6 +117,9 @@ type Props = {
   onRegionDoubleClick?: (regionName: string, cod: string) => void
   // Nivel comunal activo: monta ComunasLayer y atenúa la capa regional.
   drill?: MapDrillProps | null
+  // Región que la cámara debe enfocar (click desde el lateral). null = visual
+  // de todo Chile. Ignorado mientras el drill está activo.
+  focusCod?: string | null
   lockedRegions?: string[]  // cods the current user cannot open
 }
 
@@ -96,8 +157,17 @@ function buildDrillStyle(color: string, isDrilled: boolean): PathOptions {
   }
 }
 
-export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, lockedRegions = [] }: Props) {
+export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [] }: Props) {
   const geoJsonRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
+
+  // Bounds de la región enfocada — identidad estable (geoData no cambia) para
+  // que el effect de cámara de MapController solo corra en transiciones reales.
+  const focusBounds = useMemo(() => {
+    if (!focusCod) return null
+    const features = (geoData as FeatureCollection).features ?? []
+    const feature = features.find(f => getCod(f) === focusCod)
+    return feature ? regionFocusBounds(feature) : null
+  }, [geoData, focusCod])
 
   // Los handlers de onEachFeature se registran UNA vez (la capa no se
   // remonta) — todo lo que cambia con el tiempo se lee vía refs, que se
@@ -207,7 +277,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       attributionControl={true}
       doubleClickZoom={false}
     >
-      <MapController drillActive={!!drill} />
+      <MapController drillActive={!!drill} focusBounds={focusBounds} />
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://carto.com/">CARTO</a>'

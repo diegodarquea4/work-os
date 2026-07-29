@@ -225,9 +225,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   type MapDrill = { region: Region; comuna: { cut: number; nombre: string } | null }
   const [mapDrill, setMapDrill] = useState<MapDrill | null>(null)
 
-  // El drill muere al salir de la vista Mapa.
+  // Región que la cámara del mapa debe enfocar (click en una fila del lateral
+  // → el mapa vuela a esa región). null = visual de todo Chile. Ortogonal al
+  // drill: al entrar al drill se limpia (ComunasLayer encuadra) y al salir la
+  // cámara vuelve a Chile.
+  const [mapFocusCod, setMapFocusCod] = useState<string | null>(null)
+
+  // El drill y el foco de cámara mueren al salir de la vista Mapa.
   useEffect(() => {
-    if (view !== 'mapa') setMapDrill(null)
+    if (view !== 'mapa') {
+      setMapDrill(null)
+      setMapFocusCod(null)
+    }
   }, [view])
 
   // Restaurar el ancho del sidebar default desde localStorage al hidratar.
@@ -366,7 +375,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     [selectedRegion, projectsByRegion],
   )
 
-  function handleSelectRegion(regionName: string, cod: string) {
+  function handleSelectRegion(regionName: string, cod: string, fromSidebar = false) {
     const found = REGIONS.find(r => r.cod === cod)
     if (!found) return
     // Click simple durante el drill comunal: sale del drill y sigue el flujo
@@ -374,8 +383,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setMapDrill(null)
     // Toggle del panel del mapa, pero NO toggle del filtro global: al clickear
     // siempre actualizamos activeRegionName (para que las otras vistas hereden).
-    setSelectedRegion(prev => prev?.cod === cod ? null : found)
+    const deselect = selectedRegion?.cod === cod
+    setSelectedRegion(deselect ? null : found)
     setActiveRegionName(found.nombre)
+    // Cámara: desde el lateral el mapa vuela a la región; al deseleccionar
+    // vuelve a Chile. El click en el polígono no mueve la cámara (la región ya
+    // está a la vista) salvo que ya hubiera otra enfocada.
+    if (deselect) setMapFocusCod(null)
+    else if (fromSidebar) setMapFocusCod(cod)
+    else setMapFocusCod(prev => (prev ? cod : prev))
   }
 
   // ── Drill comunal: transiciones ────────────────────────────────────────────
@@ -384,6 +400,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     if (lockedRegions.includes(region.cod)) return
     setMapDrill({ region, comuna: null })
     setSelectedRegion(null)
+    setMapFocusCod(null)
     setActiveRegionName(region.nombre)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
@@ -721,6 +738,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
               onRegionDoubleClick={handleRegionDoubleClick}
+              focusCod={mapFocusCod}
               drill={mapDrill && comunaStats ? {
                 regionIne:      INE_CODE[mapDrill.region.cod],
                 regionCod:      mapDrill.region.cod,
@@ -770,7 +788,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               <RegionPreviewPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
-                onClose={() => setSelectedRegion(null)}
+                onClose={() => { setSelectedRegion(null); setMapFocusCod(null) }}
                 onGoToDashboard={() => setView('vista-regional')}
                 onVerMasIndicadores={(r) => { setMetricasInitialRegion(r.nombre); setView('metricas') }}
                 onVerDetalleComunal={() => enterDrill(selectedRegion)}
@@ -790,7 +808,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               lockedRegions={lockedRegions}
               ragFor={ragFor}
               avgPctFor={avgPctFor}
-              onSelectRegion={handleSelectRegion}
+              onSelectRegion={(name, cod) => handleSelectRegion(name, cod, true)}
               onHoverRegion={setHoveredCod}
               width={summarySidebarWidth}
               onResizeStart={handleSummaryResizeStart}
