@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
+import ComitesRegionalesSection from './ComitesRegionalesSection'
 import RegionEjesPanel from './RegionEjesPanel'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import DesalojoBadge from './DesalojoBadge'
@@ -155,7 +156,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
 
   // Catálogo de ejes de la región activa (migración 015). `refresh` se llama
   // desde RegionEjesPanel cuando admin agrega/edita/elimina un eje.
-  const { ejes: regionEjes, refresh: refreshRegionEjes } = useRegionEjes(selectedCod)
+  const { ejes: regionEjes, loading: regionEjesLoading, refresh: refreshRegionEjes } = useRegionEjes(selectedCod)
 
   // Initiatives for this region
   const regionIniciativas = useMemo(
@@ -599,7 +600,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
         {region && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Avance por eje estratégico</h3>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ejes estratégicos</h3>
               {canEditAny && (
                 <button
                   onClick={() => setManageEjesOpen(true)}
@@ -720,6 +721,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                         region={region}
                         eje={selectedEje}
                         onClose={() => setSelectedEjeIdForMetrics(null)}
+                        showSesiones={false}
                       />
                     </div>
                   )
@@ -727,6 +729,14 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
               </div>
             )}
           </div>
+        )}
+
+        {/* ── Sección 2b: Comités y Gabinete Regional ──────────────────────────
+            Instancias de coordinación regional en pestañas. El Comité Policial
+            (sesiones + acta) migró acá desde el drawer de «Ejes estratégicos»;
+            los otros tres comités son placeholders anunciados. */}
+        {region && (
+          <ComitesRegionalesSection region={region} regionEjes={regionEjes} ejesLoading={regionEjesLoading} />
         )}
 
         {/* ── Sección 3: Métricas clave ────────────────────────────────────────── */}

@@ -202,7 +202,7 @@ export default function RegionPreviewPanel({
         <section>
           {selectedEjeId == null ? (
             <>
-              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Avance por eje estratégico</h3>
+              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ejes estratégicos</h3>
               {ejes.length === 0 ? (
                 <p className="text-[11px] text-gray-400 italic px-2 py-2">
                   {regionEjes.length === 0

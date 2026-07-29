@@ -850,7 +850,7 @@ Código de color para escanear rápido:
     respuesta:
 `Tres lugares, todos muestran lo mismo:
 
-1. Mi Región → sección "Avance por eje estratégico". Cada tarjeta es un eje con su número, nombre, % de avance y monto de inversión.
+1. Mi Región → sección "Ejes estratégicos". Cada tarjeta es un eje con su número, nombre, % de avance y monto de inversión.
 2. El Excel de carga semanal trae una hoja "Ejes válidos" con la lista del catálogo de tu región.
 3. Kanban en vista "Por eje" → cada columna es un eje.
 
@@ -933,7 +933,7 @@ Para reportes que cruzan ejes (ej. inversión en "salud" sumando varias áreas),
     categoria: 'Ejes',
     pregunta: '¿Cómo creo un eje nuevo para una región?',
     respuesta:
-`En Mi Región (con la región seleccionada) → botón "Gestionar ejes" junto al título "Avance por eje estratégico" → se abre el panel CRUD.
+`En Mi Región (con la región seleccionada) → botón "Gestionar ejes" junto al título "Ejes estratégicos" → se abre el panel CRUD.
 
 Pasos:
 1. Botón "Agregar eje".
@@ -1033,7 +1033,7 @@ Si una iniciativa ya estaba en Diseño y notas que se ajusta mejor a Prefactibil
     categoria: 'Ejes',
     pregunta: '¿Cómo entro al panel para gestionar los ejes de una región?',
     respuesta:
-`En Mi Región (con la región objetivo seleccionada en el selector) → junto al título "Avance por eje estratégico" hay un botón "Gestionar ejes". Click → se abre el panel CRUD lateral.
+`En Mi Región (con la región objetivo seleccionada en el selector) → junto al título "Ejes estratégicos" hay un botón "Gestionar ejes". Click → se abre el panel CRUD lateral.
 
 Operaciones disponibles:
 - Listar ejes existentes con su número, nombre y conteo de iniciativas referenciándolos.
@@ -1058,7 +1058,7 @@ Cada cambio queda en el historial con tu email como autor.`,
     categoria: 'Métricas y PREGO',
     pregunta: '¿Dónde reporto el valor actual de las métricas de mi región?',
     respuesta:
-`En Mi Región → haz clic en cualquier tarjeta de eje en "Avance por eje estratégico" → se abre el drawer de métricas de ese eje.
+`En Mi Región → haz clic en cualquier tarjeta de eje en "Ejes estratégicos" → se abre el drawer de métricas de ese eje.
 
 Cada métrica muestra: valor actual, meta y barra de avance. Botón "Actualizar valor" → modal con input del nuevo valor + fecha del reporte.
 
@@ -1210,7 +1210,7 @@ Notificación automática por correo está en la lista de mejoras a futuro.`,
     categoria: 'Métricas y PREGO',
     pregunta: '¿Cómo abro las métricas de un eje específico para reportar valores?',
     respuesta:
-`En Mi Región, en la sección "Avance por eje estratégico", haz clic en la tarjeta del eje que quieres trabajar. Se abre un drawer lateral con todas las métricas definidas para ese eje en tu región.
+`En Mi Región, en la sección "Ejes estratégicos", haz clic en la tarjeta del eje que quieres trabajar. Se abre un drawer lateral con todas las métricas definidas para ese eje en tu región.
 
 Lo que ves por métrica:
 - Nombre y unidad ("Kilómetros de ruta mejorados · km").

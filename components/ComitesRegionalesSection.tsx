@@ -1,0 +1,116 @@
+'use client'
+
+import { useState } from 'react'
+import type { Region } from '@/lib/regions'
+import type { RegionEje } from '@/lib/types'
+import MetricasEjeDrawer from './MetricasEjeDrawer'
+
+/**
+ * Sección «Comités y Gabinete Regional» de Mi Región, justo debajo de
+ * «Ejes estratégicos». Agrupa las instancias de coordinación regional en
+ * cuatro pestañas. Por ahora solo el Comité Policial está desarrollado —
+ * los otros tres son placeholders anunciados.
+ *
+ * El Comité Policial se ancla al eje de la región con `sesiones_habilitadas`
+ * (mig 044; cada región tiene exactamente uno, sesiones_nombre 'Comité
+ * Policial'). El módulo de sesiones vivía dentro del drawer de «Ejes
+ * estratégicos»; acá se muestra empotrado y con las sesiones activas —
+ * mismo componente, misma experiencia, ahora en su sección propia.
+ */
+
+type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
+
+const TABS: { key: TabKey; label: string; ready: boolean }[] = [
+  { key: 'policial',       label: 'Comité Policial',                    ready: true  },
+  { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
+  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: false },
+  { key: 'gabinete',       label: 'Gabinete Regional',                   ready: false },
+]
+
+type Props = {
+  region:     Region
+  regionEjes: RegionEje[]
+  // Catálogo de ejes aún cargando — evita el parpadeo "no habilitado" antes
+  // de que llegue el eje del comité.
+  ejesLoading: boolean
+}
+
+export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading }: Props) {
+  const [active, setActive] = useState<TabKey>('policial')
+
+  // El Comité Policial se ancla al eje con sesiones habilitadas.
+  const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Comités y Gabinete Regional</h3>
+        <span className="text-xs text-gray-400 normal-case">— instancias de coordinación de la región</span>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
+        {TABS.map(t => {
+          const isActive = active === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => setActive(t.key)}
+              className={`relative flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-t-lg -mb-px border-b-2 transition-colors ${
+                isActive
+                  ? 'border-slate-800 text-slate-900 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-slate-700 hover:bg-gray-50'
+              }`}
+            >
+              {t.label}
+              {!t.ready && (
+                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-px">
+                  Pronto
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Panel activo */}
+      {active === 'policial' ? (
+        comitePolicialEje ? (
+          <MetricasEjeDrawer
+            region={region}
+            eje={comitePolicialEje}
+            onClose={() => {}}
+            embedded
+            showSesiones
+          />
+        ) : ejesLoading ? (
+          <div className="py-10 text-center text-sm text-gray-400">Cargando comité…</div>
+        ) : (
+          <Placeholder
+            titulo="Comité Policial no habilitado"
+            texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
+          />
+        )
+      ) : (
+        <Placeholder
+          titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
+          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial es el único comité con sesiones y actas en el sistema."
+        />
+      )}
+    </div>
+  )
+}
+
+function Placeholder({ titulo, texto }: { titulo: string; texto: string }) {
+  return (
+    <div className="text-center py-10 px-6 bg-white rounded-xl border border-dashed border-gray-200">
+      <svg className="mx-auto mb-3 text-gray-300" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <p className="text-sm text-gray-600 mb-1 font-medium">{titulo}</p>
+      <p className="text-xs text-gray-400 max-w-md mx-auto">{texto}</p>
+    </div>
+  )
+}

@@ -43,16 +43,25 @@ type Props = {
   // (sin lookup adicional).
   eje:     RegionEje
   onClose: () => void
+  // Modo empotrado: el drawer se monta fijo dentro de un panel (ej. el tab
+  // "Comité Policial" de la sección Comités) en vez de flotar al lado de la
+  // grid de ejes. Oculta el ✕ y la animación de entrada lateral.
+  embedded?: boolean
+  // Muestra el módulo Sesiones (botón Nueva sesión, strip, footer, modales).
+  // El módulo se movió a la sección Comités, así que el drawer que abre desde
+  // «Ejes estratégicos» lo pasa en false para no duplicarlo.
+  showSesiones?: boolean
 }
 
-export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
+export default function MetricasEjeDrawer({ region, eje, onClose, embedded = false, showSesiones = true }: Props) {
   const canEditAny         = useCanEditAny()
   const canEditOperational = useCanEditOperational()
   const userEmail          = useCurrentUserEmail()
 
   // Gate único del módulo Sesiones: flag del eje + rol operativo (viewer
-  // queda fuera — la RLS de sesion_* igual se lo negaría).
-  const sesionesOn = eje.sesiones_habilitadas && canEditOperational
+  // queda fuera — la RLS de sesion_* igual se lo negaría) + que el contenedor
+  // pida mostrarlo (solo el tab Comité Policial, no el drawer de eje).
+  const sesionesOn = eje.sesiones_habilitadas && canEditOperational && showSesiones
 
   const [metricas, setMetricas] = useState<Metrica[]>([])
   const [loading, setLoading]   = useState(true)
@@ -106,30 +115,32 @@ export default function MetricasEjeDrawer({ region, eje, onClose }: Props) {
   return (
     <>
       <aside
-        className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden transition-all duration-200 ease-out ${
-          entered ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-1'
-        }`}
+        className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden transition-all duration-200 ease-out ${
+          embedded ? '' : 'h-full'
+        } ${entered ? 'opacity-100 translate-x-0' : `opacity-0 ${embedded ? '' : 'translate-x-1'}`}`}
       >
         {/* Header chico: ✕ en su propia fila para no colisionar con
             "Nueva métrica". El eje seleccionado ya se marca con borde
             dashed verde en la columna izquierda, así que el header queda
-            mínimo a propósito. */}
-        <div className="flex-shrink-0 flex justify-end px-2 pt-2">
-          <button
-            onClick={onClose}
-            className="text-gray-300 hover:text-gray-700 hover:bg-gray-50 rounded p-1 leading-none transition-colors"
-            title="Cerrar panel"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
-            </svg>
-          </button>
-        </div>
+            mínimo a propósito. En modo empotrado no hay ✕ (el panel es fijo). */}
+        {!embedded && (
+          <div className="flex-shrink-0 flex justify-end px-2 pt-2">
+            <button
+              onClick={onClose}
+              className="text-gray-300 hover:text-gray-700 hover:bg-gray-50 rounded p-1 leading-none transition-colors"
+              title="Cerrar panel"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Acciones: Nueva métrica (admin/editor) + Nueva sesión (operativo,
             solo con el módulo Sesiones activo). Grid 2 col si están ambas. */}
         {(canEditAny || sesionesOn) && (
-          <div className={`flex-shrink-0 px-4 pt-1 pb-2 ${canEditAny && sesionesOn ? 'grid grid-cols-2 gap-2' : ''}`}>
+          <div className={`flex-shrink-0 px-4 ${embedded ? 'pt-3' : 'pt-1'} pb-2 ${canEditAny && sesionesOn ? 'grid grid-cols-2 gap-2' : ''}`}>
             {canEditAny && (
               <button
                 onClick={() => setCreateOpen(true)}
