@@ -5,20 +5,22 @@ import { registerPdfFonts } from '@/lib/pdfFonts'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
+import { generarActaGabinete } from './generarActaGabinete'
+import { subirActa } from './actaUpload'
 
 /**
  * Genera el acta PDF de una sesión CERRADA y la sube al bucket privado
  * comite-docs. Compartido por POST /api/sesiones/[id]/cerrar (paso final)
  * y POST /api/sesiones/[id]/acta (reintento cuando el PDF falló al cerrar).
+ * ÚNICO entry point: despacha por instancia (comité acá mismo; gabinete en
+ * generarActaGabinete) — el contrato de /cerrar y /acta no cambia.
  *
  * NUNCA toca métricas ni compromisos — solo lee, renderiza y sube.
- * Path: {region_cod}/{sesion_id}/acta-{fecha}.pdf — el primer segmento DEBE
- * ser la región exacta (las policies de storage.objects filtran por
- * foldername[1]). upsert:true para que el reintento no falle si el upload
- * original quedó huérfano (subió pero no alcanzó a guardar acta_path).
+ * Path vía actaStoragePath(): el primer segmento DEBE ser la región exacta
+ * (las policies de storage.objects filtran por foldername[1]). upsert:true
+ * para que el reintento no falle si el upload original quedó huérfano
+ * (subió pero no alcanzó a guardar acta_path).
  */
-
-const BUCKET = 'comite-docs'
 
 export async function generarActa(sesionId: number): Promise<string> {
   const db = getSupabaseAdmin()
@@ -28,6 +30,8 @@ export async function generarActa(sesionId: number): Promise<string> {
     .from('eje_sesiones').select('*').eq('id', sesionId).single()
   if (sesErr || !sesionRow) throw new Error(`Sesión ${sesionId} no encontrada`)
   const sesion = sesionRow as EjeSesion
+
+  if (sesion.instancia === 'gabinete') return generarActaGabinete(db, sesion)
 
   const [ejeRes, numRes, asisRes, valRes, metRes, prevRes, apunRes, verifRes, nuevosRes] = await Promise.all([
     db.from('region_ejes').select('sesiones_nombre').eq('id', sesion.eje_id).single(),
@@ -137,20 +141,5 @@ export async function generarActa(sesionId: number): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data }) as any)
 
-  const path = `${sesion.region_cod}/${sesionId}/acta-${sesion.fecha}.pdf`
-  const { error: upErr } = await db.storage.from(BUCKET).upload(path, buffer, {
-    contentType: 'application/pdf',
-    upsert: true,
-  })
-  if (upErr) throw new Error(`Upload del acta falló: ${upErr.message}`)
-
-  const { data: updData, error: updErr } = await db
-    .from('eje_sesiones').update({ acta_path: path }).eq('id', sesionId).select('id')
-  if (updErr || !updData?.length) {
-    // No dejar el archivo huérfano si la fila no se pudo actualizar.
-    await db.storage.from(BUCKET).remove([path]).catch(() => {})
-    throw new Error(`No se pudo guardar acta_path: ${updErr?.message ?? '0 filas'}`)
-  }
-
-  return path
+  return subirActa(db, sesion, buffer)
 }

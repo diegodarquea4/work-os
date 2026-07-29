@@ -73,7 +73,7 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
   const [sesionOpen, setSesionOpen]       = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
   const [nominaOpen, setNominaOpen]       = useState(false)
-  const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, eje.id, sesionesOn)
+  const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'eje', ejeId: eje.id }, sesionesOn)
 
   // Mount animation — el panel arranca invisible y entra suave para que
   // no aparezca de golpe junto con el reflow de la grid de la izquierda.
@@ -264,6 +264,7 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
       {sesionesOn && sesionOpen && (
         <SesionModal
           region={region}
+          instancia="eje"
           eje={eje}
           borradorId={resumen.borradorId}
           currentUserEmail={userEmail}
@@ -277,14 +278,18 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
       {sesionesOn && historialOpen && (
         <HistorialSesionesModal
           region={region}
+          instancia="eje"
           eje={eje}
+          nombreInstancia={eje.sesiones_nombre ?? 'Sesiones'}
           onClose={() => setHistorialOpen(false)}
         />
       )}
       {sesionesOn && nominaOpen && (
         <NominaModal
           region={region}
+          instancia="eje"
           eje={eje}
+          nombreInstancia={eje.sesiones_nombre ?? 'Comité'}
           onClose={() => setNominaOpen(false)}
         />
       )}

@@ -2,20 +2,22 @@
 
 import { useState } from 'react'
 import type { Region } from '@/lib/regions'
+import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
+import GabineteRegionalTab from './GabineteRegionalTab'
 
 /**
  * Sección «Comités y Gabinete Regional» de Mi Región, justo debajo de
  * «Ejes estratégicos». Agrupa las instancias de coordinación regional en
- * cuatro pestañas. Por ahora solo el Comité Policial está desarrollado —
- * los otros tres son placeholders anunciados.
+ * cuatro pestañas. Comité Policial y Gabinete Regional están desarrollados;
+ * Infraestructura e Inversión son placeholders anunciados.
  *
  * El Comité Policial se ancla al eje de la región con `sesiones_habilitadas`
  * (mig 044; cada región tiene exactamente uno, sesiones_nombre 'Comité
- * Policial'). El módulo de sesiones vivía dentro del drawer de «Ejes
- * estratégicos»; acá se muestra empotrado y con las sesiones activas —
- * mismo componente, misma experiencia, ahora en su sección propia.
+ * Policial'). El Gabinete Regional no tiene eje: su flag vive en
+ * region_config (mig 046) y su tab monta el módulo de sesiones en modo
+ * instancia='gabinete'.
  */
 
 type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
@@ -24,7 +26,7 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
   { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: false },
-  { key: 'gabinete',       label: 'Gabinete Regional',                   ready: false },
+  { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
 type Props = {
@@ -33,9 +35,12 @@ type Props = {
   // Catálogo de ejes aún cargando — evita el parpadeo "no habilitado" antes
   // de que llegue el eje del comité.
   ejesLoading: boolean
+  // Cartera de la región — la consume el tab Gabinete Regional (zona
+  // "iniciativas en foco" de la sesión + typeaheads), sin queries nuevas.
+  iniciativas: Iniciativa[]
 }
 
-export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading }: Props) {
+export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas }: Props) {
   const [active, setActive] = useState<TabKey>('policial')
 
   // El Comité Policial se ancla al eje con sesiones habilitadas.
@@ -91,10 +96,12 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
           />
         )
+      ) : active === 'gabinete' ? (
+        <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} />
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial es el único comité con sesiones y actas en el sistema."
+          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial y el Gabinete Regional son las instancias con sesiones y actas en el sistema."
         />
       )}
     </div>

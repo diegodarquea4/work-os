@@ -6,8 +6,11 @@ import type { Region } from '@/lib/regions'
 import type { EjeSesion, RegionEje, SesionCompromiso } from '@/lib/types'
 
 /**
- * Historial de sesiones del comité para (región, eje): lista fecha DESC con
- * asistentes / compromisos / estado del acta; el detalle se expande por fila.
+ * Historial de sesiones de la instancia — comité (región, eje) o Gabinete
+ * Regional (región, instancia='gabinete'): lista fecha DESC con asistentes /
+ * compromisos / estado del acta; el detalle se expande por fila. En gabinete
+ * el detalle muestra las INICIATIVAS TRATADAS con su acuerdo (snapshot del
+ * cierre) en lugar de indicadores.
  * El acta se descarga vía GET /api/sesiones/[id]/acta (URL firmada, bucket
  * privado). Si una sesión quedó cerrada sin acta (falló el PDF), acá está el
  * botón de reintento (POST /acta — solo regenera el PDF, nunca las métricas).
@@ -15,7 +18,9 @@ import type { EjeSesion, RegionEje, SesionCompromiso } from '@/lib/types'
 
 type Props = {
   region: Region
-  eje: RegionEje
+  instancia: 'eje' | 'gabinete'
+  eje: RegionEje | null          // null ⇔ instancia='gabinete'
+  nombreInstancia: string
   onClose: () => void
 }
 
@@ -26,10 +31,11 @@ type SesionRow = EjeSesion & {
 type DetalleSesion = {
   asistencia: { presente: boolean; invitado_nombre: string | null; invitado_institucion: string | null; nomina: { nombre: string; institucion: string; calidad: string } | null }[]
   valores: { valor: number; metrica: { titulo: string; unidad: string | null; tipo: string } | null }[]
+  iniciativas: { semaforo_al_momento: string | null; pct_avance_al_momento: number | null; acuerdo: string | null; prioridad: { nombre: string } | null }[]
   compromisos: SesionCompromiso[]
 }
 
-export default function HistorialSesionesModal({ region, eje, onClose }: Props) {
+export default function HistorialSesionesModal({ region, instancia, eje, nombreInstancia, onClose }: Props) {
   const [sesiones, setSesiones] = useState<SesionRow[]>([])
   const [loading, setLoading]   = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -38,16 +44,17 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await getSupabase()
+    let q = getSupabase()
       .from('eje_sesiones')
       .select('*, sesion_asistencia(count)')
       .eq('region_cod', region.cod)
-      .eq('eje_id', eje.id)
+    q = instancia === 'gabinete' ? q.eq('instancia', 'gabinete') : q.eq('eje_id', eje!.id)
+    const { data } = await q
       .order('fecha', { ascending: false })
       .order('id',    { ascending: false })
     setSesiones((data ?? []) as SesionRow[])
     setLoading(false)
-  }, [region.cod, eje.id])
+  }, [region.cod, instancia, eje?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -62,13 +69,23 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
     setExpandedId(s.id)
     if (detalle[s.id]) return
     const sb = getSupabase()
-    const [asisRes, valRes, compRes] = await Promise.all([
+    const [asisRes, valRes, iniRes, compRes] = await Promise.all([
       sb.from('sesion_asistencia')
         .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, institucion, calidad)')
         .eq('sesion_id', s.id),
-      sb.from('sesion_valores')
-        .select('valor, metrica:metricas_eje(titulo, unidad, tipo)')
-        .eq('sesion_id', s.id),
+      // Indicadores: solo en comités (el gabinete no digita métricas).
+      instancia === 'eje'
+        ? sb.from('sesion_valores')
+            .select('valor, metrica:metricas_eje(titulo, unidad, tipo)')
+            .eq('sesion_id', s.id)
+        : Promise.resolve({ data: [] }),
+      // Iniciativas tratadas: solo en gabinete (snapshot + acuerdo).
+      instancia === 'gabinete'
+        ? sb.from('sesion_iniciativas')
+            .select('semaforo_al_momento, pct_avance_al_momento, acuerdo, prioridad:prioridades_territoriales(nombre)')
+            .eq('sesion_id', s.id)
+            .order('created_at')
+        : Promise.resolve({ data: [] }),
       sb.from('sesion_compromisos')
         .select('*')
         .eq('sesion_origen_id', s.id)
@@ -79,6 +96,7 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
       [s.id]: {
         asistencia:  (asisRes.data ?? []) as unknown as DetalleSesion['asistencia'],
         valores:     (valRes.data ?? []) as unknown as DetalleSesion['valores'],
+        iniciativas: (iniRes.data ?? []) as unknown as DetalleSesion['iniciativas'],
         compromisos: (compRes.data ?? []) as SesionCompromiso[],
       },
     }))
@@ -129,7 +147,7 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
       >
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-gray-900">Historial — {eje.sesiones_nombre ?? 'Sesiones'}</p>
+            <p className="text-base font-semibold text-gray-900">Historial — {nombreInstancia}</p>
             <p className="text-xs text-gray-500 mt-0.5">{region.nombre}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">
@@ -220,6 +238,31 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
                                 </div>
                               </div>
                             )}
+                            {det.iniciativas.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Iniciativas tratadas</p>
+                                <div className="space-y-1.5">
+                                  {det.iniciativas.map((ini, i) => (
+                                    <div key={i} className="text-xs text-gray-600">
+                                      <p className="flex items-center gap-1.5">
+                                        {ini.semaforo_al_momento && (
+                                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                            ini.semaforo_al_momento === 'rojo'  ? 'bg-red-500'   :
+                                            ini.semaforo_al_momento === 'ambar' ? 'bg-amber-400' :
+                                            ini.semaforo_al_momento === 'verde' ? 'bg-green-500' : 'bg-gray-300'
+                                          }`} />
+                                        )}
+                                        <span className="font-medium truncate">{ini.prioridad?.nombre ?? '—'}</span>
+                                        {ini.pct_avance_al_momento != null && (
+                                          <span className="text-gray-400 tabular-nums flex-shrink-0">{Math.round(Number(ini.pct_avance_al_momento))}%</span>
+                                        )}
+                                      </p>
+                                      {ini.acuerdo && <p className="text-gray-500 mt-0.5 pl-3.5 leading-snug">Acuerdo: {ini.acuerdo}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {det.asistencia.length > 0 && (
                               <div>
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Asistencia</p>
@@ -255,7 +298,7 @@ export default function HistorialSesionesModal({ region, eje, onClose }: Props) 
                                 </div>
                               </div>
                             )}
-                            {det.valores.length === 0 && det.asistencia.length === 0 && det.compromisos.length === 0 && (
+                            {det.valores.length === 0 && det.iniciativas.length === 0 && det.asistencia.length === 0 && det.compromisos.length === 0 && (
                               <p className="text-xs text-gray-400">Sesión sin registros de detalle.</p>
                             )}
                           </>

@@ -4,37 +4,68 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { Region } from '@/lib/regions'
+import type { Iniciativa } from '@/lib/projects'
 import type {
   EjeSesion, Metrica, RegionEje, SesionAsistencia, SesionApunte,
-  SesionCompromiso, SesionNomina, SesionValor,
+  SesionCompromiso, SesionIniciativa, SesionNomina, SesionValor,
 } from '@/lib/types'
-import { institucionesSugeridas } from '@/lib/sesiones/helpers'
+import {
+  institucionesSugeridas, clasificarCompromisosGabinete, filasZona3Faltantes,
+  type OrigenCompromisoGabinete,
+} from '@/lib/sesiones/helpers'
+import { SEMAFORO_CONFIG } from '@/lib/config'
 import MetricaEditModal from './MetricaEditModal'
 
 /**
- * Formulario de sesión del comité (spec §7) — 5 zonas EN ESTE ORDEN (el
- * orden es producto, no estética):
- *   1. Compromisos anteriores (verificación — lo primero que se ve)
+ * Formulario de sesión — comités (mig 044) y Gabinete Regional (mig 046).
+ * 5 zonas EN ESTE ORDEN (el orden es producto, no estética):
+ *   1. Compromisos anteriores (verificación — lo primero que se ve).
+ *      Gabinete: propios ∪ escalados desde comités ∪ mandatos a verificar.
  *   2. Asistencia (nómina fija + invitados)
- *   3. Indicadores (métricas se_reporta_en_sesion precargadas)
+ *   3. Comité: indicadores (métricas se_reporta_en_sesion precargadas).
+ *      Gabinete: INICIATIVAS EN FOCO con acuerdo por iniciativa — el
+ *      gabinete no digita métricas (spec gabinete §3).
  *   4. Apuntes por institución (tabs)
- *   5. Compromisos nuevos
+ *   5. Compromisos nuevos. Gabinete: además puede vincular a una iniciativa
+ *      y dirigir a un comité (mandato: instancia='eje' + eje destino).
  *
  * El borrador se persiste EN CADA interacción (safeWrite onBlur/onClick) —
  * "Guardar borrador" solo cierra el modal. "Cerrar sesión" llama al
- * endpoint server-side que aplica métricas y genera el acta.
+ * endpoint server-side que (en comité) aplica métricas y genera el acta.
  *
- * Un solo borrador por (región, eje): si viene borradorId se reabre; si no,
- * se crea (y ante carrera con el UNIQUE parcial, se re-consulta).
+ * Un solo borrador por (región, instancia[, eje]): si viene borradorId se
+ * reabre; si no, se crea (y ante carrera con el UNIQUE parcial, se
+ * re-consulta).
  */
 
-type Props = {
+type PropsBase = {
   region: Region
-  eje: RegionEje
   borradorId: number | null
   currentUserEmail: string
   onClose: () => void
 }
+
+// Discriminated union — refleja el CHECK de la mig 046: una sesión de
+// gabinete NO tiene eje; una de comité lo exige.
+type Props = PropsBase & (
+  | { instancia: 'eje'; eje: RegionEje }
+  | {
+      instancia: 'gabinete'
+      gabineteNombre: string
+      // Cartera de la región ya cargada client-side — alimenta la zona 3
+      // (precarga en foco + typeahead) y el vínculo de la zona 5. Sin
+      // queries nuevas a prioridades.
+      iniciativas: Iniciativa[]
+      // Ejes con sesiones habilitadas — destino posible de un mandato y
+      // nombre del comité de origen de los escalados.
+      ejesComites: RegionEje[]
+    }
+)
+
+// Identidad estable para la rama comité: un `[]` inline nuevo por render
+// cambiaría las deps de loadAll y relanzaría el fetch en cada render.
+const SIN_INICIATIVAS: Iniciativa[] = []
+const SIN_EJES: RegionEje[] = []
 
 const ESTADO_COMPROMISO = {
   pendiente: { label: 'Pendiente', on: 'bg-gray-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
@@ -51,11 +82,17 @@ function fmtFecha(fecha: string | null): string {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function SesionModal({ region, eje, borradorId, currentUserEmail, onClose }: Props) {
+export default function SesionModal(props: Props) {
+  const { region, borradorId, currentUserEmail, onClose } = props
+  const esGabinete    = props.instancia === 'gabinete'
+  const eje           = props.instancia === 'eje' ? props.eje : null
+  const gabIniciativas = props.instancia === 'gabinete' ? props.iniciativas : SIN_INICIATIVAS
+  const ejesComites   = props.instancia === 'gabinete' ? props.ejesComites : SIN_EJES
+
   const [sesion, setSesion]     = useState<EjeSesion | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
 
-  const [compAnteriores, setCompAnteriores] = useState<SesionCompromiso[]>([])
+  const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
   const [asistencia, setAsistencia]         = useState<SesionAsistencia[]>([])
   const [metricasSesion, setMetricasSesion] = useState<Metrica[]>([])
@@ -64,6 +101,9 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
   const [instituciones, setInstituciones]   = useState<string[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
+  // Zona 3 gabinete: agenda de iniciativas de la sesión + acuerdos en edición.
+  const [sesIniciativas, setSesIniciativas] = useState<SesionIniciativa[]>([])
+  const [draftAcuerdos, setDraftAcuerdos]   = useState<Record<number, string>>({})
 
   const [tabInstitucion, setTabInstitucion] = useState<string | null>(null)
   const [draftValores, setDraftValores]     = useState<Record<number, string>>({})
@@ -79,6 +119,9 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
   const [cInstitucion, setCInstitucion]     = useState('')
   const [cNombre, setCNombre]               = useState('')
   const [cPlazo, setCPlazo]                 = useState('')
+  // Gabinete: vínculo opcional a iniciativa + comité destino (mandato).
+  const [cVinculada, setCVinculada]         = useState<Iniciativa | null>(null)
+  const [cDestinoEje, setCDestinoEje]       = useState<number | ''>('')
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
@@ -101,7 +144,8 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
           .from('eje_sesiones')
           .insert({
             region_cod: region.cod,
-            eje_id: eje.id,
+            instancia: esGabinete ? 'gabinete' : 'eje',
+            eje_id: eje?.id ?? null,
             fecha: hoyISO(),
             created_by_email: currentUserEmail || null,
           })
@@ -109,13 +153,13 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
         if (error || !data?.length) {
           // Carrera con el UNIQUE parcial (otro usuario creó el borrador) o
           // RLS: re-consultar antes de rendirse.
-          const { data: retry } = await sb
+          let retryQ = sb
             .from('eje_sesiones')
             .select('*')
             .eq('region_cod', region.cod)
-            .eq('eje_id', eje.id)
             .eq('estado', 'borrador')
-            .limit(1)
+          retryQ = esGabinete ? retryQ.eq('instancia', 'gabinete') : retryQ.eq('eje_id', eje!.id)
+          const { data: retry } = await retryQ.limit(1)
           s = (retry?.[0] as EjeSesion | undefined) ?? null
           if (!s) {
             if (!cancelled) setInitError(error?.message ?? 'No se pudo crear el borrador de sesión.')
@@ -135,54 +179,135 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
 
   const loadAll = useCallback(async (s: EjeSesion) => {
     const sb = getSupabase()
-    const [compRes, nominaRes, asisRes, metRes, valRes, prevSesRes, apunRes, nuevosRes, sesIdsRes] = await Promise.all([
-      // Zona 1: compromisos de sesiones ANTERIORES aún por verificar —
-      // abiertos, o cumplidos sin sesión de cierre (marcados en este borrador,
-      // se pueden desmarcar). Los creados en ESTE borrador van a la zona 5.
-      sb.from('sesion_compromisos').select('*')
-        .eq('region_cod', region.cod).eq('eje_id', eje.id)
-        .neq('sesion_origen_id', s.id)
-        .or('estado.in.(pendiente,en_curso),and(estado.eq.cumplido,cerrado_en_sesion_id.is.null)')
-        .order('created_at'),
-      sb.from('sesion_nomina').select('*')
-        .eq('region_cod', region.cod).eq('eje_id', eje.id).eq('activo', true)
-        .order('institucion').order('calidad'),
+    // Filtro de instancia: comité = por eje_id (⇒ instancia='eje' por el
+    // CHECK de la mig 046); gabinete = por instancia sin eje.
+    const ABIERTO_O_CUMPLIDO_SIN_CIERRE =
+      'estado.in.(pendiente,en_curso),and(estado.eq.cumplido,cerrado_en_sesion_id.is.null)'
+
+    // Zona 1: compromisos de sesiones ANTERIORES aún por verificar —
+    // abiertos, o cumplidos sin sesión de cierre (marcados en este borrador,
+    // se pueden desmarcar). Los creados en ESTE borrador van a la zona 5.
+    // Gabinete: propios + escalados desde comités + mandatos a verificar.
+    const compPromise: PromiseLike<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]> = esGabinete
+      ? (async () => {
+          const [propiosRes, escaladosRes, gabSesRes] = await Promise.all([
+            sb.from('sesion_compromisos').select('*')
+              .eq('region_cod', region.cod).eq('instancia', 'gabinete')
+              .neq('sesion_origen_id', s.id)
+              .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE).order('created_at'),
+            sb.from('sesion_compromisos').select('*')
+              .eq('region_cod', region.cod).eq('instancia', 'eje')
+              .eq('escalado_a_gabinete', true)
+              .neq('sesion_origen_id', s.id)
+              .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE).order('created_at'),
+            sb.from('eje_sesiones').select('id')
+              .eq('region_cod', region.cod).eq('instancia', 'gabinete'),
+          ])
+          // Mandatos: compromisos de comité cuyo ORIGEN es una sesión de
+          // gabinete de la región (los de este borrador van a la zona 5).
+          const gabIds = (gabSesRes.data ?? []).map(r => r.id).filter(id => id !== s.id)
+          const mandatosRes = gabIds.length
+            ? await sb.from('sesion_compromisos').select('*')
+                .eq('region_cod', region.cod).eq('instancia', 'eje')
+                .in('sesion_origen_id', gabIds)
+                .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE)
+            : { data: [] as SesionCompromiso[] }
+          return clasificarCompromisosGabinete(
+            (propiosRes.data ?? []) as SesionCompromiso[],
+            (escaladosRes.data ?? []) as SesionCompromiso[],
+            (mandatosRes.data ?? []) as SesionCompromiso[],
+          )
+        })()
+      : sb.from('sesion_compromisos').select('*')
+          .eq('region_cod', region.cod).eq('eje_id', eje!.id)
+          .neq('sesion_origen_id', s.id)
+          .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE)
+          .order('created_at')
+          .then(r => (r.data ?? []) as SesionCompromiso[])
+
+    let nominaQ = sb.from('sesion_nomina').select('*')
+      .eq('region_cod', region.cod).eq('activo', true)
+    nominaQ = esGabinete ? nominaQ.eq('instancia', 'gabinete') : nominaQ.eq('eje_id', eje!.id)
+
+    let sesIdsQ = sb.from('eje_sesiones').select('id').eq('region_cod', region.cod)
+    sesIdsQ = esGabinete ? sesIdsQ.eq('instancia', 'gabinete') : sesIdsQ.eq('eje_id', eje!.id)
+
+    const [comp, nominaRes, asisRes, apunRes, nuevosRes, sesIdsRes, iniRes] = await Promise.all([
+      compPromise,
+      nominaQ.order('institucion').order('calidad'),
       sb.from('sesion_asistencia').select('*').eq('sesion_id', s.id),
-      sb.from('metricas_eje').select('*')
-        .eq('region_cod', region.cod).eq('eje_id', eje.id)
-        .eq('se_reporta_en_sesion', true).order('created_at'),
-      sb.from('sesion_valores').select('*').eq('sesion_id', s.id),
-      sb.from('eje_sesiones').select('id')
-        .eq('region_cod', region.cod).eq('eje_id', eje.id).eq('estado', 'cerrada')
-        .order('fecha', { ascending: false }).limit(1),
       sb.from('sesion_apuntes').select('*').eq('sesion_id', s.id),
       sb.from('sesion_compromisos').select('*').eq('sesion_origen_id', s.id).order('created_at'),
-      sb.from('eje_sesiones').select('id')
-        .eq('region_cod', region.cod).eq('eje_id', eje.id).limit(30),
+      sesIdsQ.limit(30),
+      // Zona 3 gabinete: agenda guardada de la sesión.
+      esGabinete
+        ? sb.from('sesion_iniciativas').select('*').eq('sesion_id', s.id).order('created_at')
+        : Promise.resolve({ data: [] as SesionIniciativa[] }),
     ])
 
-    setCompAnteriores((compRes.data ?? []) as SesionCompromiso[])
+    // Zona 3 comité: métricas + valores + referencia de la sesión anterior.
+    // El gabinete NO digita métricas — estas queries no corren (RLS aparte,
+    // no hay eje que filtrar).
+    if (!esGabinete) {
+      const [metRes, valRes, prevSesRes] = await Promise.all([
+        sb.from('metricas_eje').select('*')
+          .eq('region_cod', region.cod).eq('eje_id', eje!.id)
+          .eq('se_reporta_en_sesion', true).order('created_at'),
+        sb.from('sesion_valores').select('*').eq('sesion_id', s.id),
+        sb.from('eje_sesiones').select('id')
+          .eq('region_cod', region.cod).eq('eje_id', eje!.id).eq('estado', 'cerrada')
+          .order('fecha', { ascending: false }).limit(1),
+      ])
+      setMetricasSesion((metRes.data ?? []) as Metrica[])
+      const vals = (valRes.data ?? []) as SesionValor[]
+      setValores(vals)
+      setDraftValores(Object.fromEntries(vals.map(v => [v.metrica_id, String(v.valor)])))
+      // Valores de la última sesión cerrada (referencia en zona 3)
+      const prevId = prevSesRes.data?.[0]?.id
+      if (prevId) {
+        const { data: prevVals } = await sb.from('sesion_valores').select('*').eq('sesion_id', prevId)
+        setValoresPrev(new Map(((prevVals ?? []) as SesionValor[]).map(v => [v.metrica_id, Number(v.valor)])))
+      }
+    }
+
+    // Zona 3 gabinete: precarga WYSIWYG — las iniciativas en foco que faltan
+    // en la agenda se insertan al abrir el borrador. La tabla ES la agenda:
+    // el snapshot del cierre server-side es determinista sobre estas filas.
+    if (esGabinete) {
+      let filas = (iniRes.data ?? []) as SesionIniciativa[]
+      if (s.estado === 'borrador') {
+        const enFoco = gabIniciativas.filter(p => p.en_foco === true)
+        const faltantes = filasZona3Faltantes(enFoco, filas)
+        if (faltantes.length) {
+          const { data: inserted, error: insErr } = await sb
+            .from('sesion_iniciativas')
+            .insert(faltantes.map(pid => ({ sesion_id: s.id, prioridad_id: pid })))
+            .select('*')
+          if (insErr) {
+            // Carrera con otro usuario precargando (UNIQUE): re-leer la agenda.
+            const { data: refetch } = await sb.from('sesion_iniciativas')
+              .select('*').eq('sesion_id', s.id).order('created_at')
+            filas = (refetch ?? []) as SesionIniciativa[]
+          } else {
+            filas = [...filas, ...((inserted ?? []) as SesionIniciativa[])]
+          }
+        }
+      }
+      setSesIniciativas(filas)
+      setDraftAcuerdos(Object.fromEntries(filas.map(f => [f.id, f.acuerdo ?? ''])))
+    }
+
+    setCompAnteriores(comp)
     const nominaData = (nominaRes.data ?? []) as SesionNomina[]
     setNomina(nominaData)
     setAsistencia((asisRes.data ?? []) as SesionAsistencia[])
-    setMetricasSesion((metRes.data ?? []) as Metrica[])
-    const vals = (valRes.data ?? []) as SesionValor[]
-    setValores(vals)
-    setDraftValores(Object.fromEntries(vals.map(v => [v.metrica_id, String(v.valor)])))
     setCompNuevos((nuevosRes.data ?? []) as SesionCompromiso[])
 
     const apun = (apunRes.data ?? []) as SesionApunte[]
     setApuntes(apun)
     setDraftApuntes(Object.fromEntries(apun.map(a => [a.institucion, a.texto])))
 
-    // Valores de la última sesión cerrada (referencia en zona 3)
-    const prevId = prevSesRes.data?.[0]?.id
-    if (prevId) {
-      const { data: prevVals } = await sb.from('sesion_valores').select('*').eq('sesion_id', prevId)
-      setValoresPrev(new Map(((prevVals ?? []) as SesionValor[]).map(v => [v.metrica_id, Number(v.valor)])))
-    }
-
-    // Tabs de apuntes: instituciones históricas de la región ∪ nómina
+    // Tabs de apuntes: instituciones históricas de la instancia ∪ nómina
     const ids = (sesIdsRes.data ?? []).map(r => r.id)
     let historicas: string[] = []
     if (ids.length) {
@@ -192,7 +317,8 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
     const sugeridas = institucionesSugeridas(historicas, nominaData.map(n => n.institucion))
     setInstituciones(sugeridas)
     setTabInstitucion(prev => prev ?? sugeridas[0] ?? null)
-  }, [region.cod, eje.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region.cod, eje?.id, esGabinete, gabIniciativas])
 
   useEffect(() => { if (sesion) loadAll(sesion) }, [sesion, loadAll])
 
@@ -326,6 +452,54 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
     }
   }
 
+  // ── Zona 3 (gabinete): iniciativas en foco ────────────────────────────────
+
+  async function commitAcuerdo(fila: SesionIniciativa) {
+    const texto = (draftAcuerdos[fila.id] ?? '').trim()
+    if ((fila.acuerdo ?? '') === texto) return
+    try {
+      await safeWrite(
+        getSupabase().from('sesion_iniciativas').update({ acuerdo: texto || null }).eq('id', fila.id),
+        `sesion_iniciativas acuerdo id=${fila.id}`,
+      )
+      setSesIniciativas(prev => prev.map(f => f.id === fila.id ? { ...f, acuerdo: texto || null } : f))
+    } catch (err) {
+      setDraftAcuerdos(prev => ({ ...prev, [fila.id]: fila.acuerdo ?? '' }))
+      window.alert((err as Error).message)
+    }
+  }
+
+  async function quitarIniciativa(fila: SesionIniciativa) {
+    try {
+      await safeDelete(
+        getSupabase().from('sesion_iniciativas').delete().eq('id', fila.id),
+        `sesion_iniciativas delete id=${fila.id}`,
+      )
+      setSesIniciativas(prev => prev.filter(f => f.id !== fila.id))
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
+  async function agregarIniciativa(p: Iniciativa) {
+    if (!sesion) return
+    if (sesIniciativas.some(f => f.prioridad_id === p.id)) return
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('sesion_iniciativas').insert({
+          sesion_id: sesion.id,
+          prioridad_id: p.id,   // llave estable — NUNCA n
+        }),
+        `sesion_iniciativas insert prioridad=${p.id}`,
+      )
+      const fila = rows[0] as SesionIniciativa
+      setSesIniciativas(prev => [...prev, fila])
+      setDraftAcuerdos(prev => ({ ...prev, [fila.id]: '' }))
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
   // ── Zona 4: apuntes por institución ───────────────────────────────────────
 
   async function commitApunte(institucion: string) {
@@ -373,20 +547,29 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
     if (!sesion || !cDescripcion.trim() || !cInstitucion.trim()) return
     setCSaving(true)
     try {
+      // Mandato (spec gabinete §5.3): un compromiso del gabinete dirigido a
+      // un comité se inserta con instancia='eje' + eje destino — aparece
+      // gratis en la zona 1 de la próxima sesión de ese comité, y el
+      // gabinete lo verifica por sesion_origen_id. Sin destino, queda en la
+      // instancia de esta sesión.
+      const destinoEjeId = esGabinete && cDestinoEje !== '' ? Number(cDestinoEje) : null
       const rows = await safeWrite(
         getSupabase().from('sesion_compromisos').insert({
           region_cod: region.cod,
-          eje_id: eje.id,
+          instancia: esGabinete ? (destinoEjeId ? 'eje' : 'gabinete') : 'eje',
+          eje_id: esGabinete ? destinoEjeId : eje!.id,
           sesion_origen_id: sesion.id,
           descripcion: cDescripcion.trim(),
           responsable_institucion: cInstitucion.trim(),
           responsable_nombre: cNombre.trim() || null,
           plazo: cPlazo || null,
+          prioridad_id: esGabinete ? (cVinculada?.id ?? null) : null,
         }),
         `sesion_compromisos insert sesion=${sesion.id}`,
       )
       setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
       setCDescripcion(''); setCInstitucion(''); setCNombre(''); setCPlazo('')
+      setCVinculada(null); setCDestinoEje('')
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -413,10 +596,12 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
 
   async function handleCerrar() {
     if (!sesion) return
-    const sinValores = metricasSesion.length > 0 && valores.length === 0
-    const msg = sinValores
-      ? 'No se digitó ningún indicador. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
-      : '¿Cerrar la sesión y generar el acta?\n\nLos indicadores digitados alimentarán las métricas del eje y la sesión quedará inmutable.'
+    const sinValores = !esGabinete && metricasSesion.length > 0 && valores.length === 0
+    const msg = esGabinete
+      ? '¿Cerrar la sesión de gabinete y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.'
+      : sinValores
+        ? 'No se digitó ningún indicador. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
+        : '¿Cerrar la sesión y generar el acta?\n\nLos indicadores digitados alimentarán las métricas del eje y la sesión quedará inmutable.'
     if (!confirm(msg)) return
     setCerrando(true)
     try {
@@ -465,7 +650,28 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
     () => asistencia.filter(a => a.presente).length,
     [asistencia],
   )
-  const nombreInstancia = eje.sesiones_nombre ?? 'Comité'
+  const nombreInstancia = esGabinete
+    ? (props.instancia === 'gabinete' ? props.gabineteNombre : 'Gabinete Regional')
+    : (eje!.sesiones_nombre ?? 'Comité')
+
+  // Nombre del comité (para chips de escalado/mandato en zona 1 y 5).
+  const comiteNombre = useCallback((ejeId: number | null): string => {
+    if (ejeId == null) return 'Comité'
+    const e = ejesComites.find(x => x.id === ejeId)
+    return e?.sesiones_nombre ?? (e ? `Eje ${e.numero}` : 'Comité')
+  }, [ejesComites])
+
+  // Typeahead de iniciativas (zona 3 y vínculo de zona 5): candidatas por
+  // texto, excluyendo las ya agendadas en zona 3.
+  const buscarIniciativas = useCallback((q: string, excluirAgendadas: boolean): Iniciativa[] => {
+    const t = q.trim().toLowerCase()
+    if (t.length < 2) return []
+    const agendadas = excluirAgendadas ? new Set(sesIniciativas.map(f => f.prioridad_id)) : null
+    return gabIniciativas
+      .filter(p => !agendadas?.has(p.id))
+      .filter(p => p.nombre.toLowerCase().includes(t) || (p.ministerio ?? '').toLowerCase().includes(t))
+      .slice(0, 8)
+  }, [gabIniciativas, sesIniciativas])
 
   const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
   const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
@@ -486,9 +692,13 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
           </div>
           <div className="px-6 py-5 space-y-3">
             <p className="text-sm text-gray-700">
-              {cierreResultado.actaGenerada
-                ? 'Los indicadores alimentaron las métricas del eje y el acta quedó disponible.'
-                : 'Los indicadores alimentaron las métricas del eje, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
+              {esGabinete
+                ? cierreResultado.actaGenerada
+                  ? 'Los acuerdos y compromisos quedaron sellados y el acta está disponible.'
+                  : 'La sesión quedó cerrada con sus acuerdos, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
+                : cierreResultado.actaGenerada
+                  ? 'Los indicadores alimentaron las métricas del eje y el acta quedó disponible.'
+                  : 'Los indicadores alimentaron las métricas del eje, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
             </p>
             <div className="flex gap-2 pt-1">
               {cierreResultado.actaGenerada ? (
@@ -571,8 +781,18 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                     <div key={c.id} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          {esGabinete && c.origenTipo === 'escalado' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Traba escalada desde el comité — el comité la sigue viendo">
+                              ⬆ {comiteNombre(c.eje_id)}
+                            </span>
+                          )}
+                          {esGabinete && c.origenTipo === 'mandato' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato del gabinete — se gestiona en el comité destino">
+                              → {comiteNombre(c.eje_id)}
+                            </span>
+                          )}
+                          <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -603,7 +823,9 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                 <div className="p-3">
                   {nomina.length === 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
-                      La nómina está vacía — agrégala desde el botón "Nómina" del panel de métricas.
+                      {esGabinete
+                        ? 'La nómina del gabinete está vacía — cárgala (seremis + equipo DPR) desde el botón "Nómina" del tab Gabinete Regional.'
+                        : 'La nómina está vacía — agrégala desde el botón "Nómina" del panel de métricas.'}
                     </p>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -662,7 +884,71 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                 </div>
               </section>
 
-              {/* ── Zona 3: indicadores ── */}
+              {/* ── Zona 3 (gabinete): iniciativas en foco ── */}
+              {esGabinete && (
+                <section className={zoneCls}>
+                  <div className={zoneHead}>
+                    <span className={zoneNum}>3</span>
+                    <h3 className="text-sm font-semibold text-gray-800">Iniciativas en foco</h3>
+                    <span className="text-xs text-gray-400 ml-auto">{sesIniciativas.length}</span>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {sesIniciativas.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        No hay iniciativas en foco — márcalas desde Gabinete → Preparación, o agrégalas acá.
+                      </p>
+                    )}
+                    {sesIniciativas.map(fila => {
+                      const p = gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null
+                      const sem = p ? (SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris) : null
+                      return (
+                        <div key={fila.id} className="px-3 py-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex items-start gap-2.5">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-800 leading-snug flex items-center gap-2 flex-wrap">
+                                {sem && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />}
+                                <span>{p?.nombre ?? `Iniciativa #${fila.prioridad_id} (ya no está en la cartera)`}</span>
+                              </p>
+                              {p && (
+                                <p className="text-[11px] text-gray-400 mt-0.5">
+                                  {p.pct_avance}% avance
+                                  {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
+                                  {p.ministerio ? ` · ${p.ministerio}` : ''}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => quitarIniciativa(fila)}
+                              className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
+                              title="Sacar de la agenda de esta sesión"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+                              </svg>
+                            </button>
+                          </div>
+                          <textarea
+                            value={draftAcuerdos[fila.id] ?? ''}
+                            onChange={e => setDraftAcuerdos(prev => ({ ...prev, [fila.id]: e.target.value }))}
+                            onBlur={() => commitAcuerdo(fila)}
+                            rows={2}
+                            placeholder="Acuerdo del gabinete sobre esta iniciativa…"
+                            className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-y bg-white"
+                          />
+                        </div>
+                      )
+                    })}
+                    <IniciativaTypeahead
+                      placeholder="+ Agregar iniciativa a la agenda (busca por nombre o ministerio)…"
+                      buscar={q => buscarIniciativas(q, true)}
+                      onPick={agregarIniciativa}
+                    />
+                  </div>
+                </section>
+              )}
+
+              {/* ── Zona 3 (comité): indicadores ── */}
+              {!esGabinete && (
               <section className={zoneCls}>
                 <div className={zoneHead}>
                   <span className={zoneNum}>3</span>
@@ -677,7 +963,7 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                 <div className="p-3">
                   {metricasSesion.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-2">
-                      Ninguna métrica del eje está marcada "se reporta en sesión" — usa "+ Indicador no contemplado".
+                      Ninguna métrica del eje está marcada &quot;se reporta en sesión&quot; — usa &quot;+ Indicador no contemplado&quot;.
                     </p>
                   ) : (
                     <div className="space-y-1.5">
@@ -715,6 +1001,7 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                   )}
                 </div>
               </section>
+              )}
 
               {/* ── Zona 4: apuntes por institución ── */}
               <section className={zoneCls}>
@@ -774,14 +1061,26 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
                 </div>
                 <div className="p-3 space-y-2">
-                  {compNuevos.map(c => (
-                    <div key={c.id} className="px-3 py-2 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
-                      </p>
-                    </div>
-                  ))}
+                  {compNuevos.map(c => {
+                    const vinculada = esGabinete && c.prioridad_id != null
+                      ? gabIniciativas.find(p => p.id === c.prioridad_id) ?? null
+                      : null
+                    const esMandato = esGabinete && c.instancia === 'eje' && c.eje_id != null
+                    return (
+                      <div key={c.id} className="px-3 py-2 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          {esMandato && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato: se gestiona en la próxima sesión de ese comité">
+                              → {comiteNombre(c.eje_id)}
+                            </span>
+                          )}
+                          <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
+                          {vinculada && <span className="truncate">· 🔗 {vinculada.nombre}</span>}
+                        </p>
+                      </div>
+                    )
+                  })}
                   <form onSubmit={agregarCompromiso} className="space-y-2 pt-1">
                     <textarea
                       value={cDescripcion}
@@ -802,6 +1101,36 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
                         {cSaving ? 'Guardando…' : '+ Compromiso'}
                       </button>
                     </div>
+                    {esGabinete && (
+                      <div className="flex gap-2 flex-wrap items-start">
+                        <div className="flex-1 min-w-[220px]">
+                          {cVinculada ? (
+                            <div className="flex items-center gap-2 text-xs bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1.5">
+                              <span className="text-violet-800 truncate flex-1">🔗 {cVinculada.nombre}</span>
+                              <button type="button" onClick={() => setCVinculada(null)} className="text-violet-400 hover:text-violet-700" title="Quitar vínculo">✕</button>
+                            </div>
+                          ) : (
+                            <IniciativaTypeahead
+                              placeholder="Vincular a iniciativa (opcional)…"
+                              buscar={q => buscarIniciativas(q, false)}
+                              onPick={p => setCVinculada(p)}
+                              compact
+                            />
+                          )}
+                        </div>
+                        <select
+                          value={cDestinoEje}
+                          onChange={e => setCDestinoEje(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={`${inputCls} w-56 text-xs py-1.5`}
+                          title="Dirigir a un comité (mandato): aparecerá en la zona de compromisos de su próxima sesión"
+                        >
+                          <option value="">Se gestiona en el gabinete</option>
+                          {ejesComites.map(e => (
+                            <option key={e.id} value={e.id}>Mandato → {e.sesiones_nombre ?? `Eje ${e.numero}`}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </form>
                 </div>
               </section>
@@ -834,8 +1163,9 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
       </div>
 
       {/* "+ indicador no contemplado" → crea métrica del eje ya marcada
-          para sesión. Al guardar recargamos las métricas de la zona 3. */}
-      {nuevaMetricaOpen && (
+          para sesión. Al guardar recargamos las métricas de la zona 3.
+          Solo comité — el gabinete no digita métricas. */}
+      {nuevaMetricaOpen && eje && (
         <div onClick={e => e.stopPropagation()}>
           <MetricaEditModal
             open
@@ -848,6 +1178,55 @@ export default function SesionModal({ region, eje, borradorId, currentUserEmail,
             sesionesOn
             defaultsSesion={{ se_reporta_en_sesion: true }}
           />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Typeahead mínimo client-side sobre la cartera ya cargada (sin queries).
+ * Usado en la zona 3 (agregar a la agenda) y en la zona 5 (vincular
+ * compromiso). Mínimo 2 caracteres; máximo 8 resultados.
+ */
+function IniciativaTypeahead({ placeholder, buscar, onPick, compact = false }: {
+  placeholder: string
+  buscar: (q: string) => Iniciativa[]
+  onPick: (p: Iniciativa) => void
+  compact?: boolean
+}) {
+  const [q, setQ] = useState('')
+  const resultados = useMemo(() => buscar(q), [q, buscar])
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-3 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 ${
+          compact ? 'py-1.5 text-xs' : 'py-2 text-sm'
+        }`}
+      />
+      {resultados.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden max-h-56 overflow-y-auto">
+          {resultados.map(p => {
+            const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => { onPick(p); setQ('') }}
+                className="w-full px-3 py-2 text-left hover:bg-violet-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
+                <span className="flex-1 min-w-0">
+                  <span className="text-xs text-gray-800 block truncate">{p.nombre}</span>
+                  <span className="text-[10px] text-gray-400 block truncate">{p.ministerio ?? '—'} · {p.pct_avance}%</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

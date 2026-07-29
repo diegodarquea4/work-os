@@ -736,7 +736,12 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             (sesiones + acta) migró acá desde el drawer de «Ejes estratégicos»;
             los otros tres comités son placeholders anunciados. */}
         {region && (
-          <ComitesRegionalesSection region={region} regionEjes={regionEjes} ejesLoading={regionEjesLoading} />
+          <ComitesRegionalesSection
+            region={region}
+            regionEjes={regionEjes}
+            ejesLoading={regionEjesLoading}
+            iniciativas={regionIniciativas}
+          />
         )}
 
         {/* ── Sección 3: Métricas clave ────────────────────────────────────────── */}
