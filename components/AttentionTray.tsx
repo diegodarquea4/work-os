@@ -15,6 +15,7 @@ import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './Active
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import { formatResponsableDisplay } from '@/lib/responsable'
+import TrabasEscaladasBlock from './TrabasEscaladasBlock'
 
 type Props = {
   projects: Iniciativa[]
@@ -29,6 +30,11 @@ type Props = {
   // Lista de nombres de regiones que el usuario puede ver. null = sin restricción
   // (mostrar las 16). Permite que aparezcan regiones sin iniciativas en el selector.
   allowedRegionNames: string[] | null
+  // Modo pane "Preparación" dentro de la sección Gabinete (fusión Atención+
+  // Gabinete, spec gabinete §7.1): oculta el select de región propio (la
+  // maneja la toolbar de KanbanView), ensancha la columna, ajusta el header y
+  // muestra el bloque de trabas escaladas desde comités.
+  embedded?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -77,6 +83,7 @@ export default function AttentionTray({
   onUpdatePrioridad, onDeletePrioridad,
   activeRegionName, onActiveRegionChange,
   allowedRegionNames,
+  embedded = false,
 }: Props) {
   const canEditAny = useCanEditAny()
   const canEditFoco = useCanEditOperational()
@@ -425,13 +432,17 @@ export default function AttentionTray({
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-[min(48rem,90vw)] mx-auto px-6 py-6">
+      <div className={`${embedded ? 'max-w-5xl' : 'max-w-[min(48rem,90vw)]'} mx-auto px-6 py-6`}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Bandeja de atención</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Iniciativas marcadas como foco del equipo</p>
+            <h2 className="text-lg font-bold text-gray-900">{embedded ? 'Preparación de la sesión' : 'Bandeja de atención'}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {embedded
+                ? 'Foco de la próxima sesión de gabinete: iniciativas marcadas, sugerencias y trabas escaladas'
+                : 'Iniciativas marcadas como foco del equipo'}
+            </p>
           </div>
           {!loading && (
             <span className={`text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${
@@ -442,6 +453,18 @@ export default function AttentionTray({
             </span>
           )}
         </div>
+
+        {/* Trabas escaladas desde comités — solo en el pane Preparación
+            (subsidiariedad comité→gabinete). Render null mientras no haya. */}
+        {embedded && canEditFoco && (
+          <TrabasEscaladasBlock
+            regionCod={regionCodActive}
+            iniciativas={projects}
+            regionEjes={regionEjesCat}
+            onToggleFoco={handleToggleFoco}
+            canEditFoco={canEditFoco}
+          />
+        )}
 
         {/* Filter block — mismo patrón que Dashboard: chips de filtros activos
             arriba, fila primaria siempre visible, fila secundaria detrás del
@@ -467,8 +490,9 @@ export default function AttentionTray({
             </div>
 
             {/* Región — single-select global (viene de props). Solo admin/editor
-                la ve; regional/viewer tiene su región fija. */}
-            {canEditAny && (
+                la ve; regional/viewer tiene su región fija. En modo embedded la
+                región la maneja el select de la toolbar de Gabinete. */}
+            {canEditAny && !embedded && (
               <select
                 value={filterRegion}
                 onChange={e => setFilterRegion(e.target.value)}

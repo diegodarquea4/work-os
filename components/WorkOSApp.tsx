@@ -19,13 +19,16 @@ import CambiarClaveModal from './CambiarClaveModal'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
-const AttentionTray    = dynamic(() => import('./AttentionTray'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const PregoView        = dynamic(() => import('./PregoView'))
 const DesalojosView    = dynamic(() => import('./DesalojosView'))
 const MetricasView     = dynamic(() => import('./MetricasView'))
 
-type View = 'mapa' | 'dashboard' | 'atencion' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas'
+// 'atencion' dejó de existir como vista top-level (fusión Atención+Gabinete,
+// spec gabinete §7.1): la Bandeja vive como pane "Preparación" dentro de
+// Gabinete (KanbanView). El valor guardado en localStorage se migra en la
+// hidratación (no hay deep links por URL — la vista persiste solo ahí).
+type View = 'mapa' | 'dashboard' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas'
 
 type Props = {
   projects: Iniciativa[]
@@ -78,6 +81,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
+  // Pane inicial de Gabinete — solo lo setea la migración del localStorage
+  // 'atencion'→'kanban' (quien venía de la Bandeja aterriza en Preparación).
+  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('tablero')
   // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.
@@ -112,8 +118,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     try {
       const storedView   = localStorage.getItem('workos:view')
       const storedRegion = localStorage.getItem('workos:activeRegion')
-      const validViews: View[] = ['mapa', 'dashboard', 'atencion', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas']
-      if (storedView && (validViews as string[]).includes(storedView)) {
+      const validViews: View[] = ['mapa', 'dashboard', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas']
+      if (storedView === 'atencion') {
+        // Fusión Atención+Gabinete: quien tenía la Bandeja guardada aterriza
+        // en Gabinete con el pane Preparación abierto (su bandeja de siempre).
+        setView('kanban')
+        setKanbanInitialPane('preparacion')
+      } else if (storedView && (validViews as string[]).includes(storedView)) {
         setView(storedView as View)
       }
       if (storedRegion) {
@@ -182,7 +193,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const desalojosReadOnly = profile?.role !== 'admin'
   const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
-    { key: 'atencion',       label: 'Atención'  },
     { key: 'kanban',         label: 'Gabinete'  },
     { key: 'vista-regional', label: 'Mi Región' },
     { key: 'desalojos',      label: 'Desalojos', visible: canSeeDesalojos },
@@ -620,16 +630,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
-      {/* Kanban view */}
+      {/* Gabinete (Kanban + pane Preparación — ex Bandeja de Atención) */}
       {view === 'kanban' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           <KanbanView
             projects={visibleIniciativas}
+            actividad={actividad}
+            actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
             activeRegionName={activeRegionName}
             onActiveRegionChange={setActiveRegionName}
             allowedRegionNames={allowedRegionNames}
+            initialPane={kanbanInitialPane}
           />
         </div>
       )}
@@ -666,22 +679,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'metricas' && (
         <div className="flex-1 overflow-hidden">
           <MetricasView initialRegionNombre={metricasInitialRegion} />
-        </div>
-      )}
-
-      {/* Atención view */}
-      {view === 'atencion' && (
-        <div className="flex-1 overflow-hidden flex">
-          <AttentionTray
-            projects={visibleIniciativas}
-            actividad={actividad}
-            actividadLoading={actividadLoading}
-            onUpdatePrioridad={handleUpdatePrioridad}
-            onDeletePrioridad={handleDeletePrioridad}
-            activeRegionName={activeRegionName}
-            onActiveRegionChange={setActiveRegionName}
-            allowedRegionNames={allowedRegionNames}
-          />
         </div>
       )}
 

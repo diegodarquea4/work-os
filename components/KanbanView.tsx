@@ -14,6 +14,9 @@ import { CapaBadge } from './CapaBadge'
 import { useCanEditOperational } from '@/lib/context/UserContext'
 import { normalizeMinisterio } from '@/lib/ministerios'
 import { compareCarteras } from '@/lib/cartera'
+// Pane Preparación (fusión Atención+Gabinete). Import estático: KanbanView ya
+// entra por dynamic() desde WorkOSApp, no infla el bundle inicial.
+import AttentionTray from './AttentionTray'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +52,10 @@ function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, val:
 
 type Props = {
   projects: Iniciativa[]
+  // Última actividad por iniciativa — la consume el pane Preparación
+  // (sugerencia "sin actividad reciente" de la ex Bandeja de Atención).
+  actividad: Record<number, string | null>
+  actividadLoading: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
   // Región activa (state global del panel — persiste entre vistas y recargas).
@@ -58,6 +65,9 @@ type Props = {
   // Nombres de regiones que el usuario puede ver. null = sin restricción.
   // Permite mostrar TODAS las regiones en el selector aunque estén vacías.
   allowedRegionNames: string[] | null
+  // Pane con el que abre la sección: 'preparacion' solo cuando el usuario
+  // venía de la ex vista Atención (migración del localStorage en WorkOSApp).
+  initialPane?: 'preparacion' | 'tablero'
 }
 
 // ── EjeCard — card for eje mode ───────────────────────────────────────────────
@@ -235,7 +245,12 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function KanbanView({ projects, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames }: Props) {
+export default function KanbanView({ projects, actividad, actividadLoading, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames, initialPane = 'tablero' }: Props) {
+  // Sub-vista de la sección Gabinete: Preparación (curaduría del foco, ex
+  // Bandeja de Atención) | Tablero (el kanban de siempre). Default tablero —
+  // las DPR no pierden el kanban; solo quien venía de Atención abre en
+  // Preparación. Sin persistencia (MVP).
+  const [pane, setPane] = useState<'preparacion' | 'tablero'>(initialPane)
   const canEditFoco = useCanEditOperational()
   const [selected, setSelected]         = useState<Iniciativa | null>(null)
   // Región filtrada controlada por el state global (WorkOSApp). Fallback a la
@@ -521,6 +536,29 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       {/* Filter bar — flex-wrap + min-w-0 en items para que en pantallas
           chicas el contenido se pliegue sin romper el layout horizontal. */}
       <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white flex items-center gap-3 flex-wrap min-w-0">
+        {/* Switch de sub-vista: Preparación (curaduría) | Tablero (kanban).
+            Mismo patrón visual del toggle de agrupación. */}
+        <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
+          <button
+            onClick={() => setPane('preparacion')}
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              pane === 'preparacion' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+            title="Preparar la sesión: foco, sugerencias y trabas escaladas"
+          >
+            Preparación
+          </button>
+          <button
+            onClick={() => setPane('tablero')}
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              pane === 'tablero' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+            title="Tablero de la cartera por ministerio/eje"
+          >
+            Tablero
+          </button>
+        </div>
+
         <select
           value={filterRegion}
           onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v) }) }}
@@ -532,7 +570,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         {/* Botón único "Filtros" — abre panel inline con Semáforo, Foco,
             Prioridad, Capa, Etapa y Etiquetas. Sin eje gobierno: el SEREMI
             piensa por cartera, no por eje gobierno transversal. */}
-        {isGroupedMode && (
+        {pane === 'tablero' && isGroupedMode && (
           <button
             onClick={() => setShowFilters(v => !v)}
             className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
@@ -552,7 +590,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         )}
 
         {/* Toggle "Ejes / Ministerios / Tags" — solo visible con región filtrada en Kanban */}
-        {isGroupedMode && (
+        {pane === 'tablero' && isGroupedMode && (
           <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
             <button
               onClick={() => setGroupBy('eje')}
@@ -591,7 +629,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         )}
 
         {/* Expandir/colapsar todos — solo en vista por ministerio */}
-        {isGroupedMode && groupBy === 'ministerio' && (
+        {pane === 'tablero' && isGroupedMode && groupBy === 'ministerio' && (
           <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
             <button
               onClick={() => toggleAllMinisterios(true)}
@@ -616,14 +654,14 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           </div>
         )}
 
-        {isGroupedMode && (
+        {pane === 'tablero' && isGroupedMode && (
           <span className="text-xs text-gray-500 font-medium">
             {filtered.length} iniciativas
           </span>
         )}
 
         {/* Descargar cartera — split button con dropdown para "solo en foco" */}
-        {isGroupedMode && groupBy === 'ministerio' && (() => {
+        {pane === 'tablero' && isGroupedMode && groupBy === 'ministerio' && (() => {
           const flaggedCount = filtered.filter(p => p.en_foco === true).length
           return (
             <div className="relative flex items-stretch ml-auto group/dl" ref={focoMenuRef}>
@@ -684,15 +722,34 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
           )
         })()}
 
-        {!isGroupedMode && (
+        {pane === 'tablero' && !isGroupedMode && (
           <span className="text-xs text-gray-400 ml-auto">{filtered.length} iniciativas</span>
         )}
       </div>
 
+      {/* ── Pane Preparación — la ex Bandeja de Atención embebida (fusión
+          spec gabinete §7.1). La región la maneja el select de esta toolbar
+          (mismo state global), por eso AttentionTray va en modo embedded. */}
+      {pane === 'preparacion' && (
+        <div className="flex-1 overflow-hidden flex">
+          <AttentionTray
+            embedded
+            projects={projects}
+            actividad={actividad}
+            actividadLoading={actividadLoading}
+            onUpdatePrioridad={onUpdatePrioridad}
+            onDeletePrioridad={onDeletePrioridad}
+            activeRegionName={activeRegionName}
+            onActiveRegionChange={onActiveRegionChange}
+            allowedRegionNames={allowedRegionNames}
+          />
+        </div>
+      )}
+
       {/* Panel inline de Filtros — solo se muestra con región seleccionada y
           cuando el botón Filtros está expandido. Mismo patrón que "Más filtros"
           del Dashboard (expand inline, sin overlay). */}
-      {isGroupedMode && showFilters && (
+      {pane === 'tablero' && isGroupedMode && showFilters && (
         <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-slate-50/60 flex items-center gap-2 flex-wrap min-w-0">
           {/* Semáforo: chips inline (4 estados, el patrón del Dashboard). */}
           <div className="flex items-center gap-1">
@@ -791,7 +848,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       )}
 
       {/* ── Eje mode ──────────────────────────────────────────────────────────── */}
-      {isPending && (
+      {pane === 'tablero' && isPending && (
         <div className="absolute inset-0 top-[50px] flex items-center justify-center bg-white/60 z-10 pointer-events-none">
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm">
             <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
@@ -805,7 +862,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
         cuando cabe entero. overflow-x-auto + grid con flex-shrink-0 → si las
         columnas no entran (ej. 6 ejes en pantalla angosta), permite scroll.
       */}
-      {isGroupedMode && groupBy === 'eje' && ejeColumns && (
+      {pane === 'tablero' && isGroupedMode && groupBy === 'eje' && ejeColumns && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           {/* mx-auto + w-fit: centra cuando los ejes caben; cuando exceden el
               viewport el grid mantiene su ancho y el overflow-x-auto del
@@ -866,7 +923,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       {/* Mismo layout que "por eje". Iniciativa con N tags se renderiza en N
           columnas (key compuesto con el tag para evitar reconciliación cruzada
           de React). Columna "Sin etiquetas" al final. */}
-      {isGroupedMode && groupBy === 'tag' && tagColumns && (
+      {pane === 'tablero' && isGroupedMode && groupBy === 'tag' && tagColumns && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           {tagColumns.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-gray-400">
@@ -911,7 +968,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       {/* ── Modo "por capa" (migración 024): 3 columnas fijas I/II/III ──────── */}
       {/* Header coloreado con la paleta del badge: wine, amber, gris. La columna
           III queda al final, en gris suave — donde aterriza la mayoría. */}
-      {isGroupedMode && groupBy === 'capa' && capaColumns && (
+      {pane === 'tablero' && isGroupedMode && groupBy === 'capa' && capaColumns && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           <div
             className="grid h-full px-6 pt-4 mx-auto w-fit"
@@ -953,7 +1010,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       )}
 
       {/* ── Modo "por ministerio": secciones verticales tipo Monday ─────────── */}
-      {isGroupedMode && groupBy === 'ministerio' && ministerioGroups && (
+      {pane === 'tablero' && isGroupedMode && groupBy === 'ministerio' && ministerioGroups && (
         <div ref={ministerioContainerRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
           {ministerioGroups.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-gray-400">
@@ -993,7 +1050,7 @@ export default function KanbanView({ projects, onUpdatePrioridad, onDeletePriori
       {/* Caso técnico edge: sin región seleccionada (projects vacío al arranque).
           La vista Gabinete siempre opera con una región — no hay vista "todas
           las regiones mezcladas" porque rompe la metáfora de la mesa por SEREMI. */}
-      {!isGroupedMode && (
+      {pane === 'tablero' && !isGroupedMode && (
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="max-w-md text-center space-y-2">
             <p className="text-sm text-gray-600 font-medium">Sin región seleccionada</p>
