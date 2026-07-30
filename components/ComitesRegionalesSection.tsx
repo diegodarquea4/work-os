@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
+import ComiteInversionPanel from './ComiteInversionPanel'
 
 /**
  * Sección «Comités y Gabinete Regional» de Mi Región, justo debajo de
@@ -23,7 +24,7 @@ type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
-  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: false },
+  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: false },
 ]
 
@@ -91,10 +92,12 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
           />
         )
+      ) : active === 'inversion' ? (
+        <ComiteInversionPanel region={region} />
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial es el único comité con sesiones y actas en el sistema."
+          texto="Esta instancia estará disponible próximamente."
         />
       )}
     </div>

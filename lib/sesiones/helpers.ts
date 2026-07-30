@@ -10,7 +10,7 @@
  *  - Sesión cerrada es inmutable; el acta NO se regenera si ya existe.
  */
 
-import type { EjeSesion, SesionCompromiso } from '@/lib/types'
+import type { EjeSesion, SesionCompromiso, SesionOficioTratado } from '@/lib/types'
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
@@ -55,6 +55,16 @@ export function deltaPulso(
  */
 export function esCompromisoAbierto(c: Pick<SesionCompromiso, 'estado'>): boolean {
   return c.estado === 'pendiente' || c.estado === 'en_curso'
+}
+
+// ── Oficios pendientes (Comité Seguimiento de la Inversión) ──────────────────
+
+/**
+ * ¿El oficio tratado sigue vivo para la sesión siguiente? Mismo principio
+ * que esCompromisoAbierto: solo depende del estado.
+ */
+export function esOficioAbierto(o: Pick<SesionOficioTratado, 'estado'>): boolean {
+  return o.estado === 'pendiente'
 }
 
 // ── Instituciones sugeridas (tabs de apuntes) ────────────────────────────────

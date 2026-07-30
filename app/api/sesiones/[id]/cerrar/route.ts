@@ -49,10 +49,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: ejeRow } = await db
-    .from('region_ejes').select('sesiones_habilitadas').eq('id', sesion!.eje_id).single()
-  if (!ejeRow?.sesiones_habilitadas) {
-    return NextResponse.json({ error: 'El eje no tiene sesiones habilitadas' }, { status: 422 })
+  // Gate de activación: solo aplica a sesiones ancladas a un eje real
+  // (instancia='eje', hoy Comité Policial). Comités sin eje (Gabinete
+  // Regional, Comité Seguimiento de la Inversión) no tienen flag que revisar
+  // — siempre están disponibles.
+  if (sesion!.instancia === 'eje') {
+    const { data: ejeRow } = await db
+      .from('region_ejes').select('sesiones_habilitadas').eq('id', sesion!.eje_id).single()
+    if (!ejeRow?.sesiones_habilitadas) {
+      return NextResponse.json({ error: 'El eje no tiene sesiones habilitadas' }, { status: 422 })
+    }
   }
 
   // ── Pre-carga de valores y métricas (validar antes del claim) ─────────────
@@ -122,9 +128,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .from('sesion_compromisos')
     .update({ cerrado_en_sesion_id: sesionId })
     .eq('region_cod', sesion!.region_cod)
-    .eq('eje_id', sesion!.eje_id)
+    .eq('instancia', sesion!.instancia)
     .eq('estado', 'cumplido')
     .is('cerrado_en_sesion_id', null)
+
+  // ── Oficios resueltos quedan sellados a esta sesión (Comité Seguimiento de
+  // la Inversión) — mismo patrón que compromisos. No-op para sesiones del
+  // Comité Policial: esa tabla solo tiene filas de Inversión.
+  await db
+    .from('sesion_oficios_tratados')
+    .update({ resuelto_en_sesion_id: sesionId })
+    .eq('region_cod', sesion!.region_cod)
+    .eq('estado', 'resuelto')
+    .is('resuelto_en_sesion_id', null)
 
   // ── Acta — si falla NO se revierte el cierre (reintento vía POST /acta) ───
   try {

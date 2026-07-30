@@ -65,6 +65,55 @@ export function useSesionesResumen(regionCod: string, ejeId: number, enabled: bo
   return { resumen, loading, refresh }
 }
 
+/**
+ * Igual que useSesionesResumen pero para comités sin eje (Comité Seguimiento
+ * de la Inversión) — filtra por `instancia` en vez de `eje_id`. El hook de
+ * Policial no se toca: sigue exactamente igual.
+ */
+export function useSesionesResumenComite(regionCod: string, instancia: 'inversion', enabled: boolean) {
+  const [resumen, setResumen] = useState<SesionesResumen>({
+    compromisosAbiertos: 0,
+    ultimaSesionFecha: null,
+    borradorId: null,
+  })
+  const [loading, setLoading] = useState(enabled)
+
+  const refresh = useCallback(async () => {
+    if (!enabled) return
+    setLoading(true)
+    const sb = getSupabase()
+    const [compRes, cerradaRes, borradorRes] = await Promise.all([
+      sb.from('sesion_compromisos')
+        .select('id, estado')
+        .eq('region_cod', regionCod)
+        .eq('instancia', instancia),
+      sb.from('eje_sesiones')
+        .select('fecha')
+        .eq('region_cod', regionCod)
+        .eq('instancia', instancia)
+        .eq('estado', 'cerrada')
+        .order('fecha', { ascending: false })
+        .limit(1),
+      sb.from('eje_sesiones')
+        .select('id')
+        .eq('region_cod', regionCod)
+        .eq('instancia', instancia)
+        .eq('estado', 'borrador')
+        .limit(1),
+    ])
+    setResumen({
+      compromisosAbiertos: (compRes.data ?? []).filter(c => esCompromisoAbierto(c as { estado: 'pendiente' | 'en_curso' | 'cumplido' })).length,
+      ultimaSesionFecha:   cerradaRes.data?.[0]?.fecha ?? null,
+      borradorId:          borradorRes.data?.[0]?.id ?? null,
+    })
+    setLoading(false)
+  }, [regionCod, instancia, enabled])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  return { resumen, loading, refresh }
+}
+
 export type PuntoSerie = { fecha: string; valor: number }
 
 /**

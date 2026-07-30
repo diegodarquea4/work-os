@@ -12,6 +12,10 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
  */
 
 export type ActaData = {
+  // 'policial' → secciones III/IV son Indicadores/Temas por institución.
+  // 'inversion' → secciones III/IV son Proyectos tratados/Oficios tratados
+  // (este comité no tiene eje ni métricas, mig 046).
+  variante: 'policial' | 'inversion'
   nombreInstancia: string
   regionNombre: string
   sesionNumero: number
@@ -34,6 +38,13 @@ export type ActaData = {
     acumulado: number | null          // solo suma (post-cierre); null en pulso
   }[]
   apuntes: { institucion: string; texto: string }[]
+  proyectosTratados: { nombre: string; nota: string | null }[]
+  oficiosTratados: {
+    nombreProyecto: string
+    oaeca: string
+    fechaLimite: string | null
+    estado: 'pendiente' | 'resuelto'
+  }[]
   compVerificados: {
     descripcion: string
     institucion: string
@@ -174,40 +185,77 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           ))}
           {data.asistencia.length === 0 && <Text style={s.vacio}>Sin registro de asistencia.</Text>}
 
-          {/* Indicadores */}
-          <SH>III. Indicadores de la sesión</SH>
-          <View style={s.th}>
-            <Text style={[s.thT, { flex: 4 }]}>Indicador</Text>
-            <Text style={[s.thT, { flex: 1 }]}>Tipo</Text>
-            <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Sesión anterior</Text>
-            <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Esta sesión</Text>
-            <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Acumulado</Text>
-          </View>
-          {data.indicadores.map((ind, i) => (
-            <View key={i} style={s.tr2} wrap={false}>
-              <Text style={[s.td, { flex: 4 }]}>{ind.titulo}{ind.unidad ? ` (${ind.unidad})` : ''}</Text>
-              <Text style={[s.td, { flex: 1, color: C.textMid }]}>{ind.tipo === 'pulso' ? 'Pulso' : 'Suma'}</Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'right', color: C.textMid }]}>
-                {ind.valorAnterior != null ? fmtNum(ind.valorAnterior) : '—'}
-              </Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'right', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{fmtNum(ind.valor)}</Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'right' }]}>
-                {ind.tipo === 'suma' && ind.acumulado != null ? fmtNum(ind.acumulado) : '—'}
-              </Text>
-            </View>
-          ))}
-          {data.indicadores.length === 0 && <Text style={s.vacio}>No se digitaron indicadores en esta sesión.</Text>}
+          {data.variante === 'policial' ? (
+            <>
+              {/* Indicadores */}
+              <SH>III. Indicadores de la sesión</SH>
+              <View style={s.th}>
+                <Text style={[s.thT, { flex: 4 }]}>Indicador</Text>
+                <Text style={[s.thT, { flex: 1 }]}>Tipo</Text>
+                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Sesión anterior</Text>
+                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Esta sesión</Text>
+                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Acumulado</Text>
+              </View>
+              {data.indicadores.map((ind, i) => (
+                <View key={i} style={s.tr2} wrap={false}>
+                  <Text style={[s.td, { flex: 4 }]}>{ind.titulo}{ind.unidad ? ` (${ind.unidad})` : ''}</Text>
+                  <Text style={[s.td, { flex: 1, color: C.textMid }]}>{ind.tipo === 'pulso' ? 'Pulso' : 'Suma'}</Text>
+                  <Text style={[s.td, { flex: 1.4, textAlign: 'right', color: C.textMid }]}>
+                    {ind.valorAnterior != null ? fmtNum(ind.valorAnterior) : '—'}
+                  </Text>
+                  <Text style={[s.td, { flex: 1.4, textAlign: 'right', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{fmtNum(ind.valor)}</Text>
+                  <Text style={[s.td, { flex: 1.4, textAlign: 'right' }]}>
+                    {ind.tipo === 'suma' && ind.acumulado != null ? fmtNum(ind.acumulado) : '—'}
+                  </Text>
+                </View>
+              ))}
+              {data.indicadores.length === 0 && <Text style={s.vacio}>No se digitaron indicadores en esta sesión.</Text>}
 
-          {/* Temas por institución */}
-          <SH>IV. Temas por institución</SH>
-          {data.apuntes.length === 0 ? (
-            <Text style={s.vacio}>Sin apuntes registrados.</Text>
-          ) : data.apuntes.map((a, i) => (
-            <View key={i} style={s.instBlock} wrap={false}>
-              <Text style={s.instName}>{a.institucion}</Text>
-              <Text style={s.instText}>{a.texto || '—'}</Text>
-            </View>
-          ))}
+              {/* Temas por institución */}
+              <SH>IV. Temas por institución</SH>
+              {data.apuntes.length === 0 ? (
+                <Text style={s.vacio}>Sin apuntes registrados.</Text>
+              ) : data.apuntes.map((a, i) => (
+                <View key={i} style={s.instBlock} wrap={false}>
+                  <Text style={s.instName}>{a.institucion}</Text>
+                  <Text style={s.instText}>{a.texto || '—'}</Text>
+                </View>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Proyectos tratados */}
+              <SH>III. Proyectos tratados en profundidad</SH>
+              {data.proyectosTratados.length === 0 ? (
+                <Text style={s.vacio}>Sin proyectos tratados en esta sesión.</Text>
+              ) : data.proyectosTratados.map((p, i) => (
+                <View key={i} style={s.instBlock} wrap={false}>
+                  <Text style={s.instName}>{p.nombre}</Text>
+                  <Text style={s.instText}>{p.nota || '—'}</Text>
+                </View>
+              ))}
+
+              {/* Oficios tratados */}
+              <SH>IV. Oficios tratados</SH>
+              <View style={s.th}>
+                <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
+                <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
+                <Text style={[s.thT, { flex: 1.2, textAlign: 'right' }]}>Fecha límite</Text>
+                <Text style={[s.thT, { flex: 1 }]}>Estado</Text>
+              </View>
+              {data.oficiosTratados.map((o, i) => (
+                <View key={i} style={s.tr2} wrap={false}>
+                  <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
+                  <Text style={[s.td, { flex: 2, color: C.textMid }]}>{o.oaeca}</Text>
+                  <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
+                  <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.textMid }]}>
+                    {o.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
+                  </Text>
+                </View>
+              ))}
+              {data.oficiosTratados.length === 0 && <Text style={s.vacio}>Sin oficios tratados en esta sesión.</Text>}
+            </>
+          )}
 
           {/* Compromisos */}
           <SH>V. Compromisos</SH>

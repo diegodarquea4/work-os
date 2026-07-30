@@ -525,11 +525,19 @@ export type RegionEje = {
 // Una sesión captura: verificación de compromisos → asistencia → indicadores
 // (alimentan metricas_eje al cerrar) → apuntes por institución → compromisos
 // nuevos. RLS restrictiva: staff todo, regional sus regiones, viewer nada.
+//
+// `instancia` distingue qué tipo de sesión es esta fila (columna ya
+// preparada en la BD para "Gabinete Regional" antes de este comité — no
+// viene de un archivo de migración de este repo). 'eje' sigue anclado a un
+// eje real (eje_id NOT NULL); 'gabinete' e 'inversion' no tienen eje —
+// eje_id va NULL (esos comités no cuelgan del catálogo de Ejes
+// estratégicos, son tabs fijos de la sección Comités).
 
 export type EjeSesion = {
   id: number
   region_cod: string
-  eje_id: number
+  instancia: 'eje' | 'gabinete' | 'inversion'
+  eje_id: number | null
   provincia_cod: string | null   // NULL = sesión regional (capa DPP futura)
   fecha: string                  // date puro YYYY-MM-DD
   lugar: string | null
@@ -546,7 +554,8 @@ export type EjeSesion = {
 export type SesionNomina = {
   id: number
   region_cod: string
-  eje_id: number
+  instancia: 'eje' | 'gabinete' | 'inversion'
+  eje_id: number | null
   provincia_cod: string | null
   nombre: string
   cargo: string | null
@@ -582,7 +591,8 @@ export type SesionApunte = {
 export type SesionCompromiso = {
   id: number
   region_cod: string
-  eje_id: number
+  instancia: 'eje' | 'gabinete' | 'inversion'
+  eje_id: number | null
   sesion_origen_id: number
   descripcion: string
   responsable_institucion: string
@@ -592,6 +602,51 @@ export type SesionCompromiso = {
   estado_updated_at: string | null
   estado_updated_by_email: string | null
   cerrado_en_sesion_id: number | null
+  // Escalamiento a Gabinete Regional (trabajo de esa instancia, no de esta
+  // tarea) — se incluyen para que el tipo refleje la columna real.
+  escalado_a_gabinete: boolean
+  escalado_en_sesion_id: number | null
+  prioridad_id: number | null
+  created_at: string
+}
+
+// ── Comité Seguimiento de la Inversión ───────────────────────────────────────
+// Sin eje (ver EjeSesion arriba) — scoped solo por region_cod/instancia='inversion'.
+
+// Catálogo de organismos (OAECA) — autoincremental: precargado y crece
+// cuando alguien escribe uno nuevo al cargar un oficio en sesión.
+export type Oaeca = {
+  id: number
+  nombre: string
+  created_at: string
+  created_by_email: string | null
+}
+
+// Proyecto tratado en profundidad en una sesión — selección desde
+// v2_proyectos_inversion, no texto libre.
+export type SesionProyecto = {
+  id: number
+  sesion_id: number
+  proyecto_id: string
+  nota: string | null
+  created_at: string
+}
+
+// Oficio tratado — vive ENTRE sesiones igual que SesionCompromiso: se carga
+// a mano dentro de una sesión (estado 'pendiente') y reaparece en la zona
+// "Oficios anteriores" de la sesión siguiente hasta quedar 'resuelto'.
+export type SesionOficioTratado = {
+  id: number
+  region_cod: string
+  sesion_origen_id: number
+  oaeca_id: number
+  proyecto_id: string
+  fecha_limite: string | null        // date puro YYYY-MM-DD
+  estado: 'pendiente' | 'resuelto'
+  nota: string | null
+  estado_updated_at: string | null
+  estado_updated_by_email: string | null
+  resuelto_en_sesion_id: number | null
   created_at: string
 }
 
