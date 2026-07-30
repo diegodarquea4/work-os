@@ -7,8 +7,9 @@ import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
-  EjeSesion, Metrica, RegionEje, SesionAsistencia, SesionApunte,
-  SesionCompromiso, SesionIniciativa, SesionNomina, SesionValor,
+  EjeSesion, RegionEje, SesionAsistencia, SesionApunte,
+  SesionCompromiso, SesionIniciativa, SesionNomina,
+  ComiteMetrica, SesionComiteValor,
 } from '@/lib/types'
 import {
   institucionesSugeridas, clasificarCompromisosGabinete, filasZona3Faltantes,
@@ -16,7 +17,7 @@ import {
 } from '@/lib/sesiones/helpers'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
-import MetricaEditModal from './MetricaEditModal'
+import ReporteInstitucionZona from './ReporteInstitucionZona'
 
 /**
  * Formulario de sesión — comités (mig 044) y Gabinete Regional (mig 046).
@@ -108,9 +109,13 @@ export default function SesionModal(props: Props) {
   const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
   const [asistencia, setAsistencia]         = useState<SesionAsistencia[]>([])
-  const [metricasSesion, setMetricasSesion] = useState<Metrica[]>([])
-  const [valores, setValores]               = useState<SesionValor[]>([])
-  const [valoresPrev, setValoresPrev]       = useState<Map<number, number>>(new Map())
+  // Zona 3 comité: reporte de métricas por institución (mig 048 — reemplaza
+  // los indicadores suma/pulso). Catálogo por región + valores de la sesión +
+  // valores de la sesión cerrada anterior (WoW).
+  const [comiteCatalogo, setComiteCatalogo]     = useState<ComiteMetrica[]>([])
+  const [comiteValores, setComiteValores]       = useState<SesionComiteValor[]>([])
+  const [comiteValoresPrev, setComiteValoresPrev] = useState<Map<number, SesionComiteValor>>(new Map())
+  // Zona 4 gabinete: apuntes por institución (el comité ya no usa esta zona).
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
   const [instituciones, setInstituciones]   = useState<string[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
@@ -119,9 +124,7 @@ export default function SesionModal(props: Props) {
   const [sesIniciativas, setSesIniciativas] = useState<SesionIniciativa[]>([])
 
   const [tabInstitucion, setTabInstitucion] = useState<string | null>(null)
-  const [draftValores, setDraftValores]     = useState<Record<number, string>>({})
   const [draftApuntes, setDraftApuntes]     = useState<Record<string, string>>({})
-  const [nuevaMetricaOpen, setNuevaMetricaOpen] = useState(false)
 
   // Invitado form
   const [invNombre, setInvNombre]           = useState('')
@@ -258,28 +261,26 @@ export default function SesionModal(props: Props) {
         : Promise.resolve({ data: [] as SesionIniciativa[] }),
     ])
 
-    // Zona 3 comité: métricas + valores + referencia de la sesión anterior.
-    // El gabinete NO digita métricas — estas queries no corren (RLS aparte,
-    // no hay eje que filtrar).
+    // Zona 3 comité: reporte por institución (mig 048). Catálogo de la región
+    // + valores de esta sesión + valores de la sesión cerrada anterior (WoW).
+    // El gabinete NO usa esta zona (tiene iniciativas en foco).
     if (!esGabinete) {
-      const [metRes, valRes, prevSesRes] = await Promise.all([
-        sb.from('metricas_eje').select('*')
-          .eq('region_cod', region.cod).eq('eje_id', eje!.id)
-          .eq('se_reporta_en_sesion', true).order('created_at'),
-        sb.from('sesion_valores').select('*').eq('sesion_id', s.id),
+      const [catRes, valRes, prevSesRes] = await Promise.all([
+        sb.from('comite_metrica').select('*')
+          .eq('region_cod', region.cod).eq('activo', true).order('orden'),
+        sb.from('sesion_comite_valor').select('*').eq('sesion_id', s.id),
         sb.from('eje_sesiones').select('id')
           .eq('region_cod', region.cod).eq('eje_id', eje!.id).eq('estado', 'cerrada')
           .order('fecha', { ascending: false }).limit(1),
       ])
-      setMetricasSesion((metRes.data ?? []) as Metrica[])
-      const vals = (valRes.data ?? []) as SesionValor[]
-      setValores(vals)
-      setDraftValores(Object.fromEntries(vals.map(v => [v.metrica_id, String(v.valor)])))
-      // Valores de la última sesión cerrada (referencia en zona 3)
+      setComiteCatalogo((catRes.data ?? []) as ComiteMetrica[])
+      setComiteValores((valRes.data ?? []) as SesionComiteValor[])
       const prevId = prevSesRes.data?.[0]?.id
       if (prevId) {
-        const { data: prevVals } = await sb.from('sesion_valores').select('*').eq('sesion_id', prevId)
-        setValoresPrev(new Map(((prevVals ?? []) as SesionValor[]).map(v => [v.metrica_id, Number(v.valor)])))
+        const { data: prevVals } = await sb.from('sesion_comite_valor').select('*').eq('sesion_id', prevId)
+        setComiteValoresPrev(new Map(((prevVals ?? []) as SesionComiteValor[]).map(v => [v.metrica_id, v])))
+      } else {
+        setComiteValoresPrev(new Map())
       }
     }
 
@@ -315,20 +316,24 @@ export default function SesionModal(props: Props) {
     setAsistencia((asisRes.data ?? []) as SesionAsistencia[])
     setCompNuevos((nuevosRes.data ?? []) as SesionCompromiso[])
 
-    const apun = (apunRes.data ?? []) as SesionApunte[]
-    setApuntes(apun)
-    setDraftApuntes(Object.fromEntries(apun.map(a => [a.institucion, a.texto])))
+    // Zona 4 apuntes por institución: solo gabinete (el comité reporta por
+    // institución en la zona 3).
+    if (esGabinete) {
+      const apun = (apunRes.data ?? []) as SesionApunte[]
+      setApuntes(apun)
+      setDraftApuntes(Object.fromEntries(apun.map(a => [a.institucion, a.texto])))
 
-    // Tabs de apuntes: instituciones históricas de la instancia ∪ nómina
-    const ids = (sesIdsRes.data ?? []).map(r => r.id)
-    let historicas: string[] = []
-    if (ids.length) {
-      const { data: hist } = await sb.from('sesion_apuntes').select('institucion').in('sesion_id', ids)
-      historicas = (hist ?? []).map(h => h.institucion)
+      // Tabs de apuntes: instituciones históricas de la instancia ∪ nómina
+      const ids = (sesIdsRes.data ?? []).map(r => r.id)
+      let historicas: string[] = []
+      if (ids.length) {
+        const { data: hist } = await sb.from('sesion_apuntes').select('institucion').in('sesion_id', ids)
+        historicas = (hist ?? []).map(h => h.institucion)
+      }
+      const sugeridas = institucionesSugeridas(historicas, nominaData.map(n => n.institucion))
+      setInstituciones(sugeridas)
+      setTabInstitucion(prev => prev ?? sugeridas[0] ?? null)
     }
-    const sugeridas = institucionesSugeridas(historicas, nominaData.map(n => n.institucion))
-    setInstituciones(sugeridas)
-    setTabInstitucion(prev => prev ?? sugeridas[0] ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region.cod, eje?.id, esGabinete, gabIniciativas])
 
@@ -453,48 +458,15 @@ export default function SesionModal(props: Props) {
     }
   }
 
-  // ── Zona 3: indicadores ───────────────────────────────────────────────────
+  // ── Zona 3 (comité): reporte por institución ──────────────────────────────
 
-  async function commitValor(m: Metrica) {
-    if (!sesion) return
-    const raw = (draftValores[m.id] ?? '').trim()
-    const existente = valores.find(v => v.metrica_id === m.id)
-    try {
-      if (raw === '') {
-        if (existente) {
-          await safeDelete(
-            getSupabase().from('sesion_valores').delete().eq('id', existente.id),
-            `sesion_valores delete id=${existente.id}`,
-          )
-          setValores(prev => prev.filter(v => v.id !== existente.id))
-        }
-        return
-      }
-      const num = parseFloat(raw.replace(',', '.'))
-      if (isNaN(num)) {
-        setDraftValores(prev => ({ ...prev, [m.id]: existente ? String(existente.valor) : '' }))
-        return
-      }
-      if (existente) {
-        if (Number(existente.valor) === num) return
-        await safeWrite(
-          getSupabase().from('sesion_valores').update({ valor: num }).eq('id', existente.id),
-          `sesion_valores update id=${existente.id}`,
-        )
-        setValores(prev => prev.map(v => v.id === existente.id ? { ...v, valor: num } : v))
-      } else {
-        const rows = await safeWrite(
-          getSupabase().from('sesion_valores').insert({
-            sesion_id: sesion.id, metrica_id: m.id, valor: num,
-          }),
-          `sesion_valores insert metrica=${m.id}`,
-        )
-        setValores(prev => [...prev, rows[0] as SesionValor])
-      }
-    } catch (err) {
-      window.alert((err as Error).message)
-    }
-  }
+  // Recarga el catálogo tras crear/editar/quitar un ítem (comite_metrica),
+  // sin relanzar todo loadAll (no pisa los valores ya digitados).
+  const reloadComiteCatalogo = useCallback(async () => {
+    const { data } = await getSupabase().from('comite_metrica').select('*')
+      .eq('region_cod', region.cod).eq('activo', true).order('orden')
+    setComiteCatalogo((data ?? []) as ComiteMetrica[])
+  }, [region.cod])
 
   // ── Zona 3 (gabinete): iniciativas en foco ────────────────────────────────
 
@@ -649,12 +621,12 @@ export default function SesionModal(props: Props) {
 
   async function handleCerrar() {
     if (!sesion) return
-    const sinValores = !esGabinete && metricasSesion.length > 0 && valores.length === 0
+    const sinDatos = !esGabinete && comiteValores.length === 0
     const msg = esGabinete
       ? '¿Cerrar la sesión de gabinete y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.'
-      : sinValores
-        ? 'No se digitó ningún indicador. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
-        : '¿Cerrar la sesión y generar el acta?\n\nLos indicadores digitados alimentarán las métricas del eje y la sesión quedará inmutable.'
+      : sinDatos
+        ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
+        : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
     if (!confirm(msg)) return
     setCerrando(true)
     try {
@@ -1012,63 +984,21 @@ export default function SesionModal(props: Props) {
                 </section>
               )}
 
-              {/* ── Zona 3 (comité): indicadores ── */}
+              {/* ── Zona 3 (comité): reporte por institución ── */}
               {!esGabinete && (
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>3</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Indicadores de la sesión</h3>
-                  <button
-                    onClick={() => setNuevaMetricaOpen(true)}
-                    className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline ml-auto"
-                  >
-                    + Indicador no contemplado
-                  </button>
-                </div>
-                <div className="p-3">
-                  {metricasSesion.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">
-                      Ninguna métrica del eje está marcada &quot;se reporta en sesión&quot; — usa &quot;+ Indicador no contemplado&quot;.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {metricasSesion.map(m => {
-                        const prev = valoresPrev.get(m.id)
-                        return (
-                          <div key={m.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 truncate">
-                                {m.titulo}
-                                <span className={`ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded ${m.tipo === 'pulso' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'}`}>
-                                  {m.tipo === 'pulso' ? 'PULSO' : 'SUMA'}
-                                </span>
-                              </p>
-                              <p className="text-[11px] text-gray-400">
-                                {prev != null ? `Sesión anterior: ${prev}${m.unidad ? ` ${m.unidad}` : ''}` : 'Primera medición'}
-                                {m.tipo === 'suma' && ` · alimenta el acumulado (${m.valor_actual ?? 0}${m.unidad ? ` ${m.unidad}` : ''})`}
-                              </p>
-                            </div>
-                            <input
-                              type="number"
-                              step="any"
-                              value={draftValores[m.id] ?? ''}
-                              onChange={e => setDraftValores(prevD => ({ ...prevD, [m.id]: e.target.value }))}
-                              onBlur={() => commitValor(m)}
-                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                              placeholder="—"
-                              className={`${inputCls} w-24 text-right py-1.5`}
-                            />
-                            {m.unidad && <span className="text-xs text-gray-400 w-10 truncate">{m.unidad}</span>}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
+                <ReporteInstitucionZona
+                  sesionId={sesion.id}
+                  regionCod={region.cod}
+                  catalogo={comiteCatalogo}
+                  valoresIniciales={comiteValores}
+                  valoresPrev={comiteValoresPrev}
+                  currentUserEmail={currentUserEmail}
+                  onCatalogoChange={reloadComiteCatalogo}
+                />
               )}
 
-              {/* ── Zona 4: apuntes por institución ── */}
+              {/* ── Zona 4 (gabinete): apuntes por institución ── */}
+              {esGabinete && (
               <section className={zoneCls}>
                 <div className={zoneHead}>
                   <span className={zoneNum}>4</span>
@@ -1131,11 +1061,12 @@ export default function SesionModal(props: Props) {
                   )}
                 </div>
               </section>
+              )}
 
-              {/* ── Zona 5: compromisos nuevos ── */}
+              {/* ── Zona compromisos nuevos (4 comité · 5 gabinete) ── */}
               <section className={zoneCls}>
                 <div className={zoneHead}>
-                  <span className={zoneNum}>5</span>
+                  <span className={zoneNum}>{esGabinete ? 5 : 4}</span>
                   <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
                 </div>
@@ -1257,25 +1188,6 @@ export default function SesionModal(props: Props) {
           </div>
         </footer>
       </div>
-
-      {/* "+ indicador no contemplado" → crea métrica del eje ya marcada
-          para sesión. Al guardar recargamos las métricas de la zona 3.
-          Solo comité — el gabinete no digita métricas. */}
-      {nuevaMetricaOpen && eje && (
-        <div onClick={e => e.stopPropagation()}>
-          <MetricaEditModal
-            open
-            onClose={() => setNuevaMetricaOpen(false)}
-            metrica={null}
-            regionCod={region.cod}
-            eje={eje}
-            currentUserEmail={currentUserEmail}
-            onSaved={() => { if (sesion) loadAll(sesion) }}
-            sesionesOn
-            defaultsSesion={{ se_reporta_en_sesion: true }}
-          />
-        </div>
-      )}
     </div>
   )
 }

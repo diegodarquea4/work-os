@@ -523,9 +523,9 @@ export type RegionEje = {
 
 // ── Sesiones (Comité Policial mig 044 · Gabinete Regional mig 046 · Comité
 // Seguimiento de la Inversión) ───────────────────────────────────────────────
-// Una sesión captura: verificación de compromisos → asistencia → indicadores
-// (comité) / iniciativas en foco (gabinete) / oficios y proyectos (inversión)
-// → apuntes por institución → compromisos nuevos. RLS restrictiva: staff
+// Una sesión captura: verificación de compromisos → asistencia → reporte por
+// institución (comité, mig 048) / iniciativas en foco (gabinete) / oficios y
+// proyectos (inversión) → compromisos nuevos. RLS restrictiva: staff
 // todo, regional sus regiones, viewer nada. `instancia` discrimina: 'eje'
 // exige eje_id, 'gabinete'/'inversion' lo prohíben (CHECK en BD — la columna
 // nació para "Gabinete Regional"; 'inversion' se agregó después reusando el
@@ -589,6 +589,40 @@ export type SesionApunte = {
   sesion_id: number
   institucion: string
   texto: string
+}
+
+// ── Reporte de métricas por institución del Comité Policial (mig 048) ────────
+// Reemplaza el modelo suma/pulso EN LA SESIÓN de comité. Institución fija
+// (Carabineros/PDI/Armada/Gendarmería); catálogo POR REGIÓN.
+export type ComiteInstitucion = 'carabineros' | 'pdi' | 'armada' | 'gendarmeria'
+
+// Ítem del catálogo (comite_metrica) — la DEFINICIÓN de una métrica por
+// institución. `numerico` alimenta el seguimiento WoW; `texto` es bloque libre.
+export type ComiteMetrica = {
+  id: number
+  region_cod: string
+  institucion: ComiteInstitucion
+  nombre: string
+  tipo: 'numerico' | 'texto'
+  unidad: string | null
+  orden: number
+  activo: boolean
+}
+
+// Sub-valor libre de una métrica (desglose por prefectura, comparación de
+// años, etc.). `valor` es texto para admitir "20%", "833", etc.
+export type ComiteDesglose = { etiqueta: string; valor: string }
+
+// Valor reportado por (sesión × métrica) — hija de eje_sesiones, se sella al
+// cerrar. El desglose viaja como JSONB en la misma fila.
+export type SesionComiteValor = {
+  id: number
+  sesion_id: number
+  metrica_id: number
+  valor_num: number | null
+  valor_texto: string | null
+  observaciones: string | null
+  desglose: ComiteDesglose[]
 }
 
 export type SesionCompromiso = {

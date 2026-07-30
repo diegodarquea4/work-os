@@ -1,7 +1,7 @@
 -- ============================================================================
--- 049_fix_inversion_instancia.sql
+-- 050_fix_inversion_instancia.sql
 --
--- Corrige 048: esa migración agregó una columna `comite` ('policial'|
+-- Corrige 049: esa migración agregó una columna `comite` ('policial'|
 -- 'inversion') a eje_sesiones/sesion_nomina/sesion_compromisos para permitir
 -- sesiones sin eje. Pero ya existía en la BD (fuera de los archivos de
 -- migración de este repo — trabajo previo para "Gabinete Regional") una

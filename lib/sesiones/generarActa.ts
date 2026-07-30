@@ -3,9 +3,10 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { registerPdfFonts } from '@/lib/pdfFonts'
 import { REGIONS } from '@/lib/regions'
-import type { EjeSesion, SesionCompromiso, SesionOficioTratado, SesionValor } from '@/lib/types'
+import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { generarActaGabinete } from './generarActaGabinete'
+import { agruparPorInstitucion, formatoValorComite } from './helpers'
 import { subirActa } from './actaUpload'
 
 /**
@@ -58,9 +59,9 @@ type AsisRow = {
 
 type Db = ReturnType<typeof getSupabaseAdmin>
 
-/** Comité Policial — comportamiento sin cambios (indicadores + apuntes). */
+/** Comité Policial — reporte por institución (mig 048). */
 async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
-  const [ejeRes, numRes, asisRes, valRes, metRes, prevRes, apunRes, verifRes, nuevosRes] = await Promise.all([
+  const [ejeRes, numRes, asisRes, valRes, catRes, verifRes, nuevosRes] = await Promise.all([
     db.from('region_ejes').select('sesiones_nombre').eq('id', sesion.eje_id).single(),
     // N° de sesión = cerradas anteriores del (región, eje) hasta esta fecha/id
     db.from('eje_sesiones').select('id, fecha')
@@ -68,17 +69,9 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
-    db.from('sesion_valores').select('*').eq('sesion_id', sesionId),
-    db.from('metricas_eje').select('id, titulo, unidad, tipo, valor_actual')
-      .eq('region_cod', sesion.region_cod).eq('eje_id', sesion.eje_id),
-    // Sesión cerrada inmediatamente anterior (para "valor sesión anterior")
-    db.from('eje_sesiones').select('id')
-      .eq('region_cod', sesion.region_cod).eq('eje_id', sesion.eje_id).eq('estado', 'cerrada')
-      .neq('id', sesionId)
-      .lte('fecha', sesion.fecha)
-      .order('fecha', { ascending: false }).order('id', { ascending: false })
-      .limit(1),
-    db.from('sesion_apuntes').select('institucion, texto').eq('sesion_id', sesionId).order('institucion'),
+    // Reporte por institución (mig 048): valores de la sesión + catálogo.
+    db.from('sesion_comite_valor').select('*').eq('sesion_id', sesionId),
+    db.from('comite_metrica').select('*').eq('region_cod', sesion.region_cod),
     // Verificados: compromisos de sesiones anteriores — cumplidos en esta
     // sesión o aún abiertos (se reporta su estado resultante)
     db.from('sesion_compromisos').select('*')
@@ -88,18 +81,9 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
   ])
 
-  const valores = (valRes.data ?? []) as SesionValor[]
-  const metricas = new Map(
-    ((metRes.data ?? []) as { id: number; titulo: string; unidad: string | null; tipo: 'suma' | 'pulso'; valor_actual: number | null }[])
-      .map(m => [m.id, m]),
-  )
-
-  let valoresPrev = new Map<number, number>()
-  const prevId = prevRes.data?.[0]?.id
-  if (prevId) {
-    const { data: pv } = await db.from('sesion_valores').select('*').eq('sesion_id', prevId)
-    valoresPrev = new Map(((pv ?? []) as SesionValor[]).map(v => [v.metrica_id, Number(v.valor)]))
-  }
+  const catalogo = (catRes.data ?? []) as ComiteMetrica[]
+  const valores  = ((valRes.data ?? []) as SesionComiteValor[])
+    .map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] }))
 
   // N° correlativo: posición por fecha (y id como desempate) entre cerradas.
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -121,21 +105,21 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
       calidad:     a.nomina ? a.nomina.calidad : 'invitado',
       presente:    a.presente,
     })),
-    indicadores: valores.map(v => {
-      const m = metricas.get(v.metrica_id)
-      return {
-        titulo:        m?.titulo ?? `Métrica ${v.metrica_id}`,
-        tipo:          m?.tipo ?? 'suma',
-        unidad:        m?.unidad ?? null,
-        valor:         Number(v.valor),
-        valorAnterior: valoresPrev.get(v.metrica_id) ?? null,
-        // valor_actual ya está post-cierre (las métricas se aplican antes
-        // de generar el acta) — es el acumulado oficial para las suma.
-        acumulado:     m?.tipo === 'suma' && m.valor_actual != null ? Number(m.valor_actual) : null,
-      }
-    }),
-    apuntes: ((apunRes.data ?? []) as { institucion: string; texto: string }[])
-      .filter(a => a.texto.trim().length > 0),
+    // Reporte por institución: solo instituciones con datos; en cada fila el
+    // valor viene pre-formateado y el desglose sin sub-valores vacíos.
+    instituciones: agruparPorInstitucion(catalogo, valores, true)
+      .filter(g => g.filas.length > 0)
+      .map(g => ({
+        label: g.label,
+        filas: g.filas.map(f => ({
+          nombre:        f.metrica.nombre,
+          unidad:        f.metrica.unidad,
+          tipo:          f.metrica.tipo,
+          valor:         formatoValorComite(f.valor, f.metrica),
+          observaciones: f.valor?.observaciones ?? null,
+          desglose:      (f.valor?.desglose ?? []).filter(d => d.etiqueta.trim() || d.valor.trim()),
+        })),
+      })),
     proyectosTratados: [],
     oficiosTratados: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
@@ -157,7 +141,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
 }
 
 /**
- * Comité Seguimiento de la Inversión — sin eje (mig 048): nombre fijo, sin
+ * Comité Seguimiento de la Inversión — sin eje (mig 049): nombre fijo, sin
  * indicadores/apuntes; en su lugar, proyectos tratados y oficios tratados.
  */
 async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
@@ -212,8 +196,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
       calidad:     a.nomina ? a.nomina.calidad : 'invitado',
       presente:    a.presente,
     })),
-    indicadores: [],
-    apuntes: [],
+    instituciones: [],
     proyectosTratados: ((proyRes.data ?? []) as unknown as { nota: string | null; proyecto: { nombre: string } | null }[])
       .map(p => ({ nombre: p.proyecto?.nombre ?? '—', nota: p.nota })),
     oficiosTratados: oficios.map(o => ({

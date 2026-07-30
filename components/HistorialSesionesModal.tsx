@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import type { Region } from '@/lib/regions'
-import type { EjeSesion, RegionEje, SesionCompromiso } from '@/lib/types'
+import type { EjeSesion, RegionEje, SesionCompromiso, ComiteInstitucion, ComiteDesglose } from '@/lib/types'
+import { COMITE_INSTITUCIONES } from '@/lib/sesiones/helpers'
 
 /**
  * Historial de sesiones de la instancia — comité (región, eje) o Gabinete
@@ -30,7 +31,11 @@ type SesionRow = EjeSesion & {
 
 type DetalleSesion = {
   asistencia: { presente: boolean; invitado_nombre: string | null; invitado_institucion: string | null; nomina: { nombre: string; institucion: string; calidad: string } | null }[]
-  valores: { valor: number; metrica: { titulo: string; unidad: string | null; tipo: string } | null }[]
+  // Reporte por institución del comité (mig 048).
+  valores: {
+    valor_num: number | null; valor_texto: string | null; observaciones: string | null; desglose: ComiteDesglose[]
+    metrica: { nombre: string; unidad: string | null; tipo: 'numerico' | 'texto'; institucion: ComiteInstitucion; orden: number } | null
+  }[]
   iniciativas: { semaforo_al_momento: string | null; pct_avance_al_momento: number | null; acuerdo: string | null; prioridad: { nombre: string } | null }[]
   compromisos: SesionCompromiso[]
 }
@@ -73,10 +78,10 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
       sb.from('sesion_asistencia')
         .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, institucion, calidad)')
         .eq('sesion_id', s.id),
-      // Indicadores: solo en comités (el gabinete no digita métricas).
+      // Reporte por institución: solo en comités (el gabinete tiene iniciativas).
       instancia === 'eje'
-        ? sb.from('sesion_valores')
-            .select('valor, metrica:metricas_eje(titulo, unidad, tipo)')
+        ? sb.from('sesion_comite_valor')
+            .select('valor_num, valor_texto, observaciones, desglose, metrica:comite_metrica(nombre, unidad, tipo, institucion, orden)')
             .eq('sesion_id', s.id)
         : Promise.resolve({ data: [] }),
       // Iniciativas tratadas: solo en gabinete (snapshot + acuerdo).
@@ -225,16 +230,41 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
                           <>
                             {det.valores.length > 0 && (
                               <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Indicadores</p>
-                                <div className="space-y-0.5">
-                                  {det.valores.map((v, i) => (
-                                    <p key={i} className="text-xs text-gray-600 flex justify-between gap-2">
-                                      <span className="truncate">{v.metrica?.titulo ?? '—'}</span>
-                                      <span className="font-semibold tabular-nums flex-shrink-0">
-                                        {v.valor}{v.metrica?.unidad ? ` ${v.metrica.unidad}` : ''}
-                                      </span>
-                                    </p>
-                                  ))}
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Reporte por institución</p>
+                                <div className="space-y-2">
+                                  {COMITE_INSTITUCIONES.map(instDef => {
+                                    const filas = det.valores
+                                      .filter(v => v.metrica?.institucion === instDef.key)
+                                      .sort((a, b) => (a.metrica?.orden ?? 0) - (b.metrica?.orden ?? 0))
+                                    if (filas.length === 0) return null
+                                    return (
+                                      <div key={instDef.key}>
+                                        <p className="text-[11px] font-semibold text-slate-700">{instDef.label}</p>
+                                        <div className="space-y-0.5 pl-2">
+                                          {filas.map((v, i) => {
+                                            const desg = Array.isArray(v.desglose) ? v.desglose.filter(d => d.etiqueta.trim() || d.valor.trim()) : []
+                                            return (
+                                              <div key={i} className="text-xs text-gray-600">
+                                                <p className="flex justify-between gap-2">
+                                                  <span className="truncate">{v.metrica?.nombre ?? '—'}</span>
+                                                  {v.metrica?.tipo === 'numerico' && (
+                                                    <span className="font-semibold tabular-nums flex-shrink-0">
+                                                      {v.valor_num != null ? v.valor_num.toLocaleString('es-CL') : '—'}{v.metrica?.unidad ? ` ${v.metrica.unidad}` : ''}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                                {v.metrica?.tipo === 'texto' && v.valor_texto && <p className="text-gray-500 leading-snug pl-2">{v.valor_texto}</p>}
+                                                {desg.length > 0 && (
+                                                  <p className="text-[11px] text-gray-400 pl-2">{desg.map(d => `${d.etiqueta}: ${d.valor}`).join(' · ')}</p>
+                                                )}
+                                                {v.observaciones && <p className="text-[11px] text-gray-400 pl-2 italic">{v.observaciones}</p>}
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               </div>
                             )}

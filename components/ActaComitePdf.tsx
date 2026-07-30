@@ -12,9 +12,9 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
  */
 
 export type ActaData = {
-  // 'policial' → secciones III/IV son Indicadores/Temas por institución.
+  // 'policial' → sección III es el reporte por institución (mig 048).
   // 'inversion' → secciones III/IV son Proyectos tratados/Oficios tratados
-  // (este comité no tiene eje ni métricas, mig 046).
+  // (este comité no tiene eje ni métricas, mig 049).
   variante: 'policial' | 'inversion'
   nombreInstancia: string
   regionNombre: string
@@ -29,15 +29,20 @@ export type ActaData = {
     calidad: 'titular' | 'suplente' | 'invitado'
     presente: boolean
   }[]
-  indicadores: {
-    titulo: string
-    tipo: 'suma' | 'pulso'
-    unidad: string | null
-    valor: number
-    valorAnterior: number | null
-    acumulado: number | null          // solo suma (post-cierre); null en pulso
+  // Reporte por institución (mig 048): Carabineros/PDI/Armada/Gendarmería.
+  // `valor` viene pre-formateado (número+unidad o texto). Solo instituciones
+  // con datos; filas sin dato ya filtradas server-side.
+  instituciones: {
+    label: string
+    filas: {
+      nombre: string
+      unidad: string | null
+      tipo: 'numerico' | 'texto'
+      valor: string
+      observaciones: string | null
+      desglose: { etiqueta: string; valor: string }[]
+    }[]
   }[]
-  apuntes: { institucion: string; texto: string }[]
   proyectosTratados: { nombre: string; nota: string | null }[]
   oficiosTratados: {
     nombreProyecto: string
@@ -84,10 +89,6 @@ function fmtFecha(iso: string | null): string {
   try {
     return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })
   } catch { return iso }
-}
-
-function fmtNum(n: number): string {
-  return Number.isInteger(n) ? n.toLocaleString('es-CL') : n.toLocaleString('es-CL', { maximumFractionDigits: 2 })
 }
 
 const s = StyleSheet.create({
@@ -187,40 +188,49 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
 
           {data.variante === 'policial' ? (
             <>
-              {/* Indicadores */}
-              <SH>III. Indicadores de la sesión</SH>
-              <View style={s.th}>
-                <Text style={[s.thT, { flex: 4 }]}>Indicador</Text>
-                <Text style={[s.thT, { flex: 1 }]}>Tipo</Text>
-                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Sesión anterior</Text>
-                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Esta sesión</Text>
-                <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Acumulado</Text>
-              </View>
-              {data.indicadores.map((ind, i) => (
-                <View key={i} style={s.tr2} wrap={false}>
-                  <Text style={[s.td, { flex: 4 }]}>{ind.titulo}{ind.unidad ? ` (${ind.unidad})` : ''}</Text>
-                  <Text style={[s.td, { flex: 1, color: C.textMid }]}>{ind.tipo === 'pulso' ? 'Pulso' : 'Suma'}</Text>
-                  <Text style={[s.td, { flex: 1.4, textAlign: 'right', color: C.textMid }]}>
-                    {ind.valorAnterior != null ? fmtNum(ind.valorAnterior) : '—'}
-                  </Text>
-                  <Text style={[s.td, { flex: 1.4, textAlign: 'right', fontFamily: 'Carlito', fontWeight: 'bold' }]}>{fmtNum(ind.valor)}</Text>
-                  <Text style={[s.td, { flex: 1.4, textAlign: 'right' }]}>
-                    {ind.tipo === 'suma' && ind.acumulado != null ? fmtNum(ind.acumulado) : '—'}
-                  </Text>
-                </View>
-              ))}
-              {data.indicadores.length === 0 && <Text style={s.vacio}>No se digitaron indicadores en esta sesión.</Text>}
-
-              {/* Temas por institución */}
-              <SH>IV. Temas por institución</SH>
-              {data.apuntes.length === 0 ? (
-                <Text style={s.vacio}>Sin apuntes registrados.</Text>
-              ) : data.apuntes.map((a, i) => (
-                <View key={i} style={s.instBlock} wrap={false}>
-                  <Text style={s.instName}>{a.institucion}</Text>
-                  <Text style={s.instText}>{a.texto || '—'}</Text>
-                </View>
-              ))}
+              {/* Temas tratados — reporte por institución (mig 048) */}
+              <SH>III. Temas tratados</SH>
+              {data.instituciones.length === 0 ? (
+                <Text style={s.vacio}>No se registraron temas por institución en esta sesión.</Text>
+              ) : data.instituciones.map((inst, ii) => {
+                const numericas = inst.filas.filter(f => f.tipo === 'numerico')
+                const textos    = inst.filas.filter(f => f.tipo === 'texto')
+                return (
+                  <View key={ii} style={{ marginBottom: 8 }}>
+                    <Text style={[s.instName, { marginTop: 4 }]}>{inst.label}</Text>
+                    {numericas.length > 0 && (
+                      <View style={s.th}>
+                        <Text style={[s.thT, { flex: 3 }]}>Ítem</Text>
+                        <Text style={[s.thT, { flex: 2 }]}>Información proporcionada</Text>
+                        <Text style={[s.thT, { flex: 3 }]}>Observaciones</Text>
+                      </View>
+                    )}
+                    {numericas.map((f, fi) => (
+                      <View key={fi} wrap={false}>
+                        <View style={s.tr2}>
+                          <Text style={[s.td, { flex: 3, fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
+                          <Text style={[s.td, { flex: 2 }]}>{f.valor}</Text>
+                          <Text style={[s.td, { flex: 3, color: C.textMid }]}>{f.observaciones ?? ''}</Text>
+                        </View>
+                        {f.desglose.map((d, di) => (
+                          <View key={di} style={{ flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 1 }}>
+                            <Text style={[s.td, { flex: 3, color: C.textMid, fontSize: 8, paddingLeft: 12 }]}>· {d.etiqueta}</Text>
+                            <Text style={[s.td, { flex: 2, color: C.textMid, fontSize: 8 }]}>{d.valor}</Text>
+                            <Text style={{ flex: 3 }}></Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                    {textos.map((f, ti) => (
+                      <View key={`t${ti}`} style={[s.instBlock, { marginTop: 4 }]} wrap={false}>
+                        <Text style={[s.instText, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
+                        <Text style={s.instText}>{f.valor}</Text>
+                        {f.observaciones && <Text style={[s.instText, { color: C.textMid, fontSize: 8 }]}>{f.observaciones}</Text>}
+                      </View>
+                    ))}
+                  </View>
+                )
+              })}
             </>
           ) : (
             <>
@@ -258,7 +268,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           )}
 
           {/* Compromisos */}
-          <SH>V. Compromisos</SH>
+          <SH>IV. Compromisos</SH>
           <Text style={{ fontSize: 8.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy, marginBottom: 3 }}>
             a) Verificación de compromisos de sesiones anteriores
           </Text>
