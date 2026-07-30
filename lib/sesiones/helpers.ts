@@ -13,7 +13,10 @@
  *  - El path del acta SIEMPRE empieza con region_cod (policy de storage).
  */
 
-import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
+import type {
+  EjeSesion, SesionCompromiso, SesionIniciativa,
+  ComiteInstitucion, ComiteMetrica, SesionComiteValor,
+} from '@/lib/types'
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
@@ -47,6 +50,65 @@ export function deltaPulso(
   const abs = curr - prev
   const pct = prev === 0 ? null : (abs / prev) * 100
   return { abs, pct }
+}
+
+// ── Reporte por institución del Comité Policial (mig 048) ────────────────────
+
+/** Instituciones fijas del Comité Policial, en orden de presentación. */
+export const COMITE_INSTITUCIONES: { key: ComiteInstitucion; label: string }[] = [
+  { key: 'carabineros', label: 'Carabineros' },
+  { key: 'pdi',         label: 'PDI' },
+  { key: 'armada',      label: 'Armada' },
+  { key: 'gendarmeria', label: 'Gendarmería' },
+]
+
+/** Fila de la ficha/acta: definición (catálogo) + valor reportado (o null). */
+export type FilaComite = { metrica: ComiteMetrica; valor: SesionComiteValor | null }
+
+/** ¿La fila tiene algún dato reportado (número, texto, observación o desglose)? */
+export function tieneValorComite(v: SesionComiteValor | null): boolean {
+  if (!v) return false
+  return v.valor_num != null
+    || !!(v.valor_texto && v.valor_texto.trim())
+    || !!(v.observaciones && v.observaciones.trim())
+    || (Array.isArray(v.desglose) && v.desglose.length > 0)
+}
+
+/**
+ * Agrupa el catálogo por institución (orden estable) y adjunta el valor
+ * reportado en la sesión (o null → fila vacía para digitar). Mantiene TODAS las
+ * métricas activas para la ficha; `soloConValor=true` filtra a las que tienen
+ * dato (para el acta — no imprimir ítems en blanco).
+ */
+export function agruparPorInstitucion(
+  catalogo: ComiteMetrica[],
+  valores: SesionComiteValor[],
+  soloConValor = false,
+): { institucion: ComiteInstitucion; label: string; filas: FilaComite[] }[] {
+  const porMetrica = new Map<number, SesionComiteValor>()
+  for (const v of valores) porMetrica.set(v.metrica_id, v)
+  return COMITE_INSTITUCIONES.map(inst => {
+    const filas = catalogo
+      .filter(m => m.institucion === inst.key && m.activo)
+      .sort((a, b) => a.orden - b.orden || a.id - b.id)
+      .map(m => ({ metrica: m, valor: porMetrica.get(m.id) ?? null }))
+      .filter(f => !soloConValor || tieneValorComite(f.valor))
+    return { institucion: inst.key, label: inst.label, filas }
+  })
+}
+
+/**
+ * Texto del valor principal para ficha/acta. Numérico → número (miles es-CL) +
+ * unidad; texto → el texto; vacío → "—".
+ */
+export function formatoValorComite(v: SesionComiteValor | null, m: ComiteMetrica): string {
+  if (m.tipo === 'texto') {
+    const t = v?.valor_texto?.trim()
+    return t && t.length > 0 ? t : '—'
+  }
+  if (v?.valor_num == null) return '—'
+  const num = v.valor_num.toLocaleString('es-CL')
+  return m.unidad ? `${num} ${m.unidad}` : num
 }
 
 // ── Compromisos ──────────────────────────────────────────────────────────────
