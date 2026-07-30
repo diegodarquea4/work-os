@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
-import MetricasEjeDrawer from './MetricasEjeDrawer'
+import ComitePolicialTab from './ComitePolicialTab'
 import GabineteRegionalTab from './GabineteRegionalTab'
 
 /**
@@ -84,13 +84,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       {/* Panel activo */}
       {active === 'policial' ? (
         comitePolicialEje ? (
-          <MetricasEjeDrawer
-            region={region}
-            eje={comitePolicialEje}
-            onClose={() => {}}
-            embedded
-            showSesiones
-          />
+          <ComitePolicialTab region={region} eje={comitePolicialEje} />
         ) : ejesLoading ? (
           <div className="py-10 text-center text-sm text-gray-400">Cargando comité…</div>
         ) : (
