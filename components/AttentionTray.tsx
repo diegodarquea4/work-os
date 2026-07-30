@@ -13,6 +13,7 @@ import DesalojoBadge from './DesalojoBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './ActiveFiltersBar'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { composeEjeLabel } from '@/lib/ejes'
 import { formatResponsableDisplay } from '@/lib/responsable'
 import TrabasEscaladasBlock from './TrabasEscaladasBlock'
@@ -140,6 +141,53 @@ export default function AttentionTray({
     return REGIONS.find(r => r.nombre === filterRegion)?.cod ?? null
   }, [filterRegion])
   const { ejes: regionEjesCat } = useRegionEjes(regionCodActive)
+
+  // Temario de preparación del gabinete (solo en el pane Preparación de una
+  // región con gabinete habilitado). El botón aparece junto al contador "en
+  // foco"; se habilita cuando hay ≥1 iniciativa marcada.
+  const { config: regionConfig } = useRegionConfig(regionCodActive)
+  const gabineteHabilitado = !!regionConfig?.gabinete_habilitado
+  const [descargandoTemario, setDescargandoTemario] = useState(false)
+  // Foco de la región SIN otros filtros — el temario arma el foco completo
+  // (un filtro de búsqueda activo no debe deshabilitar el botón).
+  const focoRegionCount = useMemo(
+    () => regionCodActive ? projects.filter(p => p.region === filterRegion && p.en_foco === true).length : 0,
+    [projects, filterRegion, regionCodActive],
+  )
+
+  async function handleDescargarTemario() {
+    if (!regionCodActive) return
+    const region = REGIONS.find(r => r.cod === regionCodActive)
+    if (!region) return
+    setDescargandoTemario(true)
+    try {
+      const res = await fetch('/api/temario-gabinete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ region }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'No se pudo generar el temario' }))
+        window.alert(err.error ?? 'No se pudo generar el temario')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `temario-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('[AttentionTray] descargar temario:', e)
+      window.alert('Error de red generando el temario')
+    } finally {
+      setDescargandoTemario(false)
+    }
+  }
+
   const availableEjesLabels = useMemo(() => {
     if (regionCodActive && regionEjesCat.length > 0) {
       return regionEjesCat.map(re => composeEjeLabel(re.numero, re.nombre))
@@ -444,14 +492,31 @@ export default function AttentionTray({
                 : 'Iniciativas marcadas como foco del equipo'}
             </p>
           </div>
-          {!loading && (
-            <span className={`text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${
-              enFoco.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
-            }`}>
-              <FlagIcon filled={enFoco.length > 0} className="w-3.5 h-3.5" />
-              {enFoco.length === 0 ? 'Sin foco' : `${enFoco.length} en foco`}
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {embedded && gabineteHabilitado && regionCodActive && (
+              <button
+                onClick={handleDescargarTemario}
+                disabled={descargandoTemario || focoRegionCount === 0}
+                title={focoRegionCount === 0
+                  ? 'Marca iniciativas en foco para armar el temario'
+                  : 'Descargar el temario de la próxima sesión de gabinete'}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
+                </svg>
+                {descargandoTemario ? 'Generando…' : 'Descargar temario'}
+              </button>
+            )}
+            {!loading && (
+              <span className={`text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                enFoco.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
+              }`}>
+                <FlagIcon filled={enFoco.length > 0} className="w-3.5 h-3.5" />
+                {enFoco.length === 0 ? 'Sin foco' : `${enFoco.length} en foco`}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Trabas escaladas desde comités — solo en el pane Preparación

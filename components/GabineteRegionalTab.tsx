@@ -131,7 +131,7 @@ export default function GabineteRegionalTab({ region, regionEjes, iniciativas, o
       <div className="px-4 pb-3">
         <p className="text-xs text-gray-400 leading-relaxed">
           El foco de la sesión se prepara en <span className="font-medium text-gray-500">Gabinete → Preparación</span> (banderas
-          + trabas escaladas) y la tabla se descarga desde el Tablero (cartera en foco).
+          + trabas escaladas); desde ahí se descarga el <span className="font-medium text-gray-500">temario</span> de la sesión.
           Al abrir la sesión, las iniciativas en foco entran solas a la agenda.
         </p>
       </div>

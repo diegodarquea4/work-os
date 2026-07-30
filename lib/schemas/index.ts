@@ -82,6 +82,16 @@ export const carteraPdfSchema = z.object({
 
 export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
 
+// ── /api/temario-gabinete POST ───────────────────────────────────────────────
+// Temario de preparación del Gabinete Regional. El server arma todo el
+// contenido con service-role (compromisos, foco, trabas) — el cliente solo
+// manda la región (cod + nombre para el header del PDF).
+export const temarioGabineteSchema = z.object({
+  region: regionFullSchema,
+})
+
+export type TemarioGabineteBody = z.infer<typeof temarioGabineteSchema>
+
 // ── /api/minuta POST ─────────────────────────────────────────────────────────
 
 /**
