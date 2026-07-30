@@ -1020,7 +1020,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             ministerioGroups.map(group => (
               <details
                 key={group.nombre}
-                open
                 className="border border-gray-200 rounded-xl overflow-hidden group"
               >
                 <summary className="cursor-pointer px-4 py-3 bg-slate-100 hover:bg-slate-200/60 transition-colors flex items-center gap-3 list-none">
@@ -1032,6 +1031,9 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
                     <path d="M3 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   <span className="text-sm font-bold text-slate-800">{group.nombre}</span>
+                  <span className="ml-auto text-xs font-medium text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
+                    {group.iniciativas.length}
+                  </span>
                 </summary>
                 {/* overflow-x-auto: si las filas anchas no entran en pantalla
                     chica (responsable + hito + prioridad + avance + nombre),
