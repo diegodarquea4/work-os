@@ -9,13 +9,20 @@ import type { EjeSesion, SesionValor } from '@/lib/types'
 /**
  * POST /api/sesiones/[id]/cerrar — el paso crítico del módulo Sesiones.
  *
- * Server-side SIEMPRE (spec §6): el cierre aplica los valores digitados a
- * metricas_eje (suma incrementa, pulso reemplaza) y genera el acta PDF.
+ * Server-side SIEMPRE (spec §6). Bifurca por `sesion.instancia`:
+ *  - Comité ('eje'): aplica los valores digitados a metricas_eje (suma
+ *    incrementa, pulso reemplaza) y genera el acta PDF.
+ *  - Gabinete: NO toca metricas_eje. En su lugar, escribe el snapshot
+ *    (semáforo + % avance) de las iniciativas tratadas en sesion_iniciativas
+ *    y sella también los compromisos escalados cumplidos.
  *
  * Idempotencia (sin RPC): claim atómico UPDATE ... WHERE estado='borrador'
  * — 0 filas = ya cerrada → 409. Tras el claim, cualquier fallo posterior
  * deja "cerrada sin acta" (reintenta POST /acta), NUNCA doble suma:
- * `metricas_aplicadas` marca el punto de no-repetición.
+ * `metricas_aplicadas` marca el punto de no-repetición. El cierre de
+ * GABINETE también lo setea (no hay métricas, pero puedeRegenerarActa lo
+ * exige como marcador de "cierre core completo" — sin él, el reintento de
+ * acta quedaría bloqueado en 409).
  *
  * Sin body: el borrador ya está persistido client-side (safeWrite).
  */
@@ -49,11 +56,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Gate de activación: solo aplica a sesiones ancladas a un eje real
-  // (instancia='eje', hoy Comité Policial). Comités sin eje (Gabinete
-  // Regional, Comité Seguimiento de la Inversión) no tienen flag que revisar
-  // — siempre están disponibles.
-  if (sesion!.instancia === 'eje') {
+  const esGabinete = sesion!.instancia === 'gabinete'
+
+  // ── Gate de habilitación por instancia ─────────────────────────────────────
+  // Comités sin eje (Gabinete Regional, Comité Seguimiento de la Inversión) no
+  // usan region_ejes.sesiones_habilitadas — Gabinete tiene su propio flag en
+  // region_config; Inversión no tiene flag y siempre está disponible.
+  if (esGabinete) {
+    const { data: cfg } = await db
+      .from('region_config').select('gabinete_habilitado').eq('region_cod', sesion!.region_cod).maybeSingle()
+    if (!cfg?.gabinete_habilitado) {
+      return NextResponse.json({ error: 'El gabinete no está habilitado en esta región' }, { status: 422 })
+    }
+  } else if (sesion!.instancia === 'eje') {
     const { data: ejeRow } = await db
       .from('region_ejes').select('sesiones_habilitadas').eq('id', sesion!.eje_id).single()
     if (!ejeRow?.sesiones_habilitadas) {
@@ -62,7 +77,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   // ── Pre-carga de valores y métricas (validar antes del claim) ─────────────
-  const { data: valoresData } = await db.from('sesion_valores').select('*').eq('sesion_id', sesionId)
+  // Gabinete: sin zona de indicadores — valores queda vacío y el loop de
+  // aplicación no-opea solo.
+  const { data: valoresData } = esGabinete
+    ? { data: [] }
+    : await db.from('sesion_valores').select('*').eq('sesion_id', sesionId)
   const valores = (valoresData ?? []) as SesionValor[]
 
   const metricaIds = valores.map(v => v.metrica_id)
@@ -121,16 +140,84 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
   }
 
+  // Marcador de "cierre core completo" — también en gabinete (ver header).
   await db.from('eje_sesiones').update({ metricas_aplicadas: true }).eq('id', sesionId)
 
+  // ── Gabinete: snapshot de las iniciativas tratadas ─────────────────────────
+  // Semáforo y % avance al momento del cierre (para el acta y el historial).
+  // Secuencial + awaited (patrón O-04); service-role pasa el trigger de
+  // inmutabilidad por el guard auth.uid() IS NULL. Una iniciativa borrada
+  // entre la sesión y el cierre queda con snapshot null (el acta muestra —).
+  if (esGabinete) {
+    const { data: agendaData } = await db
+      .from('sesion_iniciativas').select('id, prioridad_id').eq('sesion_id', sesionId)
+    const agenda = (agendaData ?? []) as { id: number; prioridad_id: number }[]
+    if (agenda.length) {
+      const { data: prioData } = await db
+        .from('prioridades_territoriales')
+        .select('id, estado_semaforo, pct_avance')
+        .in('id', agenda.map(a => a.prioridad_id))
+      const prioPorId = new Map(
+        ((prioData ?? []) as { id: number; estado_semaforo: string | null; pct_avance: number | null }[])
+          .map(p => [p.id, p]),
+      )
+      for (const fila of agenda) {
+        const p = prioPorId.get(fila.prioridad_id)
+        const { error: snapErr } = await db
+          .from('sesion_iniciativas')
+          .update({
+            semaforo_al_momento:   p?.estado_semaforo ?? null,
+            pct_avance_al_momento: p?.pct_avance ?? null,
+          })
+          .eq('id', fila.id)
+        if (snapErr) {
+          console.error('[sesiones/cerrar] fallo snapshot iniciativa', { sesionId, fila: fila.id, snapErr })
+          // No abortar: el snapshot es informativo; el acta cae a "—".
+        }
+      }
+    }
+  }
+
   // ── Compromisos cumplidos quedan sellados a esta sesión ───────────────────
-  await db
-    .from('sesion_compromisos')
-    .update({ cerrado_en_sesion_id: sesionId })
-    .eq('region_cod', sesion!.region_cod)
-    .eq('instancia', sesion!.instancia)
-    .eq('estado', 'cumplido')
-    .is('cerrado_en_sesion_id', null)
+  if (esGabinete) {
+    // Propios del gabinete…
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('instancia', 'gabinete')
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+    // …y los escalados desde comités que el gabinete verificó como cumplidos
+    // (regla 3 del spec gabinete: cumplido en cualquiera de las dos
+    // instancias desaparece de ambas; el primer cierre sella). Los mandatos
+    // NO se sellan acá — los sella el cierre del comité destino.
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('instancia', 'eje')
+      .eq('escalado_a_gabinete', true)
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+  } else if (sesion!.instancia === 'eje') {
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('eje_id', sesion!.eje_id)
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+  } else {
+    // instancia === 'inversion' — sin eje, análogo a Gabinete: filtra por instancia.
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('instancia', 'inversion')
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+  }
 
   // ── Oficios resueltos quedan sellados a esta sesión (Comité Seguimiento de
   // la Inversión) — mismo patrón que compromisos. No-op para sesiones del

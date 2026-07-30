@@ -13,8 +13,10 @@ import DesalojoBadge from './DesalojoBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './ActiveFiltersBar'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { composeEjeLabel } from '@/lib/ejes'
 import { formatResponsableDisplay } from '@/lib/responsable'
+import TrabasEscaladasBlock from './TrabasEscaladasBlock'
 
 type Props = {
   projects: Iniciativa[]
@@ -29,6 +31,11 @@ type Props = {
   // Lista de nombres de regiones que el usuario puede ver. null = sin restricción
   // (mostrar las 16). Permite que aparezcan regiones sin iniciativas en el selector.
   allowedRegionNames: string[] | null
+  // Modo pane "Preparación" dentro de la sección Gabinete (fusión Atención+
+  // Gabinete, spec gabinete §7.1): oculta el select de región propio (la
+  // maneja la toolbar de KanbanView), ensancha la columna, ajusta el header y
+  // muestra el bloque de trabas escaladas desde comités.
+  embedded?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -77,6 +84,7 @@ export default function AttentionTray({
   onUpdatePrioridad, onDeletePrioridad,
   activeRegionName, onActiveRegionChange,
   allowedRegionNames,
+  embedded = false,
 }: Props) {
   const canEditAny = useCanEditAny()
   const canEditFoco = useCanEditOperational()
@@ -133,6 +141,53 @@ export default function AttentionTray({
     return REGIONS.find(r => r.nombre === filterRegion)?.cod ?? null
   }, [filterRegion])
   const { ejes: regionEjesCat } = useRegionEjes(regionCodActive)
+
+  // Temario de preparación del gabinete (solo en el pane Preparación de una
+  // región con gabinete habilitado). El botón aparece junto al contador "en
+  // foco"; se habilita cuando hay ≥1 iniciativa marcada.
+  const { config: regionConfig } = useRegionConfig(regionCodActive)
+  const gabineteHabilitado = !!regionConfig?.gabinete_habilitado
+  const [descargandoTemario, setDescargandoTemario] = useState(false)
+  // Foco de la región SIN otros filtros — el temario arma el foco completo
+  // (un filtro de búsqueda activo no debe deshabilitar el botón).
+  const focoRegionCount = useMemo(
+    () => regionCodActive ? projects.filter(p => p.region === filterRegion && p.en_foco === true).length : 0,
+    [projects, filterRegion, regionCodActive],
+  )
+
+  async function handleDescargarTemario() {
+    if (!regionCodActive) return
+    const region = REGIONS.find(r => r.cod === regionCodActive)
+    if (!region) return
+    setDescargandoTemario(true)
+    try {
+      const res = await fetch('/api/temario-gabinete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ region }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'No se pudo generar el temario' }))
+        window.alert(err.error ?? 'No se pudo generar el temario')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `temario-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('[AttentionTray] descargar temario:', e)
+      window.alert('Error de red generando el temario')
+    } finally {
+      setDescargandoTemario(false)
+    }
+  }
+
   const availableEjesLabels = useMemo(() => {
     if (regionCodActive && regionEjesCat.length > 0) {
       return regionEjesCat.map(re => composeEjeLabel(re.numero, re.nombre))
@@ -425,23 +480,56 @@ export default function AttentionTray({
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="max-w-[min(48rem,90vw)] mx-auto px-6 py-6">
+      <div className={`${embedded ? 'max-w-5xl' : 'max-w-[min(48rem,90vw)]'} mx-auto px-6 py-6`}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Bandeja de atención</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Iniciativas marcadas como foco del equipo</p>
+            <h2 className="text-lg font-bold text-gray-900">{embedded ? 'Preparación de la sesión' : 'Bandeja de atención'}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {embedded
+                ? 'Foco de la próxima sesión de gabinete: iniciativas marcadas, sugerencias y trabas escaladas'
+                : 'Iniciativas marcadas como foco del equipo'}
+            </p>
           </div>
-          {!loading && (
-            <span className={`text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${
-              enFoco.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
-            }`}>
-              <FlagIcon filled={enFoco.length > 0} className="w-3.5 h-3.5" />
-              {enFoco.length === 0 ? 'Sin foco' : `${enFoco.length} en foco`}
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {embedded && gabineteHabilitado && regionCodActive && (
+              <button
+                onClick={handleDescargarTemario}
+                disabled={descargandoTemario || focoRegionCount === 0}
+                title={focoRegionCount === 0
+                  ? 'Marca iniciativas en foco para armar el temario'
+                  : 'Descargar el temario de la próxima sesión de gabinete'}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
+                </svg>
+                {descargandoTemario ? 'Generando…' : 'Descargar temario'}
+              </button>
+            )}
+            {!loading && (
+              <span className={`text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                enFoco.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
+              }`}>
+                <FlagIcon filled={enFoco.length > 0} className="w-3.5 h-3.5" />
+                {enFoco.length === 0 ? 'Sin foco' : `${enFoco.length} en foco`}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Trabas escaladas desde comités — solo en el pane Preparación
+            (subsidiariedad comité→gabinete). Render null mientras no haya. */}
+        {embedded && canEditFoco && (
+          <TrabasEscaladasBlock
+            regionCod={regionCodActive}
+            iniciativas={projects}
+            regionEjes={regionEjesCat}
+            onToggleFoco={handleToggleFoco}
+            canEditFoco={canEditFoco}
+          />
+        )}
 
         {/* Filter block — mismo patrón que Dashboard: chips de filtros activos
             arriba, fila primaria siempre visible, fila secundaria detrás del
@@ -467,8 +555,9 @@ export default function AttentionTray({
             </div>
 
             {/* Región — single-select global (viene de props). Solo admin/editor
-                la ve; regional/viewer tiene su región fija. */}
-            {canEditAny && (
+                la ve; regional/viewer tiene su región fija. En modo embedded la
+                región la maneja el select de la toolbar de Gabinete. */}
+            {canEditAny && !embedded && (
               <select
                 value={filterRegion}
                 onChange={e => setFilterRegion(e.target.value)}

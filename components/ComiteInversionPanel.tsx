@@ -7,7 +7,7 @@ import {
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
-import { useSesionesResumenComite } from '@/lib/hooks/useSesionesEje'
+import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
 import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
 import NominaInversionModal from './NominaInversionModal'
@@ -39,7 +39,7 @@ export default function ComiteInversionPanel({ region }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
-  const { resumen, refresh: refreshResumen } = useSesionesResumenComite(region.cod, 'inversion', canEditOperational)
+  const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, canEditOperational)
 
   function fmtFechaCorta(fecha: string): string {
     return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })

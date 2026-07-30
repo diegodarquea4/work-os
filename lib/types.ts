@@ -521,28 +521,31 @@ export type RegionEje = {
   created_by_email: string | null
 }
 
-// ── Sesiones de eje (Comité Policial — mig 044) ──────────────────────────────
+// ── Sesiones (Comité Policial mig 044 · Gabinete Regional mig 046 · Comité
+// Seguimiento de la Inversión) ───────────────────────────────────────────────
 // Una sesión captura: verificación de compromisos → asistencia → indicadores
-// (alimentan metricas_eje al cerrar) → apuntes por institución → compromisos
-// nuevos. RLS restrictiva: staff todo, regional sus regiones, viewer nada.
-//
-// `instancia` distingue qué tipo de sesión es esta fila (columna ya
-// preparada en la BD para "Gabinete Regional" antes de este comité — no
-// viene de un archivo de migración de este repo). 'eje' sigue anclado a un
-// eje real (eje_id NOT NULL); 'gabinete' e 'inversion' no tienen eje —
-// eje_id va NULL (esos comités no cuelgan del catálogo de Ejes
+// (comité) / iniciativas en foco (gabinete) / oficios y proyectos (inversión)
+// → apuntes por institución → compromisos nuevos. RLS restrictiva: staff
+// todo, regional sus regiones, viewer nada. `instancia` discrimina: 'eje'
+// exige eje_id, 'gabinete'/'inversion' lo prohíben (CHECK en BD — la columna
+// nació para "Gabinete Regional"; 'inversion' se agregó después reusando el
+// mismo mecanismo, esos comités tampoco cuelgan del catálogo de Ejes
 // estratégicos, son tabs fijos de la sección Comités).
+
+export type SesionInstancia = 'eje' | 'gabinete' | 'inversion'
 
 export type EjeSesion = {
   id: number
   region_cod: string
-  instancia: 'eje' | 'gabinete' | 'inversion'
-  eje_id: number | null
+  instancia: SesionInstancia
+  eje_id: number | null          // NOT NULL ⇔ instancia='eje' (CHECK mig 046)
   provincia_cod: string | null   // NULL = sesión regional (capa DPP futura)
   fecha: string                  // date puro YYYY-MM-DD
   lugar: string | null
   estado: 'borrador' | 'cerrada'
-  // Idempotencia del cierre: true tras aplicar suma/pulso a metricas_eje.
+  // Idempotencia del cierre: true tras completar el core del cierre (en
+  // comité: aplicar suma/pulso; en gabinete no hay métricas pero el flag se
+  // setea igual — puedeRegenerarActa lo exige como marcador de cierre).
   metricas_aplicadas: boolean
   acta_path: string | null       // path relativo en bucket comite-docs
   created_by_email: string | null
@@ -554,8 +557,8 @@ export type EjeSesion = {
 export type SesionNomina = {
   id: number
   region_cod: string
-  instancia: 'eje' | 'gabinete' | 'inversion'
-  eje_id: number | null
+  instancia: SesionInstancia
+  eje_id: number | null          // NOT NULL ⇔ instancia='eje'
   provincia_cod: string | null
   nombre: string
   cargo: string | null
@@ -591,8 +594,11 @@ export type SesionApunte = {
 export type SesionCompromiso = {
   id: number
   region_cod: string
-  instancia: 'eje' | 'gabinete' | 'inversion'
-  eje_id: number | null
+  // Dónde SE GESTIONA el compromiso. Un mandato del gabinete a un comité se
+  // inserta con instancia='eje' + eje_id destino + sesion_origen_id de la
+  // sesión de gabinete (spec gabinete §5.3 — sin tabla ni estado nuevo).
+  instancia: SesionInstancia
+  eje_id: number | null              // NOT NULL ⇔ instancia='eje'
   sesion_origen_id: number
   descripcion: string
   responsable_institucion: string
@@ -602,16 +608,40 @@ export type SesionCompromiso = {
   estado_updated_at: string | null
   estado_updated_by_email: string | null
   cerrado_en_sesion_id: number | null
-  // Escalamiento a Gabinete Regional (trabajo de esa instancia, no de esta
-  // tarea) — se incluyen para que el tipo refleje la columna real.
-  escalado_a_gabinete: boolean
-  escalado_en_sesion_id: number | null
+  // Vínculo a iniciativa por LLAVE ESTABLE (prioridades_territoriales.id,
+  // NUNCA n). Visible en el tab Seguimiento de la ficha.
   prioridad_id: number | null
+  // Escalamiento comité → gabinete: el compromiso aparece ADEMÁS en el
+  // gabinete sin cambiar de instancia. Se marca desde la sesión del comité.
+  escalado_a_gabinete: boolean
+  escalado_at: string | null
+  escalado_en_sesion_id: number | null
   created_at: string
 }
 
+// Agenda + snapshot de las iniciativas tratadas en una sesión de gabinete
+// (reemplaza a la zona de indicadores del comité). El acuerdo se escribe
+// durante el borrador; los snapshots los escribe el cierre server-side.
+export type SesionIniciativa = {
+  id: number
+  sesion_id: number
+  prioridad_id: number               // prioridades_territoriales.id — NO n
+  semaforo_al_momento: string | null
+  pct_avance_al_momento: number | null
+  acuerdo: string | null
+  created_at: string
+}
+
+// Configuración por región (mig 046). El gabinete no tiene eje, así que su
+// flag de habilitación no puede vivir en region_ejes. Habilitar = INSERT.
+export type RegionConfig = {
+  region_cod: string
+  gabinete_habilitado: boolean
+  gabinete_nombre: string
+}
+
 // ── Comité Seguimiento de la Inversión ───────────────────────────────────────
-// Sin eje (ver EjeSesion arriba) — scoped solo por region_cod/instancia='inversion'.
+// Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
 
 // Catálogo de organismos (OAECA) — autoincremental: precargado y crece
 // cuando alguien escribe uno nuevo al cargar un oficio en sesión.

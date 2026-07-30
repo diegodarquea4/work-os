@@ -1,5 +1,5 @@
 -- ============================================================================
--- 046_sesiones_inversion.sql
+-- 048_sesiones_inversion.sql
 --
 -- Módulo Sesiones — Comité Seguimiento de la Inversión. A diferencia del
 -- Comité Policial (mig 044), este comité NO cuelga de un region_ejes: el tab

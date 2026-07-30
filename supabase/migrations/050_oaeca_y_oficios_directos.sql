@@ -1,12 +1,12 @@
 -- ============================================================================
--- 048_oaeca_y_oficios_directos.sql
+-- 050_oaeca_y_oficios_directos.sql
 --
 -- Cambio de diseño del Comité Seguimiento de la Inversión: los oficios
 -- pendientes ya NO se importan desde un Excel semanal — se cargan a mano
 -- dentro de cada sesión (zona 3, mismo espíritu que "Integrantes"): OAECA
 -- (organismo) + fecha límite de respuesta + proyecto que considera.
 --
--- oficios_pendientes (catálogo importado, mig 046) deja de tener sentido.
+-- oficios_pendientes (catálogo importado, mig 048) deja de tener sentido.
 -- sesion_oficios_tratados pierde los campos que venían del Excel y gana
 -- referencias reales: oaeca_id (catálogo nuevo, autoincremental) y
 -- proyecto_id (FK real a v2_proyectos_inversion, ya usada por

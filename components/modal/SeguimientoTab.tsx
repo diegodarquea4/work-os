@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Seguimiento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import CompromisosSesionSection from '../CompromisosSesionSection'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
@@ -30,6 +31,9 @@ type Props = {
   // Email del usuario actual — se auto-pobla en `autor` al insertar.
   // Base para decidir "lo propio vs ajeno".
   currentUserEmail?: string
+  // prioridades_territoriales.id (llave estable) — habilita la sub-sección
+  // read-only "Compromisos de sesión" (gabinete/comités, mig 046).
+  prioridadIdEstable?: number
 }
 
 function fmtDate(iso: string) {
@@ -50,6 +54,7 @@ export default function SeguimientoTab({
   canCreate = true,
   canDeleteAny = true,
   currentUserEmail = '',
+  prioridadIdEstable,
 }: Props) {
   const [showForm, setShowForm]   = useState(false)
   const [formDesc, setFormDesc]   = useState('')
@@ -142,6 +147,7 @@ export default function SeguimientoTab({
 
   return (
     <div className="px-6 py-4">
+      {prioridadIdEstable != null && <CompromisosSesionSection prioridadId={prioridadIdEstable} />}
       {!showForm && canCreate && (
         <button
           onClick={() => setShowForm(true)}

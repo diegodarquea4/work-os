@@ -5,109 +5,93 @@ import { getSupabase } from '@/lib/supabase'
 import { esCompromisoAbierto } from '@/lib/sesiones/helpers'
 
 /**
- * Hooks de datos del módulo Sesiones (Comité Policial).
+ * Hooks de datos del módulo Sesiones (comités mig 044 + gabinete mig 046).
  *
- * ⚠️ Ambos reciben `enabled`: las tablas sesion_* tienen RLS restrictiva
+ * ⚠️ Todos reciben `enabled`: las tablas sesion_* tienen RLS restrictiva
  * (viewer SIN acceso) — el consumidor NUNCA debe dispararlos si el módulo
- * no es visible (`sesionesOn`). Con enabled=false no se toca la red.
+ * no es visible (`sesionesOn` / `gabineteOn`). Con enabled=false no se toca
+ * la red.
  */
+
+// Instancia cuyo resumen se pide: un comité (eje concreto) o una instancia
+// sin eje (gabinete regional, Comité Seguimiento de la Inversión). Refleja
+// el CHECK de la mig 046 en el sistema de tipos.
+export type SesionesFiltro =
+  | { instancia: 'eje'; ejeId: number }
+  | { instancia: 'gabinete' }
+  | { instancia: 'inversion' }
 
 export type SesionesResumen = {
   compromisosAbiertos: number
+  // Solo gabinete: trabas de comités escaladas y aún abiertas. 0 en comités.
+  trabasEscaladas: number
   // Fecha (YYYY-MM-DD) de la última sesión CERRADA. null = nunca ha habido.
   ultimaSesionFecha: string | null
-  // id del borrador vivo de este (región, eje) si existe — "Nueva sesión"
-  // lo reabre (el UNIQUE parcial de la mig 044 garantiza a lo más uno).
+  // id del borrador vivo de esta (región, instancia[, eje]) si existe —
+  // "Nueva sesión" lo reabre (UNIQUE parcial de la mig 046: a lo más uno).
   borradorId: number | null
 }
 
-export function useSesionesResumen(regionCod: string, ejeId: number, enabled: boolean) {
-  const [resumen, setResumen] = useState<SesionesResumen>({
-    compromisosAbiertos: 0,
-    ultimaSesionFecha: null,
-    borradorId: null,
-  })
-  const [loading, setLoading] = useState(enabled)
-
-  const refresh = useCallback(async () => {
-    if (!enabled) return
-    setLoading(true)
-    const sb = getSupabase()
-    const [compRes, cerradaRes, borradorRes] = await Promise.all([
-      sb.from('sesion_compromisos')
-        .select('id, estado')
-        .eq('region_cod', regionCod)
-        .eq('eje_id', ejeId),
-      sb.from('eje_sesiones')
-        .select('fecha')
-        .eq('region_cod', regionCod)
-        .eq('eje_id', ejeId)
-        .eq('estado', 'cerrada')
-        .order('fecha', { ascending: false })
-        .limit(1),
-      sb.from('eje_sesiones')
-        .select('id')
-        .eq('region_cod', regionCod)
-        .eq('eje_id', ejeId)
-        .eq('estado', 'borrador')
-        .limit(1),
-    ])
-    setResumen({
-      compromisosAbiertos: (compRes.data ?? []).filter(c => esCompromisoAbierto(c as { estado: 'pendiente' | 'en_curso' | 'cumplido' })).length,
-      ultimaSesionFecha:   cerradaRes.data?.[0]?.fecha ?? null,
-      borradorId:          borradorRes.data?.[0]?.id ?? null,
-    })
-    setLoading(false)
-  }, [regionCod, ejeId, enabled])
-
-  useEffect(() => { refresh() }, [refresh])
-
-  return { resumen, loading, refresh }
+const RESUMEN_VACIO: SesionesResumen = {
+  compromisosAbiertos: 0,
+  trabasEscaladas: 0,
+  ultimaSesionFecha: null,
+  borradorId: null,
 }
 
-/**
- * Igual que useSesionesResumen pero para comités sin eje (Comité Seguimiento
- * de la Inversión) — filtra por `instancia` en vez de `eje_id`. El hook de
- * Policial no se toca: sigue exactamente igual.
- */
-export function useSesionesResumenComite(regionCod: string, instancia: 'inversion', enabled: boolean) {
-  const [resumen, setResumen] = useState<SesionesResumen>({
-    compromisosAbiertos: 0,
-    ultimaSesionFecha: null,
-    borradorId: null,
-  })
+export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, enabled: boolean) {
+  const [resumen, setResumen] = useState<SesionesResumen>(RESUMEN_VACIO)
   const [loading, setLoading] = useState(enabled)
+
+  // Dependencias primitivas (filtro llega como literal en los call-sites —
+  // un objeto nuevo por render no debe relanzar el fetch).
+  const instancia = filtro.instancia
+  const ejeId = filtro.instancia === 'eje' ? filtro.ejeId : null
 
   const refresh = useCallback(async () => {
     if (!enabled) return
     setLoading(true)
     const sb = getSupabase()
-    const [compRes, cerradaRes, borradorRes] = await Promise.all([
+    // Filtro por instancia: comité = eje_id (⇒ instancia='eje' por el CHECK
+    // de la mig 046); gabinete e inversión = instancia sin eje. Columna/valor
+    // dinámicos para no duplicar cada query en tres ramas.
+    const [colInst, valInst]: [string, string | number] =
+      instancia === 'eje' ? ['eje_id', ejeId!] : ['instancia', instancia]
+    const [compRes, cerradaRes, borradorRes, escaladasRes] = await Promise.all([
       sb.from('sesion_compromisos')
         .select('id, estado')
         .eq('region_cod', regionCod)
-        .eq('instancia', instancia),
+        .eq(colInst, valInst),
       sb.from('eje_sesiones')
         .select('fecha')
         .eq('region_cod', regionCod)
-        .eq('instancia', instancia)
+        .eq(colInst, valInst)
         .eq('estado', 'cerrada')
         .order('fecha', { ascending: false })
         .limit(1),
       sb.from('eje_sesiones')
         .select('id')
         .eq('region_cod', regionCod)
-        .eq('instancia', instancia)
+        .eq(colInst, valInst)
         .eq('estado', 'borrador')
         .limit(1),
+      // Trabas escaladas abiertas — solo tiene sentido para el gabinete.
+      instancia === 'gabinete'
+        ? sb.from('sesion_compromisos')
+            .select('id')
+            .eq('region_cod', regionCod)
+            .eq('escalado_a_gabinete', true)
+            .in('estado', ['pendiente', 'en_curso'])
+        : Promise.resolve({ data: [] as { id: number }[] }),
     ])
     setResumen({
       compromisosAbiertos: (compRes.data ?? []).filter(c => esCompromisoAbierto(c as { estado: 'pendiente' | 'en_curso' | 'cumplido' })).length,
+      trabasEscaladas:     (escaladasRes.data ?? []).length,
       ultimaSesionFecha:   cerradaRes.data?.[0]?.fecha ?? null,
       borradorId:          borradorRes.data?.[0]?.id ?? null,
     })
     setLoading(false)
-  }, [regionCod, instancia, enabled])
+  }, [regionCod, instancia, ejeId, enabled])
 
   useEffect(() => { refresh() }, [refresh])
 

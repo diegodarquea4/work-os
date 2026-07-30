@@ -7,9 +7,11 @@ import type { Region } from '@/lib/regions'
 import type { RegionEje, SesionNomina } from '@/lib/types'
 
 /**
- * Nómina fija del comité (titulares/suplentes designados por oficio).
- * CRUD mínimo sobre sesion_nomina para (región, eje). Sin esto el piloto
- * no puede partir — la asistencia de la sesión se marca sobre esta nómina.
+ * Nómina fija de la instancia (titulares/suplentes designados por oficio).
+ * CRUD mínimo sobre sesion_nomina para (región, instancia[, eje]). Sin esto
+ * el piloto no puede partir — la asistencia se marca sobre esta nómina.
+ * Comité: la nómina del (región, eje). Gabinete: seremis + equipo DPR, sin
+ * eje (instancia='gabinete', mig 046).
  *
  * "Eliminar" = activo:false (regional no tiene DELETE por RLS; además la
  * nómina histórica se conserva para las actas antiguas que la referencian).
@@ -17,13 +19,15 @@ import type { RegionEje, SesionNomina } from '@/lib/types'
 
 type Props = {
   region: Region
-  eje: RegionEje
+  instancia: 'eje' | 'gabinete'
+  eje: RegionEje | null          // null ⇔ instancia='gabinete'
+  nombreInstancia: string        // header (ej. 'Comité Policial' / 'Gabinete Regional')
   onClose: () => void
 }
 
 const CALIDAD_LABEL = { titular: 'Titular', suplente: 'Suplente' } as const
 
-export default function NominaModal({ region, eje, onClose }: Props) {
+export default function NominaModal({ region, instancia, eje, nombreInstancia, onClose }: Props) {
   const [miembros, setMiembros] = useState<SesionNomina[]>([])
   const [loading, setLoading]   = useState(true)
 
@@ -37,17 +41,16 @@ export default function NominaModal({ region, eje, onClose }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await getSupabase()
+    let q = getSupabase()
       .from('sesion_nomina')
       .select('*')
       .eq('region_cod', region.cod)
-      .eq('eje_id', eje.id)
       .eq('activo', true)
-      .order('institucion')
-      .order('calidad')
+    q = instancia === 'gabinete' ? q.eq('instancia', 'gabinete') : q.eq('eje_id', eje!.id)
+    const { data } = await q.order('institucion').order('calidad')
     setMiembros((data ?? []) as SesionNomina[])
     setLoading(false)
-  }, [region.cod, eje.id])
+  }, [region.cod, instancia, eje?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -65,13 +68,14 @@ export default function NominaModal({ region, eje, onClose }: Props) {
       await safeWrite(
         getSupabase().from('sesion_nomina').insert({
           region_cod:  region.cod,
-          eje_id:      eje.id,
+          instancia,
+          eje_id:      eje?.id ?? null,
           nombre:      fNombre.trim(),
           cargo:       fCargo.trim() || null,
           institucion: fInstitucion.trim(),
           calidad:     fCalidad,
         }),
-        `sesion_nomina insert ${region.cod}/${eje.id}`,
+        `sesion_nomina insert ${region.cod}/${instancia}${eje ? `/${eje.id}` : ''}`,
       )
       setFNombre(''); setFCargo(''); setFInstitucion(''); setFCalidad('titular')
       setShowForm(false)
@@ -106,8 +110,10 @@ export default function NominaModal({ region, eje, onClose }: Props) {
       >
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-gray-900">Nómina — {eje.sesiones_nombre ?? 'Comité'}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{region.nombre} · titulares y suplentes designados por oficio</p>
+            <p className="text-base font-semibold text-gray-900">Nómina — {nombreInstancia}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {region.nombre} · {instancia === 'gabinete' ? 'seremis y equipo DPR' : 'titulares y suplentes designados por oficio'}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">

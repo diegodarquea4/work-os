@@ -42,8 +42,8 @@ export const FAQ_CATALOG: FaqEntry[] = [
 1. Mira el tour guiado completo desde este mismo Centro de Ayuda. Son 16 pasos con narración, te toma 5 minutos.
 2. Abre el Mapa y haz clic en tu región. Vas a ver tu cartera completa de iniciativas.
 3. Entra a Mi Región. Ahí tienes tu tablero: avance promedio, semáforo, avance por eje y las iniciativas en foco.
-4. Marca con la bandera (🚩) las 3 o 4 iniciativas que necesitas vigilar esta semana — aparecen en la sección "En foco" de Mi Región y en tu Bandeja de Atención.
-5. Revisa la Bandeja de Atención: además de tu foco, te sugiere automáticamente qué mirar (hitos vencidos, bloqueadas, sin actividad).
+4. Marca con la bandera (🚩) las 3 o 4 iniciativas que necesitas vigilar esta semana — aparecen en la sección "En foco" de Mi Región y en Gabinete → Preparación.
+5. Revisa Gabinete → pestaña Preparación (tu bandeja): además de tu foco, te sugiere automáticamente qué mirar (hitos vencidos, bloqueadas, sin actividad).
 
 Si te pierdes en cualquier momento, vuelve a tocar el ? del header.`,
     relacionadas: ['inicio-rutina-semanal', 'inicio-orden-revision', 'foco-marcar'],
@@ -58,7 +58,7 @@ Si te pierdes en cualquier momento, vuelve a tocar el ? del header.`,
 `Una rutina que funciona bien para equipos regionales:
 
 LUNES (30-45 min)
-- Abre la Bandeja de Atención. Revisa lo que está "En foco" y agrega/quita banderas según tu cabeza de la semana.
+- Abre Gabinete → Preparación (tu bandeja). Revisa lo que está "En foco" y agrega/quita banderas según tu cabeza de la semana.
 - Descarga el Excel de tu región desde Mi Región o desde el modal "Proponer actualización".
 - Actualiza solo las celdas que cambiaron: semáforos, % avances, próximos hitos, responsables, fechas.
 - Súbelo como propuesta. Un editor de la división la revisa en el día.
@@ -80,7 +80,7 @@ VIERNES (5 min)
     respuesta:
 `Empieza siempre por la sección "En foco" de Mi Región: la lista corta de lo que tú (o el equipo) marcaron como prioritario, con el próximo hito de cada una a la vista.
 
-Después la Bandeja de Atención: además de tu foco, las sugerencias automáticas te muestran hitos vencidos o próximos, iniciativas bloqueadas y las sin actividad hace +15 días. Si una iniciativa está en rojo (bloqueada), esa es tu prioridad de la semana — no avanza sin tu gestión.
+Después la bandeja de Preparación (sección Gabinete): además de tu foco, las sugerencias automáticas te muestran hitos vencidos o próximos, iniciativas bloqueadas y las sin actividad hace +15 días. Si una iniciativa está en rojo (bloqueada), esa es tu prioridad de la semana — no avanza sin tu gestión.
 
 Si te sobra tiempo, revisa el avance por eje. Te da contexto agregado de qué área del plan regional está al día y cuál atrasada.`,
     relacionadas: ['inicio-rutina-semanal', 'foco-marcar', 'semaforo-vs-avance'],

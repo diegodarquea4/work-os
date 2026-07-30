@@ -23,7 +23,7 @@ export const TOUR_CATALOG: TourDef[] = [
     id:          'general',
     label:       'Panorama general',
     src:         '/tour/explainer.html',
-    descripcion: 'Recorrido completo del panel: mapa, Mi Región, Dashboard, propuestas, Gabinete y Atención.',
+    descripcion: 'Recorrido completo del panel: mapa, Mi Región, Dashboard, propuestas y Gabinete (Preparación y Tablero).',
   },
   {
     id:          'desalojos',

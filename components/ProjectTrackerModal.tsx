@@ -1107,6 +1107,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           ) : tab === 'seguimiento' ? (
             <SeguimientoTab
               prioridadId={prioridad.n}
+              prioridadIdEstable={prioridad.id}
               seguimientos={seguimientos}
               onRefresh={loadData}
               canCreate={!!currentUserEmail}
