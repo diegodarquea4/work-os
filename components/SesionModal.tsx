@@ -713,7 +713,13 @@ export default function SesionModal(props: Props) {
   }, [gabIniciativas, sesIniciativas])
 
   const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
+  // Variante sin overflow-hidden para las secciones con typeahead: el desplegable
+  // de resultados es `absolute` y el overflow-hidden de la sección lo recortaba
+  // (quedaba oculto por debajo de la sección siguiente). El header redondea sus
+  // esquinas superiores (zoneHeadTop) para que el diseño se vea igual sin el clip.
+  const zoneClsOpen = 'border border-gray-200 rounded-xl'
   const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
+  const zoneHeadTop = `${zoneHead} rounded-t-[11px]`
   const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
   const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 
@@ -940,8 +946,8 @@ export default function SesionModal(props: Props) {
 
               {/* ── Zona 3 (gabinete): iniciativas en foco ── */}
               {esGabinete && (
-                <section className={zoneCls}>
-                  <div className={zoneHead}>
+                <section className={zoneClsOpen}>
+                  <div className={zoneHeadTop}>
                     <span className={zoneNum}>3</span>
                     <h3 className="text-sm font-semibold text-gray-800">Iniciativas en foco</h3>
                     <span className="text-xs text-gray-400 ml-auto">{sesIniciativas.length}</span>
@@ -1108,8 +1114,8 @@ export default function SesionModal(props: Props) {
               </section>
 
               {/* ── Zona 5: compromisos nuevos ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
+              <section className={zoneClsOpen}>
+                <div className={zoneHeadTop}>
                   <span className={zoneNum}>5</span>
                   <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
