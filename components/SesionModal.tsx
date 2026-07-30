@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { Region } from '@/lib/regions'
@@ -579,6 +580,31 @@ export default function SesionModal(props: Props) {
     setTabInstitucion(nombre)
   }
 
+  async function eliminarInstitucion(inst: string) {
+    const existente = apuntes.find(a => a.institucion === inst)
+    const conTexto = (draftApuntes[inst] ?? '').trim().length > 0
+    if ((existente || conTexto) &&
+        !window.confirm(`¿Eliminar la institución "${inst}" y sus apuntes de esta sesión?`)) return
+    // Optimistic: sacar el pill, su borrador y reubicar el tab activo.
+    const restantes = instituciones.filter(i => i !== inst)
+    setInstituciones(restantes)
+    setDraftApuntes(prev => { const next = { ...prev }; delete next[inst]; return next })
+    if (tabInstitucion === inst) setTabInstitucion(restantes[0] ?? null)
+    if (!existente) return
+    try {
+      await safeDelete(
+        getSupabase().from('sesion_apuntes').delete().eq('id', existente.id),
+        `sesion_apuntes delete id=${existente.id}`,
+      )
+      setApuntes(prev => prev.filter(a => a.id !== existente.id))
+    } catch (err) {
+      // Revert: la fila sigue en la BD, restaurar pill + borrador.
+      setInstituciones(prev => prev.includes(inst) ? prev : [...prev, inst])
+      setDraftApuntes(prev => ({ ...prev, [inst]: existente.texto }))
+      window.alert((err as Error).message)
+    }
+  }
+
   // ── Zona 5: compromisos nuevos ────────────────────────────────────────────
 
   async function agregarCompromiso(e: React.FormEvent) {
@@ -713,13 +739,7 @@ export default function SesionModal(props: Props) {
   }, [gabIniciativas, sesIniciativas])
 
   const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
-  // Variante sin overflow-hidden para las secciones con typeahead: el desplegable
-  // de resultados es `absolute` y el overflow-hidden de la sección lo recortaba
-  // (quedaba oculto por debajo de la sección siguiente). El header redondea sus
-  // esquinas superiores (zoneHeadTop) para que el diseño se vea igual sin el clip.
-  const zoneClsOpen = 'border border-gray-200 rounded-xl'
   const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
-  const zoneHeadTop = `${zoneHead} rounded-t-[11px]`
   const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
   const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 
@@ -946,8 +966,8 @@ export default function SesionModal(props: Props) {
 
               {/* ── Zona 3 (gabinete): iniciativas en foco ── */}
               {esGabinete && (
-                <section className={zoneClsOpen}>
-                  <div className={zoneHeadTop}>
+                <section className={zoneCls}>
+                  <div className={zoneHead}>
                     <span className={zoneNum}>3</span>
                     <h3 className="text-sm font-semibold text-gray-800">Iniciativas en foco</h3>
                     <span className="text-xs text-gray-400 ml-auto">{sesIniciativas.length}</span>
@@ -1080,20 +1100,34 @@ export default function SesionModal(props: Props) {
                       <div className="flex items-center gap-1 flex-wrap mb-2">
                         {instituciones.map(inst => {
                           const conTexto = (draftApuntes[inst] ?? '').trim().length > 0
+                          const activo = tabInstitucion === inst
                           return (
-                            <button
+                            <span
                               key={inst}
-                              onClick={() => setTabInstitucion(inst)}
-                              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                                tabInstitucion === inst
+                              className={`inline-flex items-center gap-1 text-xs pl-2.5 pr-1 py-1 rounded-full font-medium transition-colors ${
+                                activo
                                   ? 'bg-violet-700 text-white'
                                   : conTexto
                                     ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
                                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                               }`}
                             >
-                              {inst}
-                            </button>
+                              <button type="button" onClick={() => setTabInstitucion(inst)} className="focus:outline-none">
+                                {inst}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => eliminarInstitucion(inst)}
+                                title={`Eliminar ${inst}`}
+                                className={`rounded-full w-4 h-4 flex items-center justify-center transition-colors ${
+                                  activo ? 'text-violet-200 hover:text-white hover:bg-violet-600' : 'opacity-60 hover:opacity-100 hover:bg-black/10'
+                                }`}
+                              >
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.6">
+                                  <path d="M1 1l6 6M7 1L1 7" strokeLinecap="round"/>
+                                </svg>
+                              </button>
+                            </span>
                           )
                         })}
                       </div>
@@ -1114,8 +1148,8 @@ export default function SesionModal(props: Props) {
               </section>
 
               {/* ── Zona 5: compromisos nuevos ── */}
-              <section className={zoneClsOpen}>
-                <div className={zoneHeadTop}>
+              <section className={zoneCls}>
+                <div className={zoneHead}>
                   <span className={zoneNum}>5</span>
                   <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
@@ -1265,6 +1299,13 @@ export default function SesionModal(props: Props) {
  * Typeahead mínimo client-side sobre la cartera ya cargada (sin queries).
  * Usado en la zona 3 (agregar a la agenda) y en la zona 5 (vincular
  * compromiso). Mínimo 2 caracteres; máximo 8 resultados.
+ *
+ * El desplegable de resultados se renderiza con createPortal a document.body y
+ * position:fixed para escapar del modal — el contenedor del modal tiene
+ * overflow-hidden y el fondo backdrop-blur crea un containing block, así que un
+ * desplegable `absolute` quedaba recortado (sobre todo en la última sección).
+ * Se ancla al input por getBoundingClientRect y se reposiciona en scroll/resize;
+ * abre hacia arriba si no cabe hacia abajo.
  */
 function IniciativaTypeahead({ placeholder, buscar, onPick, compact = false }: {
   placeholder: string
@@ -1273,27 +1314,76 @@ function IniciativaTypeahead({ placeholder, buscar, onPick, compact = false }: {
   compact?: boolean
 }) {
   const [q, setQ] = useState('')
+  const [visible, setVisible] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const resultados = useMemo(() => buscar(q), [q, buscar])
+  const hayResultados = resultados.length > 0
+  const abierto = visible && hayResultados && rect !== null
+
+  const medir = useCallback(() => {
+    const el = inputRef.current
+    if (el) setRect(el.getBoundingClientRect())
+  }, [])
+
+  // Reposicionar mientras está abierto (el cuerpo del modal hace scroll). El
+  // cuerpo del efecto solo registra listeners — el setState vive en el callback.
+  useEffect(() => {
+    if (!visible || !hayResultados) return
+    window.addEventListener('scroll', medir, true)
+    window.addEventListener('resize', medir)
+    return () => {
+      window.removeEventListener('scroll', medir, true)
+      window.removeEventListener('resize', medir)
+    }
+  }, [visible, hayResultados, medir])
+
+  let dropStyle: CSSProperties = {}
+  if (abierto && rect) {
+    const MAXH = 224 // max-h-56
+    const GAP = 4
+    const espacioAbajo = window.innerHeight - rect.bottom
+    const arriba = espacioAbajo < MAXH + GAP && rect.top > espacioAbajo
+    dropStyle = {
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+      ...(arriba
+        ? { bottom: window.innerHeight - rect.top + GAP, maxHeight: Math.max(0, rect.top - GAP) }
+        : { top: rect.bottom + GAP, maxHeight: Math.max(0, espacioAbajo - GAP) }),
+    }
+  }
+
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         type="text"
         value={q}
-        onChange={e => setQ(e.target.value)}
+        onChange={e => { setQ(e.target.value); setVisible(true); medir() }}
+        onFocus={() => { setVisible(true); medir() }}
+        onBlur={() => setVisible(false)}
         placeholder={placeholder}
         className={`w-full px-3 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 ${
           compact ? 'py-1.5 text-xs' : 'py-2 text-sm'
         }`}
       />
-      {resultados.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden max-h-56 overflow-y-auto">
+      {abierto && typeof document !== 'undefined' && createPortal(
+        <div
+          style={dropStyle}
+          // No robar el foco al clickear: evita que onBlur cierre el desplegable
+          // antes de que corra el onClick del resultado.
+          onMouseDown={e => e.preventDefault()}
+          className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden overflow-y-auto"
+        >
           {resultados.map(p => {
             const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
             return (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => { onPick(p); setQ('') }}
+                onClick={() => { onPick(p); setQ(''); setVisible(false) }}
                 className="w-full px-3 py-2 text-left hover:bg-violet-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
               >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
@@ -1304,7 +1394,8 @@ function IniciativaTypeahead({ placeholder, buscar, onPick, compact = false }: {
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
