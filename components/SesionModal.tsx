@@ -61,6 +61,10 @@ type Props = PropsBase & (
       // Ejes con sesiones habilitadas — destino posible de un mandato y
       // nombre del comité de origen de los escalados.
       ejesComites: RegionEje[]
+      // Abrir la ficha completa de una iniciativa desde la zona 3. La maneja
+      // VistaRegional con su ProjectTrackerModal (montado por encima de esta
+      // sesión) — así el gabinete accede a toda la info de la iniciativa.
+      onAbrirIniciativa: (p: Iniciativa) => void
     }
 )
 
@@ -90,6 +94,7 @@ export default function SesionModal(props: Props) {
   const eje           = props.instancia === 'eje' ? props.eje : null
   const gabIniciativas = props.instancia === 'gabinete' ? props.iniciativas : SIN_INICIATIVAS
   const ejesComites   = props.instancia === 'gabinete' ? props.ejesComites : SIN_EJES
+  const abrirIniciativa = props.instancia === 'gabinete' ? props.onAbrirIniciativa : undefined
 
   const [sesion, setSesion]     = useState<EjeSesion | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
@@ -109,9 +114,9 @@ export default function SesionModal(props: Props) {
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
   const [instituciones, setInstituciones]   = useState<string[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
-  // Zona 3 gabinete: agenda de iniciativas de la sesión + acuerdos en edición.
+  // Zona 3 gabinete: agenda de iniciativas de la sesión (la ficha completa se
+  // abre en el detalle de la iniciativa, no hay acuerdo inline).
   const [sesIniciativas, setSesIniciativas] = useState<SesionIniciativa[]>([])
-  const [draftAcuerdos, setDraftAcuerdos]   = useState<Record<number, string>>({})
 
   const [tabInstitucion, setTabInstitucion] = useState<string | null>(null)
   const [draftValores, setDraftValores]     = useState<Record<number, string>>({})
@@ -302,7 +307,6 @@ export default function SesionModal(props: Props) {
         }
       }
       setSesIniciativas(filas)
-      setDraftAcuerdos(Object.fromEntries(filas.map(f => [f.id, f.acuerdo ?? ''])))
     }
 
     setCompAnteriores(comp)
@@ -494,21 +498,6 @@ export default function SesionModal(props: Props) {
 
   // ── Zona 3 (gabinete): iniciativas en foco ────────────────────────────────
 
-  async function commitAcuerdo(fila: SesionIniciativa) {
-    const texto = (draftAcuerdos[fila.id] ?? '').trim()
-    if ((fila.acuerdo ?? '') === texto) return
-    try {
-      await safeWrite(
-        getSupabase().from('sesion_iniciativas').update({ acuerdo: texto || null }).eq('id', fila.id),
-        `sesion_iniciativas acuerdo id=${fila.id}`,
-      )
-      setSesIniciativas(prev => prev.map(f => f.id === fila.id ? { ...f, acuerdo: texto || null } : f))
-    } catch (err) {
-      setDraftAcuerdos(prev => ({ ...prev, [fila.id]: fila.acuerdo ?? '' }))
-      window.alert((err as Error).message)
-    }
-  }
-
   async function quitarIniciativa(fila: SesionIniciativa) {
     try {
       await safeDelete(
@@ -534,7 +523,6 @@ export default function SesionModal(props: Props) {
       )
       const fila = rows[0] as SesionIniciativa
       setSesIniciativas(prev => [...prev, fila])
-      setDraftAcuerdos(prev => ({ ...prev, [fila.id]: '' }))
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -982,39 +970,36 @@ export default function SesionModal(props: Props) {
                       const p = gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null
                       const sem = p ? (SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris) : null
                       return (
-                        <div key={fila.id} className="px-3 py-2.5 bg-gray-50 rounded-lg">
-                          <div className="flex items-start gap-2.5">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-800 leading-snug flex items-center gap-2 flex-wrap">
-                                {sem && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />}
-                                <span>{p?.nombre ?? `Iniciativa #${fila.prioridad_id} (ya no está en la cartera)`}</span>
+                        <div key={fila.id} className="flex items-start gap-2.5 px-3 py-2.5 bg-gray-50 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => { if (p && abrirIniciativa) abrirIniciativa(p) }}
+                            disabled={!p}
+                            className="flex-1 min-w-0 text-left group disabled:cursor-default"
+                            title={p ? 'Ver ficha completa de la iniciativa' : undefined}
+                          >
+                            <p className="text-sm text-gray-800 leading-snug flex items-center gap-2 flex-wrap group-hover:text-violet-800">
+                              {sem && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />}
+                              <span>{p?.nombre ?? `Iniciativa #${fila.prioridad_id} (ya no está en la cartera)`}</span>
+                              {p && <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity">ver ficha →</span>}
+                            </p>
+                            {p && (
+                              <p className="text-[11px] text-gray-400 mt-0.5">
+                                {p.pct_avance}% avance
+                                {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
+                                {p.ministerio ? ` · ${p.ministerio}` : ''}
                               </p>
-                              {p && (
-                                <p className="text-[11px] text-gray-400 mt-0.5">
-                                  {p.pct_avance}% avance
-                                  {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
-                                  {p.ministerio ? ` · ${p.ministerio}` : ''}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => quitarIniciativa(fila)}
-                              className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
-                              title="Sacar de la agenda de esta sesión"
-                            >
-                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
-                              </svg>
-                            </button>
-                          </div>
-                          <textarea
-                            value={draftAcuerdos[fila.id] ?? ''}
-                            onChange={e => setDraftAcuerdos(prev => ({ ...prev, [fila.id]: e.target.value }))}
-                            onBlur={() => commitAcuerdo(fila)}
-                            rows={2}
-                            placeholder="Acuerdo del gabinete sobre esta iniciativa…"
-                            className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-y bg-white"
-                          />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => quitarIniciativa(fila)}
+                            className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
+                            title="Sacar de la agenda de esta sesión"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+                            </svg>
+                          </button>
                         </div>
                       )
                     })}

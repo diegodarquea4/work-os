@@ -204,8 +204,10 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
           ))}
           {data.panoramaEjes.length === 0 && <Text style={s.vacio}>Región sin iniciativas cargadas al cierre.</Text>}
 
-          {/* Iniciativas tratadas */}
-          <SH>IV. Iniciativas tratadas y acuerdos</SH>
+          {/* Iniciativas tratadas — el acuerdo por iniciativa se registra como
+              compromiso vinculado (sección VI), ya no inline. Se muestra el
+              acuerdo solo si una sesión antigua alcanzó a guardarlo. */}
+          <SH>IV. Iniciativas tratadas</SH>
           {data.iniciativas.length === 0 ? (
             <Text style={s.vacio}>No se trataron iniciativas en esta sesión.</Text>
           ) : data.iniciativas.map((ini, i) => (
@@ -219,9 +221,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
                   {ini.pctAvance != null ? `${Math.round(ini.pctAvance)}%` : '—'}
                 </Text>
               </View>
-              <Text style={s.acuerdo}>
-                {ini.acuerdo ? `Acuerdo: ${ini.acuerdo}` : 'Sin acuerdo registrado.'}
-              </Text>
+              {ini.acuerdo && <Text style={s.acuerdo}>Acuerdo: {ini.acuerdo}</Text>}
             </View>
           ))}
 

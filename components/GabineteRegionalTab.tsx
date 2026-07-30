@@ -32,9 +32,12 @@ type Props = {
   // Cartera de la región (regionIniciativas de VistaRegional) — alimenta la
   // zona 3 del SesionModal y los typeaheads sin queries nuevas.
   iniciativas: Iniciativa[]
+  // Abrir la ficha completa de una iniciativa (VistaRegional la monta con su
+  // ProjectTrackerModal, por encima de la sesión) — desde la zona 3.
+  onAbrirIniciativa: (p: Iniciativa) => void
 }
 
-export default function GabineteRegionalTab({ region, regionEjes, iniciativas }: Props) {
+export default function GabineteRegionalTab({ region, regionEjes, iniciativas, onAbrirIniciativa }: Props) {
   const canEditOperational = useCanEditOperational()
   const userEmail          = useCurrentUserEmail()
   const { config, loading: configLoading } = useRegionConfig(region.cod)
@@ -164,6 +167,7 @@ export default function GabineteRegionalTab({ region, regionEjes, iniciativas }:
           gabineteNombre={gabineteNombre}
           iniciativas={iniciativas}
           ejesComites={ejesComites}
+          onAbrirIniciativa={onAbrirIniciativa}
           borradorId={resumen.borradorId}
           currentUserEmail={userEmail}
           onClose={() => {

@@ -38,9 +38,12 @@ type Props = {
   // Cartera de la región — la consume el tab Gabinete Regional (zona
   // "iniciativas en foco" de la sesión + typeaheads), sin queries nuevas.
   iniciativas: Iniciativa[]
+  // Abrir la ficha de una iniciativa desde la sesión del gabinete — la maneja
+  // VistaRegional con su ProjectTrackerModal.
+  onAbrirIniciativa: (p: Iniciativa) => void
 }
 
-export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas }: Props) {
+export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa }: Props) {
   const [active, setActive] = useState<TabKey>('policial')
 
   // El Comité Policial se ancla al eje con sesiones habilitadas.
@@ -97,7 +100,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
           />
         )
       ) : active === 'gabinete' ? (
-        <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} />
+        <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}

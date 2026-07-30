@@ -741,6 +741,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             regionEjes={regionEjes}
             ejesLoading={regionEjesLoading}
             iniciativas={regionIniciativas}
+            onAbrirIniciativa={setSelectedIniciativa}
           />
         )}
 
