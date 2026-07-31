@@ -12,6 +12,10 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
  */
 
 export type ActaData = {
+  // 'policial' → sección III es el reporte por institución (mig 048).
+  // 'inversion' → secciones III/IV son Proyectos tratados/Oficios tratados
+  // (este comité no tiene eje ni métricas, mig 049).
+  variante: 'policial' | 'inversion'
   nombreInstancia: string
   regionNombre: string
   sesionNumero: number
@@ -38,6 +42,13 @@ export type ActaData = {
       observaciones: string | null
       desglose: { etiqueta: string; valor: string }[]
     }[]
+  }[]
+  proyectosTratados: { nombre: string; nota: string | null }[]
+  oficiosTratados: {
+    nombreProyecto: string
+    oaeca: string
+    fechaLimite: string | null
+    estado: 'pendiente' | 'resuelto'
   }[]
   compVerificados: {
     descripcion: string
@@ -175,52 +186,89 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           ))}
           {data.asistencia.length === 0 && <Text style={s.vacio}>Sin registro de asistencia.</Text>}
 
-          {/* Temas tratados — reporte por institución (mig 048) */}
-          <SH>III. Temas tratados</SH>
-          {data.instituciones.length === 0 ? (
-            <Text style={s.vacio}>No se registraron temas por institución en esta sesión.</Text>
-          ) : data.instituciones.map((inst, ii) => {
-            const numericas = inst.filas.filter(f => f.tipo === 'numerico')
-            const textos    = inst.filas.filter(f => f.tipo === 'texto')
-            return (
-              <View key={ii} style={{ marginBottom: 8 }}>
-                <Text style={[s.instName, { marginTop: 4 }]}>{inst.label}</Text>
-                {numericas.length > 0 && (
-                  <View style={s.th}>
-                    <Text style={[s.thT, { flex: 3 }]}>Ítem</Text>
-                    <Text style={[s.thT, { flex: 2 }]}>Información proporcionada</Text>
-                    <Text style={[s.thT, { flex: 3 }]}>Observaciones</Text>
-                  </View>
-                )}
-                {numericas.map((f, fi) => (
-                  <View key={fi} wrap={false}>
-                    <View style={s.tr2}>
-                      <Text style={[s.td, { flex: 3, fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
-                      <Text style={[s.td, { flex: 2 }]}>{f.valor}</Text>
-                      <Text style={[s.td, { flex: 3, color: C.textMid }]}>{f.observaciones ?? ''}</Text>
-                    </View>
-                    {f.desglose.map((d, di) => (
-                      <View key={di} style={{ flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 1 }}>
-                        <Text style={[s.td, { flex: 3, color: C.textMid, fontSize: 8, paddingLeft: 12 }]}>· {d.etiqueta}</Text>
-                        <Text style={[s.td, { flex: 2, color: C.textMid, fontSize: 8 }]}>{d.valor}</Text>
-                        <Text style={{ flex: 3 }}></Text>
+          {data.variante === 'policial' ? (
+            <>
+              {/* Temas tratados — reporte por institución (mig 048) */}
+              <SH>III. Temas tratados</SH>
+              {data.instituciones.length === 0 ? (
+                <Text style={s.vacio}>No se registraron temas por institución en esta sesión.</Text>
+              ) : data.instituciones.map((inst, ii) => {
+                const numericas = inst.filas.filter(f => f.tipo === 'numerico')
+                const textos    = inst.filas.filter(f => f.tipo === 'texto')
+                return (
+                  <View key={ii} style={{ marginBottom: 8 }}>
+                    <Text style={[s.instName, { marginTop: 4 }]}>{inst.label}</Text>
+                    {numericas.length > 0 && (
+                      <View style={s.th}>
+                        <Text style={[s.thT, { flex: 3 }]}>Ítem</Text>
+                        <Text style={[s.thT, { flex: 2 }]}>Información proporcionada</Text>
+                        <Text style={[s.thT, { flex: 3 }]}>Observaciones</Text>
+                      </View>
+                    )}
+                    {numericas.map((f, fi) => (
+                      <View key={fi} wrap={false}>
+                        <View style={s.tr2}>
+                          <Text style={[s.td, { flex: 3, fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
+                          <Text style={[s.td, { flex: 2 }]}>{f.valor}</Text>
+                          <Text style={[s.td, { flex: 3, color: C.textMid }]}>{f.observaciones ?? ''}</Text>
+                        </View>
+                        {f.desglose.map((d, di) => (
+                          <View key={di} style={{ flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 1 }}>
+                            <Text style={[s.td, { flex: 3, color: C.textMid, fontSize: 8, paddingLeft: 12 }]}>· {d.etiqueta}</Text>
+                            <Text style={[s.td, { flex: 2, color: C.textMid, fontSize: 8 }]}>{d.valor}</Text>
+                            <Text style={{ flex: 3 }}></Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                    {textos.map((f, ti) => (
+                      <View key={`t${ti}`} style={[s.instBlock, { marginTop: 4 }]} wrap={false}>
+                        <Text style={[s.instText, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
+                        <Text style={s.instText}>{f.valor}</Text>
+                        {f.observaciones && <Text style={[s.instText, { color: C.textMid, fontSize: 8 }]}>{f.observaciones}</Text>}
                       </View>
                     ))}
                   </View>
-                ))}
-                {textos.map((f, ti) => (
-                  <View key={`t${ti}`} style={[s.instBlock, { marginTop: 4 }]} wrap={false}>
-                    <Text style={[s.instText, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{f.nombre}</Text>
-                    <Text style={s.instText}>{f.valor}</Text>
-                    {f.observaciones && <Text style={[s.instText, { color: C.textMid, fontSize: 8 }]}>{f.observaciones}</Text>}
-                  </View>
-                ))}
-              </View>
-            )
-          })}
+                )
+              })}
+            </>
+          ) : (
+            <>
+              {/* Proyectos tratados */}
+              <SH>III. Proyectos tratados en profundidad</SH>
+              {data.proyectosTratados.length === 0 ? (
+                <Text style={s.vacio}>Sin proyectos tratados en esta sesión.</Text>
+              ) : data.proyectosTratados.map((p, i) => (
+                <View key={i} style={s.instBlock} wrap={false}>
+                  <Text style={s.instName}>{p.nombre}</Text>
+                  <Text style={s.instText}>{p.nota || '—'}</Text>
+                </View>
+              ))}
 
-          {/* Compromisos */}
-          <SH>IV. Compromisos</SH>
+              {/* Oficios tratados */}
+              <SH>IV. Oficios tratados</SH>
+              <View style={s.th}>
+                <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
+                <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
+                <Text style={[s.thT, { flex: 1.2, textAlign: 'right' }]}>Fecha límite</Text>
+                <Text style={[s.thT, { flex: 1 }]}>Estado</Text>
+              </View>
+              {data.oficiosTratados.map((o, i) => (
+                <View key={i} style={s.tr2} wrap={false}>
+                  <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
+                  <Text style={[s.td, { flex: 2, color: C.textMid }]}>{o.oaeca}</Text>
+                  <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
+                  <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.textMid }]}>
+                    {o.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
+                  </Text>
+                </View>
+              ))}
+              {data.oficiosTratados.length === 0 && <Text style={s.vacio}>Sin oficios tratados en esta sesión.</Text>}
+            </>
+          )}
+
+          {/* Compromisos — sección V en Inversión (III Proyectos + IV Oficios la preceden), IV en Policial (III Temas tratados) */}
+          <SH>{`${data.variante === 'inversion' ? 'V' : 'IV'}. Compromisos`}</SH>
           <Text style={{ fontSize: 8.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy, marginBottom: 3 }}>
             a) Verificación de compromisos de sesiones anteriores
           </Text>

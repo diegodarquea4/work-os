@@ -13,11 +13,13 @@ import { esCompromisoAbierto } from '@/lib/sesiones/helpers'
  * la red.
  */
 
-// Instancia cuyo resumen se pide: un comité (eje concreto) o el gabinete
-// regional (sin eje). Refleja el CHECK de la mig 046 en el sistema de tipos.
+// Instancia cuyo resumen se pide: un comité (eje concreto) o una instancia
+// sin eje (gabinete regional, Comité Seguimiento de la Inversión). Refleja
+// el CHECK de la mig 046 en el sistema de tipos.
 export type SesionesFiltro =
   | { instancia: 'eje'; ejeId: number }
   | { instancia: 'gabinete' }
+  | { instancia: 'inversion' }
 
 export type SesionesResumen = {
   compromisosAbiertos: number
@@ -51,10 +53,10 @@ export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, en
     setLoading(true)
     const sb = getSupabase()
     // Filtro por instancia: comité = eje_id (⇒ instancia='eje' por el CHECK
-    // de la mig 046); gabinete = instancia sin eje. Columna/valor dinámicos
-    // para no duplicar cada query en dos ramas.
+    // de la mig 046); gabinete e inversión = instancia sin eje. Columna/valor
+    // dinámicos para no duplicar cada query en tres ramas.
     const [colInst, valInst]: [string, string | number] =
-      instancia === 'eje' ? ['eje_id', ejeId!] : ['instancia', 'gabinete']
+      instancia === 'eje' ? ['eje_id', ejeId!] : ['instancia', instancia]
     const [compRes, cerradaRes, borradorRes, escaladasRes] = await Promise.all([
       sb.from('sesion_compromisos')
         .select('id, estado')

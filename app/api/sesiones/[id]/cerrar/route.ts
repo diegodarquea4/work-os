@@ -59,13 +59,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const esGabinete = sesion!.instancia === 'gabinete'
 
   // ── Gate de habilitación por instancia ─────────────────────────────────────
+  // Comités sin eje (Gabinete Regional, Comité Seguimiento de la Inversión) no
+  // usan region_ejes.sesiones_habilitadas — Gabinete tiene su propio flag en
+  // region_config; Inversión no tiene flag y siempre está disponible.
   if (esGabinete) {
     const { data: cfg } = await db
       .from('region_config').select('gabinete_habilitado').eq('region_cod', sesion!.region_cod).maybeSingle()
     if (!cfg?.gabinete_habilitado) {
       return NextResponse.json({ error: 'El gabinete no está habilitado en esta región' }, { status: 422 })
     }
-  } else {
+  } else if (sesion!.instancia === 'eje') {
     const { data: ejeRow } = await db
       .from('region_ejes').select('sesiones_habilitadas').eq('id', sesion!.eje_id).single()
     if (!ejeRow?.sesiones_habilitadas) {
@@ -197,7 +200,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('escalado_a_gabinete', true)
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
-  } else {
+  } else if (sesion!.instancia === 'eje') {
     await db
       .from('sesion_compromisos')
       .update({ cerrado_en_sesion_id: sesionId })
@@ -205,6 +208,30 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('eje_id', sesion!.eje_id)
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
+  } else {
+    // instancia === 'inversion' — sin eje, análogo a Gabinete: filtra por instancia.
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('instancia', 'inversion')
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+  }
+
+  // ── Oficios resueltos quedan sellados a esta sesión (Comité Seguimiento de
+  // la Inversión) — mismo patrón que compromisos. SOLO para 'inversion':
+  // sesion_oficios_tratados no tiene columna de instancia (es region_cod +
+  // sesion_origen_id), así que sin este guard el cierre de un Comité Policial
+  // o Gabinete de la misma región estamparía resuelto_en_sesion_id de oficios
+  // de Inversión aún sin sellar, con el id de una sesión de otra instancia.
+  if (sesion!.instancia === 'inversion') {
+    await db
+      .from('sesion_oficios_tratados')
+      .update({ resuelto_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('estado', 'resuelto')
+      .is('resuelto_en_sesion_id', null)
   }
 
   // ── Acta — si falla NO se revierte el cierre (reintento vía POST /acta) ───

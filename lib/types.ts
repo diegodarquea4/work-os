@@ -521,14 +521,18 @@ export type RegionEje = {
   created_by_email: string | null
 }
 
-// ── Sesiones (Comité Policial mig 044 · Gabinete Regional mig 046) ───────────
-// Una sesión captura: verificación de compromisos → asistencia → indicadores
-// (comité) / iniciativas en foco (gabinete) → apuntes por institución →
-// compromisos nuevos. RLS restrictiva: staff todo, regional sus regiones,
-// viewer nada. `instancia` discrimina: 'eje' exige eje_id, 'gabinete' lo
-// prohíbe (CHECK en BD).
+// ── Sesiones (Comité Policial mig 044 · Gabinete Regional mig 046 · Comité
+// Seguimiento de la Inversión) ───────────────────────────────────────────────
+// Una sesión captura: verificación de compromisos → asistencia → reporte por
+// institución (comité, mig 048) / iniciativas en foco (gabinete) / oficios y
+// proyectos (inversión) → compromisos nuevos. RLS restrictiva: staff
+// todo, regional sus regiones, viewer nada. `instancia` discrimina: 'eje'
+// exige eje_id, 'gabinete'/'inversion' lo prohíben (CHECK en BD — la columna
+// nació para "Gabinete Regional"; 'inversion' se agregó después reusando el
+// mismo mecanismo, esos comités tampoco cuelgan del catálogo de Ejes
+// estratégicos, son tabs fijos de la sección Comités).
 
-export type SesionInstancia = 'eje' | 'gabinete'
+export type SesionInstancia = 'eje' | 'gabinete' | 'inversion'
 
 export type EjeSesion = {
   id: number
@@ -668,6 +672,46 @@ export type RegionConfig = {
   region_cod: string
   gabinete_habilitado: boolean
   gabinete_nombre: string
+}
+
+// ── Comité Seguimiento de la Inversión ───────────────────────────────────────
+// Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
+
+// Catálogo de organismos (OAECA) — autoincremental: precargado y crece
+// cuando alguien escribe uno nuevo al cargar un oficio en sesión.
+export type Oaeca = {
+  id: number
+  nombre: string
+  created_at: string
+  created_by_email: string | null
+}
+
+// Proyecto tratado en profundidad en una sesión — selección desde
+// v2_proyectos_inversion, no texto libre.
+export type SesionProyecto = {
+  id: number
+  sesion_id: number
+  proyecto_id: string
+  nota: string | null
+  created_at: string
+}
+
+// Oficio tratado — vive ENTRE sesiones igual que SesionCompromiso: se carga
+// a mano dentro de una sesión (estado 'pendiente') y reaparece en la zona
+// "Oficios anteriores" de la sesión siguiente hasta quedar 'resuelto'.
+export type SesionOficioTratado = {
+  id: number
+  region_cod: string
+  sesion_origen_id: number
+  oaeca_id: number
+  proyecto_id: string
+  fecha_limite: string | null        // date puro YYYY-MM-DD
+  estado: 'pendiente' | 'resuelto'
+  nota: string | null
+  estado_updated_at: string | null
+  estado_updated_by_email: string | null
+  resuelto_en_sesion_id: number | null
+  created_at: string
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────

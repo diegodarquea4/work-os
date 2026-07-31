@@ -5,19 +5,23 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 import ComitePolicialTab from './ComitePolicialTab'
+import ComiteInversionPanel from './ComiteInversionPanel'
 import GabineteRegionalTab from './GabineteRegionalTab'
 
 /**
  * Sección «Comités y Gabinete Regional» de Mi Región, justo debajo de
  * «Ejes estratégicos». Agrupa las instancias de coordinación regional en
- * cuatro pestañas. Comité Policial y Gabinete Regional están desarrollados;
- * Infraestructura e Inversión son placeholders anunciados.
+ * cuatro pestañas. Comité Policial, Gabinete Regional y Comité Seguimiento
+ * de la Inversión están desarrollados; Infraestructura es placeholder
+ * anunciado.
  *
  * El Comité Policial se ancla al eje de la región con `sesiones_habilitadas`
  * (mig 044; cada región tiene exactamente uno, sesiones_nombre 'Comité
- * Policial'). El Gabinete Regional no tiene eje: su flag vive en
- * region_config (mig 046) y su tab monta el módulo de sesiones en modo
- * instancia='gabinete'.
+ * Policial'). Gabinete Regional y Comité Seguimiento de la Inversión no
+ * tienen eje: el flag de Gabinete vive en region_config (mig 046) y su tab
+ * monta el módulo de sesiones en modo instancia='gabinete'; Inversión no
+ * tiene flag de habilitación y su tab monta el módulo en modo
+ * instancia='inversion'.
  */
 
 type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
@@ -25,7 +29,7 @@ type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
-  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: false },
+  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
@@ -93,12 +97,14 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
           />
         )
+      ) : active === 'inversion' ? (
+        <ComiteInversionPanel region={region} />
       ) : active === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial y el Gabinete Regional son las instancias con sesiones y actas en el sistema."
+          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial, el Gabinete Regional y el Comité Seguimiento de la Inversión son las instancias con sesiones y actas en el sistema."
         />
       )}
     </div>
