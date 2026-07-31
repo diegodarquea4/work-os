@@ -47,15 +47,32 @@ export default function ComiteInversionPanel({ region }: Props) {
 
   async function handleActualizarSeia() {
     setSyncing(true)
-    setSyncMsg(null)
+    setSyncMsg('Actualizando desde SEIA… puede tardar unos minutos, no cierres esta pestaña.')
+    let totalUpserted = 0
     try {
-      const res = await fetch('/api/seia-sync/trigger', { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      setSyncMsg(res.ok
-        ? `Listo — ${body.upserted ?? 0} proyectos actualizados`
-        : (body.error ?? `Error HTTP ${res.status}`))
+      // La v2 es reanudable: cada llamada procesa un tramo (≤240s) y devuelve
+      // `partial:true` si quedó a medias (una sola invocación no cabe en el
+      // techo de 300s de Vercel). Repetimos hasta completar las 16 regiones.
+      // Tope de seguridad por si algo no converge.
+      for (let parte = 1; parte <= 20; parte++) {
+        const res = await fetch('/api/seia-sync/trigger', { method: 'POST' })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok || body.ok === false) {
+          setSyncMsg(body.error
+            ?? (Array.isArray(body.errors) ? body.errors.join('; ') : `Error HTTP ${res.status}`))
+          return
+        }
+        totalUpserted += body.upserted ?? 0
+        if (body.partial) {
+          setSyncMsg(`Actualizando… ${totalUpserted.toLocaleString('es-CL')} proyectos hasta ahora (continuando)…`)
+          continue
+        }
+        setSyncMsg(`Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados (16 regiones).`)
+        return
+      }
+      setSyncMsg(`Se actualizaron ${totalUpserted.toLocaleString('es-CL')} proyectos, pero quedó una parte pendiente. Vuelve a apretar para continuar.`)
     } catch {
-      setSyncMsg('Error de red actualizando SEIA')
+      setSyncMsg('Error de red actualizando SEIA. Vuelve a intentar.')
     } finally {
       setSyncing(false)
     }

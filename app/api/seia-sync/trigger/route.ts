@@ -3,14 +3,20 @@ import { requireAuth } from '@/lib/apiAuth'
 
 /**
  * POST /api/seia-sync/trigger — botón manual "Actualizar proyectos en SEIA"
- * (Comité Seguimiento de la Inversión). Wrapper delgado: no duplica la
- * lógica de sync — llama al propio /api/seia-sync (v1, probado en prod)
- * server-to-server con el mismo Bearer CRON_SECRET que usa el cron de
- * GitHub Actions. El secret nunca se expone al navegador; el gate hacia el
- * usuario es la sesión normal (admin/editor), no el secret.
+ * (Comité Seguimiento de la Inversión). SEIA pasó a refresco on-demand: ya
+ * no hay cron, el catálogo se actualiza cuando se aprieta el botón.
  *
- * v2 (/api/seia-sync-v2) queda fuera a propósito: nunca ha corrido en
- * producción — no es el momento de exponerla en un botón manual.
+ * Llama a la v2 REANUDABLE (/api/seia-sync-v2) server-to-server con el
+ * Bearer CRON_SECRET. La v2 procesa un tramo (≤240s), guarda el cursor en
+ * sync_status.notes y devuelve `partial:true` si quedó a medias. Una sola
+ * invocación no puede pasar el techo de 300s de Vercel y el sync completo
+ * tarda ~340s, así que el frontend (ComiteInversionPanel) vuelve a llamar a
+ * este endpoint hasta recibir `partial:false` → un click completa las 16
+ * regiones sin dejar ninguna afuera. Ese era el defecto de la v1: moría a
+ * los 300s antes de llegar a la última región (Magallanes).
+ *
+ * El secret nunca se expone al navegador; el gate hacia el usuario es la
+ * sesión normal (admin/editor), no el secret.
  */
 
 export const maxDuration = 300
@@ -28,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const origin = new URL(request.url).origin
-  const res = await fetch(`${origin}/api/seia-sync`, {
+  const res = await fetch(`${origin}/api/seia-sync-v2`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}` },
   })

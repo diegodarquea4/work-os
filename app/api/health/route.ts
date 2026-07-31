@@ -38,7 +38,10 @@ export const runtime = 'nodejs'
 // última corrida). El cálculo de atraso suma ese valor + margen.
 const EXPECTED_DAYS: Record<string, { intervalDays: number; cron: string; descripcion: string }> = {
   ine:            { intervalDays:  7, cron: 'Lun 07:00 UTC',     descripcion: 'BCCh — desocupación, PIB, ventas regionales' },
-  seia:           { intervalDays:  7, cron: 'Lun 08:00 UTC',     descripcion: 'SEIA — proyectos de evaluación ambiental' },
+  // SEIA salió del monitoreo programado: pasó a refresco on-demand (botón
+  // "Actualizar proyectos en SEIA" del Comité de Inversión → /api/seia-sync-v2).
+  // Sin cron que esperar, no tiene sentido marcarlo "atrasado". La telemetría
+  // de sus corridas manuales vive en sync_status bajo 'seia-v2'.
   mop:            { intervalDays:  7, cron: 'Lun 09:00 UTC',     descripcion: 'MOP — proyectos de obras públicas' },
   stop:           { intervalDays:  7, cron: 'Mié 10:00 UTC',     descripcion: 'Ley S.T.O.P. — estadísticas de seguridad' },
   pib:            { intervalDays:  7, cron: 'Lun 11:00 UTC',     descripcion: 'PIB sectorial trimestral' },
