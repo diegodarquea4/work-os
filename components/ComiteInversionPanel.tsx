@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   useCanEditAny,
   useCanEditOperational,
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
+import { getSupabase } from '@/lib/supabase'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
 import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
@@ -37,23 +38,51 @@ export default function ComiteInversionPanel({ region }: Props) {
   const [oaecaOpen, setOaecaOpen]         = useState(false)
 
   const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [progreso, setProgreso] = useState(0)          // 0-100 para la barra
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)  // solo avisos/errores
+  const [ultimaAct, setUltimaAct] = useState<string | null>(null)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, canEditOperational)
+
+  // Última actualización del catálogo SEIA = synced_at más reciente de sus
+  // filas en v2_proyectos_inversion (lo que refresca el botón). Solo lo mira
+  // quien puede actualizar (admin/editor); no toca la red para el resto.
+  const cargarUltimaAct = useCallback(async () => {
+    const { data } = await getSupabase()
+      .from('v2_proyectos_inversion')
+      .select('synced_at')
+      .eq('sistema_origen', 'seia')
+      .order('synced_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    setUltimaAct((data?.synced_at as string | undefined) ?? null)
+  }, [])
+
+  useEffect(() => {
+    if (canEditAny) cargarUltimaAct()
+  }, [canEditAny, cargarUltimaAct])
 
   function fmtFechaCorta(fecha: string): string {
     return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
   }
 
+  function fmtActualizacion(iso: string): string {
+    return new Date(iso).toLocaleString('es-CL', {
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+  }
+
   async function handleActualizarSeia() {
     setSyncing(true)
-    setSyncMsg('Actualizando desde SEIA… puede tardar unos minutos, no cierres esta pestaña.')
+    setSyncMsg(null)
+    setProgreso(4)          // arranque visible mientras corre el primer tramo
     let totalUpserted = 0
     let totalErrores = 0
     try {
       // La v2 es reanudable: cada llamada procesa un tramo (≤240s) y devuelve
-      // `partial:true` si quedó a medias (una sola invocación no cabe en el
-      // techo de 300s de Vercel). Repetimos hasta completar las 16 regiones.
+      // `partial:true` + next_cursor.region_idx (0..15) si quedó a medias (una
+      // sola invocación no cabe en el techo de 300s de Vercel). Repetimos hasta
+      // completar las 16 regiones; el region_idx alimenta la barra de progreso.
       // Tope de seguridad por si algo no converge.
       for (let parte = 1; parte <= 20; parte++) {
         const res = await fetch('/api/seia-sync/trigger', { method: 'POST' })
@@ -66,14 +95,17 @@ export default function ComiteInversionPanel({ region }: Props) {
         totalUpserted += body.upserted ?? 0
         totalErrores  += Array.isArray(body.errors) ? body.errors.length : 0
         if (body.partial) {
-          setSyncMsg(`Actualizando… ${totalUpserted.toLocaleString('es-CL')} proyectos hasta ahora (continuando)…`)
+          const idx = body.next_cursor?.region_idx ?? 0
+          setProgreso(Math.min(96, Math.max(4, Math.round((idx / 16) * 100))))
           continue
         }
-        // Terminó el recorrido. El API de SEIA a veces deja alguna región con
-        // timeout transitorio — se avisa para que se vuelva a apretar.
+        // Terminó el recorrido. La fecha (recién refrescada) reemplaza la barra;
+        // solo dejamos un aviso si el API de SEIA dejó regiones con timeout.
+        setProgreso(100)
+        await cargarUltimaAct()
         setSyncMsg(totalErrores > 0
-          ? `Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados. ${totalErrores} región(es) tuvieron un timeout transitorio de SEIA; vuelve a apretar para completarlas.`
-          : `Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados (16 regiones).`)
+          ? `${totalErrores} región(es) tuvieron un timeout transitorio de SEIA; vuelve a apretar para completarlas.`
+          : null)
         return
       }
       setSyncMsg(`Se actualizaron ${totalUpserted.toLocaleString('es-CL')} proyectos, pero quedó una parte pendiente. Vuelve a apretar para continuar.`)
@@ -113,8 +145,34 @@ export default function ComiteInversionPanel({ region }: Props) {
           )}
         </div>
 
-        {syncMsg && (
-          <p className="px-4 pb-2 text-[11px] text-gray-500">{syncMsg}</p>
+        {canEditAny && (
+          <div className="px-4 pb-2">
+            {syncing ? (
+              // Barra de progreso: avanza por región (region_idx del cursor) y
+              // pulsa mientras corre cada tramo.
+              <div>
+                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-violet-500 rounded-full transition-all duration-700 animate-pulse"
+                    style={{ width: `${progreso}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">Actualizando desde SEIA… no cierres esta pestaña ({progreso}%).</p>
+              </div>
+            ) : (
+              // Al terminar, la fecha reemplaza la barra.
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <p className="text-[11px] text-gray-400">
+                  {ultimaAct ? (
+                    <>Última actualización de SEIA: <span className="text-gray-600 font-medium">{fmtActualizacion(ultimaAct)}</span></>
+                  ) : (
+                    'Sin registro de actualización de SEIA.'
+                  )}
+                </p>
+                {syncMsg && <p className="text-[11px] text-amber-600">{syncMsg}</p>}
+              </div>
+            )}
+          </div>
         )}
 
         {canEditOperational && (

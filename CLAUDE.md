@@ -127,7 +127,7 @@ Sincronizan proyectos externos del Sistema de Evaluación de Impacto Ambiental (
 
 **MOP** — HTML scraping de `https://proyectos.mop.gob.cl` (sin API). Encoding ISO-8859-1 + entity decoding. Por región: lista + detalle de cada `cod_p` en batches de 5 paralelos. Tarda ~150s. También tiene `maxDuration = 300`.
 
-**Crons:** lunes 08:00 UTC (SEIA) y 09:00 UTC (MOP) — `vercel.json`.
+**Crons:** MOP lunes 09:00 UTC (`.github/workflows/cron-syncs.yml`). **SEIA ya no tiene cron** — pasó a refresco on-demand por botón (ver «SEIA on-demand» abajo).
 
 **Observabilidad:** ambos handlers escriben a `sync_status` al terminar (`lib/syncStatus.ts:recordSyncStatus`). Etapa 3 de la consolidación backend extendió esto a los 11 syncs restantes vía wrapper `withSyncStatus(name, runSync)` en `lib/syncRunner.ts`. Endpoint de monitoreo: `GET /api/health` (con bearer) devuelve atrasados + con_errores. Cron diario 06:00 UTC.
 
@@ -139,9 +139,9 @@ SELECT name, last_run_at, last_status, last_rows, last_error_count
 FROM sync_status ORDER BY last_run_at DESC;
 ```
 
-**Trigger manual:** `POST /api/{seia,mop}-sync` con `Authorization: Bearer <CRON_SECRET>`.
+**Trigger manual:** MOP: `POST /api/mop-sync` con `Authorization: Bearer <CRON_SECRET>`. SEIA: botón «Actualizar proyectos en SEIA» del Comité de Inversión (o `POST /api/seia-sync-v2` con bearer).
 
-**SEIA v2 (etapa 8):** ruta paralela `/api/seia-sync-v2` con troceado reanudable (cursor en `sync_status.notes`). Mismo dual-write, misma forma de datos. Corta limpio a 240s. Si `partial` queda con cursor; al reinvocar continúa. El cron de producción SIGUE apuntando a `/api/seia-sync` original hasta confirmar 2-3 corridas limpias de v2.
+**SEIA on-demand (v2 reanudable):** desde 2026-07-31 SEIA ya NO corre por cron. Se actualiza con el botón **«Actualizar proyectos en SEIA»** del Comité Seguimiento de la Inversión → `/api/seia-sync/trigger` (admin/editor, inyecta el bearer server-side) → `/api/seia-sync-v2`. La v2 trocea de forma **reanudable** (cursor en `sync_status.notes`, name `seia-v2`): corta limpio a 240s y devuelve `partial` + `next_cursor.region_idx` si queda a medias; el frontend (`ComiteInversionPanel`) **auto-continúa** hasta completar las 16 regiones (un click) y muestra barra de progreso + fecha de última actualización. Por eso `seia` salió de `EXPECTED_DAYS` en `/api/health` (sin cron que esperar). La v1 `/api/seia-sync` sigue existiendo pero ya no se usa (ni cron ni botón). El API de SEIA es flaky (timeout por página a 20s) → si alguna región queda sin refrescar, re-apretar la completa (upsert idempotente, id `seia_<EXPEDIENTE_ID>` sin duplicar).
 
 ## Environment variables
 
