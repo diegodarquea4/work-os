@@ -49,6 +49,7 @@ export default function ComiteInversionPanel({ region }: Props) {
     setSyncing(true)
     setSyncMsg('Actualizando desde SEIA… puede tardar unos minutos, no cierres esta pestaña.')
     let totalUpserted = 0
+    let totalErrores = 0
     try {
       // La v2 es reanudable: cada llamada procesa un tramo (≤240s) y devuelve
       // `partial:true` si quedó a medias (una sola invocación no cabe en el
@@ -63,11 +64,16 @@ export default function ComiteInversionPanel({ region }: Props) {
           return
         }
         totalUpserted += body.upserted ?? 0
+        totalErrores  += Array.isArray(body.errors) ? body.errors.length : 0
         if (body.partial) {
           setSyncMsg(`Actualizando… ${totalUpserted.toLocaleString('es-CL')} proyectos hasta ahora (continuando)…`)
           continue
         }
-        setSyncMsg(`Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados (16 regiones).`)
+        // Terminó el recorrido. El API de SEIA a veces deja alguna región con
+        // timeout transitorio — se avisa para que se vuelva a apretar.
+        setSyncMsg(totalErrores > 0
+          ? `Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados. ${totalErrores} región(es) tuvieron un timeout transitorio de SEIA; vuelve a apretar para completarlas.`
+          : `Listo — ${totalUpserted.toLocaleString('es-CL')} proyectos actualizados (16 regiones).`)
         return
       }
       setSyncMsg(`Se actualizaron ${totalUpserted.toLocaleString('es-CL')} proyectos, pero quedó una parte pendiente. Vuelve a apretar para continuar.`)

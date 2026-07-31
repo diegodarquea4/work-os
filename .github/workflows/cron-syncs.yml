@@ -19,7 +19,8 @@ on:
   schedule:
     - cron: '0 6 * * *'           # sinca + health (diario)
     - cron: '0 7 * * 1'           # ine-sync
-    - cron: '0 8 * * 1'           # seia-sync
+    # SEIA salió del cron: pasó a refresco on-demand (botón "Actualizar
+    # proyectos en SEIA" del Comité de Inversión → /api/seia-sync-v2 reanudable).
     - cron: '0 9 * * 1'           # mop-sync
     - cron: '0 10 * * 3'          # stop-sync (miércoles)
     - cron: '0 11 * * 1'          # pib-sync
@@ -41,7 +42,6 @@ on:
         options:
           - sinca-sync
           - ine-sync
-          - seia-sync
           - mop-sync
           - pib-sync
           - stop-sync
@@ -76,7 +76,6 @@ jobs:
           case "${{ github.event.schedule }}" in
             '0 6 * * *')          ENDPOINTS="sinca-sync health" ;;
             '0 7 * * 1')          ENDPOINTS="ine-sync" ;;
-            '0 8 * * 1')          ENDPOINTS="seia-sync" ;;
             '0 9 * * 1')          ENDPOINTS="mop-sync" ;;
             '0 10 * * 3')         ENDPOINTS="stop-sync" ;;
             '0 11 * * 1')         ENDPOINTS="pib-sync" ;;
@@ -91,7 +90,7 @@ jobs:
               # workflow_dispatch manual
               case "${{ inputs.endpoint }}" in
                 todos-semanales)
-                  ENDPOINTS="ine-sync seia-sync mop-sync pib-sync external-sync cne-sync"
+                  ENDPOINTS="ine-sync mop-sync pib-sync external-sync cne-sync"
                   ;;
                 *)
                   ENDPOINTS="${{ inputs.endpoint }}"
