@@ -267,8 +267,8 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </>
           )}
 
-          {/* Compromisos */}
-          <SH>IV. Compromisos</SH>
+          {/* Compromisos — sección V en Inversión (III Proyectos + IV Oficios la preceden), IV en Policial (III Temas tratados) */}
+          <SH>{`${data.variante === 'inversion' ? 'V' : 'IV'}. Compromisos`}</SH>
           <Text style={{ fontSize: 8.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy, marginBottom: 3 }}>
             a) Verificación de compromisos de sesiones anteriores
           </Text>

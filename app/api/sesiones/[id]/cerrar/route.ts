@@ -220,14 +220,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   // ── Oficios resueltos quedan sellados a esta sesión (Comité Seguimiento de
-  // la Inversión) — mismo patrón que compromisos. No-op para sesiones del
-  // Comité Policial: esa tabla solo tiene filas de Inversión.
-  await db
-    .from('sesion_oficios_tratados')
-    .update({ resuelto_en_sesion_id: sesionId })
-    .eq('region_cod', sesion!.region_cod)
-    .eq('estado', 'resuelto')
-    .is('resuelto_en_sesion_id', null)
+  // la Inversión) — mismo patrón que compromisos. SOLO para 'inversion':
+  // sesion_oficios_tratados no tiene columna de instancia (es region_cod +
+  // sesion_origen_id), así que sin este guard el cierre de un Comité Policial
+  // o Gabinete de la misma región estamparía resuelto_en_sesion_id de oficios
+  // de Inversión aún sin sellar, con el id de una sesión de otra instancia.
+  if (sesion!.instancia === 'inversion') {
+    await db
+      .from('sesion_oficios_tratados')
+      .update({ resuelto_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('estado', 'resuelto')
+      .is('resuelto_en_sesion_id', null)
+  }
 
   // ── Acta — si falla NO se revierte el cierre (reintento vía POST /acta) ───
   try {
