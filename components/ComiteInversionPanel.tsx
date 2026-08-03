@@ -7,6 +7,7 @@ import {
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
+import type { RegionMetaEmpleo } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
@@ -15,7 +16,7 @@ import NominaInversionModal from './NominaInversionModal'
 import OaecaModal from './OaecaModal'
 
 /**
- * Panel del tab "Comité Seguimiento de la Inversión" en ComitesRegionalesSection.
+ * Panel del tab "Comité Económico" en ComitesRegionalesSection.
  * A diferencia de MetricasEjeDrawer (Comité Policial), este comité no tiene
  * eje ni métricas — es solo el módulo Sesiones, siempre disponible (sin flag
  * de activación) porque el tab ya existe fijo para las 16 regiones.
@@ -25,7 +26,7 @@ type Props = {
   region: Region
 }
 
-const NOMBRE_COMITE = 'Comité Seguimiento de la Inversión'
+const NOMBRE_COMITE = 'Comité Económico'
 
 export default function ComiteInversionPanel({ region }: Props) {
   const canEditAny         = useCanEditAny()
@@ -41,8 +42,19 @@ export default function ComiteInversionPanel({ region }: Props) {
   const [progreso, setProgreso] = useState(0)          // 0-100 para la barra
   const [syncMsg, setSyncMsg] = useState<string | null>(null)  // solo avisos/errores
   const [ultimaAct, setUltimaAct] = useState<string | null>(null)
+  const [metaEmpleo, setMetaEmpleo] = useState<RegionMetaEmpleo | null>(null)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, canEditOperational)
+
+  const cargarMetaEmpleo = useCallback(async () => {
+    const { data } = await getSupabase()
+      .from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle()
+    setMetaEmpleo((data as RegionMetaEmpleo | null) ?? null)
+  }, [region.cod])
+
+  useEffect(() => {
+    if (canEditOperational) cargarMetaEmpleo()
+  }, [canEditOperational, cargarMetaEmpleo])
 
   // Última actualización del catálogo SEIA = synced_at más reciente de sus
   // filas en v2_proyectos_inversion (lo que refresca el botón). Solo lo mira
@@ -176,7 +188,7 @@ export default function ComiteInversionPanel({ region }: Props) {
         )}
 
         {canEditOperational && (
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-2 space-y-1.5">
             <div className="flex items-center gap-1.5 text-[11px] text-violet-900 bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1.5">
               <span className="font-semibold">{resumen.compromisosAbiertos}</span>
               <span>compromiso{resumen.compromisosAbiertos === 1 ? '' : 's'} abierto{resumen.compromisosAbiertos === 1 ? '' : 's'}</span>
@@ -187,6 +199,15 @@ export default function ComiteInversionPanel({ region }: Props) {
                   : 'sin sesiones cerradas aún'}
               </span>
             </div>
+            {metaEmpleo && (
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                <span className="font-semibold">Meta Empleo</span>
+                <span>{metaEmpleo.valor_actual.toLocaleString('es-CL')}{metaEmpleo.objetivo > 0 ? ` de ${metaEmpleo.objetivo.toLocaleString('es-CL')}` : ''}</span>
+                {metaEmpleo.objetivo > 0 && (
+                  <span className="text-amber-500">({Math.round((metaEmpleo.valor_actual / metaEmpleo.objetivo) * 100)}% avance)</span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -237,6 +258,7 @@ export default function ComiteInversionPanel({ region }: Props) {
           onClose={() => {
             setSesionOpen(false)
             refreshResumen()
+            cargarMetaEmpleo()
           }}
         />
       )}

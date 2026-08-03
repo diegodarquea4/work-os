@@ -59,7 +59,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const esGabinete = sesion!.instancia === 'gabinete'
 
   // ── Gate de habilitación por instancia ─────────────────────────────────────
-  // Comités sin eje (Gabinete Regional, Comité Seguimiento de la Inversión) no
+  // Comités sin eje (Gabinete Regional, Comité Económico) no
   // usan region_ejes.sesiones_habilitadas — Gabinete tiene su propio flag en
   // region_config; Inversión no tiene flag y siempre está disponible.
   if (esGabinete) {
@@ -232,6 +232,37 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('region_cod', sesion!.region_cod)
       .eq('estado', 'resuelto')
       .is('resuelto_en_sesion_id', null)
+  }
+
+  // ── Mesa Empleo: sumar el valor digitado en la sesión al acumulado ────────
+  // Mismo mecanismo que aplicarValorMetrica('suma', ...) de metricas_eje
+  // (mig 014), pero un único indicador por región (mig 052) — no hay
+  // catálogo de métricas acá, solo un valor opcional por sesión.
+  if (sesion!.instancia === 'inversion') {
+    const { data: valorMeta } = await db
+      .from('sesion_meta_empleo_valor').select('empleos_generados').eq('sesion_id', sesionId).maybeSingle()
+    if (valorMeta) {
+      const { data: metaRow } = await db
+        .from('region_meta_empleo').select('valor_actual').eq('region_cod', sesion!.region_cod).maybeSingle()
+      const nuevoAcumulado = aplicarValorMetrica(
+        'suma',
+        metaRow?.valor_actual != null ? Number(metaRow.valor_actual) : null,
+        Number(valorMeta.empleos_generados),
+      )
+      const { error: metaErr } = await db
+        .from('region_meta_empleo')
+        .upsert({
+          region_cod: sesion!.region_cod,
+          valor_actual: nuevoAcumulado,
+          valor_updated_by_email: profile.email,
+          valor_updated_at: new Date().toISOString(),
+        }, { onConflict: 'region_cod' })
+      if (metaErr) {
+        // No abortar: la sesión ya quedó cerrada; el acumulado es reparable
+        // desde sesion_meta_empleo_valor (fuente de verdad), igual que metricas_eje.
+        console.error('[sesiones/cerrar] fallo sumando Meta Empleo', { sesionId, metaErr })
+      }
+    }
   }
 
   // ── Acta — si falla NO se revierte el cierre (reintento vía POST /acta) ───

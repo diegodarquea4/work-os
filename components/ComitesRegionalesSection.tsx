@@ -17,7 +17,7 @@ import GabineteRegionalTab from './GabineteRegionalTab'
  *
  * El Comité Policial se ancla al eje de la región con `sesiones_habilitadas`
  * (mig 044; cada región tiene exactamente uno, sesiones_nombre 'Comité
- * Policial'). Gabinete Regional y Comité Seguimiento de la Inversión no
+ * Policial'). Gabinete Regional y Comité Económico no
  * tienen eje: el flag de Gabinete vive en region_config (mig 046) y su tab
  * monta el módulo de sesiones en modo instancia='gabinete'; Inversión no
  * tiene flag de habilitación y su tab monta el módulo en modo
@@ -29,7 +29,7 @@ type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
-  { key: 'inversion',      label: 'Comité Seguimiento de la Inversión',  ready: true  },
+  { key: 'inversion',      label: 'Comité Económico',                   ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
@@ -104,7 +104,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial, el Gabinete Regional y el Comité Seguimiento de la Inversión son las instancias con sesiones y actas en el sistema."
+          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial, el Gabinete Regional y el Comité Económico son las instancias con sesiones y actas en el sistema."
         />
       )}
     </div>

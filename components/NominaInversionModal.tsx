@@ -7,7 +7,7 @@ import type { Region } from '@/lib/regions'
 import type { SesionNomina } from '@/lib/types'
 
 /**
- * Nómina fija del Comité Seguimiento de la Inversión — copia de NominaModal
+ * Nómina fija del Comité Económico — copia de NominaModal
  * pero filtrada por `instancia='inversion'` en vez de `eje_id` (este comité
  * no tiene eje). NominaModal (Comité Policial) no se toca.
  */
@@ -101,7 +101,7 @@ export default function NominaInversionModal({ region, onClose }: Props) {
       >
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-gray-900">Nómina — Comité Seguimiento de la Inversión</p>
+            <p className="text-base font-semibold text-gray-900">Nómina — Comité Económico</p>
             <p className="text-xs text-gray-500 mt-0.5">{region.nombre} · titulares y suplentes designados por oficio</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">

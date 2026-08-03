@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import type { Region } from '@/lib/regions'
-import type { EjeSesion, SesionCompromiso, SesionOficioTratado } from '@/lib/types'
+import type { EjeSesion, SeccionComiteEconomico, SesionCompromiso, SesionOficioTratado } from '@/lib/types'
 
 /**
- * Historial de sesiones del Comité Seguimiento de la Inversión — copia de
+ * Historial de sesiones del Comité Económico — copia de
  * HistorialSesionesModal pero para `instancia='inversion'` (sin eje): el
  * detalle muestra Proyectos tratados y Oficios tratados en vez de
  * Indicadores. HistorialSesionesModal (Comité Policial) no se toca.
@@ -130,6 +130,12 @@ export default function HistorialSesionesInversionModal({ region, onClose }: Pro
     resuelto:  'bg-green-100 text-green-700',
   } as const
 
+  const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
+    mesa_empleo:            'Mesa Empleo',
+    seguimiento_inversion:  'Seguimiento Inversión',
+    general:                'General',
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -138,7 +144,7 @@ export default function HistorialSesionesInversionModal({ region, onClose }: Pro
       >
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-gray-900">Historial — Comité Seguimiento de la Inversión</p>
+            <p className="text-base font-semibold text-gray-900">Historial — Comité Económico</p>
             <p className="text-xs text-gray-500 mt-0.5">{region.nombre}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">
@@ -270,7 +276,12 @@ export default function HistorialSesionesInversionModal({ region, onClose }: Pro
                                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-px ${ESTADO_COMP[c.estado]}`}>
                                         {c.estado === 'en_curso' ? 'En curso' : c.estado === 'cumplido' ? 'Cumplido' : 'Pendiente'}
                                       </span>
-                                      <span className="flex-1 leading-snug">{c.descripcion} <span className="text-gray-400">— {c.responsable_institucion}</span></span>
+                                      <span className="flex-1 leading-snug">
+                                        {c.seccion && (
+                                          <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400 mr-1">[{SECCION_LABEL[c.seccion]}]</span>
+                                        )}
+                                        {c.descripcion} <span className="text-gray-400">— {c.responsable_institucion}</span>
+                                      </span>
                                     </div>
                                   ))}
                                 </div>

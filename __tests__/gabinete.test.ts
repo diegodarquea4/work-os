@@ -29,6 +29,8 @@ function comp(over: Partial<SesionCompromiso> & { id: number }): SesionCompromis
     escalado_a_gabinete: false,
     escalado_at: null,
     escalado_en_sesion_id: null,
+    seccion: null,
+    proyecto_id: null,
     created_at: `2026-07-0${(over.id % 9) + 1}T10:00:00Z`,
     ...over,
   }

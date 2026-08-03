@@ -650,6 +650,13 @@ export type SesionCompromiso = {
   escalado_a_gabinete: boolean
   escalado_at: string | null
   escalado_en_sesion_id: number | null
+  // Comité Económico (instancia='inversion') únicamente — mig 052. Obligatorio
+  // al crear el compromiso en esa instancia (se exige en la app, no en BD);
+  // NULL para compromisos de Comité Policial/Gabinete. Genera el tag al listar.
+  seccion: SeccionComiteEconomico | null
+  // Proyecto asociado (v2_proyectos_inversion), opcional — solo trazabilidad,
+  // no determina el tag.
+  proyecto_id: string | null
   created_at: string
 }
 
@@ -674,8 +681,18 @@ export type RegionConfig = {
   gabinete_nombre: string
 }
 
-// ── Comité Seguimiento de la Inversión ───────────────────────────────────────
+// ── Comité Económico ──────────────────────────────────────────────────────────
 // Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
+// Etiqueta visible "Comité Económico"; el valor de instancia en BD sigue
+// siendo 'inversion' (no se tocó — solo cambió el nombre de cara al usuario).
+// Agrupa dos frentes dentro de la misma sesión: Mesa Empleo (indicador Meta
+// Empleo, más adelante Proyectos de Inversión Pública) y Seguimiento de la
+// Inversión (lo que ya existía: oficios + proyectos tratados). `Compromiso.
+// seccion` (abajo) marca a cuál de los dos pertenece cada compromiso.
+
+// Sección de un compromiso del Comité Económico — genera el tag al listar
+// compromisos. NULL para compromisos de Comité Policial/Gabinete.
+export type SeccionComiteEconomico = 'mesa_empleo' | 'seguimiento_inversion' | 'general'
 
 // Catálogo de organismos (OAECA) — autoincremental: precargado y crece
 // cuando alguien escribe uno nuevo al cargar un oficio en sesión.
@@ -712,6 +729,25 @@ export type SesionOficioTratado = {
   estado_updated_by_email: string | null
   resuelto_en_sesion_id: number | null
   created_at: string
+}
+
+// Mesa Empleo — meta declarada + acumulado por región (mig 052). Mismo
+// patrón que Metrica/metricas_eje: objetivo fijo, valor_actual solo se
+// actualiza server-side al cerrar una sesión (nunca editado directo).
+export type RegionMetaEmpleo = {
+  region_cod: string
+  objetivo: number
+  valor_actual: number
+  valor_updated_by_email: string | null
+  valor_updated_at: string | null
+}
+
+// Valor de "empleos generados" digitado en una sesión — un único indicador
+// (no un catálogo), por eso UNIQUE(sesion_id) en vez de filas por métrica.
+export type SesionMetaEmpleoValor = {
+  id: number
+  sesion_id: number
+  empleos_generados: number
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────
