@@ -194,7 +194,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
     { key: 'dashboard',      label: 'Dashboard' },
     { key: 'kanban',         label: 'Gabinete'  },
-    { key: 'vista-regional', label: 'Mi Región' },
     { key: 'desalojos',      label: 'Desalojos', visible: canSeeDesalojos },
   ]
   const visibleGroupedViews = GROUPED_VIEWS.filter(v => v.visible !== false)
@@ -560,16 +559,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </button>
             </div>
             <button
-              onClick={() => { setMetricasInitialRegion(undefined); setView('metricas') }}
+              onClick={() => setView('vista-regional')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'metricas' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+                view === 'vista-regional' || view === 'metricas' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M1 9l3-3 2 2 3-4 2 2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M1 11h10" strokeLinecap="round"/>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 11s3.5-3.2 3.5-6A3.5 3.5 0 0 0 6 1.5 3.5 3.5 0 0 0 2.5 5c0 2.8 3.5 6 3.5 6z"/>
+                <circle cx="6" cy="4.8" r="1.2"/>
               </svg>
-              Métricas
+              Mi Región
             </button>
             {/* PREGO y Permisos viven en el menú tuerca (configuración) —
                 accesos de baja frecuencia fuera de la barra principal. */}
@@ -692,6 +691,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             onActiveRegionChange={setActiveRegionName}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            onOpenMetricas={(nombre) => { setMetricasInitialRegion(nombre); setView('metricas') }}
           />
         </div>
       )}

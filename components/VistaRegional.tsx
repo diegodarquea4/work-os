@@ -11,7 +11,6 @@ import type { PregoRow } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
 import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
-import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
@@ -28,8 +27,6 @@ import {
   ejeBreakdownFor,
 } from '@/lib/regionSummary'
 
-const IndicadoresModalV2 = dynamic(() => import('./IndicadoresModalV2'))
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
@@ -42,12 +39,14 @@ type Props = {
   // para que la sección "En foco" abra la ficha y propague cambios global.
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
+  /** Abre la vista de Métricas centrada en esta región (reemplaza Indicadores). */
+  onOpenMetricas: (regionNombre: string) => void
 }
 
 // Ver comentario junto a su uso en la Sección 4 (Métricas clave).
 const SHOW_INVERSION_CARD = false
 
-export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad }: Props) {
+export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad, onOpenMetricas }: Props) {
   // Determine accessible region codes for this user
   const allowedCods: string[] = useMemo(() => {
     if (!profile) return []
@@ -76,7 +75,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
     }
   }, [selectedCod, activeRegionName, onActiveRegionChange])
 
-  const [indicadoresOpen, setIndicadoresOpen] = useState(false)
   const [proposeModalOpen, setProposeModalOpen] = useState(false)
   // Bump al recibir confirmación de upload exitoso para que MyProposalsList recargue.
   const [proposalsRefreshKey, setProposalsRefreshKey] = useState(0)
@@ -366,11 +364,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           </div>
         )}
 
-        {/* IndicadoresModal — self-contained overlay */}
-        {indicadoresOpen && region && (
-          <IndicadoresModalV2 region={region} onClose={() => setIndicadoresOpen(false)} />
-        )}
-
         {/* ProposeImportModal — para mandar propuesta de actualización a DCI.
             Solo se monta si hay región activa: el botón que lo abre también
             está gateado por `region`, así que en la práctica siempre estará. */}
@@ -508,13 +501,14 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 )}
                 {region && (
                   <button
-                    onClick={() => setIndicadoresOpen(true)}
+                    onClick={() => onOpenMetricas(region.nombre)}
                     className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M1 9l3-3 2 2 3-4 2 2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M1 11h10" strokeLinecap="round"/>
                     </svg>
-                    Indicadores
+                    Métricas
                   </button>
                 )}
                 {/* Minuta split button */}
