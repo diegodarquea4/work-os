@@ -691,7 +691,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             onActiveRegionChange={setActiveRegionName}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
-            onOpenMetricas={(nombre) => { setMetricasInitialRegion(nombre); setView('metricas') }}
           />
         </div>
       )}

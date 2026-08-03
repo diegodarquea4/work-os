@@ -11,6 +11,7 @@ import type { PregoRow } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
 import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
+import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
 import MyProposalsList from './MyProposalsList'
 import MetricasEjeDrawer from './MetricasEjeDrawer'
@@ -27,6 +28,10 @@ import {
   ejeBreakdownFor,
 } from '@/lib/regionSummary'
 
+// MetricasView (Recharts, pesado) se carga on-demand y se abre como overlay
+// sobrepuesto sobre Mi Región al apretar "Métricas" (reemplazó a Indicadores).
+const MetricasView = dynamic(() => import('./MetricasView'))
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
@@ -39,14 +44,12 @@ type Props = {
   // para que la sección "En foco" abra la ficha y propague cambios global.
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
-  /** Abre la vista de Métricas centrada en esta región (reemplaza Indicadores). */
-  onOpenMetricas: (regionNombre: string) => void
 }
 
 // Ver comentario junto a su uso en la Sección 4 (Métricas clave).
 const SHOW_INVERSION_CARD = false
 
-export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad, onOpenMetricas }: Props) {
+export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad }: Props) {
   // Determine accessible region codes for this user
   const allowedCods: string[] = useMemo(() => {
     if (!profile) return []
@@ -75,6 +78,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
     }
   }, [selectedCod, activeRegionName, onActiveRegionChange])
 
+  const [metricasOpen, setMetricasOpen] = useState(false)
   const [proposeModalOpen, setProposeModalOpen] = useState(false)
   // Bump al recibir confirmación de upload exitoso para que MyProposalsList recargue.
   const [proposalsRefreshKey, setProposalsRefreshKey] = useState(0)
@@ -364,6 +368,35 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           </div>
         )}
 
+        {/* Métricas — overlay sobrepuesto sobre Mi Región (reemplazó a Indicadores).
+            No es una vista aparte: se monta encima del contenido regional y al
+            cerrarlo se vuelve a Mi Región. Deja visible la barra superior. */}
+        {metricasOpen && region && (
+          <div className="fixed inset-x-0 bottom-0 top-20 z-30 bg-white flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 flex-shrink-0">
+              <div className="flex items-center gap-2 text-slate-900">
+                <svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 9l3-3 2 2 3-4 2 2"/><path d="M1 11h10"/>
+                </svg>
+                <h2 className="text-sm font-semibold">Métricas · {region.nombre}</h2>
+              </div>
+              <button
+                onClick={() => setMetricasOpen(false)}
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                aria-label="Cerrar Métricas y volver a Mi Región"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 3L5 7l4 4"/>
+                </svg>
+                Volver a Mi Región
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <MetricasView initialRegionNombre={region.nombre} />
+            </div>
+          </div>
+        )}
+
         {/* ProposeImportModal — para mandar propuesta de actualización a DCI.
             Solo se monta si hay región activa: el botón que lo abre también
             está gateado por `region`, así que en la práctica siempre estará. */}
@@ -501,7 +534,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 )}
                 {region && (
                   <button
-                    onClick={() => onOpenMetricas(region.nombre)}
+                    onClick={() => setMetricasOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
