@@ -13,8 +13,9 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
 export type ActaData = {
   // 'policial' → sección III es el reporte por institución (mig 048).
-  // 'inversion' → secciones III/IV son Proyectos tratados/Oficios tratados
-  // (este comité no tiene eje ni métricas, mig 049).
+  // 'inversion' (Comité Económico) → sección III es Mesa Empleo (Meta
+  // Empleo, mig 052), IV/V son Proyectos/Oficios tratados (Seguimiento de
+  // la Inversión). Este comité no tiene eje ni metricas_eje (mig 049).
   variante: 'policial' | 'inversion'
   nombreInstancia: string
   regionNombre: string
@@ -43,6 +44,14 @@ export type ActaData = {
       desglose: { etiqueta: string; valor: string }[]
     }[]
   }[]
+  // Mesa Empleo (mig 052) — solo 'inversion'. null si la sesión no digitó
+  // empleos generados (el acumulado de la región igual se muestra).
+  metaEmpleo: {
+    empleosSesion: number | null
+    acumulado: number
+    objetivo: number
+    pctAvance: number | null          // null si objetivo=0 (evita división por cero)
+  } | null
   proyectosTratados: { nombre: string; nota: string | null }[]
   oficiosTratados: {
     nombreProyecto: string
@@ -50,18 +59,22 @@ export type ActaData = {
     fechaLimite: string | null
     estado: 'pendiente' | 'resuelto'
   }[]
+  // `seccion` solo aplica a variante 'inversion' — genera el tag Mesa Empleo /
+  // Seguimiento de la Inversión / General. null en Comité Policial.
   compVerificados: {
     descripcion: string
     institucion: string
     nombre: string | null
     plazo: string | null
     estado: 'pendiente' | 'en_curso' | 'cumplido'
+    seccion: 'mesa_empleo' | 'seguimiento_inversion' | 'general' | null
   }[]
   compNuevos: {
     descripcion: string
     institucion: string
     nombre: string | null
     plazo: string | null
+    seccion: 'mesa_empleo' | 'seguimiento_inversion' | 'general' | null
   }[]
   generadoPor: string | null
   generadoEn: string                  // display, ya formateado
@@ -90,6 +103,12 @@ function fmtFecha(iso: string | null): string {
     return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })
   } catch { return iso }
 }
+
+function fmtNum(n: number): string {
+  return n.toLocaleString('es-CL')
+}
+
+const SECCION_LABEL = { mesa_empleo: 'Mesa Empleo', seguimiento_inversion: 'Seguimiento Inversión', general: 'General' } as const
 
 const s = StyleSheet.create({
   page: { fontFamily: 'Carlito', fontSize: 9, color: C.textDark, backgroundColor: C.white, paddingBottom: 40 },
@@ -123,6 +142,7 @@ const s = StyleSheet.create({
   instText:  { fontSize: 8.5, lineHeight: 1.5, color: C.textDark },
 
   estadoChip: { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white, paddingHorizontal: 4, paddingVertical: 1.5, borderRadius: 2 },
+  seccionChip: { fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold', color: C.textMid, backgroundColor: C.bgLight, paddingHorizontal: 4, paddingVertical: 1.5, borderRadius: 2, alignSelf: 'flex-start' },
 
   vacio: { fontSize: 8.5, color: C.textLight, fontStyle: 'italic', paddingVertical: 4, paddingHorizontal: 4 },
 
@@ -234,8 +254,32 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </>
           ) : (
             <>
+              {/* Mesa Empleo — Meta Empleo */}
+              {data.metaEmpleo && (
+                <>
+                  <SH>III. Mesa Empleo — Meta Empleo</SH>
+                  <View style={s.metaRow}>
+                    <Text style={s.metaK}>Empleos generados esta sesión</Text>
+                    <Text style={s.metaV}>{data.metaEmpleo.empleosSesion != null ? fmtNum(data.metaEmpleo.empleosSesion) : '—'}</Text>
+                  </View>
+                  <View style={s.metaRow}>
+                    <Text style={s.metaK}>Acumulado</Text>
+                    <Text style={s.metaV}>
+                      {fmtNum(data.metaEmpleo.acumulado)}
+                      {data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}
+                      {data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% avance)` : ''}
+                    </Text>
+                  </View>
+                  {data.metaEmpleo.objetivo > 0 && (
+                    <View style={{ height: 6, backgroundColor: C.bgLight, borderRadius: 3, marginTop: 4, marginBottom: 8, overflow: 'hidden' }}>
+                      <View style={{ height: 6, width: `${Math.min(100, data.metaEmpleo.pctAvance ?? 0)}%`, backgroundColor: C.wine }} />
+                    </View>
+                  )}
+                </>
+              )}
+
               {/* Proyectos tratados */}
-              <SH>III. Proyectos tratados en profundidad</SH>
+              <SH>IV. Proyectos tratados en profundidad</SH>
               {data.proyectosTratados.length === 0 ? (
                 <Text style={s.vacio}>Sin proyectos tratados en esta sesión.</Text>
               ) : data.proyectosTratados.map((p, i) => (
@@ -246,7 +290,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
               ))}
 
               {/* Oficios tratados */}
-              <SH>IV. Oficios tratados</SH>
+              <SH>V. Oficios tratados</SH>
               <View style={s.th}>
                 <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
                 <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
@@ -267,8 +311,8 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </>
           )}
 
-          {/* Compromisos — sección V en Inversión (III Proyectos + IV Oficios la preceden), IV en Policial (III Temas tratados) */}
-          <SH>{`${data.variante === 'inversion' ? 'V' : 'IV'}. Compromisos`}</SH>
+          {/* Compromisos — sección VI en Inversión (III Mesa Empleo + IV Proyectos + V Oficios la preceden), IV en Policial (III Temas tratados) */}
+          <SH>{`${data.variante === 'inversion' ? 'VI' : 'IV'}. Compromisos`}</SH>
           <Text style={{ fontSize: 8.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.navy, marginBottom: 3 }}>
             a) Verificación de compromisos de sesiones anteriores
           </Text>
@@ -277,6 +321,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           ) : data.compVerificados.map((c, i) => (
             <View key={i} style={s.tr2} wrap={false}>
               <View style={{ flex: 5 }}>
+                {c.seccion && <Text style={[s.seccionChip, { marginBottom: 2 }]}>{SECCION_LABEL[c.seccion]}</Text>}
                 <Text style={s.td}>{c.descripcion}</Text>
                 <Text style={[s.td, { color: C.textMid, fontSize: 7.5, marginTop: 1 }]}>
                   {c.institucion}{c.nombre ? ` · ${c.nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
@@ -296,6 +341,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           ) : data.compNuevos.map((c, i) => (
             <View key={i} style={s.tr2} wrap={false}>
               <View style={{ flex: 1 }}>
+                {c.seccion && <Text style={[s.seccionChip, { marginBottom: 2 }]}>{SECCION_LABEL[c.seccion]}</Text>}
                 <Text style={s.td}>{c.descripcion}</Text>
                 <Text style={[s.td, { color: C.textMid, fontSize: 7.5, marginTop: 1 }]}>
                   Responsable: {c.institucion}{c.nombre ? ` · ${c.nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
