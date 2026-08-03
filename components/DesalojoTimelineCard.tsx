@@ -375,7 +375,7 @@ export default function DesalojoTimelineCard({
               type="button"
               onClick={async () => { await commitDescripcion(); setExpanded(false) }}
               disabled={saving}
-              className="text-[11px] px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold"
+              className="text-[11px] px-2.5 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold"
             >
               {saving ? 'Guardando…' : 'Guardar'}
             </button>
@@ -620,7 +620,7 @@ function HitoMini({
                 Cancelar
               </button>
               <button type="button" onClick={commitDetalle} disabled={savingDesc}
-                className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+                className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
                 {savingDesc ? 'Guardando…' : 'Guardar detalle'}
               </button>
             </div>
@@ -681,7 +681,7 @@ function HitoMini({
           Cancelar
         </button>
         <button type="button" onClick={commit} disabled={saving}
-          className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+          className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
           {saving ? 'Guardando…' : 'Guardar'}
         </button>
       </div>
@@ -798,7 +798,7 @@ function HitoAddForm({
           Cancelar
         </button>
         <button type="button" onClick={submit} disabled={saving || !tit.trim()}
-          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
           {saving ? 'Creando…' : 'Crear hito'}
         </button>
       </div>

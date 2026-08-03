@@ -114,7 +114,7 @@ export default function DesalojoVinculoMinvu({
             <button
               type="button"
               onClick={() => setOpenModal(true)}
-              className="text-[11px] px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-semibold shrink-0"
+              className="text-[11px] px-2.5 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 font-semibold shrink-0"
             >
               Vincular folio MINVU
             </button>

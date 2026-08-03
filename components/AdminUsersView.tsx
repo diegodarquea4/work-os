@@ -5,6 +5,7 @@ import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
 import DocumentosRegionalesPanel from './DocumentosRegionalesPanel'
 import ImportProposalsPanel from './ImportProposalsPanel'
+import { Alert } from '@/components/ui'
 
 type UserRow = {
   id: string
@@ -288,7 +289,7 @@ export default function AdminUsersView() {
         </div>
         <button
           onClick={() => setUsuariosOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7">
             <circle cx="5" cy="4" r="2"/>
@@ -329,7 +330,7 @@ export default function AdminUsersView() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowInvite(true)}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-violet-700 text-white text-xs font-semibold rounded-lg hover:bg-violet-800 transition-colors"
                 >
                   <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M7 2v10M2 7h10"/>
@@ -350,10 +351,7 @@ export default function AdminUsersView() {
 
             <div className="flex-1 overflow-auto px-6 py-5">
               {error && (
-                <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-                  {error}
-                  <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">✕</button>
-                </div>
+                <Alert variant="error" className="mb-4" onClose={() => setError(null)}>{error}</Alert>
               )}
               {!loading && (
                 <div className="relative mb-4 max-w-sm">
@@ -505,7 +503,7 @@ export default function AdminUsersView() {
                   onChange={e => setInviteEmail(e.target.value)}
                   required
                   placeholder="usuario@interior.gob.cl"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
                 />
               </div>
               <div>
@@ -515,7 +513,7 @@ export default function AdminUsersView() {
                   value={inviteName}
                   onChange={e => setInviteName(e.target.value)}
                   placeholder="Ana Torres"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
                 />
               </div>
               <div>
@@ -523,7 +521,7 @@ export default function AdminUsersView() {
                 <select
                   value={inviteRole}
                   onChange={e => { setInviteRole(e.target.value as UserRole); setInviteRegions([]) }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
                 >
                   <option value="admin">Administrador — acceso total + gestión de usuarios</option>
                   <option value="editor">Editor — acceso total de edición</option>
@@ -577,7 +575,7 @@ export default function AdminUsersView() {
                 <button
                   type="submit"
                   disabled={inviting}
-                  className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
                 >
                   {inviting ? 'Creando...' : 'Crear usuario'}
                 </button>
@@ -614,7 +612,7 @@ function CodeModalView({ email, codigo, onClose }: { email: string; codigo: stri
             </code>
             <button
               onClick={copiar}
-              className="px-3 py-3 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 shrink-0"
+              className="px-3 py-3 bg-violet-700 text-white text-xs font-semibold rounded-lg hover:bg-violet-800 shrink-0"
             >
               {copiado ? 'Copiado ✓' : 'Copiar'}
             </button>

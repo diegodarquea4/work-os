@@ -340,7 +340,7 @@ function NameColorModal({
             type="button"
             onClick={() => canSave && onConfirm(nombre.trim(), color)}
             disabled={!canSave}
-            className="px-4 py-1.5 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 text-sm font-medium bg-violet-700 text-white rounded-lg hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Guardar
           </button>
@@ -390,7 +390,7 @@ function WktModal({
             type="button"
             onClick={handleParse}
             disabled={!wkt.trim()}
-            className="px-4 py-1.5 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 text-sm font-medium bg-violet-700 text-white rounded-lg hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Continuar
           </button>
@@ -577,7 +577,7 @@ function MapHitoRow({
             <button type="button" onClick={() => { setDraft(hito.descripcion ?? ''); setEditing(false) }} disabled={saving}
               className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
             <button type="button" onClick={commit} disabled={saving}
-              className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-white hover:bg-slate-900 disabled:opacity-50 font-semibold">
+              className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
               {saving ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
@@ -645,7 +645,7 @@ function AddHitoForm({
         <button type="button" onClick={() => { setOpen(false); setErr(null) }} disabled={saving}
           className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
         <button type="button" onClick={submit} disabled={saving || !tit.trim()}
-          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
           {saving ? 'Creando…' : 'Crear hito'}
         </button>
       </div>
@@ -723,7 +723,7 @@ function NewEtapaForm({
         <button type="button" onClick={onCancel} disabled={saving}
           className="text-[10px] px-2 py-0.5 rounded text-gray-600 hover:bg-gray-100">Cancelar</button>
         <button type="button" onClick={submit} disabled={saving || !tit.trim()}
-          className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          className="text-[10px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
           {saving ? 'Creando…' : 'Crear etapa'}
         </button>
       </div>
@@ -1041,7 +1041,7 @@ export default function DesalojoMapaDrawer(props: Props) {
           onClick={() => beginDraw(selectedEtapaId)}
           disabled={!!pendingCoords || saving}
           title={label}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-md hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-700 text-white rounded-md hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 10L10 2M2 10l3-1M2 10l1-3"/>

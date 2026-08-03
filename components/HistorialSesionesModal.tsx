@@ -205,7 +205,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
                               <button
                                 onClick={() => descargarActa(s)}
                                 disabled={working}
-                                className="text-xs px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-700 disabled:opacity-50"
+                                className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-50"
                               >
                                 ⬇ Descargar acta
                               </button>

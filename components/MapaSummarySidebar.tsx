@@ -271,7 +271,7 @@ function RegionRow({ region, count, avgPct, rag, alertas, dias, isLocked, onSele
               <span className="text-[11px] text-gray-400">Sin alertas</span>
             )}
             {!isLocked && (
-              <span className="text-[11px] text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-[11px] text-violet-700 opacity-0 group-hover:opacity-100 transition-opacity">
                 Ver detalle →
               </span>
             )}

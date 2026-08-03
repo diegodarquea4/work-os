@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import type { Metrica, RegionEje } from '@/lib/types'
 import { composeEjeLabel } from '@/lib/ejes'
+import { Alert } from '@/components/ui'
 
 /**
  * Modal compacto para crear o editar la DEFINICIÓN de una métrica por eje
@@ -176,7 +177,7 @@ export default function MetricaEditModal({
               onChange={e => setTitulo(e.target.value)}
               required
               placeholder="Ej: Cobertura APS"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
             />
           </div>
 
@@ -189,7 +190,7 @@ export default function MetricaEditModal({
               onChange={e => setDescripcion(e.target.value)}
               rows={2}
               placeholder="A qué corresponde esta métrica"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 resize-none"
             />
           </div>
 
@@ -248,7 +249,7 @@ export default function MetricaEditModal({
                   required
                   step="any"
                   placeholder="Ej: 95"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
                 />
               </div>
             )}
@@ -261,7 +262,7 @@ export default function MetricaEditModal({
                 value={unidad}
                 onChange={e => setUnidad(e.target.value)}
                 placeholder="%, km…"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
               />
             </div>
           </div>
@@ -272,7 +273,7 @@ export default function MetricaEditModal({
           )}
 
           {error && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</p>
+            <Alert variant="error">{error}</Alert>
           )}
 
           <div className="flex gap-2 pt-1">
@@ -287,7 +288,7 @@ export default function MetricaEditModal({
             <button
               type="submit"
               disabled={saving || !titulo.trim() || (!esPulso && !objetivo.trim())}
-              className="flex-1 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50"
+              className="flex-1 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50"
             >
               {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear métrica'}
             </button>

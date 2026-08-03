@@ -37,6 +37,33 @@
   --spacing-fluid-xl: clamp(2rem,     1.5rem    + 0.625vw, 3rem);       /* 32→48px */
 }
 
+/* ─── Neutro unificado: slate es la escala canónica ─────────────────────────
+   Decisión de diseño (2026-08, Diego): una sola escala de gris en todo el panel.
+   Se remapea la paleta `gray-*` de Tailwind a los valores de `slate-*`, así el
+   panel entero usa un único neutro (más frío, en armonía con el violeta de
+   marca) SIN reescribir los ~84 archivos que hoy mezclan gray y slate. Los
+   componentes nuevos (components/ui) usan `slate-*` directamente. Migrar los
+   `gray-*` a `slate-*` en el código queda como limpieza gradual — visualmente
+   ya está unificado. */
+@theme {
+  --color-gray-50:  #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+
+  /* Colores de marca (antes hex sueltos repetidos): vino "Capa I" y navy de
+     actas/PDF. Ahora generan utilities: bg-wine, text-wine, ring-wine, bg-navy… */
+  --color-wine: #6b1d2c;
+  --color-navy: #1a2744;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -47,7 +74,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist (cargada por next/font en app/layout.tsx como --font-geist-sans);
+     Arial/Helvetica de fallback. Antes esto forzaba Arial y pisaba Geist. */
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 /* ─── Rich text content (Tiptap) ─────────────────────────────────────────────

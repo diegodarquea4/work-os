@@ -8,6 +8,7 @@ import { REGIONS } from '@/lib/regions'
 import ImportErrorReport from './ImportErrorReport'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
+import { Alert } from '@/components/ui'
 
 /**
  * Modal para que un usuario (típicamente regional) suba una propuesta de
@@ -195,7 +196,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
             </p>
             <button
               onClick={handleClose}
-              className="mt-6 px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700"
+              className="mt-6 px-5 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800"
             >
               Cerrar
             </button>
@@ -210,7 +211,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
                   const { downloadPrefilled } = await import('@/lib/templateExcel')
                   downloadPrefilled(regionName, iniciativas ?? [], regionEjes)
                 }}
-                className="text-blue-600 hover:text-blue-800 font-medium underline"
+                className="text-violet-700 hover:text-violet-900 font-medium underline"
               >
                 Descarga las iniciativas actuales de {regionName}
               </button>{' '}
@@ -284,9 +285,9 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
                 )}
 
                 {!hayCambiosValidos && (
-                  <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                  <Alert variant="warning">
                     Ninguna fila quedó válida para proponer. Corrige el archivo y vuelve a cargarlo.
-                  </div>
+                  </Alert>
                 )}
               </div>
             )}
@@ -300,7 +301,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
                 onChange={e => setNote(e.target.value)}
                 rows={3}
                 placeholder='Ej: "carga semanal Aysén — actualicé estado de los proyectos en ejecución".'
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 resize-none"
               />
             </div>
 
@@ -332,7 +333,7 @@ export default function ProposeImportModal({ open, onClose, regionName, iniciati
               <button
                 type="submit"
                 disabled={!file || submitting || parsing || !hayCambiosValidos}
-                className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50"
+                className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50"
                 title={!hayCambiosValidos ? 'Corrige los errores antes de enviar' : undefined}
               >
                 {submitting ? 'Enviando...' : 'Enviar propuesta'}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Alert } from '@/components/ui'
 
 type DocRow = {
   region_cod:    string
@@ -137,10 +138,7 @@ export default function DocumentosRegionalesPanel() {
       </div>
 
       {error && (
-        <div className="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          {error}
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">✕</button>
-        </div>
+        <Alert variant="error" className="mb-3" onClose={() => setError(null)}>{error}</Alert>
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

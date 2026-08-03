@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import type { ComiteInstitucion, ComiteMetrica } from '@/lib/types'
 import { COMITE_INSTITUCIONES } from '@/lib/sesiones/helpers'
+import { Alert } from '@/components/ui'
 
 /**
  * Editor de la DEFINICIÓN de un ítem del catálogo por institución
@@ -119,7 +120,7 @@ export default function MetricaComiteEditModal({
             <input
               type="text" value={nombre} onChange={e => setNombre(e.target.value)} required
               placeholder="Ej: Detenidos durante la última semana"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
             />
           </div>
 
@@ -143,12 +144,12 @@ export default function MetricaComiteEditModal({
               <input
                 type="text" value={unidad} onChange={e => setUnidad(e.target.value)}
                 placeholder="detenidos, kg, %…"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
               />
             </div>
           )}
 
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</p>}
+          {error && <Alert variant="error">{error}</Alert>}
 
           <div className="flex gap-2 pt-1">
             {isEdit && (
@@ -162,7 +163,7 @@ export default function MetricaComiteEditModal({
               Cancelar
             </button>
             <button type="submit" disabled={saving || !nombre.trim()}
-              className="flex-1 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50">
+              className="flex-1 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50">
               {saving ? 'Guardando…' : isEdit ? 'Guardar' : 'Crear'}
             </button>
           </div>

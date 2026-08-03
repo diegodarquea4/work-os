@@ -10,6 +10,7 @@ import {
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
 import { parseEjeString } from '@/lib/ejes'
+import { Alert } from '@/components/ui'
 
 /**
  * Modal de gestión del catálogo de ejes de una región. Solo admin/editor DCI
@@ -382,7 +383,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
                 <button
                   type="submit"
                   disabled={saving || !newNumero || !newNombre.trim()}
-                  className="flex-1 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-700 disabled:opacity-50"
+                  className="flex-1 py-1.5 bg-violet-700 text-white text-xs font-semibold rounded hover:bg-violet-800 disabled:opacity-50"
                 >
                   {saving ? '…' : 'Agregar'}
                 </button>
@@ -391,9 +392,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
           )}
 
           {error && (
-            <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg leading-snug">
-              {error}
-            </p>
+            <Alert variant="error" className="mt-3">{error}</Alert>
           )}
         </div>
 

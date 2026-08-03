@@ -260,7 +260,7 @@ function OverrideAvanceModal({
             type="button"
             onClick={submit}
             disabled={!validLen || saving}
-            className="text-xs px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
+            className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-medium"
           >
             {saving ? 'Avanzando…' : 'Avanzar con justificación'}
           </button>

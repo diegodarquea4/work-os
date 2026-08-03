@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ImportErrorReport from './ImportErrorReport'
+import { Alert } from '@/components/ui'
 
 /**
  * Panel para que admin/editor revise propuestas de actualización.
@@ -148,10 +149,7 @@ export default function ImportProposalsPanel() {
       </div>
 
       {error && (
-        <div className="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          {error}
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">✕</button>
-        </div>
+        <Alert variant="error" className="mb-3" onClose={() => setError(null)}>{error}</Alert>
       )}
 
       {lastResult && (
@@ -357,7 +355,7 @@ function RejectModal({
               onChange={e => setNote(e.target.value)}
               rows={3}
               placeholder="Ej: faltan datos obligatorios en filas 5-8; favor corregir y reenviar."
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 resize-none"
               autoFocus
             />
           </div>

@@ -265,7 +265,7 @@ function ExtraRow({
               type="button"
               onClick={onUploadClick}
               disabled={saving}
-              className="text-[11px] px-2 py-0.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
+              className="text-[11px] px-2 py-0.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-medium"
             >
               + Subir
             </button>

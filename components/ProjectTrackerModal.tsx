@@ -854,7 +854,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     <button
                       onClick={() => saveMetaField('proximo_hito', proximoHito)}
                       disabled={savingField}
-                      className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50 flex-shrink-0"
+                      className="text-xs px-2 py-0.5 bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50 flex-shrink-0"
                     >
                       Guardar
                     </button>
@@ -973,7 +973,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                       }
                     }}
                     disabled={savingField}
-                    className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+                    className="text-xs px-2 py-0.5 bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50"
                   >Guardar</button>
                   <button
                     onClick={() => { setEditingField(null); setInversionMm(prioridad.inversion_mm != null ? String(prioridad.inversion_mm) : '') }}
@@ -1011,7 +1011,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   <button
                     onClick={() => saveMetaField('codigo_bip', codigoBip)}
                     disabled={savingField}
-                    className="text-xs px-2 py-0.5 bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+                    className="text-xs px-2 py-0.5 bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50"
                   >Guardar</button>
                   <button
                     onClick={() => { setEditingField(null); setCodigoBip(prioridad.codigo_bip ?? '') }}
