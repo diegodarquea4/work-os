@@ -71,7 +71,7 @@ export default function FaqList({ isAdmin, canEditAny }: Props) {
             </p>
             <a
               href={`mailto:${CONTACTO}?subject=Consulta%20PSG%3A%20${encodeURIComponent(query)}`}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
             >
               Escribir a la división
             </a>
@@ -161,7 +161,7 @@ function FaqItem({ entry, isOpen, onToggle, catalog, onNavigate }: FaqItemProps)
                     <button
                       key={relId}
                       onClick={() => onNavigate(relId)}
-                      className="text-xs text-blue-700 hover:text-blue-900 hover:underline text-left"
+                      className="text-xs text-violet-700 hover:text-violet-900 hover:underline text-left"
                     >
                       → {rel.pregunta}
                     </button>

@@ -327,7 +327,7 @@ export default function RegionPreviewPanel({
         )}
         <button
           onClick={onGoToDashboard}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-violet-700 text-white rounded-lg text-sm font-medium hover:bg-violet-800 transition-colors"
         >
           <span>Ver Mi Región</span>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">

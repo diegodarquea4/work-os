@@ -128,7 +128,7 @@ function KpiCard({ label, value, sub, color = '#3b82f6', valueColor }: {
   )
 }
 
-const selectCls = 'border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400'
+const selectCls = 'border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:border-violet-500'
 
 function Filtros({ children }: { children: React.ReactNode }) {
   return <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap gap-4 items-end">{children}</div>

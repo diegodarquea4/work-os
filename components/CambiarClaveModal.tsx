@@ -76,7 +76,7 @@ export default function CambiarClaveModal({ mode, onClose }: {
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-600"><path d="M4 11l5 5 9-11" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </div>
             <h3 className="text-base font-bold text-slate-900 mb-2">Clave actualizada</h3>
-            <button onClick={onClose} className="mt-4 px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700">Cerrar</button>
+            <button onClick={onClose} className="mt-4 px-5 py-2 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800">Cerrar</button>
           </div>
         ) : (
           <form onSubmit={submit} className="px-6 py-5 space-y-3">
@@ -85,7 +85,7 @@ export default function CambiarClaveModal({ mode, onClose }: {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50"
+              className="w-full py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50"
             >
               {loading ? 'Guardando...' : 'Guardar clave nueva'}
             </button>

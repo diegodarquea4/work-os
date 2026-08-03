@@ -132,7 +132,7 @@ export default function DesalojoContextoTab({
                 Cancelar
               </button>
               <button type="button" onClick={commitResumen} disabled={savingResumen}
-                className="text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+                className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
                 {savingResumen ? 'Guardando…' : 'Guardar'}
               </button>
             </div>
@@ -192,7 +192,7 @@ export default function DesalojoContextoTab({
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-medium"
+                className="text-xs px-2.5 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-medium"
               >
                 {uploading ? 'Subiendo…' : '+ Subir'}
               </button>

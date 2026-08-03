@@ -89,7 +89,7 @@ export default function DesalojoCapasMiniTable({
           <button
             type="button"
             onClick={() => setShowCreate(s => !s)}
-            className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-medium"
+            className="text-xs px-2.5 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 font-medium"
           >
             + Nueva capa
           </button>
@@ -105,7 +105,7 @@ export default function DesalojoCapasMiniTable({
             placeholder="Ej. Polígono Armada"
             className="flex-1 text-sm px-2.5 py-1.5 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
-          <button type="submit" disabled={busy || !createName.trim()} className="text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+          <button type="submit" disabled={busy || !createName.trim()} className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
             Crear
           </button>
           <button type="button" onClick={() => { setShowCreate(false); setCreateName('') }} className="text-xs px-3 py-1.5 rounded text-gray-500 hover:bg-gray-100">
@@ -135,7 +135,7 @@ export default function DesalojoCapasMiniTable({
                       }}
                       className="flex-1 text-sm px-2 py-1 border border-slate-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
-                    <button type="button" onClick={() => commitRename(c.id)} disabled={busy} className="text-xs px-2 py-1 rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50">
+                    <button type="button" onClick={() => commitRename(c.id)} disabled={busy} className="text-xs px-2 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50">
                       OK
                     </button>
                     <button type="button" onClick={() => setEditingId(null)} className="text-xs px-2 py-1 rounded text-gray-500 hover:bg-gray-100">

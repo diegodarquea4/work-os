@@ -91,7 +91,7 @@ export default function ComitePolicialTab({ region, eje }: Props) {
               key={i.key}
               onClick={() => setInst(i.key)}
               className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
-                inst === i.key ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                inst === i.key ? 'bg-violet-700 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
               {i.label}

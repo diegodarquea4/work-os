@@ -408,7 +408,7 @@ export default function DesalojoFaseCard({
                             />
                           )}
                           <button onClick={() => commitEdit(field)} disabled={saving}
-                            className="text-xs px-2 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 font-medium">
+                            className="text-xs px-2 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-medium">
                             Guardar
                           </button>
                           <button onClick={() => setEditingField(null)} disabled={saving}
@@ -467,7 +467,7 @@ export default function DesalojoFaseCard({
                     Cancelar
                   </button>
                   <button onClick={commitNotas} disabled={savingNotas}
-                    className="text-xs px-3 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 font-semibold">
+                    className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
                     {savingNotas ? 'Guardando…' : 'Guardar'}
                   </button>
                 </div>
@@ -575,7 +575,7 @@ export default function DesalojoFaseCard({
                     Cancelar
                   </button>
                   <button type="submit" disabled={savingForm || isHtmlEmpty(formDesc)}
-                    className="text-xs px-3 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 font-semibold">
+                    className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
                     {savingForm ? 'Guardando…' : 'Guardar'}
                   </button>
                 </div>

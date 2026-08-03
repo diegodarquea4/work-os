@@ -237,7 +237,7 @@ function RolCard({
         )}
         {!readOnly && !editing && !tieneValor && (
           <button type="button" onClick={start}
-            className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-700 font-medium flex-shrink-0">
+            className="text-xs px-2.5 py-1 rounded bg-violet-700 text-white hover:bg-violet-800 font-medium flex-shrink-0">
             + Asignar
           </button>
         )}
@@ -302,7 +302,7 @@ function RolCard({
               Cancelar
             </button>
             <button type="button" onClick={commit} disabled={busy || !draft.nombre.trim()}
-              className="text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+              className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
               {busy ? 'Guardando…' : 'Guardar'}
             </button>
           </div>

@@ -151,7 +151,7 @@ export default function DesalojoVincularMinvuModal({
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={placeholder}
-            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+            className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
           />
           {regionPreset && (
             <div className="flex items-center gap-2 text-[11px]">
@@ -262,7 +262,7 @@ export default function DesalojoVincularMinvuModal({
               type="button"
               onClick={() => pick && confirmar(pick)}
               disabled={!pick || saving}
-              className="text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold"
+              className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold"
             >
               {saving ? 'Vinculando…' : 'Vincular'}
             </button>

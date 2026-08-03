@@ -5,7 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import { prioridadColor } from '@/lib/config'
+import { prioridadColor, SEMAFORO_CONFIG as SEMAFORO_BASE } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 // xlsx (~424 KB) + los módulos que lo importan (templateExcel/importParser) se
 // cargan DINÁMICAMENTE dentro de los handlers (export/import), no en el bundle
@@ -24,11 +24,15 @@ import { formatResponsableDisplay } from '@/lib/responsable'
 import { normalizeMinisterio, splitMinisterio } from '@/lib/ministerios'
 import ImportErrorReport from './ImportErrorReport'
 
+// Presentación del Dashboard (badge de tabla + bar del resumen apilado) sobre la
+// base compartida de lib/config — dot, ring y label salen de la fuente única
+// para NO divergir del resto del panel. Antes este config local redefinía labels
+// (p. ej. rojo "Bloqueadas" vs "Bloqueado" en el resto) y perdía la sincronía.
 const SEMAFORO_CONFIG = {
-  verde: { dot: 'bg-green-500', label: 'En verde',    badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  bar: 'bg-green-500'  },
-  ambar: { dot: 'bg-amber-400', label: 'En revisión', badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',  bar: 'bg-amber-400'  },
-  rojo:  { dot: 'bg-red-500',   label: 'Bloqueadas',  badge: 'bg-red-50 text-red-700 ring-1 ring-red-200',        bar: 'bg-red-500'    },
-  gris:  { dot: 'bg-gray-300',  label: 'Sin evaluar', badge: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',    bar: 'bg-gray-300'   },
+  verde: { ...SEMAFORO_BASE.verde, badge: 'bg-green-50 text-green-700 ring-1 ring-green-200', bar: 'bg-green-500' },
+  ambar: { ...SEMAFORO_BASE.ambar, badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', bar: 'bg-amber-400' },
+  rojo:  { ...SEMAFORO_BASE.rojo,  badge: 'bg-red-50 text-red-700 ring-1 ring-red-200',       bar: 'bg-red-500'   },
+  gris:  { ...SEMAFORO_BASE.gris,  badge: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',   bar: 'bg-gray-300'  },
 } as const
 
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
@@ -731,7 +735,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             {canImport && (
               <button
                 onClick={() => { setImportModalOpen(true); setImportPreview(null); setImportParseErrors([]); setImportResult(null); setImportFileName('') }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white hover:bg-violet-800 transition-colors font-medium"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M2 9h8M6 7V2M3.5 4.5L6 2l2.5 2.5"/>
@@ -1375,7 +1379,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Regiones</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setExportRegions(new Set(REGIONS.map(r => r.nombre)))} className="text-xs text-blue-600 hover:underline">Todas</button>
+                    <button onClick={() => setExportRegions(new Set(REGIONS.map(r => r.nombre)))} className="text-xs text-violet-700 hover:underline">Todas</button>
                     <button onClick={() => setExportRegions(new Set())} className="text-xs text-gray-400 hover:underline">Ninguna</button>
                   </div>
                 </div>
@@ -1408,7 +1412,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 <button
                   onClick={exportExcelFiltered}
                   disabled={exportCount === 0 || exporting}
-                  className="text-xs px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-60 font-medium flex items-center gap-1.5"
+                  className="text-xs px-4 py-2 rounded-lg bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-60 font-medium flex items-center gap-1.5"
                 >
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M2 9h8M6 2v6M3.5 5.5L6 8l2.5-2.5"/>

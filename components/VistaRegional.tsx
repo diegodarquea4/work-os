@@ -411,7 +411,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 const r = REGIONS.find(R => R.cod === cod)
                 if (r) onActiveRegionChange(r.nombre)
               }}
-              className="text-sm text-slate-900 border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm text-slate-900 border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
             >
               {allowedCods.map(cod => {
                 const r = REGIONS.find(r => r.cod === cod)
@@ -520,12 +520,12 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 {/* Minuta split button */}
                 <div className="relative" data-minuta-menu="true">
                   <div className="flex items-center gap-1">
-                    <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                    <div className="flex rounded-lg overflow-hidden border border-violet-700 bg-violet-700">
                       <button
                         onClick={() => openMinuta('ejecutiva', false)}
                         disabled={downloadingMinuta || !region || (!isAdmin && !minutaCache.ejecutiva.cached)}
                         title={!isAdmin && !minutaCache.ejecutiva.cached ? 'Aún no hay versión generada. Un administrador debe generarla.' : undefined}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {downloadingMinuta && downloadingTipo === 'ejecutiva' ? (
                           <>
@@ -546,7 +546,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                       <button
                         onClick={() => setMinutaMenuOpen(v => !v)}
                         disabled={downloadingMinuta || !region}
-                        className="px-2 py-1.5 text-white hover:bg-slate-700 disabled:opacity-50 transition-colors border-l border-slate-700"
+                        className="px-2 py-1.5 text-white hover:bg-violet-800 disabled:opacity-50 transition-colors border-l border-violet-500"
                       >
                         <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -887,7 +887,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
               onChange={e => setNumeroInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') confirmNumeroModal() }}
               placeholder="Ej: 61"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 mb-4"
             />
             <div className="flex justify-end gap-2">
               <button
@@ -898,7 +898,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
               </button>
               <button
                 onClick={confirmNumeroModal}
-                className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
+                className="px-3 py-1.5 text-xs text-white bg-violet-700 hover:bg-violet-800 rounded-lg font-medium"
               >
                 {numeroForce ? 'Regenerar' : 'Generar'}
               </button>
@@ -966,7 +966,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 )}
                 <button
                   onClick={downloadPreview}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-700 text-white text-xs font-medium rounded-lg hover:bg-violet-800 transition-colors"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M6 1v7M3 5l3 3 3-3M1 11h10"/>

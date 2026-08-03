@@ -267,7 +267,7 @@ export default function DesalojoAvanceTab({
               Cancelar
             </button>
             <button type="button" onClick={commitTipologia} disabled={savingTipo}
-              className="text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 font-semibold">
+              className="text-xs px-3 py-1.5 rounded bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 font-semibold">
               {savingTipo ? 'Guardando…' : 'Asignar'}
             </button>
           </div>

@@ -18,6 +18,7 @@ import {
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
+import { Alert } from '@/components/ui'
 
 /**
  * Formulario de sesión — comités (mig 044) y Gabinete Regional (mig 046).
@@ -727,7 +728,7 @@ export default function SesionModal(props: Props) {
             </p>
             <div className="flex gap-2 pt-1">
               {cierreResultado.actaGenerada ? (
-                <button onClick={handleDescargarActa} className="flex-1 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700">
+                <button onClick={handleDescargarActa} className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800">
                   Descargar acta
                 </button>
               ) : (
@@ -787,7 +788,7 @@ export default function SesionModal(props: Props) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {initError ? (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{initError}</p>
+            <Alert variant="error">{initError}</Alert>
           ) : !sesion ? (
             <p className="text-center text-sm text-gray-400 py-10">Preparando la sesión…</p>
           ) : (

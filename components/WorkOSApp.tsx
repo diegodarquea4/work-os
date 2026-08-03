@@ -533,7 +533,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             <button
               onClick={() => setView('mapa')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'mapa' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                view === 'mapa' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -547,7 +547,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 ref={viewDropBtnRef}
                 onClick={handleViewDropToggle}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isGroupedActive ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                  isGroupedActive ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -562,7 +562,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             <button
               onClick={() => { setMetricasInitialRegion(undefined); setView('metricas') }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                view === 'metricas' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                view === 'metricas' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -852,7 +852,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               onClick={() => { setView(v.key); setViewDropOpen(false) }}
               className={`block w-full px-3.5 py-2 text-xs text-left transition-colors ${
                 view === v.key
-                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
                   : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >
@@ -875,7 +875,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               onClick={() => { setView('prego'); setGearOpen(false) }}
               className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
                 view === 'prego'
-                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
                   : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >
@@ -891,7 +891,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               onClick={() => { setView('usuarios'); setGearOpen(false) }}
               className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
                 view === 'usuarios'
-                  ? 'font-semibold text-slate-900 bg-slate-100'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
                   : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >

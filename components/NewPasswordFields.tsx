@@ -10,7 +10,7 @@
 import { passwordChecks, PASSWORD_RULE_LABELS } from '@/lib/passwordRules'
 
 const INPUT_CLS =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent disabled:opacity-50'
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 disabled:opacity-50'
 
 export default function NewPasswordFields({
   password, setPassword, confirm, setConfirm, disabled,
