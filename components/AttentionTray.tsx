@@ -142,49 +142,49 @@ export default function AttentionTray({
   }, [filterRegion])
   const { ejes: regionEjesCat } = useRegionEjes(regionCodActive)
 
-  // Temario de preparación del gabinete (solo en el pane Preparación de una
+  // Cronograma de preparación del gabinete (solo en el pane Preparación de una
   // región con gabinete habilitado). El botón aparece junto al contador "en
   // foco"; se habilita cuando hay ≥1 iniciativa marcada.
   const { config: regionConfig } = useRegionConfig(regionCodActive)
   const gabineteHabilitado = !!regionConfig?.gabinete_habilitado
-  const [descargandoTemario, setDescargandoTemario] = useState(false)
-  // Foco de la región SIN otros filtros — el temario arma el foco completo
+  const [descargandoCronograma, setDescargandoCronograma] = useState(false)
+  // Foco de la región SIN otros filtros — el cronograma arma el foco completo
   // (un filtro de búsqueda activo no debe deshabilitar el botón).
   const focoRegionCount = useMemo(
     () => regionCodActive ? projects.filter(p => p.region === filterRegion && p.en_foco === true).length : 0,
     [projects, filterRegion, regionCodActive],
   )
 
-  async function handleDescargarTemario() {
+  async function handleDescargarCronograma() {
     if (!regionCodActive) return
     const region = REGIONS.find(r => r.cod === regionCodActive)
     if (!region) return
-    setDescargandoTemario(true)
+    setDescargandoCronograma(true)
     try {
-      const res = await fetch('/api/temario-gabinete', {
+      const res = await fetch('/api/cronograma-gabinete', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ region }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'No se pudo generar el temario' }))
-        window.alert(err.error ?? 'No se pudo generar el temario')
+        const err = await res.json().catch(() => ({ error: 'No se pudo generar el cronograma' }))
+        window.alert(err.error ?? 'No se pudo generar el cronograma')
         return
       }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `temario-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
+      a.download = `cronograma-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (e) {
-      console.error('[AttentionTray] descargar temario:', e)
-      window.alert('Error de red generando el temario')
+      console.error('[AttentionTray] descargar cronograma:', e)
+      window.alert('Error de red generando el cronograma')
     } finally {
-      setDescargandoTemario(false)
+      setDescargandoCronograma(false)
     }
   }
 
@@ -495,17 +495,17 @@ export default function AttentionTray({
           <div className="flex items-center gap-2 flex-shrink-0">
             {embedded && gabineteHabilitado && regionCodActive && (
               <button
-                onClick={handleDescargarTemario}
-                disabled={descargandoTemario || focoRegionCount === 0}
+                onClick={handleDescargarCronograma}
+                disabled={descargandoCronograma || focoRegionCount === 0}
                 title={focoRegionCount === 0
-                  ? 'Marca iniciativas en foco para armar el temario'
-                  : 'Descargar el temario de la próxima sesión de gabinete'}
+                  ? 'Marca iniciativas en foco para armar el cronograma'
+                  : 'Descargar el cronograma de la próxima sesión de gabinete'}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
                 </svg>
-                {descargandoTemario ? 'Generando…' : 'Descargar temario'}
+                {descargandoCronograma ? 'Generando…' : 'Descargar cronograma'}
               </button>
             )}
             {!loading && (
