@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { registerPdfFonts } from '@/lib/pdfFonts'
+import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
 import { panoramaPorEje, clasificarCompromisosGabinete } from './helpers'
@@ -151,10 +152,15 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
 
   // ── Render + upload ────────────────────────────────────────────────────────
   registerPdfFonts()
+  const dataConBranding: ActaGabineteData = {
+    ...data,
+    logoDataUrl: getLogoDataUrl(),
+    footerBannerDataUrl: getFooterBannerDataUrl(),
+  }
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que generarActa.ts).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaGabinetePdf as any, { data }) as any)
+  const buffer = await renderToBuffer(React.createElement(ActaGabinetePdf as any, { data: dataConBranding }) as any)
 
   return subirActa(db, sesion, buffer)
 }

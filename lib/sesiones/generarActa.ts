@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { registerPdfFonts } from '@/lib/pdfFonts'
+import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
@@ -42,10 +43,15 @@ export async function generarActa(sesionId: number): Promise<string> {
 
   // ── Render + upload ────────────────────────────────────────────────────────
   registerPdfFonts()
+  const dataConBranding: ActaData = {
+    ...data,
+    logoDataUrl: getLogoDataUrl(),
+    footerBannerDataUrl: getFooterBannerDataUrl(),
+  }
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que minuta/route.ts y renderPdf.tsx).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data }) as any)
+  const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data: dataConBranding }) as any)
 
   return subirActa(db, sesion, buffer)
 }
