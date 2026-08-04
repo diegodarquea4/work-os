@@ -20,18 +20,16 @@ import {
  */
 
 describe('LISTA_CANONICA', () => {
-  it('incluye los 24 ministerios oficiales + 3 buckets', () => {
-    expect(LISTA_CANONICA.length).toBe(27)
+  it('incluye los 25 ministerios oficiales + 3 buckets', () => {
+    expect(LISTA_CANONICA.length).toBe(28)
     expect(LISTA_CANONICA).toContain('SUBDERE')
     expect(LISTA_CANONICA).toContain('Municipalidades')
     expect(LISTA_CANONICA).toContain('Sin asignar')
   })
 
-  it('no menciona "Seguridad Pública" en ninguna entrada (guideline producto)', () => {
-    for (const entry of LISTA_CANONICA) {
-      expect(entry.toLowerCase()).not.toContain('seguridad pública')
-      expect(entry.toLowerCase()).not.toContain('seguridad publica')
-    }
+  it('Interior y Seguridad Pública son entradas separadas (reestructura 2023)', () => {
+    expect(LISTA_CANONICA).toContain('Ministerio del Interior')
+    expect(LISTA_CANONICA).toContain('Ministerio de Seguridad Pública')
   })
 })
 
@@ -113,16 +111,25 @@ describe('normalizeMinisterio — "Min. X" abbrev', () => {
   })
 })
 
-describe('normalizeMinisterio — Interior colapsado', () => {
-  it('todas las variantes de Interior + Seguridad Pública → Ministerio del Interior', () => {
+describe('normalizeMinisterio — Interior vs Seguridad Pública (separados)', () => {
+  it('variantes de Interior → Ministerio del Interior', () => {
     expect(normalizeMinisterio('Ministerio del Interior')).toBe('Ministerio del Interior')
-    expect(normalizeMinisterio('Ministerio del Interior y Seguridad Pública')).toBe('Ministerio del Interior')
-    expect(normalizeMinisterio('Ministerio de Seguridad Pública')).toBe('Ministerio del Interior')
-    expect(normalizeMinisterio('Ministerio de Seguridad Publica')).toBe('Ministerio del Interior')
-    expect(normalizeMinisterio('Ministerio de Seguridad y Orden Público')).toBe('Ministerio del Interior')
-    expect(normalizeMinisterio('Ministerio de Seguridad y Órden Público')).toBe('Ministerio del Interior')
     expect(normalizeMinisterio('MININT')).toBe('Ministerio del Interior')
     expect(normalizeMinisterio('Min. Interior')).toBe('Ministerio del Interior')
+    // Typo frecuente en data: "de Interior" sin la "l".
+    expect(normalizeMinisterio('Ministerio de Interior')).toBe('Ministerio del Interior')
+  })
+
+  it('el nombre histórico combinado cuenta como Interior (decisión de producto)', () => {
+    expect(normalizeMinisterio('Ministerio del Interior y Seguridad Pública')).toBe('Ministerio del Interior')
+  })
+
+  it('variantes de Seguridad Pública → Ministerio de Seguridad Pública (NO Interior)', () => {
+    expect(normalizeMinisterio('Ministerio de Seguridad Pública')).toBe('Ministerio de Seguridad Pública')
+    expect(normalizeMinisterio('Ministerio de Seguridad Publica')).toBe('Ministerio de Seguridad Pública')
+    expect(normalizeMinisterio('Ministerio de Seguridad y Orden Público')).toBe('Ministerio de Seguridad Pública')
+    expect(normalizeMinisterio('Ministerio de Seguridad y Órden Público')).toBe('Ministerio de Seguridad Pública')
+    expect(normalizeMinisterio('Min. Seguridad')).toBe('Ministerio de Seguridad Pública')
   })
 })
 
@@ -210,7 +217,7 @@ describe('composición split + normalize (call-site pattern)', () => {
     const result = splitMinisterio(raw).map(normalizeMinisterio)
     expect(result).toEqual([
       'Ministerio de Educación',
-      'Ministerio del Interior',
+      'Ministerio de Seguridad Pública',
       'Municipalidades',
     ])
   })
