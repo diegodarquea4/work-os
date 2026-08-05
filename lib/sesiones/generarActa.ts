@@ -121,6 +121,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
         })),
       })),
     metaEmpleo: null,
+    subsidios: null,
     proyectosTratados: [],
     oficiosTratados: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
@@ -148,7 +149,10 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
  * indicadores/apuntes; en su lugar, proyectos tratados y oficios tratados.
  */
 async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
-  const [numRes, asisRes, proyRes, verifRes, nuevosRes, oficVerifRes, oficNuevosRes, metaRegionRes, metaSesionRes] = await Promise.all([
+  const [
+    numRes, asisRes, proyRes, verifRes, nuevosRes, oficVerifRes, oficNuevosRes,
+    metaRegionRes, subRegionRes,
+  ] = await Promise.all([
     db.from('eje_sesiones').select('id, fecha')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'inversion').eq('estado', 'cerrada'),
     db.from('sesion_asistencia')
@@ -175,8 +179,10 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     // Mesa Empleo (mig 052): el cierre ya sumó el valor de esta sesión al
     // acumulado ANTES de generar el acta — igual que valor_actual en el
     // Comité Policial, acá se lee post-cierre.
-    db.from('region_meta_empleo').select('objetivo, valor_actual').eq('region_cod', sesion.region_cod).maybeSingle(),
-    db.from('sesion_meta_empleo_valor').select('empleos_generados').eq('sesion_id', sesionId).maybeSingle(),
+    db.from('region_meta_empleo').select('objetivo, valor_actual, foco_productivo').eq('region_cod', sesion.region_cod).maybeSingle(),
+    // Subsidios (mig 053): mismo criterio — se lee post-cierre.
+    db.from('region_subsidio_empleo').select('cupos, postulados, entregados, empresas_postulantes')
+      .eq('region_cod', sesion.region_cod).maybeSingle(),
   ])
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -189,12 +195,21 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     ...((oficNuevosRes.data ?? []) as unknown as OficioConNombres[]),
   ]
 
-  const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number } | null
+  const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
   const metaEmpleo = metaRegion ? {
-    empleosSesion: metaSesionRes.data ? Number(metaSesionRes.data.empleos_generados) : null,
-    acumulado:     Number(metaRegion.valor_actual),
-    objetivo:      Number(metaRegion.objetivo),
-    pctAvance:     metaRegion.objetivo > 0 ? Math.round((Number(metaRegion.valor_actual) / Number(metaRegion.objetivo)) * 100) : null,
+    acumulado:       Number(metaRegion.valor_actual),
+    objetivo:        Number(metaRegion.objetivo),
+    pctAvance:       metaRegion.objetivo > 0 ? Math.round((Number(metaRegion.valor_actual) / Number(metaRegion.objetivo)) * 100) : null,
+    focoProductivo:  metaRegion.foco_productivo,
+  } : null
+
+  const subRegion = subRegionRes.data as { cupos: number; postulados: number; entregados: number; empresas_postulantes: number } | null
+  const subsidios = subRegion ? {
+    postulados:           Number(subRegion.postulados),
+    entregados:           Number(subRegion.entregados),
+    empresasPostulantes:  Number(subRegion.empresas_postulantes),
+    cupos:                Number(subRegion.cupos),
+    pctAvance:            subRegion.cupos > 0 ? Math.round((Number(subRegion.postulados) / Number(subRegion.cupos)) * 100) : null,
   } : null
 
   return {
@@ -214,6 +229,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     })),
     instituciones: [],
     metaEmpleo,
+    subsidios,
     proyectosTratados: ((proyRes.data ?? []) as unknown as { nota: string | null; proyecto: { nombre: string } | null }[])
       .map(p => ({ nombre: p.proyecto?.nombre ?? '—', nota: p.nota })),
     oficiosTratados: oficios.map(o => ({

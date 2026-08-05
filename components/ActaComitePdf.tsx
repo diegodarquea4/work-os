@@ -47,10 +47,18 @@ export type ActaData = {
   // Mesa Empleo (mig 052) — solo 'inversion'. null si la sesión no digitó
   // empleos generados (el acumulado de la región igual se muestra).
   metaEmpleo: {
-    empleosSesion: number | null
     acumulado: number
     objetivo: number
     pctAvance: number | null          // null si objetivo=0 (evita división por cero)
+    focoProductivo: string | null     // mig 054
+  } | null
+  // Subsidios (mig 053) — solo 'inversion'. cupos: total declarado por región.
+  subsidios: {
+    postulados: number
+    entregados: number
+    empresasPostulantes: number
+    cupos: number
+    pctAvance: number | null          // postulados/cupos, null si cupos=0
   } | null
   proyectosTratados: { nombre: string; nota: string | null }[]
   oficiosTratados: {
@@ -254,27 +262,55 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </>
           ) : (
             <>
-              {/* Mesa Empleo — Meta Empleo */}
+              {/* Mesa Empleo — Meta Empleo + Subsidios */}
+              {(data.metaEmpleo || data.subsidios) && <SH>III. Mesa Empleo</SH>}
               {data.metaEmpleo && (
                 <>
-                  <SH>III. Mesa Empleo — Meta Empleo</SH>
+                  <Text style={[s.instName, { marginTop: 2 }]}>Meta Empleo</Text>
                   <View style={s.metaRow}>
-                    <Text style={s.metaK}>Empleos generados esta sesión</Text>
-                    <Text style={s.metaV}>{data.metaEmpleo.empleosSesion != null ? fmtNum(data.metaEmpleo.empleosSesion) : '—'}</Text>
-                  </View>
-                  <View style={s.metaRow}>
-                    <Text style={s.metaK}>Acumulado</Text>
+                    <Text style={s.metaK}>Empleos generados</Text>
                     <Text style={s.metaV}>
                       {fmtNum(data.metaEmpleo.acumulado)}
                       {data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}
-                      {data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% avance)` : ''}
+                      {data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% de la meta)` : ''}
                     </Text>
                   </View>
                   {data.metaEmpleo.objetivo > 0 && (
-                    <View style={{ height: 6, backgroundColor: C.bgLight, borderRadius: 3, marginTop: 4, marginBottom: 8, overflow: 'hidden' }}>
+                    <View style={{ height: 6, backgroundColor: C.bgLight, borderRadius: 3, marginTop: 4, marginBottom: 6, overflow: 'hidden' }}>
                       <View style={{ height: 6, width: `${Math.min(100, data.metaEmpleo.pctAvance ?? 0)}%`, backgroundColor: C.wine }} />
                     </View>
                   )}
+                  {data.metaEmpleo.focoProductivo && (
+                    <Text style={{ fontSize: 8, color: C.textMid, fontStyle: 'italic', marginBottom: 8 }}>
+                      Foco productivo: {data.metaEmpleo.focoProductivo}
+                    </Text>
+                  )}
+                </>
+              )}
+              {data.subsidios && (
+                <>
+                  <Text style={[s.instName, { marginTop: 6 }]}>Subsidios</Text>
+                  <View style={s.metaRow}>
+                    <Text style={s.metaK}>Postulados</Text>
+                    <Text style={s.metaV}>
+                      {fmtNum(data.subsidios.postulados)}
+                      {data.subsidios.cupos > 0 ? ` de ${fmtNum(data.subsidios.cupos)} cupos` : ''}
+                      {data.subsidios.pctAvance != null ? ` (${data.subsidios.pctAvance}%)` : ''}
+                    </Text>
+                  </View>
+                  {data.subsidios.cupos > 0 && (
+                    <View style={{ height: 6, backgroundColor: C.bgLight, borderRadius: 3, marginTop: 4, marginBottom: 4, overflow: 'hidden' }}>
+                      <View style={{ height: 6, width: `${Math.min(100, data.subsidios.pctAvance ?? 0)}%`, backgroundColor: C.azul }} />
+                    </View>
+                  )}
+                  <View style={s.metaRow}>
+                    <Text style={s.metaK}>Entregados</Text>
+                    <Text style={s.metaV}>{fmtNum(data.subsidios.entregados)}</Text>
+                  </View>
+                  <View style={[s.metaRow, { marginBottom: 8 }]}>
+                    <Text style={s.metaK}>Empresas postulantes</Text>
+                    <Text style={s.metaV}>{fmtNum(data.subsidios.empresasPostulantes)}</Text>
+                  </View>
                 </>
               )}
 
