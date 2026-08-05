@@ -24,7 +24,11 @@ export function useTemasGabinete(regionCod: string | null, enabled: boolean) {
         .eq('region_cod', regionCod!).is('sesion_id', null)
         .order('orden').order('id')
       if (cancelled) return
-      setTemas((data ?? []) as GabineteTema[])
+      // subitems es JSONB (mig 054) — normalización defensiva a string[].
+      setTemas(((data ?? []) as GabineteTema[]).map(t => ({
+        ...t,
+        subitems: Array.isArray(t.subitems) ? t.subitems : [],
+      })))
       setLoading(false)
     }
     load()

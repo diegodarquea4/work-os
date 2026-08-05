@@ -690,6 +690,9 @@ export type GabineteTema = {
   id: number
   region_cod: string
   texto: string
+  // Sub-items del tema (mig 054) — strings libres en JSONB, misma fila
+  // (patrón desglose de sesion_comite_valor).
+  subitems: string[]
   orden: number
   sesion_id: number | null
   created_at: string

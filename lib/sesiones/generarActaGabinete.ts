@@ -41,9 +41,9 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       .eq('region_cod', sesion.region_cod).eq('instancia', 'gabinete'),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     db.from('region_ejes').select('id, numero, sesiones_nombre').eq('region_cod', sesion.region_cod),
-    // "Temas a tratar" archivados a esta sesión por el cierre (mig 053) —
+    // "Temas a tratar" archivados a esta sesión por el cierre (mig 053/054) —
     // el stamping corre ANTES de generarActa, así que acá ya tienen sesion_id.
-    db.from('gabinete_temas').select('texto').eq('sesion_id', sesionId).order('orden').order('id'),
+    db.from('gabinete_temas').select('texto, subitems').eq('sesion_id', sesionId).order('orden').order('id'),
   ])
 
   // Verificados (zona 1 de la sesión): propios + escalados + mandatos —
@@ -121,9 +121,12 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       calidad:     a.nomina ? a.nomina.calidad : 'invitado',
       presente:    a.presente,
     })),
-    temas: ((temasRes.data ?? []) as { texto: string }[])
-      .map(t => t.texto)
-      .filter(t => t.trim().length > 0),
+    temas: ((temasRes.data ?? []) as { texto: string; subitems: unknown }[])
+      .filter(t => t.texto.trim().length > 0)
+      .map(t => ({
+        texto: t.texto,
+        subitems: (Array.isArray(t.subitems) ? t.subitems as string[] : []).filter(s => s.trim().length > 0),
+      })),
     panoramaEjes: panoramaPorEje(
       (prioRegionRes.data ?? []) as { eje: string | null; estado_semaforo: string | null; pct_avance: number | null }[],
     ),

@@ -81,9 +81,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
-  // Pane inicial de Gabinete — solo lo setea la migración del localStorage
-  // 'atencion'→'kanban' (quien venía de la Bandeja aterriza en Preparación).
-  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('tablero')
+  // Pane inicial de Gabinete — SIEMPRE Preparación (decisión Diego 2026-08-05:
+  // al entrar a Gabinete se aterriza primero en la preparación de la sesión).
+  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('preparacion')
   // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.

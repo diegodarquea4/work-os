@@ -83,17 +83,20 @@ export async function POST(request: Request) {
   const foco  = todas.filter(p => p.en_foco === true)
   const iniPorId = new Map(todas.map(p => [p.id, p]))
 
-  // 1b. Temas a tratar pendientes (mig 053) — pauta general, sección I del PDF.
+  // 1b. Temas a tratar pendientes (mig 053/054) — pauta general, sección I del PDF.
   const { data: rawTemas } = await sb
     .from('gabinete_temas')
-    .select('texto')
+    .select('texto, subitems')
     .eq('region_cod', region.cod)
     .is('sesion_id', null)
     .order('orden')
     .order('id')
-  const temas = ((rawTemas ?? []) as { texto: string }[])
-    .map(t => t.texto)
-    .filter(t => t.trim().length > 0)
+  const temas = ((rawTemas ?? []) as { texto: string; subitems: unknown }[])
+    .filter(t => t.texto.trim().length > 0)
+    .map(t => ({
+      texto: t.texto,
+      subitems: (Array.isArray(t.subitems) ? t.subitems as string[] : []).filter(s => s.trim().length > 0),
+    }))
 
   // Gate: basta con foco O temas para armar el cronograma (los temas son
   // pauta general válida por sí sola — decisión 2026-08-05).

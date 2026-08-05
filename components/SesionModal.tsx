@@ -808,7 +808,16 @@ export default function SesionModal(props: Props) {
                   </p>
                   <ol className="list-decimal list-inside space-y-1">
                     {temasGabinete.map(t => (
-                      <li key={t.id} className="text-sm text-gray-700 leading-snug">{t.texto}</li>
+                      <li key={t.id} className="text-sm text-gray-700 leading-snug">
+                        {t.texto}
+                        {t.subitems.length > 0 && (
+                          <ul className="mt-0.5 ml-5 space-y-0.5 list-none">
+                            {t.subitems.map((sub, si) => (
+                              <li key={si} className="text-[13px] text-gray-500 leading-snug">· {sub}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
                     ))}
                   </ol>
                   <p className="text-[10px] text-gray-400 mt-1.5">

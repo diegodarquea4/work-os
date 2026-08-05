@@ -34,8 +34,8 @@ export type ActaGabineteData = ActaBranding & {
     calidad: 'titular' | 'suplente' | 'invitado'
     presente: boolean
   }[]
-  // "Temas a tratar" archivados a esta sesión al cierre (mig 053).
-  temas: string[]
+  // "Temas a tratar" archivados a esta sesión al cierre (mig 053/054).
+  temas: { texto: string; subitems: string[] }[]
   panoramaEjes: PanoramaEje[]
   iniciativas: {
     nombre: string
@@ -121,9 +121,17 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         {data.temas.length === 0 ? (
           <Vacio>Sin temas registrados en la preparación de esta sesión.</Vacio>
         ) : data.temas.map((t, i) => (
-          <View key={i} style={s.tr} wrap={false}>
-            <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
-            <Text style={[s.td, { flex: 1 }]}>{t}</Text>
+          <View key={i} style={[s.tr, { flexDirection: 'column' }]} wrap={false}>
+            <View style={{ flexDirection: 'row' }}>
+              <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
+              <Text style={[s.td, { flex: 1 }]}>{t.texto}</Text>
+            </View>
+            {t.subitems.map((sub, si) => (
+              <View key={si} style={{ flexDirection: 'row', marginTop: 1.5 }}>
+                <Text style={[s.td, { width: 30, color: C.muted, fontSize: 8.5, textAlign: 'right', paddingRight: 4 }]}>·</Text>
+                <Text style={[s.td, { flex: 1, color: C.muted, fontSize: 8.5 }]}>{sub}</Text>
+              </View>
+            ))}
           </View>
         ))}
 

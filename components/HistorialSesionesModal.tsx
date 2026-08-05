@@ -39,8 +39,8 @@ type DetalleSesion = {
     metrica: { nombre: string; unidad: string | null; tipo: 'numerico' | 'texto'; institucion: ComiteInstitucion; orden: number } | null
   }[]
   iniciativas: { semaforo_al_momento: string | null; pct_avance_al_momento: number | null; acuerdo: string | null; prioridad: { nombre: string } | null }[]
-  // "Temas a tratar" archivados a la sesión al cierre (mig 053) — solo gabinete.
-  temas: { texto: string }[]
+  // "Temas a tratar" archivados a la sesión al cierre (mig 053/054) — solo gabinete.
+  temas: { texto: string; subitems: string[] }[]
   compromisos: SesionCompromiso[]
 }
 
@@ -100,10 +100,10 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
             .eq('sesion_id', s.id)
             .order('created_at')
         : Promise.resolve({ data: [] }),
-      // Temas a tratar archivados a la sesión (mig 053): solo en gabinete.
+      // Temas a tratar archivados a la sesión (mig 053/054): solo en gabinete.
       instancia === 'gabinete'
         ? sb.from('gabinete_temas')
-            .select('texto')
+            .select('texto, subitems')
             .eq('sesion_id', s.id)
             .order('orden')
             .order('id')
@@ -119,7 +119,10 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
         asistencia:  (asisRes.data ?? []) as unknown as DetalleSesion['asistencia'],
         valores:     (valRes.data ?? []) as unknown as DetalleSesion['valores'],
         iniciativas: (iniRes.data ?? []) as unknown as DetalleSesion['iniciativas'],
-        temas:       (temasRes.data ?? []) as unknown as DetalleSesion['temas'],
+        temas:       ((temasRes.data ?? []) as { texto: string; subitems: unknown }[]).map(t => ({
+          texto: t.texto,
+          subitems: Array.isArray(t.subitems) ? t.subitems as string[] : [],
+        })),
         compromisos: (compRes.data ?? []) as SesionCompromiso[],
       },
     }))
@@ -200,7 +203,16 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
                       <SeccionLabel>Temas a tratar</SeccionLabel>
                       <ol className="list-decimal list-inside space-y-1.5">
                         {det.temas.map((t, i) => (
-                          <li key={i} className="text-sm text-slate-700 leading-snug">{t.texto}</li>
+                          <li key={i} className="text-sm text-slate-700 leading-snug">
+                            {t.texto}
+                            {t.subitems.length > 0 && (
+                              <ul className="mt-0.5 ml-5 space-y-0.5 list-none">
+                                {t.subitems.map((sub, si) => (
+                                  <li key={si} className="text-[13px] text-slate-500 leading-snug">· {sub}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
                         ))}
                       </ol>
                     </DetalleCard>

@@ -245,7 +245,7 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function KanbanView({ projects, actividad, actividadLoading, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames, initialPane = 'tablero' }: Props) {
+export default function KanbanView({ projects, actividad, actividadLoading, onUpdatePrioridad, onDeletePrioridad, activeRegionName, onActiveRegionChange, allowedRegionNames, initialPane = 'preparacion' }: Props) {
   // Sub-vista de la sección Gabinete: Preparación (curaduría del foco, ex
   // Bandeja de Atención) | Tablero (el kanban de siempre). Default tablero —
   // las DPR no pierden el kanban; solo quien venía de Atención abre en
