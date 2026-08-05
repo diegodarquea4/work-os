@@ -81,13 +81,28 @@ export async function POST(request: Request) {
   }
   const todas = (rawIni ?? []) as Iniciativa[]
   const foco  = todas.filter(p => p.en_foco === true)
-  if (foco.length === 0) {
+  const iniPorId = new Map(todas.map(p => [p.id, p]))
+
+  // 1b. Temas a tratar pendientes (mig 053) — pauta general, sección I del PDF.
+  const { data: rawTemas } = await sb
+    .from('gabinete_temas')
+    .select('texto')
+    .eq('region_cod', region.cod)
+    .is('sesion_id', null)
+    .order('orden')
+    .order('id')
+  const temas = ((rawTemas ?? []) as { texto: string }[])
+    .map(t => t.texto)
+    .filter(t => t.trim().length > 0)
+
+  // Gate: basta con foco O temas para armar el cronograma (los temas son
+  // pauta general válida por sí sola — decisión 2026-08-05).
+  if (foco.length === 0 && temas.length === 0) {
     return new Response(
-      JSON.stringify({ error: 'Sin iniciativas en foco. Marcá iniciativas con la bandera en Preparación antes de descargar el cronograma.' }),
+      JSON.stringify({ error: 'Sin contenido para el cronograma. Marcá iniciativas en foco o escribe temas a tratar en Preparación.' }),
       { status: 400 },
     )
   }
-  const iniPorId = new Map(todas.map(p => [p.id, p]))
 
   // 2. Compromisos del gabinete abiertos (por verificar al inicio de la sesión).
   const { data: rawComp } = await sb
@@ -125,6 +140,7 @@ export async function POST(request: Request) {
     nombreInstancia,
     regionNombre: region.nombre,
     generadoEn: new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }),
+    temas,
     compromisosVerificar: comps.map(c => ({
       descripcion: c.descripcion,
       institucion: c.responsable_institucion,

@@ -9,9 +9,10 @@ import {
  * Cronograma de la sesión del GABINETE REGIONAL — documento de PREPARACIÓN
  * (se descarga desde Gabinete → Preparación, antes de la reunión). Espeja el
  * arranque de la sesión para que la delegación llegue lista:
- *   I.   Compromisos por verificar (los abiertos del gabinete).
- *   II.  Iniciativas en foco (la agenda de la sesión).
- *   III. Trabas escaladas desde comités (subsidiariedad).
+ *   I.   Temas a tratar (pauta general — puntos libres de Preparación, mig 053).
+ *   II.  Compromisos por verificar (los abiertos del gabinete).
+ *   III. Iniciativas en foco (la agenda de la sesión).
+ *   IV.  Trabas escaladas desde comités (subsidiariedad).
  *
  * Antes se llamaba "Temario"; se renombró a Cronograma (es una reunión, no una
  * prueba). Usa el estilo SOBRIO de Minuta Regional (components/actaPdfBase.tsx)
@@ -23,6 +24,8 @@ export type CronogramaGabineteData = ActaBranding & {
   nombreInstancia: string
   regionNombre: string
   generadoEn: string                  // display, ya formateado
+  // Pauta general (gabinete_temas pendientes, mig 053) — sección I.
+  temas: string[]
   compromisosVerificar: {
     descripcion: string
     institucion: string
@@ -80,8 +83,19 @@ export default function CronogramaGabinetePdf({ data }: { data: CronogramaGabine
         <MetaRow k="Fecha de la sesión" v="________________" />
         <MetaRow k="Iniciativas en foco" v={String(data.iniciativasFoco.length)} />
 
-        {/* I. Compromisos por verificar */}
-        <SH>I. Compromisos por verificar</SH>
+        {/* I. Temas a tratar — pauta general de la reunión */}
+        <SH>I. Temas a tratar</SH>
+        {data.temas.length === 0 ? (
+          <Vacio>Sin temas generales registrados en la preparación.</Vacio>
+        ) : data.temas.map((t, i) => (
+          <View key={i} style={s.tr} wrap={false}>
+            <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
+            <Text style={[s.td, { flex: 1 }]}>{t}</Text>
+          </View>
+        ))}
+
+        {/* II. Compromisos por verificar */}
+        <SH>II. Compromisos por verificar</SH>
         {data.compromisosVerificar.length === 0 ? (
           <Vacio>Sin compromisos del gabinete pendientes de sesiones anteriores.</Vacio>
         ) : data.compromisosVerificar.map((c, i) => (
@@ -98,8 +112,8 @@ export default function CronogramaGabinetePdf({ data }: { data: CronogramaGabine
           </View>
         ))}
 
-        {/* II. Iniciativas en foco */}
-        <SH>II. Iniciativas en foco</SH>
+        {/* III. Iniciativas en foco */}
+        <SH>III. Iniciativas en foco</SH>
         <View style={s.th}>
           <Text style={[s.thT, { width: 18 }]}>#</Text>
           <Text style={[s.thT, { flex: 1 }]}>Iniciativa</Text>
@@ -128,8 +142,8 @@ export default function CronogramaGabinetePdf({ data }: { data: CronogramaGabine
           </View>
         ))}
 
-        {/* III. Trabas escaladas desde comités */}
-        <SH>III. Trabas escaladas desde comités</SH>
+        {/* IV. Trabas escaladas desde comités */}
+        <SH>IV. Trabas escaladas desde comités</SH>
         {data.trabasEscaladas.length === 0 ? (
           <Vacio>Sin trabas escaladas pendientes desde los comités.</Vacio>
         ) : data.trabasEscaladas.map((t, i) => (

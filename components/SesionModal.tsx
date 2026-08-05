@@ -17,6 +17,7 @@ import {
 } from '@/lib/sesiones/helpers'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
+import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import { Alert } from '@/components/ui'
 
@@ -106,6 +107,11 @@ export default function SesionModal(props: Props) {
   // region_config es SELECT any-auth — la query es segura para todo rol.
   const { config: regionConfig } = useRegionConfig(region.cod)
   const puedeEscalar = !esGabinete && !!regionConfig?.gabinete_habilitado
+
+  // "Temas a tratar" pendientes (mig 053) — pauta general de la reunión,
+  // solo lectura en la sesión (se editan en Gabinete → Preparación; al
+  // cerrar quedan archivados a esta sesión y salen en el acta).
+  const { temas: temasGabinete } = useTemasGabinete(region.cod, esGabinete)
 
   const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
@@ -793,6 +799,24 @@ export default function SesionModal(props: Props) {
             <p className="text-center text-sm text-gray-400 py-10">Preparando la sesión…</p>
           ) : (
             <>
+              {/* Pauta general de la reunión (solo gabinete, solo lectura).
+                  Sin número: no altera la numeración producto de las zonas 1-5. */}
+              {esGabinete && temasGabinete.length > 0 && (
+                <section className="border border-violet-100 rounded-xl bg-violet-50/40 px-4 py-3">
+                  <p className="text-xs font-semibold text-violet-800 uppercase tracking-wide mb-1.5">
+                    Temas a tratar — preparación
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    {temasGabinete.map(t => (
+                      <li key={t.id} className="text-sm text-gray-700 leading-snug">{t.texto}</li>
+                    ))}
+                  </ol>
+                  <p className="text-[10px] text-gray-400 mt-1.5">
+                    Se editan en Gabinete → Preparación; quedan en el acta al cerrar la sesión.
+                  </p>
+                </section>
+              )}
+
               {/* ── Zona 1: compromisos anteriores ── */}
               <section className={zoneCls}>
                 <div className={zoneHead}>

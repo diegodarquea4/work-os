@@ -19,7 +19,7 @@ import ActaGabinetePdf, { type ActaGabineteData } from '@/components/ActaGabinet
 export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion): Promise<string> {
   const sesionId = sesion.id
 
-  const [numRes, asisRes, iniRes, prioRegionRes, apunRes, gabSesRes, nuevosRes, ejesRes] = await Promise.all([
+  const [numRes, asisRes, iniRes, prioRegionRes, apunRes, gabSesRes, nuevosRes, ejesRes, temasRes] = await Promise.all([
     // N° de sesión = cerradas de gabinete de la región (correlativo propio,
     // independiente de los comités).
     db.from('eje_sesiones').select('id, fecha')
@@ -41,6 +41,9 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       .eq('region_cod', sesion.region_cod).eq('instancia', 'gabinete'),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     db.from('region_ejes').select('id, numero, sesiones_nombre').eq('region_cod', sesion.region_cod),
+    // "Temas a tratar" archivados a esta sesión por el cierre (mig 053) —
+    // el stamping corre ANTES de generarActa, así que acá ya tienen sesion_id.
+    db.from('gabinete_temas').select('texto').eq('sesion_id', sesionId).order('orden').order('id'),
   ])
 
   // Verificados (zona 1 de la sesión): propios + escalados + mandatos —
@@ -118,6 +121,9 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       calidad:     a.nomina ? a.nomina.calidad : 'invitado',
       presente:    a.presente,
     })),
+    temas: ((temasRes.data ?? []) as { texto: string }[])
+      .map(t => t.texto)
+      .filter(t => t.trim().length > 0),
     panoramaEjes: panoramaPorEje(
       (prioRegionRes.data ?? []) as { eje: string | null; estado_semaforo: string | null; pct_avance: number | null }[],
     ),

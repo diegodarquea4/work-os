@@ -8,10 +8,13 @@ import {
 
 /**
  * Acta estándar de sesión del GABINETE REGIONAL (spec gabinete §7.4).
- * Clon estructural de ActaComitePdf con dos diferencias de contenido:
- * la sección de indicadores se reemplaza por el PANORAMA POR EJE (semáforos
- * agregados al cierre) y las INICIATIVAS TRATADAS con su acuerdo; los
- * compromisos marcan cuáles son mandatos y a qué comité van.
+ * Clon estructural de ActaComitePdf con diferencias de contenido: TEMAS A
+ * TRATAR (pauta general archivada desde Preparación al cierre, mig 053), el
+ * PANORAMA POR EJE (semáforos agregados al cierre) y las INICIATIVAS
+ * TRATADAS con su acuerdo; los compromisos marcan cuáles son mandatos y a
+ * qué comité van. Secciones: I Antecedentes · II Asistencia · III Temas a
+ * tratar · IV Panorama · V Iniciativas tratadas · VI Temas por cartera ·
+ * VII Compromisos.
  *
  * Estilo SOBRIO de Minuta Regional (components/actaPdfBase.tsx). No fetchea:
  * recibe ActaGabineteData pre-armado server-side.
@@ -31,6 +34,8 @@ export type ActaGabineteData = ActaBranding & {
     calidad: 'titular' | 'suplente' | 'invitado'
     presente: boolean
   }[]
+  // "Temas a tratar" archivados a esta sesión al cierre (mig 053).
+  temas: string[]
   panoramaEjes: PanoramaEje[]
   iniciativas: {
     nombre: string
@@ -111,8 +116,19 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         ))}
         {data.asistencia.length === 0 && <Vacio>Sin registro de asistencia.</Vacio>}
 
+        {/* Temas a tratar — pauta general archivada desde Preparación */}
+        <SH>III. Temas a tratar</SH>
+        {data.temas.length === 0 ? (
+          <Vacio>Sin temas registrados en la preparación de esta sesión.</Vacio>
+        ) : data.temas.map((t, i) => (
+          <View key={i} style={s.tr} wrap={false}>
+            <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
+            <Text style={[s.td, { flex: 1 }]}>{t}</Text>
+          </View>
+        ))}
+
         {/* Panorama por eje — semáforos agregados leídos al cierre */}
-        <SH>III. Panorama del plan regional por eje</SH>
+        <SH>IV. Panorama del plan regional por eje</SH>
         <View style={s.th}>
           <Text style={[s.thT, { flex: 4 }]}>Eje</Text>
           <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Rojo</Text>
@@ -136,7 +152,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         {/* Iniciativas tratadas — el acuerdo por iniciativa se registra como
             compromiso vinculado (sección VI), ya no inline. Se muestra el
             acuerdo solo si una sesión antigua alcanzó a guardarlo. */}
-        <SH>IV. Iniciativas tratadas</SH>
+        <SH>V. Iniciativas tratadas</SH>
         {data.iniciativas.length === 0 ? (
           <Vacio>No se trataron iniciativas en esta sesión.</Vacio>
         ) : data.iniciativas.map((ini, i) => (
@@ -155,7 +171,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         ))}
 
         {/* Temas por cartera */}
-        <SH>V. Temas por cartera</SH>
+        <SH>VI. Temas por cartera</SH>
         {data.apuntes.length === 0 ? (
           <Vacio>Sin apuntes registrados.</Vacio>
         ) : data.apuntes.map((a, i) => (
@@ -166,7 +182,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         ))}
 
         {/* Compromisos */}
-        <SH>VI. Compromisos</SH>
+        <SH>VII. Compromisos</SH>
         <SubHead>a) Verificación de compromisos anteriores (incluye escalados desde comités y mandatos)</SubHead>
         {data.compVerificados.length === 0 ? (
           <Vacio>Sin compromisos anteriores por verificar.</Vacio>

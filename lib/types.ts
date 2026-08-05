@@ -681,6 +681,21 @@ export type RegionConfig = {
   gabinete_nombre: string
 }
 
+// ── "Temas a tratar" del Gabinete Regional (mig 053) ─────────────────────────
+// Puntos libres pre-reunión (vocerías, temas generales sin iniciativa).
+// sesion_id NULL = pendiente (tarjeta de Preparación + cabecera del
+// Cronograma); NOT NULL = archivado en esa sesión al cierre (snapshot para
+// acta e historial).
+export type GabineteTema = {
+  id: number
+  region_cod: string
+  texto: string
+  orden: number
+  sesion_id: number | null
+  created_at: string
+  created_by_email: string | null
+}
+
 // ── Comité Económico ──────────────────────────────────────────────────────────
 // Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
 // Etiqueta visible "Comité Económico"; el valor de instancia en BD sigue

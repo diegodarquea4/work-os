@@ -39,6 +39,8 @@ type DetalleSesion = {
     metrica: { nombre: string; unidad: string | null; tipo: 'numerico' | 'texto'; institucion: ComiteInstitucion; orden: number } | null
   }[]
   iniciativas: { semaforo_al_momento: string | null; pct_avance_al_momento: number | null; acuerdo: string | null; prioridad: { nombre: string } | null }[]
+  // "Temas a tratar" archivados a la sesión al cierre (mig 053) — solo gabinete.
+  temas: { texto: string }[]
   compromisos: SesionCompromiso[]
 }
 
@@ -81,7 +83,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
     setExpandedId(s.id)
     if (detalle[s.id]) return
     const sb = getSupabase()
-    const [asisRes, valRes, iniRes, compRes] = await Promise.all([
+    const [asisRes, valRes, iniRes, temasRes, compRes] = await Promise.all([
       sb.from('sesion_asistencia')
         .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, institucion, calidad)')
         .eq('sesion_id', s.id),
@@ -98,6 +100,14 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
             .eq('sesion_id', s.id)
             .order('created_at')
         : Promise.resolve({ data: [] }),
+      // Temas a tratar archivados a la sesión (mig 053): solo en gabinete.
+      instancia === 'gabinete'
+        ? sb.from('gabinete_temas')
+            .select('texto')
+            .eq('sesion_id', s.id)
+            .order('orden')
+            .order('id')
+        : Promise.resolve({ data: [] }),
       sb.from('sesion_compromisos')
         .select('*')
         .eq('sesion_origen_id', s.id)
@@ -109,6 +119,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
         asistencia:  (asisRes.data ?? []) as unknown as DetalleSesion['asistencia'],
         valores:     (valRes.data ?? []) as unknown as DetalleSesion['valores'],
         iniciativas: (iniRes.data ?? []) as unknown as DetalleSesion['iniciativas'],
+        temas:       (temasRes.data ?? []) as unknown as DetalleSesion['temas'],
         compromisos: (compRes.data ?? []) as SesionCompromiso[],
       },
     }))
@@ -140,7 +151,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
             />
 
             {!det ? <CargandoDetalle /> : (() => {
-              const allEmpty = det.valores.length === 0 && det.iniciativas.length === 0 && det.asistencia.length === 0 && det.compromisos.length === 0
+              const allEmpty = det.valores.length === 0 && det.iniciativas.length === 0 && det.temas.length === 0 && det.asistencia.length === 0 && det.compromisos.length === 0
               return (
                 <>
                   {det.valores.length > 0 && (
@@ -181,6 +192,17 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
                           )
                         })}
                       </div>
+                    </DetalleCard>
+                  )}
+
+                  {det.temas.length > 0 && (
+                    <DetalleCard>
+                      <SeccionLabel>Temas a tratar</SeccionLabel>
+                      <ol className="list-decimal list-inside space-y-1.5">
+                        {det.temas.map((t, i) => (
+                          <li key={i} className="text-sm text-slate-700 leading-snug">{t.texto}</li>
+                        ))}
+                      </ol>
                     </DetalleCard>
                   )}
 
