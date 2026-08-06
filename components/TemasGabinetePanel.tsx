@@ -24,6 +24,17 @@ import type { GabineteTema } from '@/lib/types'
 
 const MIN_FILAS = 4
 
+/**
+ * Auto-ajuste sutil de altura: el textarea crece para mostrar todo lo escrito
+ * (sin barra de scroll). Se llama como `ref` (alto inicial de las filas con
+ * texto) y en `onInput` (mientras se escribe).
+ */
+function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
 type Props = {
   regionCod: string
   temas: GabineteTema[]
@@ -42,7 +53,10 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
   // (revierte visualmente al valor persistido).
   const [bump, setBump] = useState(0)
 
-  const emptyCount = Math.max(MIN_FILAS, temas.length) + extraSlots - temas.length
+  // Filas vacías = mínimo de relleno (no borrables, son el lienzo por defecto)
+  // + las agregadas con "+ Agregar tema" (borrables con la ✕).
+  const baseEmpty = Math.max(0, MIN_FILAS - temas.length)
+  const emptyCount = baseEmpty + extraSlots
 
   async function commitNuevo(texto: string) {
     const t = texto.trim()
@@ -138,7 +152,7 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
     commitSubitems(tema, tema.subitems.filter((_, i) => i !== idx))
   }
 
-  const subInputCls = 'flex-1 min-w-0 text-[13px] text-gray-600 border border-gray-100 rounded-md px-2 py-1 leading-snug resize-none focus:outline-none focus:ring-1 focus:ring-violet-200 focus:border-violet-200'
+  const subInputCls = 'flex-1 min-w-0 text-[13px] text-gray-600 border border-gray-100 rounded-md px-2 py-1 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-200 focus:border-violet-200'
 
   return (
     <div className={`bg-white rounded-xl border border-gray-100 p-4 ${className ?? ''}`}>
@@ -157,8 +171,10 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                   <textarea
                     defaultValue={t.texto}
                     rows={1}
+                    ref={autoGrow}
+                    onInput={e => autoGrow(e.currentTarget)}
                     onBlur={e => commitEdicion(t, e.target.value)}
-                    className="flex-1 min-w-0 text-sm text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-violet-300"
+                    className="flex-1 min-w-0 text-sm text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-violet-300"
                   />
                   <button
                     onClick={() => quitarTema(t)}
@@ -186,6 +202,8 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                         <textarea
                           defaultValue={sub}
                           rows={1}
+                          ref={autoGrow}
+                          onInput={e => autoGrow(e.currentTarget)}
                           onBlur={e => editarSubitem(t, si, e.target.value)}
                           className={subInputCls}
                         />
@@ -205,15 +223,26 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                   </div>
                 ))}
                 {canEdit && Array.from({ length: subSlots[t.id] ?? 0 }, (_, si) => (
-                  <div key={`${t.id}-new${t.subitems.length}-${si}:${bump}`} className="flex items-start gap-1.5">
+                  <div key={`${t.id}-new${t.subitems.length}-${si}:${bump}`} className="group flex items-start gap-1.5">
                     <span className="text-gray-300 text-xs flex-shrink-0 mt-1.5">·</span>
                     <textarea
                       defaultValue=""
                       rows={1}
                       placeholder="Subtema…"
+                      ref={autoGrow}
+                      onInput={e => autoGrow(e.currentTarget)}
                       onBlur={e => agregarSubitem(t, e.target.value)}
                       className={`${subInputCls} border-dashed placeholder:text-gray-300 focus:border-solid`}
                     />
+                    <button
+                      onClick={() => setSubSlots(prev => ({ ...prev, [t.id]: Math.max(0, (prev[t.id] ?? 1) - 1) }))}
+                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0"
+                      title="Quitar subtema"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                      </svg>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -230,18 +259,35 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
           </div>
         ))}
 
-        {canEdit && Array.from({ length: emptyCount }, (_, i) => (
-          <div key={`new-${temas.length}-${i}-${bump}`} className="flex items-start gap-2">
-            <span className="text-xs text-gray-300 tabular-nums w-4 text-right flex-shrink-0 mt-2">{temas.length + i + 1}.</span>
-            <textarea
-              defaultValue=""
-              rows={1}
-              placeholder="Escribe un tema…"
-              onBlur={e => commitNuevo(e.target.value)}
-              className="flex-1 min-w-0 text-sm text-gray-700 border border-dashed border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-solid focus:border-violet-300"
-            />
-          </div>
-        ))}
+        {canEdit && Array.from({ length: emptyCount }, (_, i) => {
+          // Los slots más allá del mínimo de relleno son "agregados" → borrables.
+          const esAgregado = i >= baseEmpty
+          return (
+            <div key={`new-${temas.length}-${i}-${bump}`} className="group flex items-start gap-2">
+              <span className="text-xs text-gray-300 tabular-nums w-4 text-right flex-shrink-0 mt-2">{temas.length + i + 1}.</span>
+              <textarea
+                defaultValue=""
+                rows={1}
+                placeholder="Escribe un tema…"
+                ref={autoGrow}
+                onInput={e => autoGrow(e.currentTarget)}
+                onBlur={e => commitNuevo(e.target.value)}
+                className="flex-1 min-w-0 text-sm text-gray-700 border border-dashed border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none overflow-hidden placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-solid focus:border-violet-300"
+              />
+              {esAgregado && (
+                <button
+                  onClick={() => setExtraSlots(s => Math.max(0, s - 1))}
+                  className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex-shrink-0"
+                  title="Quitar fila"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )
+        })}
 
         {!canEdit && temas.length === 0 && (
           <p className="text-xs text-gray-400 italic py-2">Sin temas registrados.</p>

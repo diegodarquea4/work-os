@@ -2,7 +2,8 @@
  * PDF del CRONOGRAMA de preparación del Gabinete Regional — se descarga desde
  * Gabinete → Preparación, antes de la reunión (spec gabinete §7.2, producto
  * nuevo: distinto de la cartera PDF del Tablero). Espeja el arranque de la
- * sesión: compromisos por verificar + iniciativas en foco + trabas escaladas.
+ * sesión: compromisos por verificar + iniciativas en foco + compromisos
+ * levantados desde comités.
  * (Antes se llamaba "temario"; se renombró a cronograma — es una reunión.)
  *
  * Body: { region: { cod, nombre, ... } }  (el server arma el contenido).
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
     .order('plazo', { ascending: true, nullsFirst: false })
   const comps = (rawComp ?? []) as SesionCompromiso[]
 
-  // 3. Trabas escaladas desde comités (subsidiariedad — pendientes).
+  // 3. Compromisos levantados desde comités (subsidiariedad — pendientes).
   const { data: rawTrabas } = await sb
     .from('sesion_compromisos')
     .select('*')
@@ -152,12 +153,10 @@ export async function POST(request: Request) {
       estado:      c.estado,
     })),
     iniciativasFoco: foco.map(p => ({
-      nombre:      p.nombre,
-      cartera:     p.ministerio,
-      semaforo:    p.estado_semaforo,
-      pctAvance:   p.pct_avance,
-      proximoHito: p.fecha_proximo_hito,
-      responsable: p.responsable,
+      nombre:    p.nombre,
+      // En desalojos el % de avance se gestiona en el módulo de Desalojos, no en
+      // la iniciativa → va vacío en el cronograma.
+      pctAvance: p.es_desalojo ? null : p.pct_avance,
     })),
     trabasEscaladas: trabas.map(t => ({
       descripcion:     t.descripcion,
