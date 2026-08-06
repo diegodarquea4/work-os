@@ -26,20 +26,13 @@ export async function GET() {
   }
 
   const signInById = new Map<string, string | null>()
-  const mfaById    = new Map<string, boolean>()
   if (!authError && authData?.users) {
-    for (const u of authData.users) {
-      signInById.set(u.id, u.last_sign_in_at ?? null)
-      // Estado 2FA: tiene al menos un factor verificado (los factores vienen en
-      // la respuesta de listUsers). Solo informativo — el enforcement es aparte.
-      mfaById.set(u.id, (u.factors ?? []).some(f => f.status === 'verified'))
-    }
+    for (const u of authData.users) signInById.set(u.id, u.last_sign_in_at ?? null)
   }
 
   const enriched = (profiles ?? []).map(p => ({
     ...p,
     last_sign_in_at: signInById.get(p.id) ?? null,
-    mfa_activo:      mfaById.get(p.id) ?? false,
   }))
 
   return Response.json(enriched)

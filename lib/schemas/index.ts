@@ -138,7 +138,6 @@ export const adminUsersPatchSchema = z.object({
   // Reemplazan al viejo reset_password (que ponía DCI2026):
   recuperar:     z.boolean().optional(),  // emite código nuevo + bloquea la clave anterior + cierra sesiones
   forzar_cambio: z.boolean().optional(),  // marca debe_cambiar_clave + cierra sesiones (sin código)
-  resetear_2fa:  z.boolean().optional(),  // borra el factor 2FA del usuario (re-enrola en el próximo login)
 })
 
 export type AdminUsersPatchBody = z.infer<typeof adminUsersPatchSchema>

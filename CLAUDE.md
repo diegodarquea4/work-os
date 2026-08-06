@@ -64,47 +64,6 @@ Las políticas SELECT NO se tocaron (riesgo de romper lecturas) — todas siguen
 - `desalojos-docs` (bucket privado): admin-only (sin cambios).
 - `plan-regional`, `import-proposals`: sin policies hoy → uploads desde browser fallarían. Deuda: abrir si aparece reporte.
 
-## Verificación en dos pasos (2FA / TOTP)
-
-**Obligatoria para todos** (decisión Diego 2026-08-06). Usa la MFA nativa de
-`@supabase/auth-js` (`supabase.auth.mfa.*`) con factor **TOTP** (app
-autenticadora). **Sin migración**: los factores viven en `auth.mfa_factors`
-(GoTrue). Lógica pura testeable en `lib/mfa.ts` (`mfaState`, `decodeAal`).
-
-Estado por sesión = claim `aal` del JWT + si hay factor verificado:
-- `aal2` → acceso pleno.
-- `aal1` + factor verificado → **needs-challenge** (pide el código de 6 dígitos).
-- `aal1` sin factor → **needs-enroll** (overlay bloqueante).
-
-**Enforcement en dos capas:**
-- `proxy.ts` (gate duro): decodifica `aal` del token ya validado por `getUser()`
-  + lee `user.factors` (sin red extra). Una sesión `needs-challenge` se bloquea:
-  páginas → redirect a `/login`; rutas `/api/*` → 401. Ojo: la redirección
-  `user && isLoginPage → '/'` está condicionada a `!needsChallenge` (un
-  aal1-con-factor debe poder quedarse en `/login` a verificar — si no, loop).
-- `WorkOSApp` (cliente): si `getAuthenticatorAssuranceLevel().nextLevel === 'aal1'`
-  (sin factor) muestra `<MfaEnrollModal>` bloqueante (patrón `CambiarClaveModal`
-  'forzado'). Orden: cambio de clave forzado primero, 2FA después.
-
-Login (`app/login/page.tsx`): máquina `password | mfa`. Tras `signInWithPassword`,
-si `currentLevel==='aal1' && nextLevel==='aal2'` → paso del código
-(`challengeAndVerify`). Al montar, si el proxy redirigió una sesión aal1-con-factor,
-arranca directo en el paso `mfa`.
-
-**Recuperación = reset por admin** (no hay códigos de respaldo). Panel Usuarios
-→ botón "Resetear 2FA" → `PATCH /api/admin/users/[id]` con `resetear_2fa:true` →
-`auth.admin.mfa.deleteFactor` por factor + cierre de sesiones. El listado
-(`GET /api/admin/users`) trae `mfa_activo` por fila (badge Activo/Pendiente).
-
-**Break-glass** (admin sin su autenticador y sin otro admin que lo resetee):
-borrar su factor vía service-role — `DELETE FROM auth.mfa_factors WHERE user_id = '<uuid>'`
-(por Supabase MCP/SQL). Recupera el acceso en el próximo login (queda needs-enroll).
-
-**Deuda / fase 2 (diferida):** el enforcement v1 es a nivel de app. Endurecer
-exigiendo `auth.jwt()->>'aal' = 'aal2'` en las policies RLS de escritura queda
-para después (toca todas las policies desde mig 023 y solo puede activarse con
-el 100% enrolado, si no lockout masivo).
-
 ## Llave estable de mutación (etapa 5)
 
 `prioridades_territoriales.id` (PK, UNIQUE BTREE) es la llave de escritura. `n` se mantiene como número de orden de negocio pero NO es UNIQUE — usarlo como llave de write puede afectar múltiples filas. **Todas las mutaciones nuevas deben usar `.eq('id', prioridad.id)`** (no `.eq('n', ...)`).

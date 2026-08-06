@@ -17,8 +17,6 @@ type UserRow = {
   // ISO timestamp del último login (auth.users.last_sign_in_at). null si el
   // usuario nunca inició sesión (recién creado y no entró todavía).
   last_sign_in_at: string | null
-  // true si el usuario tiene la verificación en dos pasos configurada.
-  mfa_activo: boolean
 }
 
 /** Etiqueta y color para "Último acceso" según antigüedad. */
@@ -245,25 +243,6 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
-  // Resetear 2FA (perdió el teléfono/app): borra el factor del usuario. En su
-  // próximo login vuelve a ver el overlay para configurar la verificación.
-  async function handleReset2fa(id: string, email: string) {
-    if (!confirm(`Resetear la verificación en dos pasos de ${email}?\n\nSu 2FA actual dejará de funcionar; deberá configurarla de nuevo en el próximo ingreso.`)) return
-    setSaving(id)
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resetear_2fa: true }),
-    })
-    if (res.ok) {
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, mfa_activo: false } : u))
-    } else {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Error al resetear la verificación en dos pasos')
-    }
-    setSaving(null)
-  }
-
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     setInviting(true)
@@ -412,7 +391,6 @@ export default function AdminUsersView() {
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
-                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">2FA</th>
                         <th className="px-5 py-3"></th>
                       </tr>
                     </thead>
@@ -463,32 +441,8 @@ export default function AdminUsersView() {
                               )
                             })()}
                           </td>
-                          <td className="px-5 py-3.5">
-                            {u.mfa_activo ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full" title="Verificación en dos pasos configurada">
-                                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5l3 3 5-6.5"/></svg>
-                                Activo
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full" title="Aún no configura la verificación en dos pasos">
-                                Pendiente
-                              </span>
-                            )}
-                          </td>
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {u.mfa_activo && (
-                                <button
-                                  onClick={() => handleReset2fa(u.id, u.email)}
-                                  disabled={saving === u.id}
-                                  className="p-1.5 text-gray-300 hover:text-violet-600 transition-colors rounded hover:bg-violet-50 disabled:opacity-40"
-                                  title="Resetear verificación en dos pasos (perdió el teléfono/app)"
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3.5" y="1.5" width="7" height="11" rx="1.2"/><path d="M6 10.5h2"/>
-                                  </svg>
-                                </button>
-                              )}
                               <button
                                 onClick={() => handleForzarCambio(u.id, u.email)}
                                 disabled={saving === u.id}
