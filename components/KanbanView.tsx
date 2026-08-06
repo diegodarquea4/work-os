@@ -544,7 +544,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
               pane === 'preparacion' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
             }`}
-            title="Preparar la sesión: foco, sugerencias y trabas escaladas"
+            title="Preparar la sesión: foco, sugerencias y compromisos levantados desde comités"
           >
             Preparación
           </button>

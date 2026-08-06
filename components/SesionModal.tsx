@@ -842,7 +842,7 @@ export default function SesionModal(props: Props) {
                         <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
                         <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {esGabinete && c.origenTipo === 'escalado' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Traba escalada desde el comité — el comité la sigue viendo">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Compromiso levantado desde el comité — el comité lo sigue viendo">
                               ⬆ {comiteNombre(c.eje_id)}
                             </span>
                           )}

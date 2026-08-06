@@ -72,7 +72,7 @@ export default function TrabasEscaladasBlock({ regionCod, iniciativas, regionEje
           <path d="M7 10V5M7 2.5v.5"/>
           <path d="M2 12L7 1l5 11H2z"/>
         </svg>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-orange-800">Trabas escaladas desde comités</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-orange-800">Compromisos levantados desde comités</h3>
         <span className="text-[10px] font-semibold bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">{trabas.length}</span>
       </div>
       <div>

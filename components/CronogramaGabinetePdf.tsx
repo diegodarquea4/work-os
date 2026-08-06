@@ -11,8 +11,9 @@ import {
  * arranque de la sesión para que la delegación llegue lista:
  *   I.   Temas a tratar (pauta general — puntos libres de Preparación, mig 053).
  *   II.  Compromisos por verificar (los abiertos del gabinete).
- *   III. Iniciativas en foco (la agenda de la sesión).
- *   IV.  Trabas escaladas desde comités (subsidiariedad).
+ *   III. Iniciativas en foco (agenda: iniciativa + % de avance; en desalojos el
+ *        avance va vacío porque se gestiona en el módulo de Desalojos).
+ *   IV.  Compromisos levantados desde comités (subsidiariedad).
  *
  * Antes se llamaba "Temario"; se renombró a Cronograma (es una reunión, no una
  * prueba). Usa el estilo SOBRIO de Minuta Regional (components/actaPdfBase.tsx)
@@ -34,13 +35,11 @@ export type CronogramaGabineteData = ActaBranding & {
     plazo: string | null
     estado: 'pendiente' | 'en_curso' | 'cumplido'
   }[]
+  // Iniciativas en foco: solo nombre + % de avance (el avance es null cuando la
+  // iniciativa es un Desalojo — esa cifra vive en el módulo de Desalojos).
   iniciativasFoco: {
     nombre: string
-    cartera: string | null
-    semaforo: string | null
     pctAvance: number | null
-    proximoHito: string | null        // YYYY-MM-DD o null
-    responsable: string | null
   }[]
   trabasEscaladas: {
     descripcion: string
@@ -54,7 +53,6 @@ export type CronogramaGabineteData = ActaBranding & {
 
 const ESTADO_LABEL = { pendiente: 'Pendiente', en_curso: 'En curso', cumplido: 'Cumplido' } as const
 const ESTADO_COLOR = { pendiente: C.gris, en_curso: C.azul, cumplido: C.verde } as const
-const SEM_COLOR: Record<string, string> = { rojo: C.rojo, ambar: C.ambar, verde: C.verde }
 
 const comiteTag = {
   fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold' as const, color: C.muted,
@@ -121,40 +119,29 @@ export default function CronogramaGabinetePdf({ data }: { data: CronogramaGabine
           </View>
         ))}
 
-        {/* III. Iniciativas en foco */}
+        {/* III. Iniciativas en foco — solo iniciativa + % de avance */}
         <SH>III. Iniciativas en foco</SH>
         <View style={s.th}>
           <Text style={[s.thT, { width: 18 }]}>#</Text>
           <Text style={[s.thT, { flex: 1 }]}>Iniciativa</Text>
-          <Text style={[s.thT, { width: 62, textAlign: 'right' }]}>Semáforo</Text>
           <Text style={[s.thT, { width: 46, textAlign: 'right' }]}>Avance</Text>
         </View>
         {data.iniciativasFoco.length === 0 ? (
           <Vacio>No hay iniciativas marcadas en foco.</Vacio>
         ) : data.iniciativasFoco.map((p, i) => (
-          <View key={i} style={[s.tr, { flexDirection: 'column' }]} wrap={false}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
-              <Text style={[s.td, { flex: 1, fontFamily: 'Carlito', fontWeight: 'bold' }]}>{p.nombre}</Text>
-              <Text style={[s.td, { width: 62, textAlign: 'right', fontFamily: 'Carlito', fontWeight: 'bold', color: p.semaforo ? (SEM_COLOR[p.semaforo] ?? C.gris) : C.gris }]}>
-                {p.semaforo ? p.semaforo.toUpperCase() : '—'}
-              </Text>
-              <Text style={[s.td, { width: 46, textAlign: 'right', color: C.muted }]}>
-                {p.pctAvance != null ? `${Math.round(p.pctAvance)}%` : '—'}
-              </Text>
-            </View>
-            <Text style={[s.td, { color: C.muted, fontSize: 8, marginTop: 1.5, marginLeft: 18 }]}>
-              {p.cartera ? p.cartera : 'Sin cartera'}
-              {p.proximoHito ? ` · próximo hito ${fmtFecha(p.proximoHito)}` : ''}
-              {p.responsable ? ` · resp. ${p.responsable}` : ''}
+          <View key={i} style={[s.tr, { alignItems: 'center' }]} wrap={false}>
+            <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
+            <Text style={[s.td, { flex: 1, fontFamily: 'Carlito', fontWeight: 'bold' }]}>{p.nombre}</Text>
+            <Text style={[s.td, { width: 46, textAlign: 'right', color: C.muted }]}>
+              {p.pctAvance != null ? `${Math.round(p.pctAvance)}%` : '—'}
             </Text>
           </View>
         ))}
 
-        {/* IV. Trabas escaladas desde comités */}
-        <SH>IV. Trabas escaladas desde comités</SH>
+        {/* IV. Compromisos levantados desde comités */}
+        <SH>IV. Compromisos levantados desde comités</SH>
         {data.trabasEscaladas.length === 0 ? (
-          <Vacio>Sin trabas escaladas pendientes desde los comités.</Vacio>
+          <Vacio>Sin compromisos levantados desde los comités.</Vacio>
         ) : data.trabasEscaladas.map((t, i) => (
           <View key={i} style={s.tr} wrap={false}>
             <View style={{ flex: 5 }}>

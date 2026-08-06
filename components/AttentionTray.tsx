@@ -494,7 +494,7 @@ export default function AttentionTray({
             <h2 className="text-lg font-bold text-gray-900">{embedded ? 'Preparación de la sesión' : 'Bandeja de atención'}</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               {embedded
-                ? 'Foco de la próxima sesión de gabinete: iniciativas marcadas, sugerencias y trabas escaladas'
+                ? 'Foco de la próxima sesión de gabinete: iniciativas marcadas, sugerencias y compromisos levantados desde comités'
                 : 'Iniciativas marcadas como foco del equipo'}
             </p>
           </div>
