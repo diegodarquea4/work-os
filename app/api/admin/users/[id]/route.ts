@@ -36,9 +36,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     )
   }
-  const { role, region_cods, full_name, recuperar, forzar_cambio } = parse.data
+  const { role, region_cods, full_name, recuperar, forzar_cambio, resetear_2fa } = parse.data
 
   const db = getSupabaseAdmin()
+
+  // ── Reset de verificación en dos pasos: borra los factores del usuario y cierra
+  //    sesiones. En su próximo login vuelve a ver el overlay de enrolamiento. ──
+  if (resetear_2fa) {
+    const { data: factors, error: listErr } = await db.auth.admin.mfa.listFactors({ userId: id })
+    if (listErr) return Response.json({ error: listErr.message }, { status: 500 })
+    for (const f of factors?.factors ?? []) {
+      const { error: delErr } = await db.auth.admin.mfa.deleteFactor({ id: f.id, userId: id })
+      if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
+    }
+    await revokeSessionsBestEffort(id)
+    return Response.json({ ok: true })
+  }
 
   // ── Recuperación: emite código nuevo, BLOQUEA la clave anterior (fija una
   //    aleatoria imposible) y cierra sesiones. El usuario solo entra con el código. ──

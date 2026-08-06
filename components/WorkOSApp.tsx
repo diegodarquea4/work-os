@@ -17,6 +17,7 @@ import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
 import CambiarClaveModal from './CambiarClaveModal'
+import MfaEnrollModal from './MfaEnrollModal'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -49,6 +50,24 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
+  }, [])
+
+  // Gate de verificación en dos pasos (obligatoria). `nextLevel === 'aal1'`
+  // significa que la sesión no tiene factor verificado → debe enrolarse
+  // (overlay bloqueante). El caso "tiene factor pero sesión en aal1" (challenge
+  // pendiente) lo ataja el proxy antes de llegar acá, así que aquí solo
+  // distinguimos enroll vs. ok. Fail-open ante error de red: el proxy sigue
+  // siendo el gate duro.
+  const [mfaGate, setMfaGate] = useState<'checking' | 'ok' | 'enroll'>('checking')
+  useEffect(() => {
+    let cancelled = false
+    getSupabase().auth.mfa.getAuthenticatorAssuranceLevel()
+      .then(({ data }) => {
+        if (cancelled) return
+        setMfaGate(data && data.nextLevel === 'aal1' ? 'enroll' : 'ok')
+      })
+      .catch(() => { if (!cancelled) setMfaGate('ok') })
+    return () => { cancelled = true }
   }, [])
 
   // Atajo global `?` (Shift+/) abre el Centro de Ayuda. Lo ignoramos si el
@@ -507,8 +526,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // Cambio de clave obligatorio: el overlay bloquea el panel ANTES de mostrarlo.
   // El panel no se rinde hasta que el usuario crea la clave (recarga → flag en false).
+  // Orden: la clave primero (si además debe enrolar 2FA, eso viene después).
   if (profile?.debe_cambiar_clave) {
     return <CambiarClaveModal mode="forzado" />
+  }
+
+  // Verificación en dos pasos obligatoria: si la sesión no tiene factor
+  // verificado, el overlay de enrolamiento bloquea el panel hasta configurarla.
+  if (mfaGate === 'enroll') {
+    return <MfaEnrollModal />
   }
 
   return (

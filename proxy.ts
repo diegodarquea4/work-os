@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
+import { decodeAal, mfaState } from '@/lib/mfa'
 
 const SECURITY_HEADERS: [string, string][] = [
   // SAMEORIGIN (no DENY) porque embebemos /tour/explainer.html en iframe
@@ -34,6 +35,17 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Verificación en dos pasos: una sesión que pasó contraseña (aal1) pero tiene
+  // un factor TOTP verificado debe completar el segundo factor antes de usar la
+  // app. El claim `aal` se decodifica del token ya validado por getUser() y los
+  // factores vienen en el mismo `user` → sin llamadas de red extra.
+  let needsChallenge = false
+  if (user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const hasVerifiedFactor = (user.factors ?? []).some(f => f.status === 'verified')
+    needsChallenge = mfaState(decodeAal(session?.access_token), hasVerifiedFactor) === 'needs-challenge'
+  }
+
   const { pathname } = request.nextUrl
   const isLoginPage     = pathname.startsWith('/login')
   const isAuthCallback  = pathname.startsWith('/auth/callback')
@@ -63,8 +75,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isLoginPage) {
+  // Un usuario aal1-con-factor SÍ puede quedarse en /login (ahí completa el
+  // segundo factor). Solo lo mandamos a "/" si ya está plenamente verificado.
+  if (user && isLoginPage && !needsChallenge) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Gate del segundo factor: fuera de /login (y de las rutas públicas/cron), una
+  // sesión con challenge pendiente se bloquea. Páginas → a /login a verificar;
+  // rutas /api → 401 (no redirigir un fetch a HTML).
+  if (needsChallenge && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Verificación en dos pasos requerida' }, { status: 401 })
+    }
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Attach security headers to every response

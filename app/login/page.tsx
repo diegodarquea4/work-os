@@ -1,10 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import { complexityOk } from '@/lib/passwordRules'
 import NewPasswordFields from '@/components/NewPasswordFields'
+
+/** ID del factor TOTP verificado de la sesión actual (para el challenge). */
+async function verifiedTotpFactorId(): Promise<string | null> {
+  const { data } = await getSupabase().auth.mfa.listFactors()
+  const f = (data?.all ?? []).find(x => x.factor_type === 'totp' && x.status === 'verified')
+  return f?.id ?? null
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +19,47 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  // ── Segundo paso: verificación en dos pasos (TOTP) ───────────────────────────
+  // step 'mfa' cuando la contraseña fue correcta pero falta el segundo factor
+  // (login recién hecho, o sesión aal1 redirigida por el proxy a /login).
+  const [step, setStep]           = useState<'password' | 'mfa'>('password')
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  const [mfaCode, setMfaCode]     = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
+  const [mfaError, setMfaError]   = useState<string | null>(null)
+
+  // Si el proxy redirigió una sesión aal1-con-factor a /login, arrancar directo
+  // en el paso del código (unifica el flujo con el login recién hecho).
+  useEffect(() => {
+    let cancelled = false
+    getSupabase().auth.mfa.getAuthenticatorAssuranceLevel().then(async ({ data }) => {
+      if (cancelled || !data) return
+      if (data.currentLevel === 'aal1' && data.nextLevel === 'aal2') {
+        const fid = await verifiedTotpFactorId()
+        if (!cancelled && fid) { setMfaFactorId(fid); setStep('mfa') }
+      }
+    }).catch(() => { /* sin sesión: se queda en el paso de contraseña */ })
+    return () => { cancelled = true }
+  }, [])
+
+  async function verificarMfa(e: React.FormEvent) {
+    e.preventDefault()
+    if (!mfaFactorId) return
+    const limpio = mfaCode.replace(/\D/g, '')
+    if (limpio.length !== 6) { setMfaError('Ingresa el código de 6 dígitos de tu app.'); return }
+    setMfaLoading(true)
+    setMfaError(null)
+    const { error } = await getSupabase().auth.mfa.challengeAndVerify({ factorId: mfaFactorId, code: limpio })
+    if (error) {
+      setMfaError('Código incorrecto o expirado. Revisa tu app e inténtalo de nuevo.')
+      setMfaLoading(false)
+      setMfaCode('')
+      return
+    }
+    router.push('/')
+    router.refresh()
+  }
 
   // ── Activar cuenta / crear clave con código ──────────────────────────────────
   const [showActivate, setShowActivate] = useState(false)
@@ -33,10 +81,24 @@ export default function LoginPage() {
     if (error) {
       setError('Correo o contraseña incorrectos.')
       setLoading(false)
-    } else {
-      router.push('/')
-      router.refresh()
+      return
     }
+
+    // Contraseña OK. Si la cuenta tiene un factor verificado, la sesión quedó en
+    // aal1 y falta el segundo factor → mostrar el paso del código. Si no tiene
+    // factor, entra al panel (el overlay de enrolamiento lo tomará ahí).
+    const { data: aal } = await getSupabase().auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aal && aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2') {
+      const fid = await verifiedTotpFactorId()
+      if (fid) {
+        setMfaFactorId(fid)
+        setStep('mfa')
+        setLoading(false)
+        return
+      }
+    }
+    router.push('/')
+    router.refresh()
   }
 
   function closeActivate() {
@@ -75,6 +137,7 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Regiones · PSG</p>
         </div>
 
+        {step === 'password' ? (
         <form
           onSubmit={handleLogin}
           className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-8 space-y-5"
@@ -128,6 +191,55 @@ export default function LoginPage() {
             ¿Tienes un código? Activa tu cuenta o crea tu clave
           </button>
         </form>
+        ) : (
+        <form
+          onSubmit={verificarMfa}
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-8 space-y-5"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Verificación en dos pasos
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Ingresa el código de 6 dígitos de tu app autenticadora.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              value={mfaCode}
+              onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              maxLength={6}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-center text-lg tracking-[0.4em] font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+            />
+          </div>
+
+          {mfaError && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{mfaError}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={mfaLoading || mfaCode.length !== 6}
+            className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {mfaLoading ? 'Verificando...' : 'Verificar e ingresar'}
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await getSupabase().auth.signOut()
+              setStep('password'); setMfaCode(''); setMfaError(null); setMfaFactorId(null); setPassword('')
+            }}
+            className="w-full text-center text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            Volver
+          </button>
+        </form>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-6">
           Ministerio del Interior
