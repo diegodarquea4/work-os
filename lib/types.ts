@@ -681,6 +681,24 @@ export type RegionConfig = {
   gabinete_nombre: string
 }
 
+// ── "Temas a tratar" del Gabinete Regional (mig 053) ─────────────────────────
+// Puntos libres pre-reunión (vocerías, temas generales sin iniciativa).
+// sesion_id NULL = pendiente (tarjeta de Preparación + cabecera del
+// Cronograma); NOT NULL = archivado en esa sesión al cierre (snapshot para
+// acta e historial).
+export type GabineteTema = {
+  id: number
+  region_cod: string
+  texto: string
+  // Sub-items del tema (mig 054) — strings libres en JSONB, misma fila
+  // (patrón desglose de sesion_comite_valor).
+  subitems: string[]
+  orden: number
+  sesion_id: number | null
+  created_at: string
+  created_by_email: string | null
+}
+
 // ── Comité Económico ──────────────────────────────────────────────────────────
 // Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
 // Etiqueta visible "Comité Económico"; el valor de instancia en BD sigue
@@ -738,7 +756,7 @@ export type RegionMetaEmpleo = {
   region_cod: string
   objetivo: number
   valor_actual: number
-  // Descripción libre del sector/foco productivo de la región (mig 054) —
+  // Descripción libre del sector/foco productivo de la región (mig 056) —
   // se muestra justo debajo de la meta, a modo de nube de texto.
   foco_productivo: string | null
   valor_updated_by_email: string | null
@@ -753,7 +771,7 @@ export type SesionMetaEmpleoValor = {
   empleos_generados: number
 }
 
-// Subsidios de empleo — cupo declarado por región + acumulados (mig 053).
+// Subsidios de empleo — cupo declarado por región + acumulados (mig 055).
 // Mismo patrón que RegionMetaEmpleo: cupos fijo, el resto solo se actualiza
 // server-side al cerrar una sesión.
 export type RegionSubsidioEmpleo = {

@@ -8,6 +8,7 @@ import {
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { RegionMetaEmpleo, RegionSubsidioEmpleo } from '@/lib/types'
+import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import { getSupabase } from '@/lib/supabase'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
@@ -57,7 +58,7 @@ export default function ComiteInversionPanel({ region }: Props) {
   }, [region.cod])
 
   useEffect(() => {
-    if (canEditOperational) cargarMetaEmpleo()
+    if (canEditOperational && MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
   }, [canEditOperational, cargarMetaEmpleo])
 
   // Última actualización del catálogo SEIA = synced_at más reciente de sus
@@ -203,7 +204,7 @@ export default function ComiteInversionPanel({ region }: Props) {
                   : 'sin sesiones cerradas aún'}
               </span>
             </div>
-            {metaEmpleo && (
+            {MESA_EMPLEO_HABILITADA && metaEmpleo && (
               <div className="flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
                 <span className="font-semibold">Meta Empleo</span>
                 <span>{metaEmpleo.valor_actual.toLocaleString('es-CL')}{metaEmpleo.objetivo > 0 ? ` de ${metaEmpleo.objetivo.toLocaleString('es-CL')}` : ''}</span>
@@ -212,7 +213,7 @@ export default function ComiteInversionPanel({ region }: Props) {
                 )}
               </div>
             )}
-            {subsidio && (
+            {MESA_EMPLEO_HABILITADA && subsidio && (
               <div className="flex items-center gap-1.5 text-[11px] text-sky-900 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-1.5 flex-wrap">
                 <span className="font-semibold">Subsidios</span>
                 <span>{subsidio.postulados.toLocaleString('es-CL')}{subsidio.cupos > 0 ? ` de ${subsidio.cupos.toLocaleString('es-CL')} cupos` : ''} postulados</span>
@@ -272,7 +273,7 @@ export default function ComiteInversionPanel({ region }: Props) {
           onClose={() => {
             setSesionOpen(false)
             refreshResumen()
-            cargarMetaEmpleo()
+            if (MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
           }}
         />
       )}

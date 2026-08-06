@@ -1,9 +1,9 @@
 -- ============================================================================
--- 054_meta_empleo_foco_y_seed_regiones.sql
+-- 056_meta_empleo_foco_y_seed_regiones.sql
 --
 -- Carga la meta de empleo, el foco productivo y el cupo de subsidios
 -- declarados para las 16 regiones (reemplaza el piloto de solo Tarapacá de
--- las migraciones 052/053). `foco_productivo` es texto libre — se muestra
+-- las migraciones 052/055). `foco_productivo` es texto libre — se muestra
 -- justo debajo de la meta en Mesa Empleo, a modo de nube de texto.
 -- ============================================================================
 

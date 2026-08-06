@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import type { Region } from '@/lib/regions'
 import { INE_CODE } from '@/lib/regions'
 import type {
@@ -108,12 +109,7 @@ function Chevron({ open }: { open: boolean }) {
 
 const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
-// Zonas 3 y 4 tienen comboboxes con dropdown flotante — sin overflow-hidden
-// para que el dropdown no quede recortado ni empujado sobre la zona
-// siguiente; el header se redondea explícito ya que el padre ya no clippea.
-const zoneClsFlow = 'border border-gray-200 rounded-xl'
 const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
-const zoneHeadFlow = `${zoneHead} rounded-t-xl`
 const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
 
 function hoyISO(): string {
@@ -309,7 +305,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [metaEmpleoInput, setMetaEmpleoInput]   = useState('')
   const [metaEmpleoSaving, setMetaEmpleoSaving] = useState(false)
 
-  // Subsidios: cupo+acumulados de la región (mig 053) y deltas digitados en
+  // Subsidios: cupo+acumulados de la región (mig 055) y deltas digitados en
   // esta sesión.
   const [subsidioRegion, setSubsidioRegion]     = useState<RegionSubsidioEmpleo | null>(null)
   const [subsidioSesion, setSubsidioSesion]     = useState<SesionSubsidioEmpleoValor | null>(null)
@@ -1000,7 +996,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 </div>
               </section>
 
-              {/* ── Zona 3: Mesa Empleo (desplegable) ── */}
+              {/* ── Zona 3: Mesa Empleo (desplegable) — escondida hasta confirmar ── */}
+              {MESA_EMPLEO_HABILITADA && (
               <section className={zoneCls}>
                 <button type="button" onClick={() => setMesaEmpleoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
                   <span className={zoneNum}>3</span>
@@ -1119,11 +1116,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                   </div>
                 )}
               </section>
+              )}
 
-              {/* ── Zona 4: Seguimiento de la Inversión (desplegable) ── */}
+              {/* ── Zona 4: Seguimiento de la Inversión (desplegable) — 3 si Mesa Empleo está escondida ── */}
               <section className={zoneCls}>
                 <button type="button" onClick={() => setSeguimientoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>4</span>
+                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 4 : 3}</span>
                   <h3 className="text-sm font-semibold text-gray-800">Seguimiento de la Inversión</h3>
                   <Chevron open={seguimientoOpen} />
                 </button>
@@ -1278,10 +1276,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 )}
               </section>
 
-              {/* ── Zona 5: compromisos nuevos ── */}
+              {/* ── Zona 5: compromisos nuevos — 4 si Mesa Empleo está escondida ── */}
               <section className={zoneCls}>
                 <div className={zoneHead}>
-                  <span className={zoneNum}>5</span>
+                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 5 : 4}</span>
                   <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
                 </div>
@@ -1317,9 +1315,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           className={`${inputCls} w-full text-xs py-1.5`}
                         >
                           <option value="" disabled>Selecciona sección…</option>
-                          <option value="mesa_empleo">Mesa Empleo</option>
+                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">Mesa Empleo</option>}
                           <option value="seguimiento_inversion">Seguimiento de la Inversión</option>
-                          <option value="general">General (fuera de ambas)</option>
+                          <option value="general">General{MESA_EMPLEO_HABILITADA ? ' (fuera de ambas)' : ''}</option>
                         </select>
                       </label>
                       <div className="flex-1 min-w-[170px]">

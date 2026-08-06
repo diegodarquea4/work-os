@@ -1,12 +1,13 @@
 /**
- * PDF del TEMARIO de preparación del Gabinete Regional — se descarga desde
- * Gabinete → Preparación, antes de la sesión (spec gabinete §7.2, producto
+ * PDF del CRONOGRAMA de preparación del Gabinete Regional — se descarga desde
+ * Gabinete → Preparación, antes de la reunión (spec gabinete §7.2, producto
  * nuevo: distinto de la cartera PDF del Tablero). Espeja el arranque de la
  * sesión: compromisos por verificar + iniciativas en foco + trabas escaladas.
+ * (Antes se llamaba "temario"; se renombró a cronograma — es una reunión.)
  *
  * Body: { region: { cod, nombre, ... } }  (el server arma el contenido).
  * Auth: requireAuth() + scope regional (mismo patrón que /api/cartera-pdf).
- * Gate: region_config.gabinete_habilitado — el temario es un producto del
+ * Gate: region_config.gabinete_habilitado — el cronograma es un producto del
  * gabinete; sin flag, 400 (el botón tampoco se muestra, pero se defiende acá).
  */
 
@@ -18,8 +19,9 @@ import type { SesionCompromiso } from '@/lib/types'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { registerPdfFonts } from '@/lib/pdfFonts'
-import { temarioGabineteSchema } from '@/lib/schemas'
-import TemarioGabinetePdf, { type TemarioGabineteData } from '@/components/TemarioGabinetePdf'
+import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
+import { cronogramaGabineteSchema } from '@/lib/schemas'
+import CronogramaGabinetePdf, { type CronogramaGabineteData } from '@/components/CronogramaGabinetePdf'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
   try { rawBody = await request.json() }
   catch { return new Response(JSON.stringify({ error: 'Solicitud inválida' }), { status: 400 }) }
 
-  const parse = temarioGabineteSchema.safeParse(rawBody)
+  const parse = cronogramaGabineteSchema.safeParse(rawBody)
   if (!parse.success) {
     return new Response(
       JSON.stringify({ error: 'Solicitud inválida', detalle: parse.error.issues }),
@@ -79,13 +81,31 @@ export async function POST(request: Request) {
   }
   const todas = (rawIni ?? []) as Iniciativa[]
   const foco  = todas.filter(p => p.en_foco === true)
-  if (foco.length === 0) {
+  const iniPorId = new Map(todas.map(p => [p.id, p]))
+
+  // 1b. Temas a tratar pendientes (mig 053/054) — pauta general, sección I del PDF.
+  const { data: rawTemas } = await sb
+    .from('gabinete_temas')
+    .select('texto, subitems')
+    .eq('region_cod', region.cod)
+    .is('sesion_id', null)
+    .order('orden')
+    .order('id')
+  const temas = ((rawTemas ?? []) as { texto: string; subitems: unknown }[])
+    .filter(t => t.texto.trim().length > 0)
+    .map(t => ({
+      texto: t.texto,
+      subitems: (Array.isArray(t.subitems) ? t.subitems as string[] : []).filter(s => s.trim().length > 0),
+    }))
+
+  // Gate: basta con foco O temas para armar el cronograma (los temas son
+  // pauta general válida por sí sola — decisión 2026-08-05).
+  if (foco.length === 0 && temas.length === 0) {
     return new Response(
-      JSON.stringify({ error: 'Sin iniciativas en foco. Marcá iniciativas con la bandera en Preparación antes de descargar el temario.' }),
+      JSON.stringify({ error: 'Sin contenido para el cronograma. Marcá iniciativas en foco o escribe temas a tratar en Preparación.' }),
       { status: 400 },
     )
   }
-  const iniPorId = new Map(todas.map(p => [p.id, p]))
 
   // 2. Compromisos del gabinete abiertos (por verificar al inicio de la sesión).
   const { data: rawComp } = await sb
@@ -117,10 +137,13 @@ export async function POST(request: Request) {
       [e.id, e.sesiones_nombre ?? `Eje ${e.numero}`]),
   )
 
-  const data: TemarioGabineteData = {
+  const data: CronogramaGabineteData = {
+    logoDataUrl: getLogoDataUrl(),
+    footerBannerDataUrl: getFooterBannerDataUrl(),
     nombreInstancia,
     regionNombre: region.nombre,
     generadoEn: new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }),
+    temas,
     compromisosVerificar: comps.map(c => ({
       descripcion: c.descripcion,
       institucion: c.responsable_institucion,
@@ -149,11 +172,11 @@ export async function POST(request: Request) {
   registerPdfFonts()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const element = React.createElement(TemarioGabinetePdf as any, { data })
+  const element = React.createElement(CronogramaGabinetePdf as any, { data })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pdfBuffer = await renderToBuffer(element as any)
 
-  const filename = `temario-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
+  const filename = `cronograma-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
 
   return new Response(pdfBuffer as unknown as BodyInit, {
     status: 200,

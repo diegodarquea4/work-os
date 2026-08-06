@@ -178,6 +178,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
   }
 
+  // ── Gabinete: archivar los "Temas a tratar" pendientes a esta sesión ───────
+  // (mig 053). ANTES del acta: el builder lee por sesion_id, y el reintento
+  // POST /acta también. Idempotente por el claim + filtro IS NULL (un tema
+  // insertado DURANTE este request queda pendiente para la próxima sesión —
+  // aceptable). No-abortante: si falla, los temas siguen pendientes y los
+  // barre el próximo cierre (mismo criterio que el snapshot de iniciativas).
+  if (esGabinete) {
+    const { error: temasErr } = await db
+      .from('gabinete_temas')
+      .update({ sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .is('sesion_id', null)
+    if (temasErr) {
+      console.error('[sesiones/cerrar] fallo archivando temas a tratar', { sesionId, temasErr })
+    }
+  }
+
   // ── Compromisos cumplidos quedan sellados a esta sesión ───────────────────
   if (esGabinete) {
     // Propios del gabinete…
@@ -265,7 +282,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  // ── Mesa Empleo: sumar los subsidios digitados en la sesión (mig 053) ─────
+  // ── Mesa Empleo: sumar los subsidios digitados en la sesión (mig 055) ─────
   // Mismo mecanismo que Meta Empleo, con tres campos en vez de uno.
   if (sesion!.instancia === 'inversion') {
     const { data: valorSub } = await db

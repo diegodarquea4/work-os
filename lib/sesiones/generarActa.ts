@@ -2,11 +2,12 @@ import React from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { registerPdfFonts } from '@/lib/pdfFonts'
+import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { generarActaGabinete } from './generarActaGabinete'
-import { agruparPorInstitucion, formatoValorComite } from './helpers'
+import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA } from './helpers'
 import { subirActa } from './actaUpload'
 
 /**
@@ -42,10 +43,15 @@ export async function generarActa(sesionId: number): Promise<string> {
 
   // ── Render + upload ────────────────────────────────────────────────────────
   registerPdfFonts()
+  const dataConBranding: ActaData = {
+    ...data,
+    logoDataUrl: getLogoDataUrl(),
+    footerBannerDataUrl: getFooterBannerDataUrl(),
+  }
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que minuta/route.ts y renderPdf.tsx).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data }) as any)
+  const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data: dataConBranding }) as any)
 
   return subirActa(db, sesion, buffer)
 }
@@ -180,7 +186,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     // acumulado ANTES de generar el acta — igual que valor_actual en el
     // Comité Policial, acá se lee post-cierre.
     db.from('region_meta_empleo').select('objetivo, valor_actual, foco_productivo').eq('region_cod', sesion.region_cod).maybeSingle(),
-    // Subsidios (mig 053): mismo criterio — se lee post-cierre.
+    // Subsidios (mig 055): mismo criterio — se lee post-cierre.
     db.from('region_subsidio_empleo').select('cupos, postulados, entregados, empresas_postulantes')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
   ])
@@ -195,8 +201,10 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     ...((oficNuevosRes.data ?? []) as unknown as OficioConNombres[]),
   ]
 
+  // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
+  // sección no se muestra en el acta mientras esté escondida en la sesión.
   const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
-  const metaEmpleo = metaRegion ? {
+  const metaEmpleo = (MESA_EMPLEO_HABILITADA && metaRegion) ? {
     acumulado:       Number(metaRegion.valor_actual),
     objetivo:        Number(metaRegion.objetivo),
     pctAvance:       metaRegion.objetivo > 0 ? Math.round((Number(metaRegion.valor_actual) / Number(metaRegion.objetivo)) * 100) : null,
@@ -204,7 +212,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
   } : null
 
   const subRegion = subRegionRes.data as { cupos: number; postulados: number; entregados: number; empresas_postulantes: number } | null
-  const subsidios = subRegion ? {
+  const subsidios = (MESA_EMPLEO_HABILITADA && subRegion) ? {
     postulados:           Number(subRegion.postulados),
     entregados:           Number(subRegion.entregados),
     empresasPostulantes:  Number(subRegion.empresas_postulantes),

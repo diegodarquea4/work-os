@@ -1,5 +1,5 @@
 -- ============================================================================
--- 053_subsidios_empleo_y_seed.sql
+-- 055_subsidios_empleo_y_seed.sql
 --
 -- Mesa Empleo gana un segundo indicador: Subsidios (cupos por región +
 -- postulados/entregados/empresas postulantes, acumulados por sesión). Mismo

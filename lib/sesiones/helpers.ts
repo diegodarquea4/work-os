@@ -18,6 +18,11 @@ import type {
   ComiteInstitucion, ComiteMetrica, SesionComiteValor,
 } from '@/lib/types'
 
+// Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
+// sin confirmar. Flag temporal para esconderla de la sesión, el panel y el
+// acta sin borrar el trabajo ya hecho; sacar cuando se confirme.
+export const MESA_EMPLEO_HABILITADA = false
+
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
 /**

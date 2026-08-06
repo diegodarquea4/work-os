@@ -14,9 +14,11 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, stringChip, type ActiveChip } from './ActiveFiltersBar'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
+import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
 import { composeEjeLabel } from '@/lib/ejes'
 import { formatResponsableDisplay } from '@/lib/responsable'
 import TrabasEscaladasBlock from './TrabasEscaladasBlock'
+import TemasGabinetePanel from './TemasGabinetePanel'
 
 type Props = {
   projects: Iniciativa[]
@@ -142,49 +144,53 @@ export default function AttentionTray({
   }, [filterRegion])
   const { ejes: regionEjesCat } = useRegionEjes(regionCodActive)
 
-  // Temario de preparación del gabinete (solo en el pane Preparación de una
+  // Cronograma de preparación del gabinete (solo en el pane Preparación de una
   // región con gabinete habilitado). El botón aparece junto al contador "en
   // foco"; se habilita cuando hay ≥1 iniciativa marcada.
   const { config: regionConfig } = useRegionConfig(regionCodActive)
   const gabineteHabilitado = !!regionConfig?.gabinete_habilitado
-  const [descargandoTemario, setDescargandoTemario] = useState(false)
-  // Foco de la región SIN otros filtros — el temario arma el foco completo
+  // "Temas a tratar" pendientes (mig 053): alimentan la tarjeta de la
+  // izquierda Y el gate del botón cronograma (basta foco O temas).
+  const { temas, setTemas } = useTemasGabinete(regionCodActive, embedded && gabineteHabilitado)
+  const temasVisible = embedded && gabineteHabilitado && !!regionCodActive
+  const [descargandoCronograma, setDescargandoCronograma] = useState(false)
+  // Foco de la región SIN otros filtros — el cronograma arma el foco completo
   // (un filtro de búsqueda activo no debe deshabilitar el botón).
   const focoRegionCount = useMemo(
     () => regionCodActive ? projects.filter(p => p.region === filterRegion && p.en_foco === true).length : 0,
     [projects, filterRegion, regionCodActive],
   )
 
-  async function handleDescargarTemario() {
+  async function handleDescargarCronograma() {
     if (!regionCodActive) return
     const region = REGIONS.find(r => r.cod === regionCodActive)
     if (!region) return
-    setDescargandoTemario(true)
+    setDescargandoCronograma(true)
     try {
-      const res = await fetch('/api/temario-gabinete', {
+      const res = await fetch('/api/cronograma-gabinete', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ region }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'No se pudo generar el temario' }))
-        window.alert(err.error ?? 'No se pudo generar el temario')
+        const err = await res.json().catch(() => ({ error: 'No se pudo generar el cronograma' }))
+        window.alert(err.error ?? 'No se pudo generar el cronograma')
         return
       }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `temario-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
+      a.download = `cronograma-gabinete-${region.cod}-${new Date().toISOString().slice(0, 10)}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (e) {
-      console.error('[AttentionTray] descargar temario:', e)
-      window.alert('Error de red generando el temario')
+      console.error('[AttentionTray] descargar cronograma:', e)
+      window.alert('Error de red generando el cronograma')
     } finally {
-      setDescargandoTemario(false)
+      setDescargandoCronograma(false)
     }
   }
 
@@ -480,7 +486,7 @@ export default function AttentionTray({
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className={`${embedded ? 'max-w-5xl' : 'max-w-[min(48rem,90vw)]'} mx-auto px-6 py-6`}>
+      <div className={`${embedded ? (temasVisible ? 'max-w-6xl' : 'max-w-5xl') : 'max-w-[min(48rem,90vw)]'} mx-auto px-6 py-6`}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
@@ -495,17 +501,17 @@ export default function AttentionTray({
           <div className="flex items-center gap-2 flex-shrink-0">
             {embedded && gabineteHabilitado && regionCodActive && (
               <button
-                onClick={handleDescargarTemario}
-                disabled={descargandoTemario || focoRegionCount === 0}
-                title={focoRegionCount === 0
-                  ? 'Marca iniciativas en foco para armar el temario'
-                  : 'Descargar el temario de la próxima sesión de gabinete'}
+                onClick={handleDescargarCronograma}
+                disabled={descargandoCronograma || (focoRegionCount === 0 && temas.length === 0)}
+                title={focoRegionCount === 0 && temas.length === 0
+                  ? 'Marca iniciativas en foco o escribe temas a tratar para armar el cronograma'
+                  : 'Descargar el cronograma de la próxima sesión de gabinete'}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-violet-700 text-white hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v9M4 7l4 4 4-4M2 14h12"/>
                 </svg>
-                {descargandoTemario ? 'Generando…' : 'Descargar temario'}
+                {descargandoCronograma ? 'Generando…' : 'Descargar cronograma'}
               </button>
             )}
             {!loading && (
@@ -518,6 +524,21 @@ export default function AttentionTray({
             )}
           </div>
         </div>
+
+        {/* Layout del pane Preparación con gabinete habilitado: tarjeta
+            "Temas a tratar" a la izquierda + contenido existente a la
+            derecha. Sin gabinete (o no-embedded) el wrapper es transparente
+            (sin clases) y el layout queda idéntico al de siempre. */}
+        <div className={temasVisible ? 'flex gap-5 items-start' : undefined}>
+          {temasVisible && regionCodActive && (
+            <TemasGabinetePanel
+              regionCod={regionCodActive}
+              temas={temas}
+              setTemas={setTemas}
+              className="w-72 flex-shrink-0 sticky top-0"
+            />
+          )}
+          <div className={temasVisible ? 'flex-1 min-w-0' : undefined}>
 
         {/* Trabas escaladas desde comités — solo en el pane Preparación
             (subsidiariedad comité→gabinete). Render null mientras no haya. */}
@@ -788,6 +809,10 @@ export default function AttentionTray({
 
           </div>
         )}
+
+          {/* cierra columna derecha + wrapper del layout Preparación */}
+          </div>
+        </div>
       </div>
 
       {/* Modal */}

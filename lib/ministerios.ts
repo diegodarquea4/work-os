@@ -11,8 +11,14 @@
  * Este módulo es display-layer: la BD sigue tal cual. Si producto agrega o
  * renombra un ministerio, hay que tocar este archivo.
  *
- * Variantes de "Seguridad Pública" se colapsan a "Ministerio del Interior"
- * (guideline de producto — el panel no menciona "Seguridad Pública").
+ * "Ministerio del Interior" y "Ministerio de Seguridad Pública" son ministerios
+ * SEPARADOS (reestructura 2023 — Seguridad Pública es su propia cartera). Antes
+ * este módulo colapsaba todo Seguridad en Interior, lo que inflaba el filtro de
+ * Interior en el Dashboard; corregido 2026-08. El nombre histórico combinado
+ * "Ministerio del Interior y Seguridad Pública" se cuenta como Interior
+ * (decisión de producto: esas iniciativas quedan bajo Interior). Esto deja el
+ * filtro consistente con lib/ministeriosCanon.ts (import/editor), que ya los
+ * trataba por separado.
  */
 
 export const LISTA_CANONICA = [
@@ -32,6 +38,7 @@ export const LISTA_CANONICA = [
   'Ministerio de Obras Públicas',
   'Ministerio de Relaciones Exteriores',
   'Ministerio de Salud',
+  'Ministerio de Seguridad Pública',
   'Ministerio de Transportes y Telecomunicaciones',
   'Ministerio de Vivienda y Urbanismo',
   'Ministerio del Deporte',
@@ -70,14 +77,23 @@ const RAW_ALIASES: Array<[readonly string[], MinisterioCanon]> = [
   [['SEGEGOB'], 'Ministerio Secretaría General de Gobierno'],
   [['SEGPRES'], 'Ministerio Secretaría General de la Presidencia'],
 
+  // Interior y Seguridad Pública SEPARADOS. El nombre histórico combinado
+  // cuenta como Interior (decisión de producto 2026-08). "Ministerio de
+  // Interior" (sin la "l") es un typo frecuente en la data.
   [[
     'Ministerio del Interior y Seguridad Pública',
-    'Ministerio de Seguridad Pública',
-    'Ministerio de Seguridad y Orden Público',
-    'Ministerio de Seguridad y Órden Público',
+    'Ministerio de Interior',
     'MININT',
     'Min. Interior',
   ], 'Ministerio del Interior'],
+
+  // Seguridad Pública (su canon se auto-registra desde LISTA_CANONICA; acá
+  // solo las variantes históricas / abreviaturas).
+  [[
+    'Ministerio de Seguridad y Orden Público',
+    'Ministerio de Seguridad y Órden Público',
+    'Min. Seguridad',
+  ], 'Ministerio de Seguridad Pública'],
 
   [['Min. Salud'], 'Ministerio de Salud'],
   [['Min. Educación', 'Min. Educacion'], 'Ministerio de Educación'],

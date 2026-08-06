@@ -12,6 +12,7 @@ import ComunasSidebar from './ComunasSidebar'
 import MapaDrillBreadcrumb from './MapaDrillBreadcrumb'
 import { computeComunaStats } from '@/lib/comunaStats'
 import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
+import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
@@ -81,9 +82,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
-  // Pane inicial de Gabinete — solo lo setea la migración del localStorage
-  // 'atencion'→'kanban' (quien venía de la Bandeja aterriza en Preparación).
-  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('tablero')
+  // Pane inicial de Gabinete — SIEMPRE Preparación (decisión Diego 2026-08-05:
+  // al entrar a Gabinete se aterriza primero en la preparación de la sesión).
+  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('preparacion')
   // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.
@@ -138,6 +139,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       setHydrated(true)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Calienta el cache de region_config (16 filas) apenas carga la app: al
+  // entrar a Gabinete → Preparación el flag gabinete_habilitado ya se conoce
+  // síncrono y la tarjeta "Temas a tratar" se pinta junto con En Foco (sin
+  // esto aparecía con delay en cada entrada — KanbanView se remonta).
+  useEffect(() => { prefetchRegionConfigs() }, [])
 
   // Persistir cambios de view después de la hidratación. Saltamos el primer
   // render para no sobreescribir lo que acabamos de leer.
