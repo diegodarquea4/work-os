@@ -756,6 +756,9 @@ export type RegionMetaEmpleo = {
   region_cod: string
   objetivo: number
   valor_actual: number
+  // Descripción libre del sector/foco productivo de la región (mig 056) —
+  // se muestra justo debajo de la meta, a modo de nube de texto.
+  foco_productivo: string | null
   valor_updated_by_email: string | null
   valor_updated_at: string | null
 }
@@ -766,6 +769,28 @@ export type SesionMetaEmpleoValor = {
   id: number
   sesion_id: number
   empleos_generados: number
+}
+
+// Subsidios de empleo — cupo declarado por región + acumulados (mig 055).
+// Mismo patrón que RegionMetaEmpleo: cupos fijo, el resto solo se actualiza
+// server-side al cerrar una sesión.
+export type RegionSubsidioEmpleo = {
+  region_cod: string
+  cupos: number
+  postulados: number
+  entregados: number
+  empresas_postulantes: number
+  valor_updated_by_email: string | null
+  valor_updated_at: string | null
+}
+
+// Deltas de subsidios digitados en una sesión (se suman al cerrar).
+export type SesionSubsidioEmpleoValor = {
+  id: number
+  sesion_id: number
+  postulados: number
+  entregados: number
+  empresas_postulantes: number
 }
 
 // ── Regional Metrics (time-series) ────────────────────────────────────────────

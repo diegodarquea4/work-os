@@ -282,6 +282,34 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
   }
 
+  // ── Mesa Empleo: sumar los subsidios digitados en la sesión (mig 055) ─────
+  // Mismo mecanismo que Meta Empleo, con tres campos en vez de uno.
+  if (sesion!.instancia === 'inversion') {
+    const { data: valorSub } = await db
+      .from('sesion_subsidio_empleo_valor').select('postulados, entregados, empresas_postulantes')
+      .eq('sesion_id', sesionId).maybeSingle()
+    if (valorSub) {
+      const { data: subRow } = await db
+        .from('region_subsidio_empleo').select('postulados, entregados, empresas_postulantes')
+        .eq('region_cod', sesion!.region_cod).maybeSingle()
+      const suma = (actual: number | null, delta: number) => aplicarValorMetrica('suma', actual, delta)
+      const { error: subErr } = await db
+        .from('region_subsidio_empleo')
+        .upsert({
+          region_cod: sesion!.region_cod,
+          postulados:            suma(subRow?.postulados != null ? Number(subRow.postulados) : null, Number(valorSub.postulados)),
+          entregados:            suma(subRow?.entregados != null ? Number(subRow.entregados) : null, Number(valorSub.entregados)),
+          empresas_postulantes:  suma(subRow?.empresas_postulantes != null ? Number(subRow.empresas_postulantes) : null, Number(valorSub.empresas_postulantes)),
+          valor_updated_by_email: profile.email,
+          valor_updated_at: new Date().toISOString(),
+        }, { onConflict: 'region_cod' })
+      if (subErr) {
+        // No abortar: reparable desde sesion_subsidio_empleo_valor (fuente de verdad).
+        console.error('[sesiones/cerrar] fallo sumando Subsidios', { sesionId, subErr })
+      }
+    }
+  }
+
   // ── Acta — si falla NO se revierte el cierre (reintento vía POST /acta) ───
   try {
     const actaPath = await generarActa(sesionId)

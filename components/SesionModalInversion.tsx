@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import type { Region } from '@/lib/regions'
 import { INE_CODE } from '@/lib/regions'
 import type {
-  EjeSesion, Oaeca, RegionMetaEmpleo, SeccionComiteEconomico, SesionAsistencia, SesionCompromiso,
-  SesionMetaEmpleoValor, SesionNomina, SesionOficioTratado, SesionProyecto,
+  EjeSesion, Oaeca, RegionMetaEmpleo, RegionSubsidioEmpleo, SeccionComiteEconomico, SesionAsistencia,
+  SesionCompromiso, SesionMetaEmpleoValor, SesionNomina, SesionOficioTratado, SesionProyecto,
+  SesionSubsidioEmpleoValor,
 } from '@/lib/types'
 import { Alert } from '@/components/ui'
 
@@ -15,17 +17,18 @@ import { Alert } from '@/components/ui'
  * Formulario de sesión del Comité Económico — 5 zonas EN ESTE ORDEN (mismo
  * criterio que SesionModal.tsx: el orden es producto):
  *   1. Integrantes (nómina fija + invitados — igual que Asistencia)
- *   2. Mesa Empleo (desplegable) — Meta Empleo (indicador con objetivo +
+ *   2. Compromisos anteriores (si hubieron) — de CUALQUIERA de las dos
+ *      secciones o generales, fuera de ambas; sube justo bajo Integrantes
+ *      (mismo criterio que Zona 1 de SesionModal.tsx: verificar primero)
+ *   3. Mesa Empleo (desplegable) — Meta Empleo (indicador con objetivo +
  *      acumulado, mig 052) y Proyectos de Inversión Pública (módulo
  *      placeholder — la tabla se arma más adelante)
- *   3. Seguimiento de la Inversión (desplegable) — lo que ya existía:
- *      3a. Oficios anteriores (verificación)
- *      3b. Oficios tratados nuevos (alta directa: OAECA + fecha límite +
+ *   4. Seguimiento de la Inversión (desplegable) — lo que ya existía:
+ *      4a. Oficios anteriores (verificación)
+ *      4b. Oficios tratados nuevos (alta directa: OAECA + fecha límite +
  *          proyecto — no hay import de Excel)
- *      3c. Proyectos tratados en profundidad (selección desde catálogo
+ *      4c. Proyectos tratados en profundidad (selección desde catálogo
  *          real, v2_proyectos_inversion — no texto libre)
- *   4. Compromisos anteriores (si hubieron) — de CUALQUIERA de las dos
- *      secciones o generales, fuera de ambas
  *   5. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
  *      seguimiento_inversion / general) y genera el tag al listar;
  *      `proyecto_id` es opcional en cualquier sección.
@@ -106,12 +109,7 @@ function Chevron({ open }: { open: boolean }) {
 
 const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
-// Zonas 3 y 4 tienen comboboxes con dropdown flotante — sin overflow-hidden
-// para que el dropdown no quede recortado ni empujado sobre la zona
-// siguiente; el header se redondea explícito ya que el padre ya no clippea.
-const zoneClsFlow = 'border border-gray-200 rounded-xl'
 const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
-const zoneHeadFlow = `${zoneHead} rounded-t-xl`
 const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
 
 function hoyISO(): string {
@@ -307,6 +305,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [metaEmpleoInput, setMetaEmpleoInput]   = useState('')
   const [metaEmpleoSaving, setMetaEmpleoSaving] = useState(false)
 
+  // Subsidios: cupo+acumulados de la región (mig 055) y deltas digitados en
+  // esta sesión.
+  const [subsidioRegion, setSubsidioRegion]     = useState<RegionSubsidioEmpleo | null>(null)
+  const [subsidioSesion, setSubsidioSesion]     = useState<SesionSubsidioEmpleoValor | null>(null)
+  const [subPostuladosInput, setSubPostuladosInput] = useState('')
+  const [subEntregadosInput, setSubEntregadosInput] = useState('')
+  const [subEmpresasInput, setSubEmpresasInput]     = useState('')
+  const [subsidioSaving, setSubsidioSaving]     = useState(false)
+
   // Colapso de las dos secciones nuevas — ambas arrancan abiertas.
   const [mesaEmpleoOpen, setMesaEmpleoOpen]     = useState(true)
   const [seguimientoOpen, setSeguimientoOpen]   = useState(true)
@@ -380,6 +387,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const [
       nominaRes, asisRes, compRes, nuevosRes, oficiosAntRes, oficiosTratRes,
       oaecaRes, proyRegionRes, proyRes, metaRegionRes, metaSesionRes,
+      subRegionRes, subSesionRes,
     ] = await Promise.all([
       sb.from('sesion_nomina').select('*')
         .eq('region_cod', region.cod).eq('instancia', 'inversion').eq('activo', true)
@@ -409,6 +417,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       sb.from('sesion_proyectos').select('*').eq('sesion_id', s.id),
       sb.from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
       sb.from('sesion_meta_empleo_valor').select('*').eq('sesion_id', s.id).maybeSingle(),
+      sb.from('region_subsidio_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
+      sb.from('sesion_subsidio_empleo_valor').select('*').eq('sesion_id', s.id).maybeSingle(),
     ])
 
     setNomina((nominaRes.data ?? []) as SesionNomina[])
@@ -423,6 +433,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const metaSesion = (metaSesionRes.data as SesionMetaEmpleoValor | null) ?? null
     setMetaEmpleoSesion(metaSesion)
     setMetaEmpleoInput(metaSesion ? String(metaSesion.empleos_generados) : '')
+    setSubsidioRegion((subRegionRes.data as RegionSubsidioEmpleo | null) ?? null)
+    const subSesion = (subSesionRes.data as SesionSubsidioEmpleoValor | null) ?? null
+    setSubsidioSesion(subSesion)
+    setSubPostuladosInput(subSesion ? String(subSesion.postulados) : '')
+    setSubEntregadosInput(subSesion ? String(subSesion.entregados) : '')
+    setSubEmpresasInput(subSesion ? String(subSesion.empresas_postulantes) : '')
 
     const proy = (proyRes.data ?? []) as SesionProyecto[]
     setProyectosSesion(proy)
@@ -502,7 +518,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  // ── Zona 2: Mesa Empleo — Meta Empleo ─────────────────────────────────────
+  // ── Zona 3: Mesa Empleo — Meta Empleo ─────────────────────────────────────
 
   async function commitMetaEmpleo() {
     if (!sesion) return
@@ -524,7 +540,39 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  // ── Zona 3a: verificación de oficios anteriores (Seguimiento de la Inversión) ──
+  // ── Zona 3: Mesa Empleo — Subsidios ───────────────────────────────────────
+
+  async function commitSubsidios() {
+    if (!sesion) return
+    const postulados = subPostuladosInput.trim() === '' ? 0 : Number(subPostuladosInput)
+    const entregados = subEntregadosInput.trim() === '' ? 0 : Number(subEntregadosInput)
+    const empresas   = subEmpresasInput.trim() === '' ? 0 : Number(subEmpresasInput)
+    if ([postulados, entregados, empresas].some(Number.isNaN)) return
+    if (subsidioSesion
+      && postulados === subsidioSesion.postulados
+      && entregados === subsidioSesion.entregados
+      && empresas === subsidioSesion.empresas_postulantes) return
+    setSubsidioSaving(true)
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('sesion_subsidio_empleo_valor')
+          .upsert({
+            sesion_id: sesion.id,
+            postulados,
+            entregados,
+            empresas_postulantes: empresas,
+          }, { onConflict: 'sesion_id' }),
+        `sesion_subsidio_empleo_valor upsert sesion=${sesion.id}`,
+      )
+      setSubsidioSesion(rows[0] as SesionSubsidioEmpleoValor)
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setSubsidioSaving(false)
+    }
+  }
+
+  // ── Zona 4a: verificación de oficios anteriores (Seguimiento de la Inversión) ──
 
   async function setEstadoOficio(o: SesionOficioConNombres, estado: SesionOficioTratado['estado']) {
     if (o.estado === estado) return
@@ -559,7 +607,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  // ── Zona 3b: alta directa de oficios nuevos (Seguimiento de la Inversión) ──
+  // ── Zona 4b: alta directa de oficios nuevos (Seguimiento de la Inversión) ──
 
   async function crearOaeca(nombre: string): Promise<Oaeca | null> {
     try {
@@ -604,7 +652,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  // ── Zona 3c: proyectos tratados en profundidad (Seguimiento de la Inversión) ──
+  // ── Zona 4c: proyectos tratados en profundidad (Seguimiento de la Inversión) ──
 
   async function agregarProyecto(p: V2Proyecto) {
     if (!sesion) return
@@ -896,10 +944,63 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 </div>
               </section>
 
-              {/* ── Zona 2: Mesa Empleo (desplegable) ── */}
+              {/* ── Zona 2: compromisos anteriores (de cualquier sección, o generales) ── */}
+              <section className={zoneCls}>
+                <div className={zoneHead}>
+                  <span className={zoneNum}>2</span>
+                  <h3 className="text-sm font-semibold text-gray-800">Compromisos anteriores</h3>
+                  <span className="text-xs text-gray-400 ml-auto">{compAnteriores.length}</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  {compAnteriores.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
+                  ) : compAnteriores.map(c => (
+                    <div key={c.id} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        {c.seccion && <div className="mb-1"><SeccionTag seccion={c.seccion} /></div>}
+                        <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {(Object.keys(ESTADO_COMPROMISO) as (keyof typeof ESTADO_COMPROMISO)[]).map(est => (
+                          <button
+                            key={est}
+                            onClick={async () => {
+                              if (c.estado === est) return
+                              try {
+                                await safeWrite(
+                                  getSupabase().from('sesion_compromisos').update({
+                                    estado: est,
+                                    estado_updated_at: new Date().toISOString(),
+                                    estado_updated_by_email: currentUserEmail || null,
+                                  }).eq('id', c.id),
+                                  `sesion_compromisos estado id=${c.id}`,
+                                )
+                                setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado: est } : x))
+                              } catch (err) {
+                                window.alert((err as Error).message)
+                              }
+                            }}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
+                              c.estado === est ? ESTADO_COMPROMISO[est].on : ESTADO_COMPROMISO[est].off
+                            }`}
+                          >
+                            {ESTADO_COMPROMISO[est].label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* ── Zona 3: Mesa Empleo (desplegable) — escondida hasta confirmar ── */}
+              {MESA_EMPLEO_HABILITADA && (
               <section className={zoneCls}>
                 <button type="button" onClick={() => setMesaEmpleoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>2</span>
+                  <span className={zoneNum}>3</span>
                   <h3 className="text-sm font-semibold text-gray-800">Mesa Empleo</h3>
                   <Chevron open={mesaEmpleoOpen} />
                 </button>
@@ -910,9 +1011,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Meta Empleo</h4>
                       <div className="flex items-baseline justify-between gap-2 mb-1">
                         <span className="text-xs text-gray-500">
-                          Acumulado: <span className="font-semibold text-gray-800">{(metaEmpleoRegion?.valor_actual ?? 0).toLocaleString('es-CL')}</span>
+                          Empleos generados: <span className="font-semibold text-gray-800">{(metaEmpleoRegion?.valor_actual ?? 0).toLocaleString('es-CL')}</span>
                           {metaEmpleoRegion && metaEmpleoRegion.objetivo > 0 && (
-                            <> de {metaEmpleoRegion.objetivo.toLocaleString('es-CL')} ({Math.round((metaEmpleoRegion.valor_actual / metaEmpleoRegion.objetivo) * 100)}%)</>
+                            <> de {metaEmpleoRegion.objetivo.toLocaleString('es-CL')} — {Math.round((metaEmpleoRegion.valor_actual / metaEmpleoRegion.objetivo) * 100)}% de la meta</>
                           )}
                         </span>
                       </div>
@@ -924,8 +1025,13 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           />
                         </div>
                       )}
+                      {metaEmpleoRegion?.foco_productivo && (
+                        <p className="inline-block text-[11px] text-violet-800 bg-violet-50 border border-violet-100 rounded-full px-3 py-1 mb-2.5 italic">
+                          Foco productivo: {metaEmpleoRegion.foco_productivo}
+                        </p>
+                      )}
                       <label className="flex flex-col gap-0.5 max-w-xs">
-                        <span className="text-[10px] text-gray-500 font-medium">Empleos generados esta sesión</span>
+                        <span className="text-[10px] text-gray-500 font-medium">Actualización de empleos generados</span>
                         <input
                           type="number"
                           value={metaEmpleoInput}
@@ -938,6 +1044,68 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       {metaEmpleoSaving && <p className="text-[10px] text-gray-400 mt-1">Guardando…</p>}
                     </div>
 
+                    {/* Subsidios */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Subsidios</h4>
+                      <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <span className="text-xs text-gray-500">
+                          Postulados: <span className="font-semibold text-gray-800">{(subsidioRegion?.postulados ?? 0).toLocaleString('es-CL')}</span>
+                          {subsidioRegion && subsidioRegion.cupos > 0 && (
+                            <> de {subsidioRegion.cupos.toLocaleString('es-CL')} cupos — {Math.round((subsidioRegion.postulados / subsidioRegion.cupos) * 100)}%</>
+                          )}
+                        </span>
+                      </div>
+                      {subsidioRegion && subsidioRegion.cupos > 0 && (
+                        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-2">
+                          <div
+                            className="h-full bg-amber-500 rounded-full"
+                            style={{ width: `${Math.min(100, Math.round((subsidioRegion.postulados / subsidioRegion.cupos) * 100))}%` }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex gap-4 text-xs text-gray-500 mb-3">
+                        <span>Entregados: <span className="font-semibold text-gray-800">{(subsidioRegion?.entregados ?? 0).toLocaleString('es-CL')}</span></span>
+                        <span>Empresas postulantes: <span className="font-semibold text-gray-800">{(subsidioRegion?.empresas_postulantes ?? 0).toLocaleString('es-CL')}</span></span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-medium block mb-1">Actualización de esta sesión</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-lg">
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-gray-400">Postulados</span>
+                          <input
+                            type="number"
+                            value={subPostuladosInput}
+                            onChange={e => setSubPostuladosInput(e.target.value)}
+                            onBlur={commitSubsidios}
+                            placeholder="0"
+                            className={`${inputCls} w-full`}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-gray-400">Entregados</span>
+                          <input
+                            type="number"
+                            value={subEntregadosInput}
+                            onChange={e => setSubEntregadosInput(e.target.value)}
+                            onBlur={commitSubsidios}
+                            placeholder="0"
+                            className={`${inputCls} w-full`}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-gray-400">Empresas postulantes</span>
+                          <input
+                            type="number"
+                            value={subEmpresasInput}
+                            onChange={e => setSubEmpresasInput(e.target.value)}
+                            onBlur={commitSubsidios}
+                            placeholder="0"
+                            className={`${inputCls} w-full`}
+                          />
+                        </label>
+                      </div>
+                      {subsidioSaving && <p className="text-[10px] text-gray-400 mt-1">Guardando…</p>}
+                    </div>
+
                     {/* Proyectos de Inversión Pública — placeholder */}
                     <div className="pt-3 border-t border-gray-100">
                       <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Proyectos de Inversión Pública</h4>
@@ -948,17 +1116,18 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                   </div>
                 )}
               </section>
+              )}
 
-              {/* ── Zona 3: Seguimiento de la Inversión (desplegable) ── */}
+              {/* ── Zona 4: Seguimiento de la Inversión (desplegable) — 3 si Mesa Empleo está escondida ── */}
               <section className={zoneCls}>
                 <button type="button" onClick={() => setSeguimientoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>3</span>
+                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 4 : 3}</span>
                   <h3 className="text-sm font-semibold text-gray-800">Seguimiento de la Inversión</h3>
                   <Chevron open={seguimientoOpen} />
                 </button>
                 {seguimientoOpen && (
                   <div className="p-3 space-y-4">
-                    {/* Zona 3a: oficios anteriores */}
+                    {/* Zona 4a: oficios anteriores */}
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios anteriores</h4>
@@ -1003,7 +1172,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       </div>
                     </div>
 
-                    {/* Zona 3b: alta de oficios nuevos */}
+                    {/* Zona 4b: alta de oficios nuevos */}
                     <div className="pt-3 border-t border-gray-100">
                       <div className="flex items-center gap-2 mb-2">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios tratados nuevos</h4>
@@ -1059,7 +1228,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       </div>
                     </div>
 
-                    {/* Zona 3c: proyectos tratados en profundidad */}
+                    {/* Zona 4c: proyectos tratados en profundidad */}
                     <div className="pt-3 border-t border-gray-100">
                       <div className="flex items-center gap-2 mb-2">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Proyectos tratados en profundidad</h4>
@@ -1107,62 +1276,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 )}
               </section>
 
-              {/* ── Zona 4: compromisos anteriores (de cualquier sección, o generales) ── */}
+              {/* ── Zona 5: compromisos nuevos — 4 si Mesa Empleo está escondida ── */}
               <section className={zoneCls}>
                 <div className={zoneHead}>
-                  <span className={zoneNum}>4</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Compromisos anteriores</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{compAnteriores.length}</span>
-                </div>
-                <div className="p-3 space-y-2">
-                  {compAnteriores.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
-                  ) : compAnteriores.map(c => (
-                    <div key={c.id} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        {c.seccion && <div className="mb-1"><SeccionTag seccion={c.seccion} /></div>}
-                        <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {(Object.keys(ESTADO_COMPROMISO) as (keyof typeof ESTADO_COMPROMISO)[]).map(est => (
-                          <button
-                            key={est}
-                            onClick={async () => {
-                              if (c.estado === est) return
-                              try {
-                                await safeWrite(
-                                  getSupabase().from('sesion_compromisos').update({
-                                    estado: est,
-                                    estado_updated_at: new Date().toISOString(),
-                                    estado_updated_by_email: currentUserEmail || null,
-                                  }).eq('id', c.id),
-                                  `sesion_compromisos estado id=${c.id}`,
-                                )
-                                setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado: est } : x))
-                              } catch (err) {
-                                window.alert((err as Error).message)
-                              }
-                            }}
-                            className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
-                              c.estado === est ? ESTADO_COMPROMISO[est].on : ESTADO_COMPROMISO[est].off
-                            }`}
-                          >
-                            {ESTADO_COMPROMISO[est].label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* ── Zona 5: compromisos nuevos ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>5</span>
+                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 5 : 4}</span>
                   <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
                 </div>
@@ -1198,9 +1315,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           className={`${inputCls} w-full text-xs py-1.5`}
                         >
                           <option value="" disabled>Selecciona sección…</option>
-                          <option value="mesa_empleo">Mesa Empleo</option>
+                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">Mesa Empleo</option>}
                           <option value="seguimiento_inversion">Seguimiento de la Inversión</option>
-                          <option value="general">General (fuera de ambas)</option>
+                          <option value="general">General{MESA_EMPLEO_HABILITADA ? ' (fuera de ambas)' : ''}</option>
                         </select>
                       </label>
                       <div className="flex-1 min-w-[170px]">

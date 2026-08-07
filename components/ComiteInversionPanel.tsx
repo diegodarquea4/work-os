@@ -7,7 +7,8 @@ import {
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
-import type { RegionMetaEmpleo } from '@/lib/types'
+import type { RegionMetaEmpleo, RegionSubsidioEmpleo } from '@/lib/types'
+import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import { getSupabase } from '@/lib/supabase'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
@@ -43,17 +44,21 @@ export default function ComiteInversionPanel({ region }: Props) {
   const [syncMsg, setSyncMsg] = useState<string | null>(null)  // solo avisos/errores
   const [ultimaAct, setUltimaAct] = useState<string | null>(null)
   const [metaEmpleo, setMetaEmpleo] = useState<RegionMetaEmpleo | null>(null)
+  const [subsidio, setSubsidio] = useState<RegionSubsidioEmpleo | null>(null)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, canEditOperational)
 
   const cargarMetaEmpleo = useCallback(async () => {
-    const { data } = await getSupabase()
-      .from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle()
-    setMetaEmpleo((data as RegionMetaEmpleo | null) ?? null)
+    const [{ data: meta }, { data: sub }] = await Promise.all([
+      getSupabase().from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
+      getSupabase().from('region_subsidio_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
+    ])
+    setMetaEmpleo((meta as RegionMetaEmpleo | null) ?? null)
+    setSubsidio((sub as RegionSubsidioEmpleo | null) ?? null)
   }, [region.cod])
 
   useEffect(() => {
-    if (canEditOperational) cargarMetaEmpleo()
+    if (canEditOperational && MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
   }, [canEditOperational, cargarMetaEmpleo])
 
   // Última actualización del catálogo SEIA = synced_at más reciente de sus
@@ -199,13 +204,23 @@ export default function ComiteInversionPanel({ region }: Props) {
                   : 'sin sesiones cerradas aún'}
               </span>
             </div>
-            {metaEmpleo && (
+            {MESA_EMPLEO_HABILITADA && metaEmpleo && (
               <div className="flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
                 <span className="font-semibold">Meta Empleo</span>
                 <span>{metaEmpleo.valor_actual.toLocaleString('es-CL')}{metaEmpleo.objetivo > 0 ? ` de ${metaEmpleo.objetivo.toLocaleString('es-CL')}` : ''}</span>
                 {metaEmpleo.objetivo > 0 && (
-                  <span className="text-amber-500">({Math.round((metaEmpleo.valor_actual / metaEmpleo.objetivo) * 100)}% avance)</span>
+                  <span className="text-amber-500">({Math.round((metaEmpleo.valor_actual / metaEmpleo.objetivo) * 100)}% de la meta)</span>
                 )}
+              </div>
+            )}
+            {MESA_EMPLEO_HABILITADA && subsidio && (
+              <div className="flex items-center gap-1.5 text-[11px] text-sky-900 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-1.5 flex-wrap">
+                <span className="font-semibold">Subsidios</span>
+                <span>{subsidio.postulados.toLocaleString('es-CL')}{subsidio.cupos > 0 ? ` de ${subsidio.cupos.toLocaleString('es-CL')} cupos` : ''} postulados</span>
+                <span className="text-sky-300">·</span>
+                <span>{subsidio.entregados.toLocaleString('es-CL')} entregados</span>
+                <span className="text-sky-300">·</span>
+                <span>{subsidio.empresas_postulantes.toLocaleString('es-CL')} empresas</span>
               </div>
             )}
           </div>
@@ -258,7 +273,7 @@ export default function ComiteInversionPanel({ region }: Props) {
           onClose={() => {
             setSesionOpen(false)
             refreshResumen()
-            cargarMetaEmpleo()
+            if (MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
           }}
         />
       )}

@@ -51,10 +51,18 @@ export type ActaData = ActaBranding & {
   // Mesa Empleo (mig 052) — solo 'inversion'. null si la sesión no digitó
   // empleos generados (el acumulado de la región igual se muestra).
   metaEmpleo: {
-    empleosSesion: number | null
     acumulado: number
     objetivo: number
     pctAvance: number | null          // null si objetivo=0 (evita división por cero)
+    focoProductivo: string | null     // mig 056
+  } | null
+  // Subsidios (mig 055) — solo 'inversion'. cupos: total declarado por región.
+  subsidios: {
+    postulados: number
+    entregados: number
+    empresasPostulantes: number
+    cupos: number
+    pctAvance: number | null          // postulados/cupos, null si cupos=0
   } | null
   proyectosTratados: { nombre: string; nota: string | null }[]
   oficiosTratados: {
@@ -91,6 +99,13 @@ const SECCION_LABEL = { mesa_empleo: 'Mesa Empleo', seguimiento_inversion: 'Segu
 export default function ActaComitePdf({ data }: { data: ActaData }) {
   const presentes = data.asistencia.filter(a => a.presente)
   const footerLeft = `Generado por PSG · ${data.generadoEn}${data.generadoPor ? ` · ${data.generadoPor}` : ''}`
+  // Mesa Empleo (mig 055/056) puede venir null mientras no está confirmada
+  // (MESA_EMPLEO_HABILITADA en lib/sesiones/helpers.ts) — la numeración de
+  // 'inversion' se corre un número cuando esa sección no se muestra.
+  const mesaEmpleoVisible = Boolean(data.metaEmpleo || data.subsidios)
+  const nProyectos    = mesaEmpleoVisible ? 'IV' : 'III'
+  const nOficios      = mesaEmpleoVisible ? 'V' : 'IV'
+  const nCompromisos  = data.variante === 'inversion' ? (mesaEmpleoVisible ? 'VI' : 'V') : 'IV'
 
   return (
     <Document title={`Acta ${data.nombreInstancia} N°${data.sesionNumero} — ${data.regionNombre}`}>
@@ -183,28 +198,46 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           </>
         ) : (
           <>
-            {/* Mesa Empleo — Meta Empleo */}
+            {/* Mesa Empleo — Meta Empleo + Subsidios */}
+            {(data.metaEmpleo || data.subsidios) && <SH>III. Mesa Empleo</SH>}
             {data.metaEmpleo && (
               <>
-                <SH>III. Mesa Empleo — Meta Empleo</SH>
+                <Text style={[s.blockName, { marginTop: 2 }]}>Meta Empleo</Text>
                 <MetaRow
-                  k="Empleos generados esta sesión"
-                  v={data.metaEmpleo.empleosSesion != null ? fmtNum(data.metaEmpleo.empleosSesion) : '—'}
-                />
-                <MetaRow
-                  k="Acumulado"
-                  v={`${fmtNum(data.metaEmpleo.acumulado)}${data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}${data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% avance)` : ''}`}
+                  k="Empleos generados"
+                  v={`${fmtNum(data.metaEmpleo.acumulado)}${data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}${data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% de la meta)` : ''}`}
                 />
                 {data.metaEmpleo.objetivo > 0 && (
                   <View style={s.barTrack}>
                     <View style={[s.barFill, { width: `${Math.min(100, data.metaEmpleo.pctAvance ?? 0)}%` }]} />
                   </View>
                 )}
+                {data.metaEmpleo.focoProductivo && (
+                  <Text style={{ fontSize: 8.5, color: C.muted, fontStyle: 'italic', marginBottom: 8 }}>
+                    Foco productivo: {data.metaEmpleo.focoProductivo}
+                  </Text>
+                )}
+              </>
+            )}
+            {data.subsidios && (
+              <>
+                <Text style={[s.blockName, { marginTop: 6 }]}>Subsidios</Text>
+                <MetaRow
+                  k="Postulados"
+                  v={`${fmtNum(data.subsidios.postulados)}${data.subsidios.cupos > 0 ? ` de ${fmtNum(data.subsidios.cupos)} cupos` : ''}${data.subsidios.pctAvance != null ? ` (${data.subsidios.pctAvance}%)` : ''}`}
+                />
+                {data.subsidios.cupos > 0 && (
+                  <View style={s.barTrack}>
+                    <View style={[s.barFill, { width: `${Math.min(100, data.subsidios.pctAvance ?? 0)}%` }]} />
+                  </View>
+                )}
+                <MetaRow k="Entregados" v={fmtNum(data.subsidios.entregados)} />
+                <MetaRow k="Empresas postulantes" v={fmtNum(data.subsidios.empresasPostulantes)} />
               </>
             )}
 
             {/* Proyectos tratados */}
-            <SH>IV. Proyectos tratados en profundidad</SH>
+            <SH>{`${nProyectos}. Proyectos tratados en profundidad`}</SH>
             {data.proyectosTratados.length === 0 ? (
               <Vacio>Sin proyectos tratados en esta sesión.</Vacio>
             ) : data.proyectosTratados.map((p, i) => (
@@ -215,7 +248,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             ))}
 
             {/* Oficios tratados */}
-            <SH>V. Oficios tratados</SH>
+            <SH>{`${nOficios}. Oficios tratados`}</SH>
             <View style={s.th}>
               <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
               <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
@@ -236,8 +269,8 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           </>
         )}
 
-        {/* Compromisos — VI en Inversión (III Mesa Empleo + IV Proyectos + V Oficios la preceden), IV en Policial */}
-        <SH>{`${data.variante === 'inversion' ? 'VI' : 'IV'}. Compromisos`}</SH>
+        {/* Compromisos — numeración corrida si Mesa Empleo no se muestra (ver arriba) */}
+        <SH>{`${nCompromisos}. Compromisos`}</SH>
         <SubHead>a) Verificación de compromisos de sesiones anteriores</SubHead>
         {data.compVerificados.length === 0 ? (
           <Vacio>Sin compromisos anteriores por verificar.</Vacio>
