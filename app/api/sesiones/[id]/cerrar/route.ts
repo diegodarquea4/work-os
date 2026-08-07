@@ -180,16 +180,46 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   // ── Gabinete: archivar los "Temas a tratar" pendientes a esta sesión ───────
   // (mig 053). ANTES del acta: el builder lee por sesion_id, y el reintento
-  // POST /acta también. Idempotente por el claim + filtro IS NULL (un tema
-  // insertado DURANTE este request queda pendiente para la próxima sesión —
-  // aceptable). No-abortante: si falla, los temas siguen pendientes y los
-  // barre el próximo cierre (mismo criterio que el snapshot de iniciativas).
+  // POST /acta también. No-abortante: si falla, los temas siguen pendientes y
+  // los barre el próximo cierre (mismo criterio que el snapshot de iniciativas).
+  //
+  // Temas FIJOS (mig 057, recurrentes): NO se consumen — el original queda
+  // pendiente para la próxima Preparación. Para que igual queden registrados en
+  // el acta/historial de ESTA sesión, se inserta una COPIA archivada
+  // (sesion_id set, fijo=false). Orden: primero la copia de los fijos, después
+  // el archivo de los no fijos (filtros disjuntos por `fijo`, sin solaparse).
   if (esGabinete) {
+    const { data: fijos, error: fijosErr } = await db
+      .from('gabinete_temas')
+      .select('texto, subitems, orden, created_by_email')
+      .eq('region_cod', sesion!.region_cod)
+      .is('sesion_id', null)
+      .eq('fijo', true)
+    if (fijosErr) {
+      console.error('[sesiones/cerrar] fallo leyendo temas fijos', { sesionId, fijosErr })
+    } else if (fijos && fijos.length > 0) {
+      const copias = (fijos as { texto: string; subitems: unknown; orden: number; created_by_email: string | null }[])
+        .map(t => ({
+          region_cod:       sesion!.region_cod,
+          texto:            t.texto,
+          subitems:         t.subitems,
+          orden:            t.orden,
+          sesion_id:        sesionId,
+          fijo:             false,   // la copia es un registro archivado, no recurrente
+          created_by_email: t.created_by_email,
+        }))
+      const { error: copiaErr } = await db.from('gabinete_temas').insert(copias)
+      if (copiaErr) {
+        console.error('[sesiones/cerrar] fallo copiando temas fijos al acta', { sesionId, copiaErr })
+      }
+    }
+
     const { error: temasErr } = await db
       .from('gabinete_temas')
       .update({ sesion_id: sesionId })
       .eq('region_cod', sesion!.region_cod)
       .is('sesion_id', null)
+      .eq('fijo', false)
     if (temasErr) {
       console.error('[sesiones/cerrar] fallo archivando temas a tratar', { sesionId, temasErr })
     }

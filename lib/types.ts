@@ -695,6 +695,9 @@ export type GabineteTema = {
   subitems: string[]
   orden: number
   sesion_id: number | null
+  // Tema recurrente (mig 057): si es true, al cerrar la sesión NO se consume —
+  // sigue pendiente para la próxima Preparación (se archiva una copia al acta).
+  fijo: boolean
   created_at: string
   created_by_email: string | null
 }

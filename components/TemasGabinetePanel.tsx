@@ -35,6 +35,16 @@ function autoGrow(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`
 }
 
+/** Chincheta (pin) — rellena cuando el tema está fijado. */
+function PinIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+    </svg>
+  )
+}
+
 type Props = {
   regionCod: string
   temas: GabineteTema[]
@@ -118,6 +128,20 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
     }
   }
 
+  /** Fija/desfija un tema recurrente (mig 057): fijado = no se consume al cerrar. */
+  async function toggleFijo(tema: GabineteTema) {
+    const next = !tema.fijo
+    try {
+      await safeWrite(
+        getSupabase().from('gabinete_temas').update({ fijo: next }).eq('id', tema.id),
+        `gabinete_temas fijo id=${tema.id}`,
+      )
+      setTemas(prev => prev.map(x => x.id === tema.id ? { ...x, fijo: next } : x))
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
   /** Persiste el array completo de sub-items del tema (JSONB, misma fila). */
   async function commitSubitems(tema: GabineteTema, next: string[]) {
     try {
@@ -158,7 +182,8 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
     <div className={`bg-white rounded-xl border border-gray-100 p-4 ${className ?? ''}`}>
       <h3 className="text-sm font-bold text-gray-800">Temas a tratar:</h3>
       <p className="text-xs text-gray-400 mt-0.5 mb-3 leading-snug">
-        Puntos generales para la próxima sesión (vocerías, contexto). Se archivan en el acta al cerrarla.
+        Puntos generales para la próxima sesión (vocerías, contexto). Se archivan en el acta al cerrarla;
+        los fijados (📌) se mantienen para la próxima por ser recurrentes.
       </p>
 
       <div className="space-y-1.5">
@@ -177,6 +202,15 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                     className="flex-1 min-w-0 text-sm text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-violet-300"
                   />
                   <button
+                    onClick={() => toggleFijo(t)}
+                    className={`transition-opacity mt-2 flex-shrink-0 ${t.fijo ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100'}`}
+                    title={t.fijo
+                      ? 'Tema recurrente: no se borra al cerrar la sesión. Click para dejar de fijarlo.'
+                      : 'Fijar como recurrente (no se borra al cerrar la sesión)'}
+                  >
+                    <PinIcon filled={t.fijo} />
+                  </button>
+                  <button
                     onClick={() => quitarTema(t)}
                     className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex-shrink-0"
                     title="Quitar tema"
@@ -187,7 +221,10 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                   </button>
                 </>
               ) : (
-                <p className="flex-1 min-w-0 text-sm text-gray-700 leading-snug py-1.5">{t.texto}</p>
+                <p className="flex-1 min-w-0 text-sm text-gray-700 leading-snug py-1.5">
+                  {t.fijo && <span className="text-violet-500 mr-1" title="Tema recurrente">📌</span>}
+                  {t.texto}
+                </p>
               )}
             </div>
 

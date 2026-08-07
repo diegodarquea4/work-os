@@ -24,6 +24,7 @@ function normalizar(data: unknown[]): GabineteTema[] {
   return (data as GabineteTema[]).map(t => ({
     ...t,
     subitems: Array.isArray(t.subitems) ? t.subitems : [],
+    fijo: t.fijo ?? false,   // mig 057 (defensivo para filas pre-migración)
   }))
 }
 
