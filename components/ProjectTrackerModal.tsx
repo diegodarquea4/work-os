@@ -411,11 +411,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <div className="inline-flex items-center rounded-md ring-1 ring-gray-200 bg-white overflow-hidden" title="Nivel de importancia (Capa)">
                   {(['l','ll','lll'] as Capa[]).map(v => {
                     const active = capaLocal === v
+                    // Escala sobria "neutro con acento": vino como acento solo en
+                    // Capa I, slate en II/III. Fill en el segmento activo para que
+                    // se distinga del inactivo (ver CapaBadge para el badge).
                     const activeBg = v === 'l'
-                      ? 'bg-[#6b1d2c] text-white'
+                      ? 'bg-wine/10 text-wine'
                       : v === 'll'
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-gray-100 text-gray-700'
+                        ? 'bg-slate-200 text-slate-700'
+                        : 'bg-slate-100 text-slate-500'
                     const label = v === 'l' ? 'I' : v === 'll' ? 'II' : 'III'
                     return (
                       <button

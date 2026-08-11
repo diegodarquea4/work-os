@@ -942,17 +942,20 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             }}
           >
             {capaColumns.map(({ capa, label, sub, cards }) => {
+              // Escala sobria "neutro con acento": el encabezado no es un bloque
+              // sólido; vino tenue solo en Capa I, slate en II/III. Ring para dar
+              // definición sobre el fondo claro (alineado con CapaBadge).
               const headerBg =
-                capa === 'l'  ? 'bg-[#6b1d2c] text-white' :
-                capa === 'll' ? 'bg-amber-100 text-amber-900' :
-                                'bg-gray-100 text-gray-700'
+                capa === 'l'  ? 'bg-wine/10 text-wine ring-1 ring-wine/25' :
+                capa === 'll' ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-200' :
+                                'bg-slate-50 text-slate-500 ring-1 ring-slate-200'
               return (
                 <div key={capa} className="flex flex-col overflow-hidden pb-4">
                   <div className={`px-3 py-2.5 rounded-xl mb-3 ${headerBg}`}>
                     <p className="text-xs font-bold tracking-wide">{label}</p>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[11px] opacity-80">{sub}</span>
-                      <span className="text-xs font-bold bg-white/40 text-current px-2 py-0.5 rounded-full">{cards.length}</span>
+                      <span className="text-xs font-bold bg-white text-current ring-1 ring-black/5 px-2 py-0.5 rounded-full">{cards.length}</span>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 pr-1">

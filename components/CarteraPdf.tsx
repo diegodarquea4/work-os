@@ -230,16 +230,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
   },
-  // Capa de importancia (migración 024). I=wine institucional, II=amber.
-  // III queda invisible en el PDF (default) — el espacio se gana para
-  // chips realmente informativos.
+  // Capa de importancia (migración 024). Colorimetría sobria "neutro con acento"
+  // (Diego, 2026-08-11): vino solo como acento en Capa I (contorno + texto),
+  // slate en II. III queda invisible en el PDF (default) — el espacio se gana
+  // para chips realmente informativos.
   chipCapaI: {
-    backgroundColor: '#6b1d2c', color: '#ffffff',
+    backgroundColor: '#faf3f5', color: '#6b1d2c',
+    borderWidth: 0.5, borderColor: '#c99aa2',
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
   },
   chipCapaII: {
-    backgroundColor: '#fef3c7', color: '#92400e',
+    backgroundColor: '#f1f5f9', color: '#334155',
+    borderWidth: 0.5, borderColor: '#cbd5e1',
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
   },

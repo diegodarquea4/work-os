@@ -9,18 +9,22 @@ type Props = {
   className?: string
 }
 
+// Colorimetría sobria "neutro con acento" (Diego, 2026-08-11): las Capas son un
+// ranking de un solo eje, así que se leen como una escala neutra —no tres colores
+// sueltos—. Slate en todo; el vino (marca, `--color-wine`) aparece SOLO en Capa I
+// como acento (contorno + texto), fiel a la sobriedad del resto del panel.
 const STYLES: Record<Capa, { label: string; classes: string }> = {
   l: {
     label: 'Capa I',
-    classes: 'bg-[#6b1d2c] text-white ring-1 ring-[#6b1d2c]/30',
+    classes: 'bg-white text-wine ring-1 ring-wine/55',
   },
   ll: {
     label: 'Capa II',
-    classes: 'bg-amber-100 text-amber-800 ring-1 ring-amber-300',
+    classes: 'bg-slate-100 text-slate-700 ring-1 ring-slate-300',
   },
   lll: {
     label: 'Capa III',
-    classes: 'bg-gray-100 text-gray-500 ring-1 ring-gray-300',
+    classes: 'bg-slate-50 text-slate-400 ring-1 ring-slate-200',
   },
 }
 
