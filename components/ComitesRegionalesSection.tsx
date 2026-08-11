@@ -35,6 +35,11 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
+// Comité Económico en marcha blanca: activo solo en estas regiones (Manuel
+// prueba sus cambios en Tarapacá); en el resto se muestra "Pronto". El
+// desarrollo completo sigue vivo — solo se gatea su visibilidad por región.
+const ECONOMICO_ACTIVO: readonly string[] = ['I'] // Tarapacá
+
 type Props = {
   region:     Region
   regionEjes: RegionEje[]
@@ -55,6 +60,10 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   // El Comité Policial se ancla al eje con sesiones habilitadas.
   const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
 
+  // Económico en marcha blanca: solo Tarapacá lo tiene activo; en el resto
+  // muestra "Pronto" (mismo trato que Infraestructura).
+  const economicoActivo = ECONOMICO_ACTIVO.includes(region.cod)
+
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
@@ -66,6 +75,8 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
         {TABS.map(t => {
           const isActive = active === t.key
+          // Económico hereda su estado "listo" de la región; el resto es fijo.
+          const ready = t.key === 'inversion' ? economicoActivo : t.ready
           return (
             <button
               key={t.key}
@@ -77,7 +88,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
               }`}
             >
               {t.label}
-              {!t.ready && (
+              {!ready && (
                 <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-px">
                   Pronto
                 </span>
@@ -102,13 +113,20 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       ) : active === 'politico' ? (
         <ComitePoliticoPanel region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : active === 'inversion' ? (
-        <ComiteInversionPanel region={region} />
+        economicoActivo ? (
+          <ComiteInversionPanel region={region} />
+        ) : (
+          <Placeholder
+            titulo="Comité Económico — en marcha blanca"
+            texto="El Comité Económico está en pruebas en la Región de Tarapacá. Pronto disponible en el resto de las regiones."
+          />
+        )
       ) : active === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : (
         <Placeholder
           titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente. Por ahora, el Comité Policial, el Gabinete Regional y el Comité Económico son las instancias con sesiones y actas en el sistema."
+          texto="Esta instancia estará disponible próximamente."
         />
       )}
     </div>
