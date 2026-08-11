@@ -20,6 +20,7 @@ export type SesionesFiltro =
   | { instancia: 'eje'; ejeId: number }
   | { instancia: 'gabinete' }
   | { instancia: 'inversion' }
+  | { instancia: 'politico' }
 
 export type SesionesResumen = {
   compromisosAbiertos: number

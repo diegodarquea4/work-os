@@ -20,7 +20,9 @@ export type ActaData = ActaBranding & {
   // 'inversion' (Comité Económico) → sección III es Mesa Empleo (Meta
   // Empleo, mig 052), IV/V son Proyectos/Oficios tratados (Seguimiento de
   // la Inversión). Este comité no tiene eje ni metricas_eje (mig 049).
-  variante: 'policial' | 'inversion'
+  // 'politico' (Comité Político, mig 059) → sección III es "Temas conversados"
+  // (lista con subpuntos); sin instituciones/mesa empleo/oficios.
+  variante: 'policial' | 'inversion' | 'politico'
   nombreInstancia: string
   regionNombre: string
   sesionNumero: number
@@ -71,6 +73,8 @@ export type ActaData = ActaBranding & {
     fechaLimite: string | null
     estado: 'pendiente' | 'resuelto'
   }[]
+  // Temas conversados (mig 059) — solo variante 'politico'. Lista con subpuntos.
+  temas: { texto: string; subitems: string[] }[]
   // `seccion` solo aplica a variante 'inversion' — genera el tag Mesa Empleo /
   // Seguimiento de la Inversión / General. null en Comité Policial.
   compVerificados: {
@@ -195,6 +199,21 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
                 </View>
               )
             })}
+          </>
+        ) : data.variante === 'politico' ? (
+          <>
+            {/* Temas conversados (mig 059) — lista con subpuntos, destacada */}
+            <SH>III. Temas conversados</SH>
+            {data.temas.length === 0 ? (
+              <Vacio>No se registraron temas conversados en esta sesión.</Vacio>
+            ) : data.temas.map((t, i) => (
+              <View key={i} style={[s.block, { marginTop: 4 }]} wrap={false}>
+                <Text style={[s.blockText, { fontFamily: 'Carlito', fontWeight: 'bold' }]}>{i + 1}. {t.texto}</Text>
+                {t.subitems.map((sub, si) => (
+                  <Text key={si} style={[s.blockText, { color: C.muted, paddingLeft: 12 }]}>· {sub}</Text>
+                ))}
+              </View>
+            ))}
           </>
         ) : (
           <>

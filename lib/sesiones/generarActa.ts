@@ -37,8 +37,9 @@ export async function generarActa(sesionId: number): Promise<string> {
 
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
 
-  const data: ActaData = sesion.instancia === 'inversion'
-    ? await armarActaInversion(db, sesion, sesionId, regionNombre)
+  const data: ActaData =
+    sesion.instancia === 'inversion' ? await armarActaInversion(db, sesion, sesionId, regionNombre)
+    : sesion.instancia === 'politico' ? await armarActaPolitico(db, sesion, sesionId, regionNombre)
     : await armarActaPolicial(db, sesion, sesionId, regionNombre)
 
   // ── Render + upload ────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     subsidios: null,
     proyectosTratados: [],
     oficiosTratados: [],
+    temas: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
       descripcion: c.descripcion,
       institucion: c.responsable_institucion,
@@ -246,6 +248,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
       fechaLimite:    o.fecha_limite,
       estado:         o.estado,
     })),
+    temas: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
       descripcion: c.descripcion,
       institucion: c.responsable_institucion,
@@ -260,6 +263,77 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
       nombre:      c.responsable_nombre,
       plazo:       c.plazo,
       seccion:     c.seccion,
+    })),
+    generadoPor: sesion.closed_by_email,
+    generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
+  }
+}
+
+/**
+ * Comité Político — sin eje (mig 059): asistencia ad-hoc + temas conversados
+ * (lista con subpuntos) + compromisos. Sin indicadores/proyectos/oficios.
+ */
+async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
+  const [numRes, asisRes, temasRes, verifRes, nuevosRes] = await Promise.all([
+    db.from('eje_sesiones').select('id, fecha')
+      .eq('region_cod', sesion.region_cod).eq('instancia', 'politico').eq('estado', 'cerrada'),
+    db.from('sesion_asistencia')
+      .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
+      .eq('sesion_id', sesionId),
+    db.from('sesion_temas').select('texto, subitems').eq('sesion_id', sesionId).order('orden').order('id'),
+    // Verificados: compromisos gestionados en Político de sesiones anteriores,
+    // cumplidos en esta sesión o aún abiertos (mismo criterio que los demás).
+    db.from('sesion_compromisos').select('*')
+      .eq('region_cod', sesion.region_cod).eq('instancia', 'politico')
+      .neq('sesion_origen_id', sesionId)
+      .or(`cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`),
+    // Nuevos: TODO lo originado en esta sesión, incluida la delegación a otras
+    // instancias (sin filtro de instancia — igual que inversion).
+    db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
+  ])
+
+  const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
+  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+
+  return {
+    variante: 'politico',
+    nombreInstancia: 'Comité Político',
+    regionNombre,
+    sesionNumero,
+    fecha: sesion.fecha,
+    lugar: sesion.lugar,
+    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
+      nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
+      cargo:       a.nomina?.cargo ?? null,
+      institucion: a.nomina?.institucion ?? a.invitado_institucion ?? '—',
+      calidad:     a.nomina ? a.nomina.calidad : 'invitado',
+      presente:    a.presente,
+    })),
+    instituciones: [],
+    metaEmpleo: null,
+    subsidios: null,
+    proyectosTratados: [],
+    oficiosTratados: [],
+    temas: ((temasRes.data ?? []) as { texto: string; subitems: unknown }[]).map(t => ({
+      texto:    t.texto,
+      subitems: Array.isArray(t.subitems) ? t.subitems as string[] : [],
+    })),
+    compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
+      descripcion: c.descripcion,
+      institucion: c.responsable_institucion,
+      nombre:      c.responsable_nombre,
+      plazo:       c.plazo,
+      estado:      c.estado,
+      seccion:     null,
+    })),
+    compNuevos: ((nuevosRes.data ?? []) as SesionCompromiso[]).map(c => ({
+      descripcion: c.descripcion,
+      institucion: c.responsable_institucion,
+      nombre:      c.responsable_nombre,
+      plazo:       c.plazo,
+      seccion:     null,
     })),
     generadoPor: sesion.closed_by_email,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),

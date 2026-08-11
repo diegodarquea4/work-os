@@ -5,6 +5,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 import ComitePolicialTab from './ComitePolicialTab'
+import ComitePoliticoPanel from './ComitePoliticoPanel'
 import ComiteInversionPanel from './ComiteInversionPanel'
 import GabineteRegionalTab from './GabineteRegionalTab'
 
@@ -24,10 +25,11 @@ import GabineteRegionalTab from './GabineteRegionalTab'
  * instancia='inversion'.
  */
 
-type TabKey = 'policial' | 'infraestructura' | 'inversion' | 'gabinete'
+type TabKey = 'policial' | 'politico' | 'infraestructura' | 'inversion' | 'gabinete'
 
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
+  { key: 'politico',       label: 'Comité Político',                    ready: true  },
   { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
   { key: 'inversion',      label: 'Comité Económico',                   ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
@@ -97,6 +99,8 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
           />
         )
+      ) : active === 'politico' ? (
+        <ComitePoliticoPanel region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : active === 'inversion' ? (
         <ComiteInversionPanel region={region} />
       ) : active === 'gabinete' ? (

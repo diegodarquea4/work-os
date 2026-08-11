@@ -256,12 +256,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
   } else {
-    // instancia === 'inversion' — sin eje, análogo a Gabinete: filtra por instancia.
+    // instancia sin eje NI gabinete ('inversion' | 'politico') — análogo a
+    // Gabinete: filtra por la propia instancia de la sesión.
     await db
       .from('sesion_compromisos')
       .update({ cerrado_en_sesion_id: sesionId })
       .eq('region_cod', sesion!.region_cod)
-      .eq('instancia', 'inversion')
+      .eq('instancia', sesion!.instancia)
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
   }

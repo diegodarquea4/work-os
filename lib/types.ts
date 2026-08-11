@@ -531,7 +531,7 @@ export type RegionEje = {
 // mismo mecanismo, esos comités tampoco cuelgan del catálogo de Ejes
 // estratégicos, son tabs fijos de la sección Comités).
 
-export type SesionInstancia = 'eje' | 'gabinete' | 'inversion'
+export type SesionInstancia = 'eje' | 'gabinete' | 'inversion' | 'politico'
 
 export type EjeSesion = {
   id: number
@@ -588,6 +588,17 @@ export type SesionApunte = {
   sesion_id: number
   institucion: string
   texto: string
+}
+
+// "Temas conversados" del Comité Político (mig 059). Hija de la sesión (a
+// diferencia de gabinete_temas, que vive pendiente entre sesiones): se anota
+// durante la sesión y ya cuelga de ella. Lista con subpuntos (subitems).
+export type SesionTema = {
+  id: number
+  sesion_id: number
+  texto: string
+  subitems: string[]
+  orden: number
 }
 
 // ── Reporte de métricas por institución del Comité Policial (mig 048) ────────
