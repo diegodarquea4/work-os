@@ -117,8 +117,8 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
           <ComiteInversionPanel region={region} />
         ) : (
           <Placeholder
-            titulo="Comité Económico — en marcha blanca"
-            texto="El Comité Económico está en pruebas en la Región de Tarapacá. Pronto disponible en el resto de las regiones."
+            titulo="Comité Económico — en desarrollo"
+            texto="Esta instancia estará disponible próximamente."
           />
         )
       ) : active === 'gabinete' ? (
