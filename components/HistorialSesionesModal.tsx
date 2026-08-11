@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { useIsAdmin } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { RegionEje, SesionCompromiso, ComiteInstitucion, ComiteDesglose } from '@/lib/types'
 import { COMITE_INSTITUCIONES } from '@/lib/sesiones/helpers'
@@ -76,7 +77,8 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const { working, descargarActa, reintentarActa } = useActaAcciones(load)
+  const isAdmin = useIsAdmin()
+  const { working, descargarActa, reintentarActa, eliminarSesion } = useActaAcciones(load)
 
   async function toggleExpand(s: SesionResumen) {
     if (expandedId === s.id) { setExpandedId(null); return }
@@ -145,6 +147,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
             nAsis={s.sesion_asistencia?.[0]?.count ?? 0}
             expanded={expandedId === s.id}
             onToggle={() => toggleExpand(s)}
+            onDelete={isAdmin ? () => eliminarSesion(s.id) : undefined}
           >
             <ActaAcciones
               sesion={s}

@@ -62,7 +62,24 @@ export function useActaAcciones(reload: () => Promise<void> | void) {
     }
   }
 
-  return { working, descargarActa, reintentarActa }
+  // Borrar la sesión del historial (registro + acta). Solo admin — el gate real
+  // es la ruta DELETE (service-role); acá el call-site decide si ofrecer la X.
+  async function eliminarSesion(sesionId: number) {
+    if (!window.confirm(
+      '¿Borrar esta acta del historial?\n\nSe elimina el registro de la sesión y su acta PDF. Esta acción no se puede deshacer.',
+    )) return
+    setWorking(true)
+    try {
+      const res = await fetch(`/api/sesiones/${sesionId}`, { method: 'DELETE' })
+      const body = await res.json().catch(() => ({}))
+      if (res.ok) await reload()
+      else window.alert(body.error ?? 'No se pudo borrar el acta')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  return { working, descargarActa, reintentarActa, eliminarSesion }
 }
 
 // ── Shell del modal ──────────────────────────────────────────────────────────
@@ -119,34 +136,50 @@ function EstadoActaPill({ sesion }: { sesion: SesionResumen }) {
 }
 
 export function SesionCard({
-  sesion, nAsis, expanded, onToggle, children,
+  sesion, nAsis, expanded, onToggle, onDelete, children,
 }: {
   sesion: SesionResumen
   nAsis: number
   expanded: boolean
   onToggle: () => void
+  /** Solo admin: muestra la X (arriba a la derecha) para borrar la sesión. */
+  onDelete?: () => void
   children: ReactNode
 }) {
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-3.5 px-5 py-4 hover:bg-slate-50 transition-colors text-left"
-      >
-        <svg
-          width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2"
-          className={`text-slate-400 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}
+      <div className="flex items-stretch">
+        <button
+          onClick={onToggle}
+          className="flex-1 min-w-0 flex items-center gap-3.5 px-5 py-4 hover:bg-slate-50 transition-colors text-left"
         >
-          <path d="M3 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-slate-800">
-            {fmtFechaLarga(sesion.fecha)}{sesion.lugar ? ` · ${sesion.lugar}` : ''}
-          </p>
-          <p className="text-sm text-slate-500 mt-0.5">{nAsis} en asistencia</p>
-        </div>
-        <EstadoActaPill sesion={sesion} />
-      </button>
+          <svg
+            width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2"
+            className={`text-slate-400 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}
+          >
+            <path d="M3 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold text-slate-800">
+              {fmtFechaLarga(sesion.fecha)}{sesion.lugar ? ` · ${sesion.lugar}` : ''}
+            </p>
+            <p className="text-sm text-slate-500 mt-0.5">{nAsis} en asistencia</p>
+          </div>
+          <EstadoActaPill sesion={sesion} />
+        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            title="Borrar acta (solo administrador)"
+            aria-label="Borrar acta"
+            className="flex-shrink-0 self-stretch px-4 flex items-center border-l border-slate-100 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4l12 12M16 4L4 16" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/70 space-y-4">
