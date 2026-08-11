@@ -943,12 +943,14 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           >
             {capaColumns.map(({ capa, label, sub, cards }) => {
               // Escala sobria "neutro con acento": el encabezado no es un bloque
-              // sólido; vino tenue solo en Capa I, slate en II/III. Ring para dar
-              // definición sobre el fondo claro (alineado con CapaBadge).
+              // sólido; vino tenue solo en Capa I, slate en II/III. Borde con
+              // suficiente contraste para marcar la caja del título sobre el fondo
+              // claro del tablero (III comparte el slate-50 del fondo → depende del
+              // borde). Alineado con CapaBadge.
               const headerBg =
-                capa === 'l'  ? 'bg-wine/10 text-wine ring-1 ring-wine/25' :
-                capa === 'll' ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-200' :
-                                'bg-slate-50 text-slate-500 ring-1 ring-slate-200'
+                capa === 'l'  ? 'bg-wine/10 text-wine ring-1 ring-wine/40' :
+                capa === 'll' ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-300' :
+                                'bg-slate-50 text-slate-500 ring-1 ring-slate-300'
               return (
                 <div key={capa} className="flex flex-col overflow-hidden pb-4">
                   <div className={`px-3 py-2.5 rounded-xl mb-3 ${headerBg}`}>
