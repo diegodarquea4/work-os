@@ -20,10 +20,19 @@ import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import { getRegionColor } from '@/lib/regionColors'
+import { SEMAFORO_CONFIG } from '@/lib/config'
 import {
   criticalAlertCountFor,
   diasDesdeUltimaActividad,
 } from '@/lib/regionSummary'
+
+// Significado de cada color del semáforo, para los tooltips de los puntos RAG
+// (útil cuando la barra lateral está angosta y solo se ven los colores).
+const SEM_TITLE = {
+  verde: SEMAFORO_CONFIG.verde.label,   // "En verde"
+  ambar: SEMAFORO_CONFIG.ambar.label,   // "En revisión"
+  rojo:  SEMAFORO_CONFIG.rojo.label,    // "Bloqueado"
+} as const
 
 type RagCounts = { rojo: number; ambar: number; verde: number; gris?: number }
 
@@ -123,9 +132,9 @@ export default function MapaSummarySidebar({
           <span className="text-sm font-bold text-slate-700 w-10 text-right tabular-nums">{globalAvgPct}%</span>
         </div>
         <div className="flex items-center gap-3 text-xs mb-3">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></span>
+          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.rojo}><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></span>
+          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.ambar}><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></span>
+          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.verde}><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></span>
           <span className="ml-auto text-gray-400">{totalIniciativas} iniciativas</span>
         </div>
 
@@ -157,14 +166,13 @@ export default function MapaSummarySidebar({
 
       {/* Lista de filas accionables */}
       <div className="flex-1 overflow-y-auto">
-        {filas.map(({ region, count, avgPct, rag, alertas, dias, isLocked }) => (
+        {filas.map(({ region, count, avgPct, rag, dias, isLocked }) => (
           <RegionRow
             key={region.cod}
             region={region}
             count={count}
             avgPct={avgPct}
             rag={rag}
-            alertas={alertas}
             dias={dias}
             isLocked={isLocked}
             onSelect={onSelectRegion}
@@ -183,14 +191,13 @@ type RowProps = {
   count:    number
   avgPct:   number
   rag:      { rojo: number; ambar: number; verde: number }
-  alertas:  number
   dias:     number | null
   isLocked: boolean
   onSelect: (regionName: string, cod: string) => void
   onHover?: (cod: string | null) => void
 }
 
-function RegionRow({ region, count, avgPct, rag, alertas, dias, isLocked, onSelect, onHover }: RowProps) {
+function RegionRow({ region, count, avgPct, rag, dias, isLocked, onSelect, onHover }: RowProps) {
   const color    = getRegionColor(region.nombre)
   const barColor = avgPct === 100 ? 'bg-green-500'
                  : avgPct >= 60   ? 'bg-blue-500'
@@ -239,19 +246,19 @@ function RegionRow({ region, count, avgPct, rag, alertas, dias, isLocked, onSele
           <div className="flex items-center gap-2 text-[11px]">
             <span className="flex items-center gap-2">
               {rag.verde > 0 && (
-                <span className="flex items-center gap-0.5">
+                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.verde}>
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500"/>
                   <span className="text-green-700 font-medium">{rag.verde}</span>
                 </span>
               )}
               {rag.ambar > 0 && (
-                <span className="flex items-center gap-0.5">
+                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.ambar}>
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>
                   <span className="text-amber-700 font-medium">{rag.ambar}</span>
                 </span>
               )}
               {rag.rojo > 0 && (
-                <span className="flex items-center gap-0.5">
+                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.rojo}>
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500"/>
                   <span className="text-red-700 font-medium">{rag.rojo}</span>
                 </span>
@@ -261,21 +268,15 @@ function RegionRow({ region, count, avgPct, rag, alertas, dias, isLocked, onSele
             <span className="text-gray-400 truncate">{ultimaActividad}</span>
           </div>
 
-          {/* Línea 3: alertas críticas + CTA */}
-          <div className="flex items-center justify-between mt-1.5">
-            {alertas > 0 ? (
-              <span className="text-[11px] text-red-600 font-medium">
-                {alertas} {alertas === 1 ? 'alerta crítica' : 'alertas críticas'}
-              </span>
-            ) : (
-              <span className="text-[11px] text-gray-400">Sin alertas</span>
-            )}
-            {!isLocked && (
+          {/* Línea 3: CTA en hover. El conteo de "alertas críticas" se quitó
+              por decisión de producto (no aportaba y saturaba la fila). */}
+          {!isLocked && (
+            <div className="flex items-center justify-end mt-1.5">
               <span className="text-[11px] text-violet-700 opacity-0 group-hover:opacity-100 transition-opacity">
                 Ver detalle →
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </button>

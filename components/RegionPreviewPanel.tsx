@@ -9,8 +9,10 @@
  *   1. Header: nombre + zona + capital + N iniciativas + botón de descarga
  *      de la Minuta de Contexto Regional (si ya fue generada en Mi Región).
  *   2. Avance por eje estratégico — misma grid que Mi Región. Al hacer click
- *      en un eje, la grid es reemplazada (mismo espacio) por la lista de
- *      iniciativas de prioridad alta de ese eje, con un botón de volver.
+ *      en un eje, su box se expande en el mismo lugar (sigue mostrando su % de
+ *      avance total) y despliega debajo sus iniciativas (ordenadas por capa,
+ *      con scroll propio si son muchas); la flecha para volver va integrada,
+ *      sutil, en el mismo box.
  *   3. Métricas clave — misma sección que Mi Región (Desocupación, PIB,
  *      Seguridad), en modo compacto para que todo entre sin scroll.
  *   4. Footer con CTA "Ver Mi Región".
@@ -28,6 +30,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { splitMinisterio } from '@/lib/ministerios'
+import { CapaBadge } from './CapaBadge'
 import MetricasClaveSection from './MetricasClaveSection'
 import { fmtMM } from '@/lib/comunaStats'
 import {
@@ -111,7 +114,7 @@ export default function RegionPreviewPanel({
   // ── Cómputos ───────────────────────────────────────────────────────────────
 
   // En modo comuna, el universo del panel completo se acota por CUT — el
-  // desglose por eje y la lista de prioridad alta operan sobre el subconjunto.
+  // desglose por eje y la lista de iniciativas operan sobre el subconjunto.
   const regionIniciativas = useMemo(() => {
     const deRegion = iniciativasDeRegion(region.cod, projects)
     return comuna ? deRegion.filter(p => p.comuna_cods.includes(comuna.cut)) : deRegion
@@ -130,16 +133,21 @@ export default function RegionPreviewPanel({
     [region.cod, regionIniciativas, regionEjes],
   )
 
-  // Eje seleccionado en la grid → reemplaza la grid (mismo espacio, sin abrir
-  // nada nuevo) por solo las iniciativas de Capa I (máxima importancia) de ese eje.
+  // Eje seleccionado en la grid → el box de ese eje se expande en su lugar
+  // (sigue mostrando su % de avance total) y despliega debajo TODAS sus
+  // iniciativas (Capa I, II y III), ordenadas por capa (las más importantes
+  // primero) para que arriba queden las que más importan; cuando son muchas,
+  // la lista tiene su propio scroll. Aplica igual a nivel regional y comunal
+  // (regionIniciativas ya viene filtrado por CUT en modo comuna).
   const [selectedEjeId, setSelectedEjeId] = useState<number | null>(null)
-  const selectedEje = selectedEjeId != null ? regionEjes.find(re => re.id === selectedEjeId) ?? null : null
-  const iniciativasAltaDelEje = useMemo(
-    () => selectedEjeId != null
-      ? regionIniciativas.filter(p => p.eje_id === selectedEjeId && p.capa === 'l')
-      : [],
-    [selectedEjeId, regionIniciativas],
-  )
+  const selectedEjeData = selectedEjeId != null ? ejes.find(e => e.ejeId === selectedEjeId) ?? null : null
+  const iniciativasDelEje = useMemo(() => {
+    if (selectedEjeId == null) return []
+    const ordenCapa = { l: 0, ll: 1, lll: 2 } as const
+    return regionIniciativas
+      .filter(p => p.eje_id === selectedEjeId)
+      .sort((a, b) => (ordenCapa[a.capa] ?? 3) - (ordenCapa[b.capa] ?? 3))
+  }, [selectedEjeId, regionIniciativas])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -197,8 +205,8 @@ export default function RegionPreviewPanel({
           chica en ambos módulos); overflow-y-auto queda como resguardo. */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {/* Avance por eje estratégico — misma grid que Mi Región. Al hacer
-            click en un eje, la grid desaparece y en el mismo espacio se
-            muestran solo las iniciativas de prioridad alta de ese eje. */}
+            click en un eje, su box se expande en el mismo lugar (conserva su %
+            de avance) y despliega debajo sus iniciativas (ordenadas por capa). */}
         <section>
           {selectedEjeId == null ? (
             <>
@@ -221,7 +229,7 @@ export default function RegionPreviewPanel({
                         onClick={() => setSelectedEjeId(e.ejeId)}
                         onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setSelectedEjeId(e.ejeId) } }}
                         className="p-2 rounded-lg text-left cursor-pointer border border-gray-100 bg-white hover:border-slate-300 transition-colors"
-                        title="Ver iniciativas de prioridad alta de este eje"
+                        title="Ver las iniciativas de este eje"
                       >
                         <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 mb-1">
                           Eje {e.numero}
@@ -248,56 +256,97 @@ export default function RegionPreviewPanel({
               )}
             </>
           ) : (
-            <div>
-              <button
-                onClick={() => setSelectedEjeId(null)}
-                className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-slate-700 font-medium mb-1.5 transition-colors"
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7.5 2.5L3 6l4.5 3.5"/>
-                </svg>
-                Volver
-              </button>
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 truncate">
-                Prioridad alta{selectedEje ? ` — Eje ${selectedEje.numero}: ${selectedEje.nombre}` : ''}
-              </p>
-              <div className="space-y-1.5">
-                {iniciativasAltaDelEje.length === 0 ? (
-                  <p className="text-[11px] text-gray-400 italic text-center py-4">
-                    Sin iniciativas de prioridad alta en este eje.
+            <>
+              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ejes estratégicos</h3>
+              {/* Box del eje seleccionado, expandido en su lugar: sigue mostrando
+                  su % de avance total; la flecha para volver va integrada, sutil,
+                  arriba a la derecha del mismo box. Un click en el header colapsa. */}
+              <div className="rounded-lg border border-slate-300 bg-white overflow-hidden shadow-sm">
+                <button
+                  onClick={() => setSelectedEjeId(null)}
+                  className="w-full p-2 text-left hover:bg-slate-50 transition-colors"
+                  title="Volver a todos los ejes"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                      Eje {selectedEjeData?.numero}
+                    </span>
+                    <svg
+                      width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-gray-400"
+                      aria-label="Volver a todos los ejes"
+                    >
+                      <path d="M7.5 2.5L3 6l4.5 3.5"/>
+                    </svg>
+                  </div>
+                  <p className="text-[10px] font-semibold text-slate-700 mb-1 leading-tight line-clamp-2">{selectedEjeData?.nombre}</p>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="flex-1 bg-gray-100 rounded-full h-1">
+                      <div
+                        className={`${(selectedEjeData?.avgPct ?? 0) >= 70 ? 'bg-green-500' : (selectedEjeData?.avgPct ?? 0) >= 40 ? 'bg-amber-400' : 'bg-red-400'} h-1 rounded-full transition-all`}
+                        style={{ width: `${selectedEjeData?.avgPct ?? 0}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-800 tabular-nums">{selectedEjeData?.avgPct ?? 0}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[9px] text-gray-400">
+                    <div className="flex items-center gap-1">
+                      {selectedEjeData && selectedEjeData.rojo  > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-red-500"/>{selectedEjeData.rojo}</span>}
+                      {selectedEjeData && selectedEjeData.ambar > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-amber-400"/>{selectedEjeData.ambar}</span>}
+                      {selectedEjeData && selectedEjeData.verde > 0 && <span className="flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-green-500"/>{selectedEjeData.verde}</span>}
+                    </div>
+                    <span>{selectedEjeData?.total ?? 0} init.</span>
+                  </div>
+                </button>
+
+                {/* Detalle desplegado: iniciativas del eje (Capa I/II/III),
+                    ordenadas por capa. Scroll propio cuando son muchas. */}
+                <div className="border-t border-gray-100 bg-slate-50/40 px-2 py-2">
+                  <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Iniciativas{iniciativasDelEje.length > 0 ? ` · ${iniciativasDelEje.length}` : ''}
                   </p>
-                ) : (
-                  iniciativasAltaDelEje.map(p => {
-                    const barColor = p.estado_semaforo === 'verde' ? 'bg-green-500'
-                      : p.estado_semaforo === 'ambar' ? 'bg-amber-400'
-                      : p.estado_semaforo === 'rojo'  ? 'bg-red-500'
-                      : 'bg-gray-300'
-                    const pct = p.pct_avance ?? 0
-                    const ministerios = splitMinisterio(p.ministerio).join(' / ')
-                    const comunas = (p.comuna ?? '').split(';').map(c => c.trim()).filter(Boolean).join(' / ')
-                    return (
-                      <div key={p.n} className="bg-slate-50/70 border border-gray-100 rounded-lg p-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-[11px] font-medium text-slate-800 leading-snug">{p.nombre}</p>
-                          <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 ${barColor}`} />
-                        </div>
-                        <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <p className="text-[9px] text-gray-400 truncate flex-1 min-w-0">
-                            {comunas || 'Sin comuna'} · {ministerios || 'Sin asignar'}
-                          </p>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <div className="w-10 bg-gray-200 rounded-full h-1">
-                              <div className={`${barColor} h-1 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    {iniciativasDelEje.length === 0 ? (
+                      <p className="text-[11px] text-gray-400 italic text-center py-3">
+                        Este eje aún no tiene iniciativas.
+                      </p>
+                    ) : (
+                      iniciativasDelEje.map(p => {
+                        const barColor = p.estado_semaforo === 'verde' ? 'bg-green-500'
+                          : p.estado_semaforo === 'ambar' ? 'bg-amber-400'
+                          : p.estado_semaforo === 'rojo'  ? 'bg-red-500'
+                          : 'bg-gray-300'
+                        const pct = p.pct_avance ?? 0
+                        const ministerios = splitMinisterio(p.ministerio).join(' / ')
+                        const comunas = (p.comuna ?? '').split(';').map(c => c.trim()).filter(Boolean).join(' / ')
+                        return (
+                          <div key={p.n} className="bg-white border border-gray-100 rounded-lg p-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                                <CapaBadge value={p.capa} size="sm" hideDefault className="flex-shrink-0 mt-px" />
+                                <p className="text-[11px] font-medium text-slate-800 leading-snug min-w-0">{p.nombre}</p>
+                              </div>
+                              <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 ${barColor}`} />
                             </div>
-                            <span className="text-[9px] font-semibold text-slate-600 tabular-nums w-7 text-right">{pct}%</span>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <p className="text-[9px] text-gray-400 truncate flex-1 min-w-0">
+                                {comunas || 'Sin comuna'} · {ministerios || 'Sin asignar'}
+                              </p>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <div className="w-10 bg-gray-200 rounded-full h-1">
+                                  <div className={`${barColor} h-1 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-[9px] font-semibold text-slate-600 tabular-nums w-7 text-right">{pct}%</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </section>
 
