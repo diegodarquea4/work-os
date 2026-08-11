@@ -99,12 +99,6 @@ function semLabel(sem: string | null | undefined): string {
   return 'Sin evaluar'
 }
 
-function prioColor(p: string): string {
-  if (p === 'Alta') return C.rojo
-  if (p === 'Media') return C.amber
-  return C.textMid
-}
-
 function emailToName(email: string | null | undefined): string {
   if (!email) return '—'
   const at = email.indexOf('@')
@@ -249,11 +243,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
     fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
   },
-  chipPrio: {
-    paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
-    fontSize: 7, fontFamily: 'Carlito', fontWeight: 'bold',
-    backgroundColor: C.bgRow,
-  },
   chipNeutro: {
     backgroundColor: C.bgRow, color: C.textMid,
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2,
@@ -363,7 +352,6 @@ function FichaCompacta({ p, seguimientos }: { p: Iniciativa; seguimientos: Segui
           <View style={[s.chipSemDot, { backgroundColor: sem }]} />
           <Text style={s.chipSemText}>{semLabel(p.estado_semaforo)}</Text>
         </View>
-        <Text style={[s.chipPrio, { color: prioColor(p.prioridad) }]}>{p.prioridad}</Text>
         <Text style={s.chipNeutro}>Avance: {p.pct_avance ?? 0}%</Text>
         <Text style={s.chipNeutro}>{tr(p.eje, 32)}</Text>
         {p.en_foco === true && <Text style={s.chipFoco}>⚑ EN FOCO</Text>}

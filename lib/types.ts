@@ -15,7 +15,6 @@ export type Prioridad = {
   nombre: string
   descripcion: string | null
   ministerio: string | null
-  prioridad: 'Alta' | 'Media' | 'Baja'
   etapa_actual: string | null
   estado_termino_gobierno: string | null
   proximo_hito: string | null

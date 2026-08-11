@@ -131,12 +131,12 @@ export default function RegionPreviewPanel({
   )
 
   // Eje seleccionado en la grid → reemplaza la grid (mismo espacio, sin abrir
-  // nada nuevo) por solo las iniciativas de prioridad alta de ese eje.
+  // nada nuevo) por solo las iniciativas de Capa I (máxima importancia) de ese eje.
   const [selectedEjeId, setSelectedEjeId] = useState<number | null>(null)
   const selectedEje = selectedEjeId != null ? regionEjes.find(re => re.id === selectedEjeId) ?? null : null
   const iniciativasAltaDelEje = useMemo(
     () => selectedEjeId != null
-      ? regionIniciativas.filter(p => p.eje_id === selectedEjeId && p.prioridad === 'Alta')
+      ? regionIniciativas.filter(p => p.eje_id === selectedEjeId && p.capa === 'l')
       : [],
     [selectedEjeId, regionIniciativas],
   )

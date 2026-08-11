@@ -23,7 +23,6 @@ export type Iniciativa = {
   nombre: string
   descripcion: string | null
   ministerio: string | null
-  prioridad: 'Alta' | 'Media' | 'Baja'
   etapa_actual: string | null
   estado_termino_gobierno: string | null
   proximo_hito: string | null
@@ -121,7 +120,6 @@ function parseCSV(content: string): Iniciativa[] {
     nombre: f[6] || '',
     descripcion: null,
     ministerio: f[7] || null,
-    prioridad: (f[8] || 'Media') as 'Alta' | 'Media' | 'Baja',
     etapa_actual: null,
     estado_termino_gobierno: null,
     proximo_hito: null,

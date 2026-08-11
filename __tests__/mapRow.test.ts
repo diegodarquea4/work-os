@@ -24,7 +24,6 @@ function makeRow(overrides: Partial<Prioridad> = {}): Prioridad {
     eje:    'Eje 1: Vivienda',
     nombre: 'Test',
     ministerio: null,
-    prioridad: 'Alta',
     estado_semaforo: 'verde',
     pct_avance: 50,
     responsable: null,

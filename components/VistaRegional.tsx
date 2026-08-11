@@ -9,7 +9,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { PregoRow } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
-import { SEMAFORO_CONFIG, prioridadColor } from '@/lib/config'
+import { SEMAFORO_CONFIG } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
 import ProposeImportModal from './ProposeImportModal'
@@ -822,7 +822,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               {enFoco.map(p => {
                 const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-                const pc = prioridadColor(p.prioridad)
                 const dias = diasHastaHito(p.fecha_proximo_hito)
                 const hitoUrgent = dias !== null && dias <= 7
                 return (
@@ -871,10 +870,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                           </div>
                         )}
                       </div>
-
-                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
-                        {p.prioridad}
-                      </span>
                     </button>
                   </div>
                 )

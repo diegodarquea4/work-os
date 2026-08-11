@@ -27,11 +27,9 @@ export const EJE_GOBIERNO: Record<string, EjeGobierno> = {
   'Eje 6: Familia, Educación y Equidad Territorial': 'Social',
 }
 
-export function prioridadColor(p: 'Alta' | 'Media' | 'Baja') {
-  return p === 'Alta'  ? { bg: 'bg-red-100',   text: 'text-red-700',   flag: 'text-red-500'   } :
-         p === 'Media' ? { bg: 'bg-amber-100', text: 'text-amber-700', flag: 'text-amber-500' } :
-                         { bg: 'bg-blue-100',  text: 'text-blue-700',  flag: 'text-blue-500'  }
-}
+// `prioridadColor` eliminado (2026-08-11): el campo `prioridad` (Alta/Media/Baja)
+// se jubiló en favor de `capa` (I/II/III, único nivel de importancia). El color
+// de capa vive en components/CapaBadge.tsx.
 
 /** Chip color for eje_gobierno value (compact, for inline use) */
 export function ejeGobColor(eg: string | null): string {

@@ -6,7 +6,7 @@ import type { Seguimiento, Documento, SemaforoLog, Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
-import { SEMAFORO_CONFIG, prioridadColor, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
+import { SEMAFORO_CONFIG, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import SeguimientoTab from './modal/SeguimientoTab'
@@ -50,7 +50,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [savingSem, setSavingSem]     = useState(false)
   const [savingPct, setSavingPct]     = useState(false)
 
-  const [prioridadLocal, setPrioridadLocal] = useState<'Alta' | 'Media' | 'Baja'>(prioridad.prioridad)
   const [nombreLocal, setNombreLocal]       = useState<string>(prioridad.nombre)
   const [editingNombre, setEditingNombre]   = useState(false)
   const [savingNombre, setSavingNombre]     = useState(false)
@@ -95,7 +94,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // antigua paleta `EJE_COLORS` no matcheaba la data real y todos caían
   // al fallback igual, así que se eliminó.
   const ejeColor = 'bg-gray-100 text-gray-600'
-  const pc = prioridadColor(prioridadLocal)
 
   // Catálogo de ejes para componer label uniforme "Eje N: Nombre" desde el
   // dato estructural. Si la iniciativa todavía no tiene eje_id (legacy),
@@ -350,40 +348,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ejeColor}`}>
                   {ejeDisplay}
                 </span>
-                {/* Prioridad chip */}
-                <label className={`relative inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group ${pc.bg}`}>
-                  <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor" className={pc.flag}>
-                    <path d="M1 0v9M1 0h5.5L4.5 3.5 6.5 7H1z"/>
-                  </svg>
-                  <span className={`text-xs font-semibold ${pc.text}`}>{prioridadLocal}</span>
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className={`opacity-40 group-hover:opacity-70 transition-opacity ${pc.text}`}>
-                    <path d="M1.5 3L4 5.5L6.5 3"/>
-                  </svg>
-                  <select
-                    value={prioridadLocal}
-                    disabled={!canEdit}
-                    onChange={async e => {
-                      const val = e.target.value as 'Alta' | 'Media' | 'Baja'
-                      const prev = prioridadLocal
-                      setPrioridadLocal(val)
-                      try {
-                        await safeWrite(
-                          getSupabase().from('prioridades_territoriales').update({ prioridad: val }).eq('id', prioridad.id),
-                          `prioridad n=${prioridad.n}`,
-                        )
-                        onUpdatePrioridad(prioridad.n, { prioridad: val })
-                      } catch (err) {
-                        setPrioridadLocal(prev)
-                        window.alert((err as Error).message)
-                      }
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
-                  >
-                    <option value="Alta">Alta</option>
-                    <option value="Media">Media</option>
-                    <option value="Baja">Baja</option>
-                  </select>
-                </label>
               </div>
               {editingNombre && canEditAny ? (
                 <input

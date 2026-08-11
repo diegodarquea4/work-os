@@ -49,7 +49,6 @@ function makeIniciativa(overrides: Partial<Iniciativa> = {}): Iniciativa {
     nombre:             'Test',
     descripcion:        null,
     ministerio:         null,
-    prioridad:          'Alta',
     etapa_actual:       null,
     estado_termino_gobierno: null,
     proximo_hito:       null,

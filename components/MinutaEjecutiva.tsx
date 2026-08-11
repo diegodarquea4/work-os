@@ -412,9 +412,9 @@ export default function MinutaEjecutiva({
   // Fallback bullets derived from data (when no AI)
   const fallbackBullets: string[] = []
   if (!ai) {
-    const alta = projects.filter(p => p.prioridad === 'Alta').length
+    const capaI = projects.filter(p => p.capa === 'l').length
     fallbackBullets.push(`${total} iniciativas territoriales activas en ${regionLabel(region)}.`)
-    if (alta > 0) fallbackBullets.push(`${alta} iniciativas de alta prioridad bajo seguimiento activo.`)
+    if (capaI > 0) fallbackBullets.push(`${capaI} iniciativas en Capa I bajo seguimiento activo.`)
     if (rojo > 0)  fallbackBullets.push(`${rojo} iniciativa${rojo !== 1 ? 's' : ''} en estado crítico (rojo) requieren atención inmediata.`)
     if (verde > 0) fallbackBullets.push(`${verde} iniciativa${verde !== 1 ? 's' : ''} con avance en verde, dentro de los plazos establecidos.`)
     fallbackBullets.push(`Avance promedio de las iniciativas: ${avgPct}%.`)

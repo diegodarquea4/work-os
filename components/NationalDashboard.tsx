@@ -5,7 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import { prioridadColor, SEMAFORO_CONFIG as SEMAFORO_BASE } from '@/lib/config'
+import { SEMAFORO_CONFIG as SEMAFORO_BASE } from '@/lib/config'
 import { useCanEditAny } from '@/lib/context/UserContext'
 // xlsx (~424 KB) + los módulos que lo importan (templateExcel/importParser) se
 // cargan DINÁMICAMENTE dentro de los handlers (export/import), no en el bundle
@@ -38,9 +38,9 @@ const SEMAFORO_CONFIG = {
 const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
-type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'prioridad' | 'actividad'
+type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'actividad'
 type SortDir = 'asc' | 'desc'
-type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'prioridad' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'capa' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'capa' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
 
 const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'n',                label: '#',                     defaultVisible: false },
@@ -52,7 +52,6 @@ const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'ejeRegional',      label: 'Eje Regional',          defaultVisible: false },
   { id: 'ejeGobierno',      label: 'Eje Gobierno',          defaultVisible: false },
   { id: 'avance',           label: 'Avance',                defaultVisible: true  },
-  { id: 'prioridad',        label: 'Prioridad',             defaultVisible: false },
   { id: 'etapaActual',      label: 'Etapa Actual',          defaultVisible: false },
   { id: 'proximoHito',      label: 'Próximo Hito',          defaultVisible: true  },
   { id: 'fechaProximoHito', label: 'Fecha Próx. Hito',      defaultVisible: false },
@@ -120,7 +119,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterEje, setFilterEje]                 = useState<Set<string>>(new Set())
   const [filterEjeGobierno, setFilterEjeGobierno] = useState<Set<string>>(new Set())
   const [filterSemaforo, setFilterSemaforo]       = useState<Set<string>>(new Set())
-  const [filterPrioridad, setFilterPrioridad]     = useState<Set<string>>(new Set())
   // Filtros nuevos sumados en el rediseño — columnas que la tabla ya mostraba
   // pero que no se podían filtrar.
   const [filterEtapa, setFilterEtapa]             = useState<Set<string>>(new Set())
@@ -237,7 +235,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterEje.size          > 0 && !filterEje.has(p.eje))                                      return false
       if (filterEjeGobierno.size  > 0 && !(p.eje_gobierno && filterEjeGobierno.has(p.eje_gobierno))) return false
       if (filterSemaforo.size     > 0 && !filterSemaforo.has(p.estado_semaforo))                     return false
-      if (filterPrioridad.size    > 0 && !filterPrioridad.has(p.prioridad))                          return false
       if (filterEtapa.size        > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))       return false
       if (filterRat.size          > 0 && !(p.rat && filterRat.has(p.rat)))                           return false
       if (filterFuente.size       > 0 && !(p.fuente_financiamiento && filterFuente.has(p.fuente_financiamiento))) return false
@@ -263,7 +260,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (sortCol === 'ejeGobierno') cmp = (a.eje_gobierno ?? '').localeCompare(b.eje_gobierno ?? '')
       if (sortCol === 'semaforo')    cmp = SEMAFORO_ORDER[a.estado_semaforo] - SEMAFORO_ORDER[b.estado_semaforo]
       if (sortCol === 'avance')      cmp = a.pct_avance - b.pct_avance
-      if (sortCol === 'prioridad')   cmp = (a.prioridad === 'Alta' ? 0 : 1) - (b.prioridad === 'Alta' ? 0 : 1)
       if (sortCol === 'actividad') {
         const da = actividad[a.n] ? new Date(actividad[a.n]!).getTime() : 0
         const db = actividad[b.n] ? new Date(actividad[b.n]!).getTime() : 0
@@ -272,7 +268,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, filterMinisterio, sortCol, sortDir, actividad])
+  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, filterMinisterio, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -301,7 +297,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // muestran solo lo que sigue siendo posible dados los OTROS filtros activos
   // (así no se ofrecen opciones que devolverían 0 resultados).
   type FilterKey =
-    | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'prioridad'
+    | 'region' | 'eje' | 'ejeGobierno' | 'semaforo'
     | 'etapa'  | 'rat' | 'fuente' | 'comuna' | 'origen'
     | 'tags'   | 'responsable' | 'foco' | 'desalojo' | 'capa'
     | 'ministerio' | null
@@ -320,7 +316,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (excluding !== 'eje'          && filterEje.size          > 0 && !filterEje.has(p.eje))                                                             return false
       if (excluding !== 'ejeGobierno'  && filterEjeGobierno.size  > 0 && !(p.eje_gobierno && filterEjeGobierno.has(p.eje_gobierno)))                        return false
       if (excluding !== 'semaforo'     && filterSemaforo.size     > 0 && !filterSemaforo.has(p.estado_semaforo))                                            return false
-      if (excluding !== 'prioridad'    && filterPrioridad.size    > 0 && !filterPrioridad.has(p.prioridad))                                                 return false
       if (excluding !== 'etapa'        && filterEtapa.size        > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))                              return false
       if (excluding !== 'rat'          && filterRat.size          > 0 && !(p.rat && filterRat.has(p.rat)))                                                  return false
       if (excluding !== 'fuente'       && filterFuente.size       > 0 && !(p.fuente_financiamiento && filterFuente.has(p.fuente_financiamiento)))           return false
@@ -362,7 +357,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
 
   const baseDeps = [
     projects, deferredSearch,
-    filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterPrioridad,
+    filterRegion, filterEje, filterEjeGobierno, filterSemaforo,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
     filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa,
     filterMinisterio,
@@ -441,7 +436,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setFilterEje(new Set())
     setFilterEjeGobierno(new Set())
     setFilterSemaforo(new Set())
-    setFilterPrioridad(new Set())
     setFilterEtapa(new Set())
     setFilterRat(new Set())
     setFilterFuente(new Set())
@@ -616,7 +610,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const hasFilters =
     !!deferredSearch ||
     filterRegion.size > 0 || filterEje.size > 0 || filterEjeGobierno.size > 0 ||
-    filterSemaforo.size > 0 || filterPrioridad.size > 0 ||
+    filterSemaforo.size > 0 ||
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
     filterComuna.size > 0 || filterOrigen.size > 0 ||
     filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo ||
@@ -631,7 +625,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     (filterCapa.size > 0          ? 1 : 0) +
     (filterEje.size > 0           ? 1 : 0) +
     (filterEjeGobierno.size > 0   ? 1 : 0) +
-    (filterPrioridad.size > 0     ? 1 : 0) +
     (filterEtapa.size > 0         ? 1 : 0) +
     (filterRat.size > 0           ? 1 : 0) +
     (filterFuente.size > 0        ? 1 : 0) +
@@ -810,7 +803,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             setChip('Eje Regional', filterEje,         () => setFilterEje(empty())),
             setChip('Eje Gobierno', filterEjeGobierno, () => setFilterEjeGobierno(empty())),
             setChip('Semáforo',     filterSemaforo,    () => setFilterSemaforo(empty())),
-            setChip('Prioridad',    filterPrioridad,   () => setFilterPrioridad(empty())),
             setChip('Etapa',        filterEtapa,       () => setFilterEtapa(empty())),
             setChip('RAT',          filterRat,         () => setFilterRat(empty())),
             setChip('Fuente',       filterFuente,      () => setFilterFuente(empty())),
@@ -981,32 +973,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               onChange={setFilterEjeGobierno}
             />
 
-            {/* Prioridad chips inline — 3 opciones con dot de color. */}
-            <div className="flex items-center gap-1">
-              {(['Alta', 'Media', 'Baja'] as const).map(p => {
-                const active = filterPrioridad.has(p)
-                const activeClass =
-                  p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'       :
-                  p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' :
-                                  'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setFilterPrioridad(prev => {
-                      const next = new Set(prev)
-                      next.has(p) ? next.delete(p) : next.add(p)
-                      return next
-                    })}
-                    className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                      active ? activeClass : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                )
-              })}
-            </div>
-
             <FilterPopover
               label="Etapa"
               options={availableEtapas}
@@ -1097,7 +1063,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('ejeRegional')   && <ColHeader col="eje" label="Eje Regional" />}
               {visibleCols.has('ejeGobierno')   && <ColHeader col="ejeGobierno" label="Eje Gobierno" />}
               {visibleCols.has('avance')        && <ColHeader col="avance" label="Avance" />}
-              {visibleCols.has('prioridad')        && <ColHeader col="prioridad" label="Prioridad" />}
               {visibleCols.has('etapaActual')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etapa Actual</th>}
               {visibleCols.has('proximoHito')      && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Próximo Hito</th>}
               {visibleCols.has('fechaProximoHito') && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Fecha Próx. Hito</th>}
@@ -1536,13 +1501,6 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
             </div>
             <span className="text-xs font-semibold text-gray-700 w-8 text-right">{p.pct_avance}%</span>
           </div>
-        </td>
-      )}
-      {visibleCols.has('prioridad') && (
-        <td className="px-3 py-3.5">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${prioridadColor(p.prioridad).bg} ${prioridadColor(p.prioridad).text}`}>
-            {p.prioridad}
-          </span>
         </td>
       )}
       {visibleCols.has('etapaActual') && (

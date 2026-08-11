@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useDeferredValue, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
-import { SEMAFORO_CONFIG, prioridadColor, ejeGobColor } from '@/lib/config'
+import { SEMAFORO_CONFIG, ejeGobColor } from '@/lib/config'
 import { useCanEditAny, useCanEditOperational, useIsAdmin } from '@/lib/context/UserContext'
 import { getSupabase } from '@/lib/supabase'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -107,7 +107,6 @@ export default function AttentionTray({
   const [filterEje, setFilterEje]               = useState<Set<string>>(new Set())
   const [filterEjeGob, setFilterEjeGob]         = useState<Set<string>>(new Set())
   const [filterSemaforo, setFilterSemaforo]     = useState<Set<string>>(new Set())
-  const [filterPrioridad, setFilterPrioridad]   = useState<Set<string>>(new Set())
   const [filterEtapa, setFilterEtapa]           = useState<Set<string>>(new Set())
   const [filterRat, setFilterRat]               = useState<Set<string>>(new Set())
   const [filterFuente, setFilterFuente]         = useState<Set<string>>(new Set())
@@ -204,7 +203,7 @@ export default function AttentionTray({
   const filtersActive =
     search !== '' || filterRegion !== 'todas' ||
     filterEje.size > 0 || filterEjeGob.size > 0 || filterSemaforo.size > 0 ||
-    filterPrioridad.size > 0 || filterEtapa.size > 0 || filterRat.size > 0 ||
+    filterEtapa.size > 0 || filterRat.size > 0 ||
     filterFuente.size > 0 || filterComuna.size > 0 || filterOrigen.size > 0 ||
     filterTags.size > 0 || filterResponsable.size > 0 || filterDesalojo ||
     filterCapa.size > 0
@@ -214,7 +213,6 @@ export default function AttentionTray({
   const secondaryFilterCount =
     (filterEje.size > 0          ? 1 : 0) +
     (filterEjeGob.size > 0       ? 1 : 0) +
-    (filterPrioridad.size > 0    ? 1 : 0) +
     (filterEtapa.size > 0        ? 1 : 0) +
     (filterRat.size > 0          ? 1 : 0) +
     (filterFuente.size > 0       ? 1 : 0) +
@@ -229,7 +227,6 @@ export default function AttentionTray({
     setFilterEje(new Set())
     setFilterEjeGob(new Set())
     setFilterSemaforo(new Set())
-    setFilterPrioridad(new Set())
     setFilterEtapa(new Set())
     setFilterRat(new Set())
     setFilterFuente(new Set())
@@ -258,7 +255,6 @@ export default function AttentionTray({
       if (excluding !== 'eje'          && filterEje.size       > 0 && !filterEje.has(p.eje))                                                       return false
       if (excluding !== 'ejeGob'       && filterEjeGob.size    > 0 && !(p.eje_gobierno && filterEjeGob.has(p.eje_gobierno)))                       return false
       if (excluding !== 'semaforo'     && filterSemaforo.size  > 0 && !filterSemaforo.has(p.estado_semaforo))                                      return false
-      if (excluding !== 'prioridad'    && filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad))                                           return false
       if (excluding !== 'etapa'        && filterEtapa.size     > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))                        return false
       if (excluding !== 'rat'          && filterRat.size       > 0 && !(p.rat && filterRat.has(p.rat)))                                            return false
       if (excluding !== 'fuente'       && filterFuente.size    > 0 && !(p.fuente_financiamiento && filterFuente.has(p.fuente_financiamiento)))     return false
@@ -292,7 +288,7 @@ export default function AttentionTray({
 
   const baseDeps = [
     projects, deferredSearch,
-    filterRegion, filterEje, filterEjeGob, filterSemaforo, filterPrioridad,
+    filterRegion, filterEje, filterEjeGob, filterSemaforo,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
     filterTags, filterResponsable, filterDesalojo, filterCapa,
   ]
@@ -451,7 +447,6 @@ export default function AttentionTray({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const PRIORIDAD_OPTIONS = ['Alta', 'Media', 'Baja'] as const
   const SEMAFORO_OPTIONS  = ['rojo', 'ambar', 'verde', 'gris'] as const
 
   // Bar de filtros activos — chips de qué se está filtrando. Misma API que
@@ -463,7 +458,6 @@ export default function AttentionTray({
     setChip('Eje Regional', filterEje,         () => setFilterEje(new Set())),
     setChip('Eje Gobierno', filterEjeGob,      () => setFilterEjeGob(new Set())),
     setChip('Semáforo',     filterSemaforo,    () => setFilterSemaforo(new Set())),
-    setChip('Prioridad',    filterPrioridad,   () => setFilterPrioridad(new Set())),
     setChip('Etapa',        filterEtapa,       () => setFilterEtapa(new Set())),
     setChip('RAT',          filterRat,         () => setFilterRat(new Set())),
     setChip('Fuente',       filterFuente,      () => setFilterFuente(new Set())),
@@ -655,22 +649,6 @@ export default function AttentionTray({
             <div className="flex items-center gap-2 flex-wrap pt-1">
               <FilterPopover label="Eje Regional"  options={availableEjes}        selected={filterEje}         onChange={setFilterEje} />
               <FilterPopover label="Eje Gobierno"  options={availableEjesGob}     selected={filterEjeGob}      onChange={setFilterEjeGob} />
-
-              <div className="flex items-center gap-1">
-                {PRIORIDAD_OPTIONS.map(p => {
-                  const active = filterPrioridad.has(p)
-                  const pc = prioridadColor(p as 'Alta' | 'Media' | 'Baja')
-                  return (
-                    <button key={p} onClick={() => toggleSet(setFilterPrioridad, p as string)}
-                      className={`text-xs px-2 py-1 rounded-full transition-colors font-semibold ${
-                        active ? `${pc.bg} ${pc.text} ring-1` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}>
-                      {p}
-                    </button>
-                  )
-                })}
-              </div>
-
               <FilterPopover label="Etapa"        options={availableEtapas}       selected={filterEtapa}       onChange={setFilterEtapa} />
               <FilterPopover label="RAT"          options={availableRats}         selected={filterRat}         onChange={setFilterRat} />
               <FilterPopover label="Fuente"       options={availableFuentes}      selected={filterFuente}      onChange={setFilterFuente} />
@@ -846,7 +824,6 @@ type FocoRowProps = {
 
 const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, showRegion, onToggleFoco, onSelect }: FocoRowProps) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-  const pc  = prioridadColor(p.prioridad)
   const dias = diasHastaHito(p.fecha_proximo_hito)
   const hitoUrgent = dias !== null && dias <= 7
 
@@ -903,10 +880,6 @@ const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, show
             </div>
           )}
         </div>
-
-        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
-          {p.prioridad}
-        </span>
       </button>
     </div>
   )

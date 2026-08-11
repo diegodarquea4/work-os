@@ -21,7 +21,7 @@ const existing = [{
   codigo_iniciativa: 'RM-01-001',
 }] as unknown as Iniciativa[]
 
-const HEADERS = ['#', 'Región', 'Nombre Iniciativa', 'Eje', 'Ministerio', 'Prioridad', 'Etapa Actual', 'Semáforo']
+const HEADERS = ['#', 'Región', 'Nombre Iniciativa', 'Eje', 'Ministerio', 'Capa', 'Etapa Actual', 'Semáforo']
 
 function parseUpdateRow(cells: Partial<Record<string, string>>) {
   const row = HEADERS.map(h => cells[h] ?? '')
@@ -32,10 +32,10 @@ function parseUpdateRow(cells: Partial<Record<string, string>>) {
 // ── Matching tolerante de enums (la fricción que reportó Diego) ───────────────
 
 describe('parseImportWorkbook — tolerancia a tildes/mayúsculas en enums', () => {
-  it('acepta un valor con mayúscula distinta y lo guarda canónico', () => {
-    const { rows } = parseUpdateRow({ '#': '1', 'Prioridad': 'alta' })
+  it('acepta un valor de Capa con mayúscula distinta y lo guarda canónico', () => {
+    const { rows } = parseUpdateRow({ '#': '1', 'Capa': 'LL' })
     expect(rows[0].errors).toEqual([])
-    expect(rows[0].patch.prioridad).toBe('Alta')
+    expect(rows[0].patch.capa).toBe('ll')
   })
 
   it('acepta un valor sin tilde y lo guarda con tilde (canónico)', () => {
@@ -51,10 +51,10 @@ describe('parseImportWorkbook — tolerancia a tildes/mayúsculas en enums', () 
   })
 
   it('un valor que de verdad no existe falla con un mensaje que lista las opciones', () => {
-    const { rows } = parseUpdateRow({ '#': '1', 'Prioridad': 'Urgente' })
+    const { rows } = parseUpdateRow({ '#': '1', 'Capa': 'IV' })
     expect(rows[0].errors).toHaveLength(1)
-    expect(rows[0].errors[0]).toContain('Prioridad «Urgente»')
-    expect(rows[0].errors[0]).toContain('Alta · Media · Baja')
+    expect(rows[0].errors[0]).toContain('Capa «IV»')
+    expect(rows[0].errors[0]).toContain('l · ll · lll')
   })
 })
 
@@ -71,10 +71,10 @@ describe('rowErrorLabel — ancla que el usuario reconoce', () => {
   })
 
   it('flattenRowErrors ancla cada error a su fila', () => {
-    const { rows } = parseUpdateRow({ '#': '1', 'Prioridad': 'Urgente' })
+    const { rows } = parseUpdateRow({ '#': '1', 'Capa': 'IV' })
     const flat = flattenRowErrors(rows)
     // Fila de datos = fila 2 del Excel (header en fila 1, sin fila-guía).
-    expect(flat[0]).toBe('Fila 2 · «Iniciativa Uno»: Prioridad «Urgente»: no es una opción válida. Usa: Alta · Media · Baja.')
+    expect(flat[0]).toBe('Fila 2 · «Iniciativa Uno»: Capa «IV»: no es una opción válida. Usa: l · ll · lll.')
   })
 })
 
@@ -88,7 +88,7 @@ describe('classifyError — familias de los mensajes nuevos', () => {
     ['Fila 4 · «X»: La iniciativa #7 es de la región Biobío, no de «Maule».', 'region-mismatch'],
     ['Fila 5 · «X»: Eje «foo»: formato inválido. Debe ser «Eje N: Nombre».', 'eje-invalido'],
     ['Fila 6 · «X»: Eje 9: no está en el catálogo de Tarapacá.', 'eje-invalido'],
-    ['Fila 7 · «X»: Prioridad «Urgente»: no es una opción válida. Usa: Alta · Media · Baja.', 'valor-invalido'],
+    ['Fila 7 · «X»: Capa «IV»: no es una opción válida. Usa: l · ll · lll.', 'valor-invalido'],
     ['Fila 8 · «X»: En Foco «quizás»: no se entiende. Usa Sí o No.', 'valor-invalido'],
     ['Fila 9 · «X»: % Avance «abc»: debe ser un número entero de 0 a 100.', 'formato'],
     ['Fila 10 · «X»: Fecha Próximo Hito «31/13/2027»: el día o el mes están fuera de rango.', 'formato'],

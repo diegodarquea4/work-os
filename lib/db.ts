@@ -24,7 +24,6 @@ export function mapRow(row: Prioridad): Iniciativa {
     nombre:                 row.nombre,
     descripcion:            row.descripcion ?? null,
     ministerio:             row.ministerio,
-    prioridad:              row.prioridad as Iniciativa['prioridad'],
     etapa_actual:           row.etapa_actual ?? null,
     estado_termino_gobierno: row.estado_termino_gobierno ?? null,
     proximo_hito:           row.proximo_hito ?? null,
@@ -61,7 +60,7 @@ export function mapRow(row: Prioridad): Iniciativa {
 // filas del load inicial. Si mapRow agrega un campo, agregarlo acá también.
 const PRIORIDAD_COLS =
   'id,n,region,cod,capital,zona,eje,eje_id,eje_gobierno,nombre,descripcion,ministerio,' +
-  'prioridad,etapa_actual,estado_termino_gobierno,proximo_hito,fecha_proximo_hito,' +
+  'etapa_actual,estado_termino_gobierno,proximo_hito,fecha_proximo_hito,' +
   'fuente_financiamiento,codigo_bip,inversion_mm,comuna,rat,estado_semaforo,pct_avance,' +
   'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa,comuna_cods,alcance_regional'
 

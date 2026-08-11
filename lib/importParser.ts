@@ -27,7 +27,6 @@ import { matchComunas, sugerirComuna } from './comunas'
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 
 export const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad'] as const
-export const VALID_PRIORIDAD      = ['Alta', 'Media', 'Baja'] as const
 export const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS', 'AD', 'CF'] as const
 export const VALID_ETAPA          = ['Preinversión', 'Prefactibilidad', 'Diseño', 'Ejecución', 'Terminado'] as const
 export const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro'] as const
@@ -310,12 +309,6 @@ export function parseImportWorkbook(
       if (!m) rowErrors.push(opcionInvalida('Eje Gobierno', ejeGobierno, VALID_EJE_GOBIERNO))
       else target.eje_gobierno = m
     }
-    const prioridad = col(row, 'Prioridad')
-    if (prioridad) {
-      const m = matchEnum(prioridad, VALID_PRIORIDAD)
-      if (!m) rowErrors.push(opcionInvalida('Prioridad', prioridad, VALID_PRIORIDAD))
-      else target.prioridad = m
-    }
     const etapa = col(row, 'Etapa Actual')
     if (etapa) {
       const m = matchEnum(etapa, VALID_ETAPA)
@@ -594,7 +587,6 @@ export function parseImportWorkbook(
         eje_id:            ejeId,
         nombre,
         ministerio,
-        prioridad:         'Media',
         estado_semaforo:   'gris',
         pct_avance:        0,
         codigo_iniciativa: codigoIniciativa,

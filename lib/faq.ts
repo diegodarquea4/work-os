@@ -333,7 +333,7 @@ Para evitar este error a futuro: revisa siempre la hoja "Ejes válidos" del Exce
     respuesta:
 `Sí puedes editarlos en el Excel, pero esos campos se consideran estructurales: cuando los modificas, el admin va a revisar especialmente esa fila para confirmar el cambio antes de aprobarlo.
 
-Es esperable: ministerio responsable, código BIP, eje, prioridad o RAT son decisiones que afectan trazabilidad histórica, reportes a Hacienda y comparabilidad entre regiones. La división DCI las valida.
+Es esperable: ministerio responsable, código BIP, eje, capa o RAT son decisiones que afectan trazabilidad histórica, reportes a Hacienda y comparabilidad entre regiones. La división DCI las valida.
 
 Lo operativo (semáforo, % avance, próximo hito, responsable, fechas, etapa) se aplica directo sin revisión adicional.
 
@@ -562,7 +562,7 @@ Atajo si trabajas mucho con varias: una hoja de trabajo separada por región en 
 
 1. CONTEO. Arriba del preview hay un resumen: N filas a INSERTAR, M filas a UPDATE, K filas con error. Si los números no calzan con lo que esperabas (ej. "100 UPDATE" cuando esperabas 5), hay algo raro.
 
-2. CAMBIOS ESTRUCTURALES. Las filas marcadas con badge "ESTRUCTURAL" tocan eje, ministerio, prioridad, RAT o código BIP. Esas merecen revisión especial — el cambio queda en log con tu email como aprobador.
+2. CAMBIOS ESTRUCTURALES. Las filas marcadas con badge "ESTRUCTURAL" tocan eje, ministerio, capa, RAT o código BIP. Esas merecen revisión especial — el cambio queda en log con tu email como aprobador.
 
 3. ERRORES PARCIALES. Las filas con ⚠ rojo no se van a aplicar al aprobar. Mira si son errores típicos (semáforo mal, fecha mal) o algo conceptual.
 
@@ -570,7 +570,7 @@ Atajo si trabajas mucho con varias: una hoja de trabajo separada por región en 
 
 5. CONSISTENCIA INTERNA. ¿La región está aumentando todos los semáforos a verde de golpe? ¿Bajando todos los avances? Patrones raros pueden indicar carga sin revisar.
 
-6. NUEVAS INICIATIVAS. Si hay INSERTs, revisa que tengan datos básicos completos (eje, ministerio, prioridad, código BIP si corresponde).
+6. NUEVAS INICIATIVAS. Si hay INSERTs, revisa que tengan datos básicos completos (eje, ministerio, capa, código BIP si corresponde).
 
 Aprobar = aplicar todo lo válido + dejar los errores parciales sin aplicar. Rechazar = nada se aplica, requiere nota obligatoria.`,
     relacionadas: ['carga-aprobar-propuesta', 'carga-aprobar-parcial', 'carga-aplicada-con-avisos'],
@@ -661,7 +661,7 @@ No es desconfianza en tu juicio — al contrario, es para que el cambio quede re
 - Comentarios y notas.
 
 Lo que NO puedes editar directo (es estructural, va vía Excel):
-- Eje, ministerio, prioridad (alta/media/baja), código BIP, RAT, inversión, fuente de financiamiento, fechas de inicio/término oficiales.`,
+- Eje, ministerio, capa (I/II/III), código BIP, RAT, inversión, fuente de financiamiento, fechas de inicio/término oficiales.`,
     relacionadas: ['permisos-eje-no-edita', 'carga-semaforo-vs-excel'],
     ultima_revision: '2026-06-08',
   },
@@ -1327,7 +1327,7 @@ Recomendación: acuerden quién maneja el foco (ej. el coordinador) o que cada u
 Criterios actuales (combinación, no exclusivos):
 - Bloqueadas (semáforo rojo) que NO están marcadas en foco.
 - Con hito próximo a vencer (≤ 7 días) y todavía no las viste.
-- Sin actividad reciente (+15 días) pero con prioridad alta.
+- Sin actividad reciente (+15 días) pero en Capa I.
 - Con cambio de semáforo en los últimos 3 días.
 
 Son sugerencias, no obligaciones. Si una sugerencia no tiene sentido para tu cabeza (sabes algo del contexto que el panel no sabe), no la marques.`,
@@ -1443,7 +1443,7 @@ Si ninguna aplica y crees que es un bug, escríbenos con captura de pantalla.`,
     categoria: 'Atención y foco',
     pregunta: '¿Para qué sirven las etiquetas (tags) en una iniciativa?',
     respuesta:
-`Las etiquetas son una clasificación transversal libre que cruza ejes, ministerios y regiones. Sirven para agrupar iniciativas según criterios que no calzan con los campos estructurales (eje, ministerio, prioridad).
+`Las etiquetas son una clasificación transversal libre que cruza ejes, ministerios y regiones. Sirven para agrupar iniciativas según criterios que no calzan con los campos estructurales (eje, ministerio, capa).
 
 Casos de uso típicos:
 - Marcar las iniciativas que van a un comité o gabinete específico ("Comité crisis junio").

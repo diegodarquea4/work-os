@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, useRef, useEffect, useCallback, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import { SEMAFORO_CONFIG, prioridadColor, splitMinisterios } from '@/lib/config'
+import { SEMAFORO_CONFIG, splitMinisterios } from '@/lib/config'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import { getSupabase } from '@/lib/supabase'
 import { REGIONS } from '@/lib/regions'
@@ -79,7 +79,6 @@ const EjeCard = memo(function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }
   canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-  const pc  = prioridadColor(p.prioridad)
   const enFoco     = p.en_foco === true
   const esDesalojo = p.es_desalojo === true
   return (
@@ -118,10 +117,7 @@ const EjeCard = memo(function EjeCard({ p, onSelect, onToggleFoco, canEditFoco }
           {p.etapa_actual}
         </span>
       )}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${pc.bg} ${pc.text}`}>
-          {p.prioridad}
-        </span>
+      <div className="flex items-center justify-end pt-2 border-t border-gray-100">
         <div className="flex items-center gap-1.5">
           <div className="w-10 h-1 bg-gray-100 rounded-full overflow-hidden">
             <div className={`h-1 rounded-full ${sem.dot}`} style={{ width: `${p.pct_avance}%` }} />
@@ -145,7 +141,6 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
   canEditFoco: boolean
 }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-  const pc  = prioridadColor(p.prioridad)
   const dias = daysUntil(p.fecha_proximo_hito)
   const hitoUrgent = dias !== null && dias <= 7 && (p.estado_semaforo === 'rojo' || p.estado_semaforo === 'ambar')
   const enFoco     = p.en_foco === true
@@ -234,11 +229,6 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
                 : `En ${dias}d`)
           : '—'}
       </div>
-
-      {/* Prioridad pill */}
-      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${pc.bg} ${pc.text}`}>
-        {p.prioridad}
-      </span>
     </button>
   )
 })
@@ -267,7 +257,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   // de versión anterior: eje gobierno (Economía/Social/Seguridad) — el
   // SEREMI piensa por cartera, no por eje gobierno transversal.
   const [filterSemaforo,  setFilterSemaforo]  = useState<Set<string>>(new Set())
-  const [filterPrioridad, setFilterPrioridad] = useState<Set<string>>(new Set())
   const [filterCapa,      setFilterCapa]      = useState<Set<Capa>>(new Set())
   const [filterEtapa,     setFilterEtapa]     = useState<Set<string>>(new Set())
   const [filterTags,      setFilterTags]      = useState<Set<string>>(new Set())
@@ -391,13 +380,12 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   const filtered = useMemo(() => projects.filter(p => {
     if (filterRegion !== 'todas' && p.region !== filterRegion) return false
     if (filterSemaforo.size  > 0 && !filterSemaforo.has(p.estado_semaforo))                       return false
-    if (filterPrioridad.size > 0 && !filterPrioridad.has(p.prioridad))                            return false
     if (filterCapa.size      > 0 && !filterCapa.has(p.capa))                                      return false
     if (filterEtapa.size     > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))         return false
     if (filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                 return false
     if (filterFoco && p.en_foco !== true)                                                         return false
     return true
-  }), [projects, filterRegion, filterSemaforo, filterPrioridad, filterCapa, filterEtapa, filterTags, filterFoco])
+  }), [projects, filterRegion, filterSemaforo, filterCapa, filterEtapa, filterTags, filterFoco])
 
   // ── Modo "por eje": columnas planas ordenadas 1→6 ──────────────────────────
   const ejeColumns = useMemo(() => {
@@ -509,7 +497,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
 
   const activeFilterCount =
     (filterSemaforo.size  > 0 ? 1 : 0) +
-    (filterPrioridad.size > 0 ? 1 : 0) +
     (filterCapa.size      > 0 ? 1 : 0) +
     (filterEtapa.size     > 0 ? 1 : 0) +
     (filterTags.size      > 0 ? 1 : 0) +
@@ -517,7 +504,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
 
   function clearAllFilters() {
     setFilterSemaforo(new Set())
-    setFilterPrioridad(new Set())
     setFilterCapa(new Set())
     setFilterEtapa(new Set())
     setFilterTags(new Set())
@@ -788,28 +774,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             <span className="text-[10px]">⚑</span>
             En foco
           </button>
-
-          {/* Prioridad: chips inline (3 opciones). */}
-          <div className="flex items-center gap-1">
-            {(['Alta', 'Media', 'Baja'] as const).map(p => {
-              const active = filterPrioridad.has(p)
-              const activeClass =
-                p === 'Alta'  ? 'bg-red-50 text-red-700 ring-1 ring-red-200'       :
-                p === 'Media' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' :
-                                'bg-gray-200 text-gray-600 ring-1 ring-gray-300'
-              return (
-                <button
-                  key={p}
-                  onClick={() => toggleSet(setFilterPrioridad, p as string)}
-                  className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                    active ? activeClass : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {p}
-                </button>
-              )
-            })}
-          </div>
 
           <FilterPopover
             label="Capa"
