@@ -1,10 +1,14 @@
 // Shared configuration constants — single source of truth for colors and labels
 // used across ProjectTrackerModal, ProjectsPanel, KanbanView, NationalDashboard
 
+// Etiquetas de estado del semáforo (verde/naranjo/rojo/gris). Diego 2026-08-11:
+// verde = "Avanzando", el color naranjo = "Pendiente" (nunca "ámbar" en texto
+// visible), rojo = "Frenado". La clave interna sigue siendo `ambar` (es el valor
+// almacenado en `estado_semaforo`); solo cambia el rótulo mostrado.
 export const SEMAFORO_CONFIG = {
-  verde: { dot: 'bg-green-500', ring: 'ring-green-300', label: 'En verde'    },
-  ambar: { dot: 'bg-amber-400', ring: 'ring-amber-300', label: 'En revisión' },
-  rojo:  { dot: 'bg-red-500',   ring: 'ring-red-300',   label: 'Bloqueado'   },
+  verde: { dot: 'bg-green-500', ring: 'ring-green-300', label: 'Avanzando'  },
+  ambar: { dot: 'bg-amber-400', ring: 'ring-amber-300', label: 'Pendiente'  },
+  rojo:  { dot: 'bg-red-500',   ring: 'ring-red-300',   label: 'Frenado'    },
   gris:  { dot: 'bg-gray-300',  ring: 'ring-gray-200',  label: 'Sin evaluar' },
 } as const
 

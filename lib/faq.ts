@@ -256,7 +256,7 @@ La lista se ordena por fecha de envío, la más reciente arriba.`,
 
 Pasos:
 1. Haz clic en la propuesta en "Mis propuestas". Te abre el detalle con la lista de filas que fallaron y el motivo de cada una.
-2. Causas típicas: semáforo escrito distinto a los 4 valores válidos (verde / ambar / rojo / gris), fecha en formato no estándar, % avance mayor a 100, ministerio que no está en el catálogo.
+2. Causas típicas: semáforo escrito distinto a los 4 valores válidos (verde / naranjo / rojo / gris), fecha en formato no estándar, % avance mayor a 100, ministerio que no está en el catálogo.
 3. Descarga un Excel nuevo (ya viene con los cambios que SÍ se aplicaron), corrige solo las filas que fallaron, y súbelo como nueva propuesta.
 
 No necesitas reenviar el Excel original — el sistema ya tomó lo que era válido.`,
@@ -515,7 +515,7 @@ A futuro vamos a asignar contrapartes por región. Por ahora, bandeja única.`,
     respuesta:
 `Por orden de frecuencia:
 
-1. SEMÁFORO MAL ESCRITO. Los únicos 4 valores válidos: verde / ambar / rojo / gris. Si escribes "amarillo", "verde claro", "Verde", o lo dejas en blanco, esa fila no se actualiza. Tip: copia y pega de otra fila válida.
+1. SEMÁFORO MAL ESCRITO. Los únicos 4 valores válidos: verde / naranjo / rojo / gris. Si escribes "amarillo", "verde claro", o lo dejas en blanco, esa fila no se actualiza. Tip: copia y pega de otra fila válida.
 
 2. FECHA EN FORMATO NO ESTÁNDAR. Usa siempre DD-MM-YYYY (ej. 30-06-2026). Si Excel te lo convirtió a "30/06/2026" o "30 jun 2026", el parser lo rechaza.
 

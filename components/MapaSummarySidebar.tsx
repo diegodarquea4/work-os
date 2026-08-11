@@ -15,7 +15,7 @@
  * memoria mantiene su orden mental.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
@@ -29,9 +29,9 @@ import {
 // Significado de cada color del semáforo, para los tooltips de los puntos RAG
 // (útil cuando la barra lateral está angosta y solo se ven los colores).
 const SEM_TITLE = {
-  verde: SEMAFORO_CONFIG.verde.label,   // "En verde"
-  ambar: SEMAFORO_CONFIG.ambar.label,   // "En revisión"
-  rojo:  SEMAFORO_CONFIG.rojo.label,    // "Bloqueado"
+  verde: SEMAFORO_CONFIG.verde.label,   // "Avanzando"
+  ambar: SEMAFORO_CONFIG.ambar.label,   // "Pendiente" (color naranjo)
+  rojo:  SEMAFORO_CONFIG.rojo.label,    // "Frenado"
 } as const
 
 type RagCounts = { rojo: number; ambar: number; verde: number; gris?: number }
@@ -132,9 +132,9 @@ export default function MapaSummarySidebar({
           <span className="text-sm font-bold text-slate-700 w-10 text-right tabular-nums">{globalAvgPct}%</span>
         </div>
         <div className="flex items-center gap-3 text-xs mb-3">
-          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.rojo}><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></span>
-          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.ambar}><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></span>
-          <span className="flex items-center gap-1 cursor-help" title={SEM_TITLE.verde}><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></span>
+          <SemDotTip label={SEM_TITLE.rojo} className="gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></SemDotTip>
+          <SemDotTip label={SEM_TITLE.ambar} className="gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></SemDotTip>
+          <SemDotTip label={SEM_TITLE.verde} className="gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></SemDotTip>
           <span className="ml-auto text-gray-400">{totalIniciativas} iniciativas</span>
         </div>
 
@@ -246,22 +246,22 @@ function RegionRow({ region, count, avgPct, rag, dias, isLocked, onSelect, onHov
           <div className="flex items-center gap-2 text-[11px]">
             <span className="flex items-center gap-2">
               {rag.verde > 0 && (
-                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.verde}>
+                <SemDotTip label={SEM_TITLE.verde} className="gap-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500"/>
                   <span className="text-green-700 font-medium">{rag.verde}</span>
-                </span>
+                </SemDotTip>
               )}
               {rag.ambar > 0 && (
-                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.ambar}>
+                <SemDotTip label={SEM_TITLE.ambar} className="gap-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>
                   <span className="text-amber-700 font-medium">{rag.ambar}</span>
-                </span>
+                </SemDotTip>
               )}
               {rag.rojo > 0 && (
-                <span className="flex items-center gap-0.5 cursor-help" title={SEM_TITLE.rojo}>
+                <SemDotTip label={SEM_TITLE.rojo} className="gap-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500"/>
                   <span className="text-red-700 font-medium">{rag.rojo}</span>
-                </span>
+                </SemDotTip>
               )}
             </span>
             <span className="text-gray-300">·</span>
@@ -280,5 +280,25 @@ function RegionRow({ region, count, avgPct, rag, dias, isLocked, onSelect, onHov
         </div>
       </div>
     </button>
+  )
+}
+
+// ── Tooltip del semáforo ───────────────────────────────────────────────────────
+
+/**
+ * Punto del semáforo (verde/naranjo/rojo) con su significado en un tooltip propio,
+ * visible al instante en hover. Antes se usaba el `title` nativo + `cursor-help`,
+ * pero sobre un punto de 8px el tooltip nativo tarda ~1s y solo se alcanzaba a
+ * ver el cursor "?" (reporte de Diego, 2026-08-11). El `className` controla el
+ * gap interno (dot ↔ conteo) para calzar con cada contexto.
+ */
+function SemDotTip({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <span className={`relative group/sem inline-flex items-center ${className}`}>
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg opacity-0 group-hover/sem:opacity-100 transition-opacity duration-100">
+        {label}
+      </span>
+    </span>
   )
 }

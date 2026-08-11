@@ -321,7 +321,7 @@ function MinisterioResumen({ iniciativas }: { iniciativas: Iniciativa[] }) {
       </View>
       <View style={s.resumenBox}>
         <Text style={s.resumenValSemA}>{rag.amber}</Text>
-        <Text style={s.resumenLbl}>Ámbar</Text>
+        <Text style={s.resumenLbl}>Naranjas</Text>
       </View>
       <View style={s.resumenBox}>
         <Text style={s.resumenValSemV}>{rag.verde}</Text>

@@ -140,7 +140,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
         <View style={s.th}>
           <Text style={[s.thT, { flex: 4 }]}>Eje</Text>
           <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Rojo</Text>
-          <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Ámbar</Text>
+          <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Naranjo</Text>
           <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Verde</Text>
           <Text style={[s.thT, { flex: 1, textAlign: 'right' }]}>Sin ev.</Text>
           <Text style={[s.thT, { flex: 1.4, textAlign: 'right' }]}>Avance</Text>

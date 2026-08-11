@@ -24,7 +24,7 @@ const SEM_TEXT: Record<string, string> = {
   verde: 'text-green-600', ambar: 'text-amber-600', rojo: 'text-red-600', gris: 'text-gray-500',
 }
 const SEM_LABEL: Record<string, string> = {
-  verde: 'En verde', ambar: 'En revisión', rojo: 'Bloqueado', gris: 'Sin evaluar',
+  verde: 'Avanzando', ambar: 'Pendiente', rojo: 'Frenado', gris: 'Sin evaluar',
 }
 
 type Props = {

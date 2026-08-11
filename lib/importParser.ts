@@ -99,6 +99,19 @@ function matchEnum(input: string, options: readonly string[]): string | undefine
   return options.find(o => normalizeEnum(o) === n)
 }
 
+/**
+ * Sem\u00e1foro: el template documenta el color intermedio como \u00abnaranjo\u00bb (Diego
+ * 2026-08-11), pero el valor persistido en `estado_semaforo` sigue siendo
+ * `ambar`. Aceptamos \u00abnaranjo\u00bb/\u00abnaranja\u00bb \u2192 `ambar`, y mantenemos \u00abambar\u00bb por
+ * back-compat (cargas viejas que a\u00fan usen la palabra anterior).
+ */
+function matchSemaforo(input: string): string | undefined {
+  const direct = matchEnum(input, VALID_SEMAFORO)
+  if (direct) return direct
+  const n = normalizeEnum(input)
+  return n === 'naranjo' || n === 'naranja' ? 'ambar' : undefined
+}
+
 /** Mensaje uniforme para un valor que no calza con ninguna opci\u00f3n del cat\u00e1logo. */
 function opcionInvalida(columna: string, valor: string, opciones: readonly string[]): string {
   return `${columna} \u00ab${valor}\u00bb: no es una opci\u00f3n v\u00e1lida. Usa: ${opciones.join(' \u00b7 ')}.`
@@ -348,8 +361,8 @@ export function parseImportWorkbook(
     // ── Campos operativos (semáforo, % avance, en foco) ─────────────────────
     const semaforo = col(row, 'Semáforo')
     if (semaforo) {
-      const m = matchEnum(semaforo, VALID_SEMAFORO)
-      if (!m) rowErrors.push(opcionInvalida('Semáforo', semaforo, VALID_SEMAFORO))
+      const m = matchSemaforo(semaforo)
+      if (!m) rowErrors.push(opcionInvalida('Semáforo', semaforo, ['verde', 'naranjo', 'rojo', 'gris']))
       else target.estado_semaforo = m
     }
     const pctStr = col(row, '% Avance')

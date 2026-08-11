@@ -50,6 +50,24 @@ describe('parseImportWorkbook — tolerancia a tildes/mayúsculas en enums', () 
     expect(rows[0].patch.estado_semaforo).toBe('verde')
   })
 
+  it('acepta «naranjo» (nuevo rótulo del template) y lo guarda como ambar', () => {
+    const { rows } = parseUpdateRow({ '#': '1', 'Semáforo': 'Naranjo' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.estado_semaforo).toBe('ambar')
+  })
+
+  it('sigue aceptando «ambar» por back-compat', () => {
+    const { rows } = parseUpdateRow({ '#': '1', 'Semáforo': 'ambar' })
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.estado_semaforo).toBe('ambar')
+  })
+
+  it('un semáforo inválido lista las opciones con «naranjo», no «ambar»', () => {
+    const { rows } = parseUpdateRow({ '#': '1', 'Semáforo': 'amarillo' })
+    expect(rows[0].errors).toHaveLength(1)
+    expect(rows[0].errors[0]).toContain('verde · naranjo · rojo · gris')
+  })
+
   it('un valor que de verdad no existe falla con un mensaje que lista las opciones', () => {
     const { rows } = parseUpdateRow({ '#': '1', 'Capa': 'IV' })
     expect(rows[0].errors).toHaveLength(1)

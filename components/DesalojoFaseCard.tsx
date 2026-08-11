@@ -85,9 +85,9 @@ const FASE_FIELDS: Record<DesalojoFaseConSemaforo, FieldCfg[]> = {
 }
 
 const SEMAFORO_OPTS: { value: SemaforoDimension; label: string; dot: string; chipActive: string }[] = [
-  { value: 'verde', label: 'En verde',    dot: 'bg-green-500', chipActive: 'bg-green-100 text-green-700 ring-green-300' },
-  { value: 'ambar', label: 'En revisión', dot: 'bg-amber-400', chipActive: 'bg-amber-100 text-amber-700 ring-amber-300' },
-  { value: 'rojo',  label: 'Bloqueado',   dot: 'bg-red-500',   chipActive: 'bg-red-100   text-red-700   ring-red-300'   },
+  { value: 'verde', label: 'Avanzando', dot: 'bg-green-500', chipActive: 'bg-green-100 text-green-700 ring-green-300' },
+  { value: 'ambar', label: 'Pendiente', dot: 'bg-amber-400', chipActive: 'bg-amber-100 text-amber-700 ring-amber-300' },
+  { value: 'rojo',  label: 'Frenado',   dot: 'bg-red-500',   chipActive: 'bg-red-100   text-red-700   ring-red-300'   },
   { value: 'gris',  label: 'Sin evaluar', dot: 'bg-gray-300',  chipActive: 'bg-gray-200  text-gray-700  ring-gray-400'  },
 ]
 

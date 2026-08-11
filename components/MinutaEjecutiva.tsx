@@ -477,7 +477,7 @@ export default function MinutaEjecutiva({
                   {/* Stat boxes */}
                   <View style={s.statRow}>
                     <View style={[s.statBox, { borderColor: C.red   }]}><Text style={s.statNR}>{rojo}</Text><Text  style={s.statL}>Rojo</Text></View>
-                    <View style={[s.statBox, { borderColor: C.amber }]}><Text style={s.statNA}>{ambar}</Text><Text style={s.statL}>Ambar</Text></View>
+                    <View style={[s.statBox, { borderColor: C.amber }]}><Text style={s.statNA}>{ambar}</Text><Text style={s.statL}>Naranjo</Text></View>
                     <View style={[s.statBox, { borderColor: C.verde }]}><Text style={s.statNV}>{verde}</Text><Text style={s.statL}>Verde</Text></View>
                     <View style={[s.statBox, { borderColor: C.border}]}><Text style={s.statNGr}>{gris}</Text><Text style={s.statL}>S/E</Text></View>
                   </View>
@@ -488,7 +488,7 @@ export default function MinutaEjecutiva({
                   {/* Legend */}
                   <View style={s.leg}>
                     <LegItem color={C.red}   label={`Rojo (${rojo})`}    />
-                    <LegItem color={C.amber} label={`Ambar (${ambar})`}  />
+                    <LegItem color={C.amber} label={`Naranjo (${ambar})`}  />
                     <LegItem color={C.verde} label={`Verde (${verde})`}  />
                     <LegItem color={C.gris}  label={`S/E (${gris})`}     />
                   </View>
