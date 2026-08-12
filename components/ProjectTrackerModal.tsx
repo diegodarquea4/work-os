@@ -484,45 +484,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
                 </button>
               )}
-              {canEditAny && onDeletePrioridad && !confirmDelete && (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="text-gray-300 hover:text-red-500 transition-colors mt-0.5"
-                  title="Eliminar iniciativa"
-                >
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h14M8 6V4h4v2M19 6l-1 12H2L1 6" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              )}
-              {confirmDelete && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-red-600 font-medium">¿Eliminar?</span>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="text-xs px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  >
-                    {deleting ? '…' : 'Sí'}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                  >
-                    No
-                  </button>
-                </div>
-              )}
-              <button
-                onClick={toggleDetail}
-                className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
-                title={detailCollapsed ? 'Mostrar el detalle' : 'Minimizar el detalle (más espacio abajo)'}
-                aria-expanded={!detailCollapsed}
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  {detailCollapsed ? <path d="M5 8l5 5 5-5"/> : <path d="M5 12l5-5 5 5"/>}
-                </svg>
-              </button>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
@@ -690,6 +651,18 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               <span className="text-xs text-gray-500 flex-shrink-0">%</span>
               {savingPct && <span className="text-xs text-gray-400 ml-1">…</span>}
             </div>
+
+            {/* Minimizar el detalle — a la altura de Estado/Avance (lo que oculta) */}
+            <button
+              onClick={toggleDetail}
+              className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+              title="Minimizar el detalle (más espacio abajo)"
+              aria-expanded={true}
+            >
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12l5-5 5 5"/>
+              </svg>
+            </button>
           </div>
 
           {/* Metadata */}
@@ -1070,6 +1043,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </>
           )}
 
+          {/* Detalle minimizado: afordancia para volver a mostrarlo */}
+          {detailCollapsed && (
+            <div className="flex justify-end mb-1">
+              <button
+                onClick={toggleDetail}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                title="Mostrar el detalle"
+                aria-expanded={false}
+              >
+                Mostrar detalle
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 8l5 5 5-5"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* Tabs */}
           <div className="flex mt-1">
             {(['seguimiento', 'tareas', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
@@ -1141,6 +1131,41 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             />
           )}
         </div>
+
+        {/* ── Footer: eliminar iniciativa (esquina inferior derecha) ── */}
+        {canEditAny && onDeletePrioridad && (
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-2 flex items-center justify-end">
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-600 transition-colors"
+                title="Eliminar iniciativa"
+              >
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h14M8 6V4h4v2M19 6l-1 12H2L1 6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Eliminar iniciativa
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-600 font-medium">¿Eliminar esta iniciativa?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-xs px-2.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {deleting ? '…' : 'Sí, eliminar'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-xs px-2.5 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
