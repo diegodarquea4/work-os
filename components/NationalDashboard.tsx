@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect, useDeferredValue, memo } from 'react'
+import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import { SEMAFORO_CONFIG as SEMAFORO_BASE } from '@/lib/config'
-import { useCanEditAny } from '@/lib/context/UserContext'
+import { useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import BulkEditBar, { type BulkApplyArgs } from './BulkEditBar'
+import { applyBulkUpdate } from '@/lib/bulkUpdate'
 // xlsx (~424 KB) + los módulos que lo importan (templateExcel/importParser) se
 // cargan DINÁMICAMENTE dentro de los handlers (export/import), no en el bundle
 // del Dashboard — la mayoría de los usuarios nunca exporta ni importa.
@@ -77,6 +79,8 @@ type Props = {
   actividadLoading?: boolean
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
+  /** Edición masiva: aplica el mismo patch a muchas iniciativas (por `n`). */
+  onBulkUpdatePrioridad?: (ns: number[], patch: Partial<Iniciativa>) => void
 }
 
 // ImportPreviewRow ahora vive en lib/importParser como ParsedRow (reusable
@@ -100,11 +104,20 @@ function ratColor(r: string): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad }: Props) {
+export default function NationalDashboard({ projects, actividad, actividadLoading = false, onUpdatePrioridad, onDeletePrioridad, onBulkUpdatePrioridad }: Props) {
   // Importar masivo: admin y editor escriben directo (tienen permisos
   // estructurales). Regional canaliza vía "Proponer actualización" en Mi
   // Región. Viewer no carga.
   const canImport = useCanEditAny()
+  // Edición masiva: cualquier autenticado no-viewer (admin/editor/regional). El
+  // set de campos ofrecidos depende del rol (definicionales solo admin/editor,
+  // gate `canEditAny`). Viewer no ve checkboxes ni barra.
+  const canEditAny         = useCanEditAny()
+  const canBulk            = useCanEditOperational() && !!onBulkUpdatePrioridad
+  const currentUserEmail   = useCurrentUserEmail()
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ ok: number; sinCambio: number; campoLabel: string; valorLabel: string } | null>(null)
   const [search, setSearch]                   = useState('')
   // D1-03: useDeferredValue posterga el efecto de la búsqueda mientras el
   // usuario tipea. El <input> sigue ligado a `search` (responsive UX), pero
@@ -430,6 +443,52 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     ? Math.round(filtered.reduce((s, p) => s + p.pct_avance, 0) / total)
     : 0
 
+  // ── Selección para edición masiva ──────────────────────────────────────────
+  // Objetivo efectivo = intersección de lo seleccionado con lo actualmente
+  // filtrado: nunca se edita una fila que no estás viendo (la selección persiste
+  // como Set, pero aplicar/contar se acota a `filtered`).
+  const bulkTargets = useMemo(
+    () => (canBulk ? filtered.filter(p => selectedIds.has(p.id)) : []),
+    [canBulk, filtered, selectedIds],
+  )
+  const allFilteredSelected  = total > 0 && bulkTargets.length === total
+  const someFilteredSelected = bulkTargets.length > 0 && bulkTargets.length < total
+
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      const allSel = filtered.length > 0 && filtered.every(p => next.has(p.id))
+      if (allSel) filtered.forEach(p => next.delete(p.id))
+      else filtered.forEach(p => next.add(p.id))
+      return next
+    })
+  }
+
+  async function handleBulkApply({ patch, campoLabel, valorLabel }: BulkApplyArgs) {
+    if (bulkTargets.length === 0) return
+    setBulkResult(null)
+    setBulkApplying(true)
+    try {
+      const res = await applyBulkUpdate(bulkTargets, patch, currentUserEmail)
+      onBulkUpdatePrioridad?.(bulkTargets.map(t => t.n), patch)
+      setBulkResult({ ...res, campoLabel, valorLabel })
+      setSelectedIds(new Set())
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setBulkApplying(false)
+    }
+  }
+
   function clearFilters() {
     setSearch('')
     setFilterRegion(new Set())
@@ -633,8 +692,8 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     (filterTags.size > 0          ? 1 : 0) +
     (filterResponsable.size > 0   ? 1 : 0)
 
-  // Dynamic column count for colspan calculation
-  const colCount = visibleCols.size
+  // Dynamic column count for colspan calculation (+1 por la columna de selección)
+  const colCount = visibleCols.size + (canBulk ? 1 : 0)
 
   // Virtualization: con 3000+ filas el render directo bloqueaba el browser.
   // estimateSize 64 cubre la altura tipica del row (2 lineas en nombre/descripcion).
@@ -1049,14 +1108,39 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         </div>
       )}
 
+      {/* ── Bulk result banner ── */}
+      {bulkResult && (
+        <div className="flex-shrink-0 px-6 py-2.5 border-b bg-violet-50 border-violet-200 text-xs text-violet-900 flex items-start gap-2">
+          <span className="font-semibold whitespace-nowrap">
+            {bulkResult.campoLabel} → «{bulkResult.valorLabel}» aplicado a {bulkResult.ok} {bulkResult.ok === 1 ? 'iniciativa' : 'iniciativas'}.
+          </span>
+          {bulkResult.sinCambio > 0 && (
+            <span className="text-amber-700">{bulkResult.sinCambio} sin cambios (permiso o eliminadas).</span>
+          )}
+          <button onClick={() => setBulkResult(null)} className="ml-auto text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+      )}
+
       {/* ── Table ── */}
       <div ref={tableScrollRef} className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
             <tr>
+              {canBulk && (
+                <th className="sticky left-0 z-20 bg-gray-50 w-10 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    ref={el => { if (el) el.indeterminate = someFilteredSelected }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-400 cursor-pointer align-middle"
+                    title="Seleccionar todas las iniciativas filtradas"
+                  />
+                </th>
+              )}
               {visibleCols.has('n')             && <ColHeader col="n" label="#" />}
               {visibleCols.has('estado')        && <ColHeader col="semaforo" label="Estado" />}
-              {visibleCols.has('iniciativa')    && <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">Iniciativa</th>}
+              {visibleCols.has('iniciativa')    && <th className={`sticky ${canBulk ? 'left-10' : 'left-0'} z-20 bg-gray-50 px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[2px_0_0_0_rgba(0,0,0,0.04)]`}>Iniciativa</th>}
               {visibleCols.has('region')        && <ColHeader col="region" label="Región" />}
               {visibleCols.has('comuna')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Comuna</th>}
               {visibleCols.has('ministerio')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Ministerio</th>}
@@ -1105,6 +1189,9 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                       actividad={actividad}
                       actividadLoading={actividadLoading}
                       onSelect={setSelected}
+                      selectable={canBulk}
+                      selected={selectedIds.has(p.id)}
+                      onToggleSelect={toggleSelect}
                     />
                   )
                 })}
@@ -1118,6 +1205,17 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           </tbody>
         </table>
       </div>
+
+      {/* ── Barra de edición masiva ── */}
+      {canBulk && bulkTargets.length > 0 && (
+        <BulkEditBar
+          count={bulkTargets.length}
+          canEditAny={canEditAny}
+          applying={bulkApplying}
+          onApply={handleBulkApply}
+          onClear={() => setSelectedIds(new Set())}
+        />
+      )}
 
       {/* ── Import modal ── */}
       {importModalOpen && (() => {
@@ -1416,16 +1514,33 @@ type DataRowProps = {
   actividad: Record<number, string | null>
   actividadLoading: boolean
   onSelect: (p: Iniciativa) => void
+  /** Edición masiva habilitada (canEditOperational) → muestra el checkbox. */
+  selectable: boolean
+  selected: boolean
+  onToggleSelect: (id: number) => void
 }
 
-const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoading, onSelect }: DataRowProps) {
+const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoading, onSelect, selectable, selected, onToggleSelect }: DataRowProps) {
   const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
   const ejeColor = 'bg-gray-100 text-gray-600'
   return (
     <tr
       onClick={() => onSelect(p)}
-      className="hover:bg-blue-50/40 cursor-pointer transition-colors"
+      className={`cursor-pointer transition-colors ${selected ? 'bg-violet-50 hover:bg-violet-100/70' : 'hover:bg-blue-50/40'}`}
     >
+      {selectable && (
+        <td
+          className={`sticky left-0 z-10 w-10 px-3 py-3.5 ${selected ? 'bg-violet-50' : 'bg-white'}`}
+          onClick={e => { e.stopPropagation(); onToggleSelect(p.id) }}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            readOnly
+            className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-400 cursor-pointer align-middle pointer-events-none"
+          />
+        </td>
+      )}
       {visibleCols.has('n') && (
         <td className="px-3 py-3.5 text-xs text-gray-400 font-mono">{p.n}</td>
       )}
@@ -1438,7 +1553,7 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
         </td>
       )}
       {visibleCols.has('iniciativa') && (
-        <td className="sticky left-0 z-10 bg-white px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]">
+        <td className={`sticky ${selectable ? 'left-10' : 'left-0'} z-10 ${selected ? 'bg-violet-50' : 'bg-white'} px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]`}>
           <div className="flex items-start gap-1.5">
             {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
             <div className="flex-1 min-w-0">

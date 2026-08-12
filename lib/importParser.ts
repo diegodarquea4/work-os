@@ -25,15 +25,29 @@ import { canonizeMinisterio } from './ministeriosCanon'
 import { matchComunas, sugerirComuna } from './comunas'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
+// Definidos en lib/enums.ts (módulo liviano) para que la UI los reuse sin
+// arrastrar `xlsx`. Se re-exportan aquí para no romper importadores existentes.
 
-export const VALID_EJE_GOBIERNO   = ['Economía', 'Social', 'Seguridad'] as const
-export const VALID_RAT            = ['No Requiere', 'No Ingresado', 'En Tramitación', 'FI', 'IN', 'OT', 'RE', 'RS', 'AD', 'CF'] as const
-export const VALID_ETAPA          = ['Preinversión', 'Prefactibilidad', 'Diseño', 'Ejecución', 'Terminado'] as const
-export const VALID_ESTADO_TERMINO = ['Inaugurado/Terminado/Presentado', 'Término Diseño', 'Inicio Obras/Programa', 'Término Obras/Programa', 'Término Etapa Preinversional', 'Adjudicación de Licitación', 'Otro'] as const
-export const VALID_PROXIMO_HITO   = ['Otro', 'Obtención RS', 'Obtención Financiamiento', 'Presentación Core', 'Publicación Bases Licitación', 'Adjudicación Licitación', 'Término Diseño/Preinversión', 'Primera Piedra', 'Inicio Obras/Programa', 'Inicio Obras', 'Término Obras/Programa', 'Término Obras', 'Inauguración', 'Finalizado'] as const
-export const VALID_FUENTE         = ['FNDR', 'Mixto', 'Sectorial', 'Privado', 'FONDEMA', 'PEDZE'] as const
-export const VALID_SEMAFORO       = ['verde', 'ambar', 'rojo', 'gris'] as const
-export const VALID_CAPA           = ['l', 'll', 'lll'] as const
+export {
+  VALID_EJE_GOBIERNO,
+  VALID_RAT,
+  VALID_ETAPA,
+  VALID_ESTADO_TERMINO,
+  VALID_PROXIMO_HITO,
+  VALID_FUENTE,
+  VALID_SEMAFORO,
+  VALID_CAPA,
+} from './enums'
+import {
+  VALID_EJE_GOBIERNO,
+  VALID_RAT,
+  VALID_ETAPA,
+  VALID_ESTADO_TERMINO,
+  VALID_PROXIMO_HITO,
+  VALID_FUENTE,
+  VALID_SEMAFORO,
+  VALID_CAPA,
+} from './enums'
 
 // ── Tipos de salida ──────────────────────────────────────────────────────────
 

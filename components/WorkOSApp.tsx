@@ -390,6 +390,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setLocalIniciativas(prev => prev.filter(p => p.n !== n))
   }, [])
 
+  // Edición masiva (Dashboard): aplica el mismo `patch` a muchas iniciativas en
+  // un solo setState. La escritura a BD ya la hizo el call-site (por `id`); acá
+  // solo propagamos al estado local, que se matchea por `n`.
+  const handleBulkUpdatePrioridad = useCallback((ns: number[], patch: Partial<Iniciativa>) => {
+    const set = new Set(ns)
+    setLocalIniciativas(prev => prev.map(p => set.has(p.n) ? { ...p, ...patch } : p))
+  }, [])
+
   // Agregados por región + globales. Se recalculaban en CADA render de WorkOSApp
   // (incluso al arrastrar el sidebar o abrir un dropdown). Ahora se memoizan por
   // `localIniciativas` — solo se rehacen cuando cambian los datos, y estabilizan
@@ -632,6 +640,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             actividadLoading={actividadLoading}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            onBulkUpdatePrioridad={handleBulkUpdatePrioridad}
           />
         </div>
       )}
