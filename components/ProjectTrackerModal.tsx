@@ -39,6 +39,19 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const canEdit = canEditRegion(prioridad.region)
 
   const [tab, setTab]               = useState<Tab>('seguimiento')
+  // Detalle (ministerio, etiquetas, semáforo/avance y la grilla de metadatos)
+  // colapsable: al trabajar mucho en Seguimiento/Tareas se gana espacio abajo.
+  // La preferencia se persiste entre aperturas (patrón de columnas del Dashboard).
+  const [detailCollapsed, setDetailCollapsed] = useState<boolean>(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem('workos:iniciativaDetailCollapsed') === '1' } catch { return false }
+  })
+  function toggleDetail() {
+    setDetailCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem('workos:iniciativaDetailCollapsed', next ? '1' : '0') } catch { /* noop */ }
+      return next
+    })
+  }
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
   const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
@@ -500,6 +513,16 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </button>
                 </div>
               )}
+              <button
+                onClick={toggleDetail}
+                className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
+                title={detailCollapsed ? 'Mostrar el detalle' : 'Minimizar el detalle (más espacio abajo)'}
+                aria-expanded={!detailCollapsed}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {detailCollapsed ? <path d="M5 8l5 5 5-5"/> : <path d="M5 12l5-5 5 5"/>}
+                </svg>
+              </button>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
@@ -508,6 +531,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </div>
           </div>
 
+          {/* Detalle colapsable: ministerio, etiquetas, semáforo/avance y metadatos.
+              Al minimizar, el contenido de abajo (Seguimiento/Tareas/…) gana espacio. */}
+          {!detailCollapsed && (
+          <>
           {/* Ministerio — multi-select editable */}
           <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingMinisterio ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-xs text-gray-400">Ministerio:</span>
@@ -1040,6 +1067,8 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </div>
           </div>{/* end right col */}
           </div>{/* end metadata grid */}
+          </>
+          )}
 
           {/* Tabs */}
           <div className="flex mt-1">
