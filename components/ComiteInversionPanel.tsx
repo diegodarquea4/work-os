@@ -227,7 +227,7 @@ export default function ComiteInversionPanel({ region }: Props) {
         )}
 
         {!canEditOperational && (
-          <div className="py-10 text-center text-sm text-gray-400 px-4">
+          <div className="py-10 text-center text-sm text-gray-500 px-4">
             No tienes permiso para operar el módulo de sesiones de este comité.
           </div>
         )}

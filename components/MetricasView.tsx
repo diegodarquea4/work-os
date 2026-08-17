@@ -654,7 +654,7 @@ function ResumenModule({ initialRegionNombre }: { initialRegionNombre?: string }
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
-                      <p className="text-xs text-gray-400 py-12 text-center">Sin datos para el rango seleccionado.</p>
+                      <p className="text-xs text-gray-500 py-12 text-center">Sin datos para el rango seleccionado.</p>
                     )}
                   </div>
 

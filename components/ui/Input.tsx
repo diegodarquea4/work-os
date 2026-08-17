@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes, type ReactNode } from 'react'
 
 const BASE =
-  'w-full rounded-lg border bg-white text-sm text-slate-900 placeholder:text-slate-400 ' +
+  'w-full rounded-lg border bg-white text-sm text-slate-900 placeholder:text-slate-500 ' +
   'focus:outline-none focus:ring-2 disabled:opacity-60 disabled:bg-slate-50 transition-colors'
 const OK = 'border-slate-300 focus:border-violet-500 focus:ring-violet-200'
 const ERR = 'border-red-400 focus:border-red-500 focus:ring-red-200'

@@ -354,7 +354,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   }
 
   if (allowedCods.length === 0) {
-    return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Sin región asignada.</div>
+    return <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Sin región asignada.</div>
   }
 
   return (

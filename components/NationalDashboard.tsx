@@ -776,7 +776,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           {/* Avance */}
           <div className="flex-shrink-0 text-center px-3">
             <div className="text-fluid-3xl font-bold text-slate-700 leading-none">{avgPct}%</div>
-            <div className="text-xs text-gray-400 mt-0.5">avance</div>
+            <div className="text-xs text-gray-500 mt-0.5">avance</div>
           </div>
 
           {/* Action cluster: Importar · Excel · Columnas. Antes "Columnas"
@@ -1167,7 +1167,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           <tbody className="bg-white divide-y divide-gray-50">
             {total === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-6 py-16 text-center text-gray-400 text-sm">
+                <td colSpan={colCount} className="px-6 py-16 text-center text-gray-500 text-sm">
                   Sin prioridades con estos filtros.{' '}
                   <button onClick={clearFilters} className="underline text-slate-600">Limpiar filtros</button>
                 </td>
@@ -1376,7 +1376,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )}
 
                 {hasFile && importPreview?.length === 0 && !importParseErrors.length && (
-                  <p className="text-xs text-gray-400 text-center py-8">No se encontraron filas con datos en el archivo.</p>
+                  <p className="text-xs text-gray-500 text-center py-8">No se encontraron filas con datos en el archivo.</p>
                 )}
               </div>
 
