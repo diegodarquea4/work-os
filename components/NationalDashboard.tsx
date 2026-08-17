@@ -1141,7 +1141,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       {/* ── Table ── */}
       <div ref={tableScrollRef} className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-30">
+          <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-20">
             <tr>
               {canBulk && (
                 <th className="sticky left-0 z-20 bg-gray-50 w-10 px-3 py-2.5">
