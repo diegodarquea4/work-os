@@ -13,11 +13,12 @@ import {
 } from './historial/historialUi'
 
 /**
- * Historial de sesiones de la instancia — comité (región, eje) o Gabinete
- * Regional (región, instancia='gabinete'): lista fecha DESC con asistentes /
- * compromisos / estado del acta; el detalle se expande por fila. En gabinete
- * el detalle muestra las INICIATIVAS TRATADAS con su acuerdo (snapshot del
- * cierre) en lugar del reporte por institución.
+ * Historial de sesiones de la instancia — comité (región, eje), Gabinete
+ * Regional o Comité de Infraestructura (región, instancia sin eje): lista
+ * fecha DESC con asistentes / compromisos / estado del acta; el detalle se
+ * expande por fila. En gabinete e infraestructura el detalle muestra las
+ * INICIATIVAS TRATADAS con su acuerdo (snapshot del cierre) en lugar del
+ * reporte por institución.
  * El acta se descarga vía GET /api/sesiones/[id]/acta (URL firmada, bucket
  * privado). Si una sesión quedó cerrada sin acta (falló el PDF), acá está el
  * botón de reintento (POST /acta — solo regenera el PDF, nunca las métricas).
@@ -26,8 +27,8 @@ import {
 
 type Props = {
   region: Region
-  instancia: 'eje' | 'gabinete'
-  eje: RegionEje | null          // null ⇔ instancia='gabinete'
+  instancia: 'eje' | 'gabinete' | 'infraestructura'
+  eje: RegionEje | null          // null ⇔ instancia≠'eje'
   nombreInstancia: string
   onClose: () => void
 }
@@ -61,7 +62,7 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
       .from('eje_sesiones')
       .select('*, sesion_asistencia(count)')
       .eq('region_cod', region.cod)
-    q = instancia === 'gabinete' ? q.eq('instancia', 'gabinete') : q.eq('eje_id', eje!.id)
+    q = instancia === 'eje' ? q.eq('eje_id', eje!.id) : q.eq('instancia', instancia)
     const { data } = await q
       .order('fecha', { ascending: false })
       .order('id',    { ascending: false })
@@ -95,8 +96,9 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
             .select('valor_num, valor_texto, observaciones, desglose, metrica:comite_metrica(nombre, unidad, tipo, institucion, orden)')
             .eq('sesion_id', s.id)
         : Promise.resolve({ data: [] }),
-      // Iniciativas tratadas: solo en gabinete (snapshot + acuerdo).
-      instancia === 'gabinete'
+      // Iniciativas tratadas: gabinete (en foco) e infraestructura (por tag) —
+      // ambas usan sesion_iniciativas como agenda con snapshot + acuerdo.
+      (instancia === 'gabinete' || instancia === 'infraestructura')
         ? sb.from('sesion_iniciativas')
             .select('semaforo_al_momento, pct_avance_al_momento, acuerdo, prioridad:prioridades_territoriales(nombre)')
             .eq('sesion_id', s.id)

@@ -5,7 +5,7 @@ import { registerPdfFonts } from '@/lib/pdfFonts'
 import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
-import { panoramaPorEje, clasificarCompromisosGabinete } from './helpers'
+import { panoramaPorEje, clasificarCompromisosGabinete, COMITES_CON_ESCALAMIENTO } from './helpers'
 import { subirActa } from './actaUpload'
 import ActaGabinetePdf, { type ActaGabineteData } from '@/components/ActaGabinetePdf'
 
@@ -56,7 +56,7 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       .neq('sesion_origen_id', sesionId)
       .or(VERIF),
     db.from('sesion_compromisos').select('*')
-      .eq('region_cod', sesion.region_cod).eq('instancia', 'eje')
+      .eq('region_cod', sesion.region_cod).in('instancia', COMITES_CON_ESCALAMIENTO)
       .eq('escalado_a_gabinete', true)
       .neq('sesion_origen_id', sesionId)
       .or(VERIF),
@@ -74,13 +74,18 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
     (mandatosRes.data ?? []) as SesionCompromiso[],
   )
 
-  // Nombre de la instancia + del comité de cada eje
+  // Nombre de la instancia + del comité de cada eje. Infraestructura no
+  // cuelga de region_ejes (sin eje_id) — su nombre se resuelve por separado.
   const { data: cfg } = await db
-    .from('region_config').select('gabinete_nombre').eq('region_cod', sesion.region_cod).maybeSingle()
+    .from('region_config').select('gabinete_nombre, infraestructura_nombre')
+    .eq('region_cod', sesion.region_cod).maybeSingle()
   const ejesPorId = new Map(
     ((ejesRes.data ?? []) as { id: number; numero: number; sesiones_nombre: string | null }[])
       .map(e => [e.id, e.sesiones_nombre ?? `Eje ${e.numero}`]),
   )
+  const infraestructuraNombre = (cfg?.infraestructura_nombre as string | undefined) ?? 'Comité de Infraestructura'
+  const comiteOrigenNombre = (c: SesionCompromiso): string | null =>
+    c.instancia === 'infraestructura' ? infraestructuraNombre : (c.eje_id != null ? ejesPorId.get(c.eje_id) ?? null : null)
 
   // Nombre de las iniciativas vinculadas en compromisos nuevos
   const nuevos = (nuevosRes.data ?? []) as SesionCompromiso[]
@@ -145,7 +150,7 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       plazo:        c.plazo,
       estado:       c.estado,
       origen:       c.origenTipo,
-      comiteNombre: c.eje_id != null ? ejesPorId.get(c.eje_id) ?? null : null,
+      comiteNombre: comiteOrigenNombre(c),
     })),
     compNuevos: nuevos.map(c => ({
       descripcion:      c.descripcion,

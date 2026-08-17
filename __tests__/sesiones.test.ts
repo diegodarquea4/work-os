@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  agruparPorMegaproyecto,
   aplicarValorMetrica,
   deltaPulso,
   esCompromisoAbierto,
@@ -108,5 +109,51 @@ describe('sesionIdSchema', () => {
     expect(sesionIdSchema.safeParse('abc').success).toBe(false)
     expect(sesionIdSchema.safeParse(-1).success).toBe(false)
     expect(sesionIdSchema.safeParse(1.5).success).toBe(false)
+  })
+})
+
+describe('agruparPorMegaproyecto', () => {
+  type Item = { id: number; tags: string[] }
+  const tagsDe = (it: Item) => it.tags
+
+  it('sin megaproyectos configurados, todo cae en sinMegaproyecto (lista plana)', () => {
+    const items = [{ id: 1, tags: ['Manuel', 'Puerto de Arica'] }, { id: 2, tags: ['Manuel'] }]
+    const r = agruparPorMegaproyecto(items, tagsDe, [])
+    expect(r.grupos).toEqual([])
+    expect(r.sinMegaproyecto).toBe(items) // sin trabajo extra — ni siquiera copia el array
+  })
+
+  it('agrupa por tag y ordena los grupos alfabéticamente', () => {
+    const items = [
+      { id: 1, tags: ['Manuel', 'Ruta 5'] },
+      { id: 2, tags: ['Manuel', 'Puerto de Arica'] },
+      { id: 3, tags: ['Manuel'] }, // sin megaproyecto
+    ]
+    const r = agruparPorMegaproyecto(items, tagsDe, ['Ruta 5', 'Puerto de Arica'])
+    expect(r.grupos.map(g => g.tag)).toEqual(['Puerto de Arica', 'Ruta 5'])
+    expect(r.grupos[0].items.map(i => i.id)).toEqual([2])
+    expect(r.grupos[1].items.map(i => i.id)).toEqual([1])
+    expect(r.sinMegaproyecto.map(i => i.id)).toEqual([3])
+  })
+
+  it('un ítem con varios tags-megaproyecto aparece en cada grupo que le corresponde', () => {
+    const items = [{ id: 1, tags: ['Puerto de Arica', 'Ruta 5'] }]
+    const r = agruparPorMegaproyecto(items, tagsDe, ['Ruta 5', 'Puerto de Arica'])
+    expect(r.grupos).toHaveLength(2)
+    expect(r.grupos.every(g => g.items[0].id === 1)).toBe(true)
+    expect(r.sinMegaproyecto).toEqual([])
+  })
+
+  it('un megaproyecto configurado sin ninguna iniciativa no genera grupo vacío', () => {
+    const items = [{ id: 1, tags: ['Manuel'] }]
+    const r = agruparPorMegaproyecto(items, tagsDe, ['Puerto de Arica'])
+    expect(r.grupos).toEqual([])
+    expect(r.sinMegaproyecto.map(i => i.id)).toEqual([1])
+  })
+
+  it('tags null/undefined no rompe (fallback a [])', () => {
+    const items = [{ id: 1, tags: undefined as unknown as string[] }]
+    const r = agruparPorMegaproyecto(items, tagsDe, ['Puerto de Arica'])
+    expect(r.sinMegaproyecto.map(i => i.id)).toEqual([1])
   })
 })

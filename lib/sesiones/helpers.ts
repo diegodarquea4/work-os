@@ -21,7 +21,8 @@ import type {
 // Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
 // sin confirmar. Flag temporal para esconderla de la sesión, el panel y el
 // acta sin borrar el trabajo ya hecho; sacar cuando se confirme.
-export const MESA_EMPLEO_HABILITADA = false
+// ⚠️ Prendido a `true` SOLO para vista local — volver a `false` antes de commitear.
+export const MESA_EMPLEO_HABILITADA = true
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
@@ -161,10 +162,22 @@ export function institucionesSugeridas(
 // ── Zona 1 del gabinete: clasificación de compromisos ───────────────────────
 
 /**
+ * Instancias de comité (no-gabinete) que pueden escalar un compromiso al
+ * Gabinete Regional vía `escalado_a_gabinete` (mig 046, generalizado en mig
+ * 057 para Infraestructura). Comité Económico ('inversion') queda afuera a
+ * propósito — no se pidió esa relación y su acta/zona 1 no la contempla.
+ * Único punto de verdad: las queries que leen "compromisos escalados" para
+ * el gabinete (SesionModal, generarActaGabinete, cierre) deben filtrar
+ * `instancia IN COMITES_CON_ESCALAMIENTO`, no solo `= 'eje'`.
+ */
+export const COMITES_CON_ESCALAMIENTO = ['eje', 'infraestructura'] as const
+
+/**
  * Origen de un compromiso en la zona 1 de la sesión de gabinete:
  *  - 'gabinete': creado en una sesión de gabinete y gestionado ahí.
- *  - 'escalado': compromiso de comité (instancia='eje') marcado
- *    escalado_a_gabinete — el comité lo sigue viendo; acá se verifica también.
+ *  - 'escalado': compromiso de comité (instancia ∈ COMITES_CON_ESCALAMIENTO)
+ *    marcado escalado_a_gabinete — el comité lo sigue viendo; acá se
+ *    verifica también.
  *  - 'mandato': compromiso dirigido POR el gabinete a un comité
  *    (instancia='eje' con sesion_origen_id de una sesión de gabinete) — el
  *    gabinete verifica su avance aunque se gestione en el comité.
@@ -212,6 +225,36 @@ export function filasZona3Faltantes(
     if (!ya.has(p.id) && !faltantes.includes(p.id)) faltantes.push(p.id)
   }
   return faltantes
+}
+
+// ── Megaproyectos del Comité de Infraestructura (mig 061) ───────────────────
+
+/**
+ * Agrupa una lista por un sub-conjunto CURADO de tags (region_config.
+ * infraestructura_megaproyectos) — no por todos los tags que aparezcan.
+ * Reusada por el preview del tab (ComiteInfraestructuraTab) y la zona 3 de
+ * la sesión (SesionModal, instancia='infraestructura'): mismo criterio en
+ * los dos lugares, un solo lugar donde vive la regla.
+ *
+ * Sin megaproyectos configurados: `grupos` vacío y todo cae en
+ * `sinMegaproyecto` — el consumidor lo renderiza como lista plana (sin
+ * agrupar), igual que antes de que existiera esta curaduría.
+ * Un ítem con varios tags-megaproyecto aparece en cada grupo que le
+ * corresponde (mismo criterio que "agrupar por tag" del Kanban — mig 016).
+ * Grupos ordenados alfabéticamente y sin los que quedaron vacíos.
+ */
+export function agruparPorMegaproyecto<T>(
+  items: T[],
+  tagsDe: (item: T) => string[] | null | undefined,
+  megaproyectos: string[],
+): { grupos: { tag: string; items: T[] }[]; sinMegaproyecto: T[] } {
+  if (megaproyectos.length === 0) return { grupos: [], sinMegaproyecto: items }
+  const ordenados = [...megaproyectos].sort((a, b) => a.localeCompare(b, 'es'))
+  const grupos = ordenados
+    .map(tag => ({ tag, items: items.filter(it => (tagsDe(it) ?? []).includes(tag)) }))
+    .filter(g => g.items.length > 0)
+  const sinMegaproyecto = items.filter(it => !(tagsDe(it) ?? []).some(t => megaproyectos.includes(t)))
+  return { grupos, sinMegaproyecto }
 }
 
 // ── Panorama por eje (bloque 2 de la sesión / sección III del acta) ─────────

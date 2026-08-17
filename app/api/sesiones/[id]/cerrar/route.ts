@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
-import { aplicarValorMetrica, puedeCerrar } from '@/lib/sesiones/helpers'
+import { aplicarValorMetrica, puedeCerrar, COMITES_CON_ESCALAMIENTO } from '@/lib/sesiones/helpers'
 import { generarActa } from '@/lib/sesiones/generarActa'
 import type { EjeSesion, SesionValor } from '@/lib/types'
 
@@ -57,16 +57,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   const esGabinete = sesion!.instancia === 'gabinete'
+  const esInfraestructura = sesion!.instancia === 'infraestructura'
 
   // ── Gate de habilitación por instancia ─────────────────────────────────────
-  // Comités sin eje (Gabinete Regional, Comité Económico) no
-  // usan region_ejes.sesiones_habilitadas — Gabinete tiene su propio flag en
-  // region_config; Inversión no tiene flag y siempre está disponible.
+  // Comités sin eje (Gabinete Regional, Comité Económico, Comité de
+  // Infraestructura) no usan region_ejes.sesiones_habilitadas — Gabinete e
+  // Infraestructura tienen su propio flag en region_config; Inversión no
+  // tiene flag y siempre está disponible.
   if (esGabinete) {
     const { data: cfg } = await db
       .from('region_config').select('gabinete_habilitado').eq('region_cod', sesion!.region_cod).maybeSingle()
     if (!cfg?.gabinete_habilitado) {
       return NextResponse.json({ error: 'El gabinete no está habilitado en esta región' }, { status: 422 })
+    }
+  } else if (esInfraestructura) {
+    const { data: cfg } = await db
+      .from('region_config').select('infraestructura_habilitado').eq('region_cod', sesion!.region_cod).maybeSingle()
+    if (!cfg?.infraestructura_habilitado) {
+      return NextResponse.json({ error: 'El Comité de Infraestructura no está habilitado en esta región' }, { status: 422 })
     }
   } else if (sesion!.instancia === 'eje') {
     const { data: ejeRow } = await db
@@ -77,9 +85,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   // ── Pre-carga de valores y métricas (validar antes del claim) ─────────────
-  // Gabinete: sin zona de indicadores — valores queda vacío y el loop de
-  // aplicación no-opea solo.
-  const { data: valoresData } = esGabinete
+  // Gabinete/Infraestructura: sin zona de indicadores — valores queda vacío y
+  // el loop de aplicación no-opea solo.
+  const { data: valoresData } = (esGabinete || esInfraestructura)
     ? { data: [] }
     : await db.from('sesion_valores').select('*').eq('sesion_id', sesionId)
   const valores = (valoresData ?? []) as SesionValor[]
@@ -143,12 +151,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   // Marcador de "cierre core completo" — también en gabinete (ver header).
   await db.from('eje_sesiones').update({ metricas_aplicadas: true }).eq('id', sesionId)
 
-  // ── Gabinete: snapshot de las iniciativas tratadas ─────────────────────────
+  // ── Gabinete/Infraestructura: snapshot de las iniciativas tratadas ────────
   // Semáforo y % avance al momento del cierre (para el acta y el historial).
   // Secuencial + awaited (patrón O-04); service-role pasa el trigger de
   // inmutabilidad por el guard auth.uid() IS NULL. Una iniciativa borrada
   // entre la sesión y el cierre queda con snapshot null (el acta muestra —).
-  if (esGabinete) {
+  if (esGabinete || esInfraestructura) {
     const { data: agendaData } = await db
       .from('sesion_iniciativas').select('id, prioridad_id').eq('sesion_id', sesionId)
     const agenda = (agendaData ?? []) as { id: number; prioridad_id: number }[]
@@ -235,15 +243,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('instancia', 'gabinete')
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
-    // …y los escalados desde comités que el gabinete verificó como cumplidos
-    // (regla 3 del spec gabinete: cumplido en cualquiera de las dos
-    // instancias desaparece de ambas; el primer cierre sella). Los mandatos
-    // NO se sellan acá — los sella el cierre del comité destino.
+    // …y los escalados desde comités (Comité Policial, Comité de
+    // Infraestructura) que el gabinete verificó como cumplidos (regla 3 del
+    // spec gabinete: cumplido en cualquiera de las dos instancias desaparece
+    // de ambas; el primer cierre sella). Los mandatos NO se sellan acá — los
+    // sella el cierre del comité destino.
     await db
       .from('sesion_compromisos')
       .update({ cerrado_en_sesion_id: sesionId })
       .eq('region_cod', sesion!.region_cod)
-      .eq('instancia', 'eje')
+      .in('instancia', COMITES_CON_ESCALAMIENTO)
       .eq('escalado_a_gabinete', true)
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
@@ -253,6 +262,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .update({ cerrado_en_sesion_id: sesionId })
       .eq('region_cod', sesion!.region_cod)
       .eq('eje_id', sesion!.eje_id)
+      .eq('estado', 'cumplido')
+      .is('cerrado_en_sesion_id', null)
+  } else if (esInfraestructura) {
+    await db
+      .from('sesion_compromisos')
+      .update({ cerrado_en_sesion_id: sesionId })
+      .eq('region_cod', sesion!.region_cod)
+      .eq('instancia', 'infraestructura')
       .eq('estado', 'cumplido')
       .is('cerrado_en_sesion_id', null)
   } else {

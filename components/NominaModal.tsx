@@ -19,8 +19,8 @@ import type { RegionEje, SesionNomina } from '@/lib/types'
 
 type Props = {
   region: Region
-  instancia: 'eje' | 'gabinete'
-  eje: RegionEje | null          // null ⇔ instancia='gabinete'
+  instancia: 'eje' | 'gabinete' | 'infraestructura'
+  eje: RegionEje | null          // null ⇔ instancia≠'eje'
   nombreInstancia: string        // header (ej. 'Comité Policial' / 'Gabinete Regional')
   onClose: () => void
 }
@@ -46,7 +46,7 @@ export default function NominaModal({ region, instancia, eje, nombreInstancia, o
       .select('*')
       .eq('region_cod', region.cod)
       .eq('activo', true)
-    q = instancia === 'gabinete' ? q.eq('instancia', 'gabinete') : q.eq('eje_id', eje!.id)
+    q = instancia === 'eje' ? q.eq('eje_id', eje!.id) : q.eq('instancia', instancia)
     const { data } = await q.order('institucion').order('calidad')
     setMiembros((data ?? []) as SesionNomina[])
     setLoading(false)
