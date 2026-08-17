@@ -5,6 +5,7 @@ import type { Seguimiento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import CompromisosSesionSection from '../CompromisosSesionSection'
+import { EmptyState } from '@/components/ui'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
@@ -224,13 +225,16 @@ export default function SeguimientoTab({
       )}
 
       {seguimientos.length === 0 ? (
-        <div className="text-center py-10 text-gray-300">
-          <svg className="mx-auto mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 8v4l3 3" strokeLinecap="round"/>
-          </svg>
-          <p className="text-sm">Sin actualizaciones aún</p>
-        </div>
+        <EmptyState
+          title="Sin actualizaciones aún"
+          description="Las novedades y acuerdos de esta iniciativa quedan registrados acá."
+          icon={
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4l3 3" strokeLinecap="round"/>
+            </svg>
+          }
+        />
       ) : (
         <div className="relative">
           <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
