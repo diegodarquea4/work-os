@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
+import { can, type CapabilityKey, type UserCapability } from '@/lib/permissions'
 
 type UserCtxValue = {
   canEditRegion:      (regionNombreOrCod: string) => boolean
@@ -8,6 +9,8 @@ type UserCtxValue = {
   canEditOperational: boolean  // true for any authenticated user; gates día-a-día.
   isAdmin:            boolean  // true only for admin (gates bulk import + proposal review)
   userEmail:          string   // email del usuario actual; auto-fill de autor/subido_por.
+  /** Capas de usuarios (Fase 0): capacidades del usuario, base de `useCan`. */
+  capabilities:       UserCapability[]
 }
 
 const UserCtx = createContext<UserCtxValue>({
@@ -16,6 +19,7 @@ const UserCtx = createContext<UserCtxValue>({
   canEditOperational: true,
   isAdmin:            true,
   userEmail:          '',
+  capabilities:       [],
 })
 
 export function UserProvider({
@@ -24,6 +28,7 @@ export function UserProvider({
   canEditOperational,
   isAdmin,
   userEmail,
+  capabilities = [],
   children,
 }: {
   canEditRegion:      (r: string) => boolean
@@ -31,10 +36,11 @@ export function UserProvider({
   canEditOperational: boolean
   isAdmin:            boolean
   userEmail:          string
+  capabilities?:      UserCapability[]
   children:           React.ReactNode
 }) {
   return (
-    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, isAdmin, userEmail }}>
+    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, isAdmin, userEmail, capabilities }}>
       {children}
     </UserCtx.Provider>
   )
@@ -62,4 +68,15 @@ export function useIsAdmin() {
  *  y para "lo propio vs ajeno" en seguimientos/documentos. */
 export function useCurrentUserEmail() {
   return useContext(UserCtx).userEmail
+}
+
+/**
+ * Capas de usuarios (Fase 0): ¿el usuario tiene la capacidad `key` en `region`
+ * (o en '*' = todas)? Sin `region`, true si la tiene en cualquier región.
+ *
+ * ADITIVO — los 5 hooks legacy de arriba siguen siendo la barrera de UI hoy;
+ * `useCan` convivirá con ellos hasta que las Fases 2/3 migren los call-sites.
+ */
+export function useCan(key: CapabilityKey, region?: string): boolean {
+  return can(useContext(UserCtx).capabilities, key, region)
 }

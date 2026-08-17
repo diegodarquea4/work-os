@@ -16,6 +16,7 @@ import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
+import type { UserCapability } from '@/lib/permissions'
 import CambiarClaveModal from './CambiarClaveModal'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
@@ -44,11 +45,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const { warning, secondsLeft, extend } = useInactivityLogout()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [capabilities, setCapabilities] = useState<UserCapability[]>([])
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [cambiarClaveOpen, setCambiarClaveOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return
+      setProfile(data)
+      setCapabilities(data.capabilities ?? [])  // Fase 0 capas de usuarios (aditivo)
+    }).catch(() => null)
   }, [])
 
   // Atajo global `?` (Shift+/) abre el Centro de Ayuda. Lo ignoramos si el
@@ -528,6 +534,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       canEditOperational={!!profile && profile.role !== 'viewer'}
       isAdmin={profile?.role === 'admin'}
       userEmail={profile?.email ?? ''}
+      capabilities={capabilities}
     >
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
