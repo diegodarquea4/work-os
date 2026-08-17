@@ -832,10 +832,10 @@ const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, show
       {canEditFoco ? (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFoco(p.n, p.id, false) }}
-          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-all duration-500 ease-out p-1 -m-1 rounded"
+          className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] p-1 -m-1 rounded"
           title="Quitar del foco"
         >
-          <FlagIcon filled className="w-4 h-4 transition-all duration-500" />
+          <FlagIcon filled className="w-4 h-4 transition-colors duration-150" />
         </button>
       ) : (
         <span className="flex-shrink-0 text-amber-500 p-1 -m-1" title="En foco">
@@ -902,10 +902,10 @@ const SugerenciaRow = memo(function SugerenciaRow({ p, metricText, metricColor, 
       {canEditFoco ? (
         <button
           onClick={() => onToggleFoco(p.n, p.id, true)}
-          className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-all duration-500 ease-out p-1 -m-1 rounded"
+          className="flex-shrink-0 text-gray-300 hover:text-amber-400 transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] p-1 -m-1 rounded"
           title="Marcar en foco"
         >
-          <FlagIcon className="w-4 h-4 transition-all duration-500" />
+          <FlagIcon className="w-4 h-4 transition-colors duration-150" />
         </button>
       ) : (
         <span className="flex-shrink-0 w-4 h-4" aria-hidden />
