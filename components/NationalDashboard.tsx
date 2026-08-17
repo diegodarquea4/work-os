@@ -712,6 +712,23 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     ? totalVirtualSize - virtualRows[virtualRows.length - 1].end
     : 0
 
+  // Navegación por teclado entre filas (↑/↓). Con la tabla virtualizada la fila
+  // destino puede no estar renderizada: scrollToIndex la trae a la vista y luego
+  // la enfocamos, reintentando unos frames hasta que exista en el DOM. Abrir sigue
+  // siendo Enter (onKeyDown de cada fila). Se navega dentro de `filtered`.
+  const focusRowByIndex = useCallback((idx: number) => {
+    if (filtered.length === 0) return
+    const clamped = Math.max(0, Math.min(filtered.length - 1, idx))
+    rowVirtualizer.scrollToIndex(clamped, { align: 'auto' })
+    const sel = `tr[data-row-index="${clamped}"]`
+    const tryFocus = (attempts: number) => {
+      const el = tableScrollRef.current?.querySelector<HTMLElement>(sel)
+      if (el) el.focus()
+      else if (attempts > 0) requestAnimationFrame(() => tryFocus(attempts - 1))
+    }
+    tryFocus(4)
+  }, [filtered.length, rowVirtualizer])
+
   function ColHeader({ col, label }: { col: SortCol; label: string }) {
     const active = sortCol === col
     return (
@@ -1164,7 +1181,18 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('tags')             && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Etiquetas</th>}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-50">
+          <tbody
+            className="bg-white divide-y divide-gray-50"
+            onKeyDown={e => {
+              if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+              const row = (e.target as HTMLElement).closest('tr[data-row-index]')
+              if (!row) return
+              const cur = Number(row.getAttribute('data-row-index'))
+              if (Number.isNaN(cur)) return
+              e.preventDefault()
+              focusRowByIndex(cur + (e.key === 'ArrowDown' ? 1 : -1))
+            }}
+          >
             {total === 0 ? (
               <tr>
                 <td colSpan={colCount} className="px-6 py-16 text-center text-gray-500 text-sm">
@@ -1189,6 +1217,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                       actividad={actividad}
                       actividadLoading={actividadLoading}
                       onSelect={setSelected}
+                      index={vi.index}
                       selectable={canBulk}
                       selected={selectedIds.has(p.id)}
                       onToggleSelect={toggleSelect}
@@ -1514,17 +1543,20 @@ type DataRowProps = {
   actividad: Record<number, string | null>
   actividadLoading: boolean
   onSelect: (p: Iniciativa) => void
+  /** Índice de la fila dentro de `filtered` — ancla para la navegación ↑/↓. */
+  index: number
   /** Edición masiva habilitada (canEditOperational) → muestra el checkbox. */
   selectable: boolean
   selected: boolean
   onToggleSelect: (id: number) => void
 }
 
-const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoading, onSelect, selectable, selected, onToggleSelect }: DataRowProps) {
+const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoading, onSelect, index, selectable, selected, onToggleSelect }: DataRowProps) {
   const sem      = SEMAFORO_CONFIG[p.estado_semaforo]
   const ejeColor = 'bg-gray-100 text-gray-600'
   return (
     <tr
+      data-row-index={index}
       onClick={() => onSelect(p)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p) } }}
       role="button"
