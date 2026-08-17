@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { adminUsersPostSchema } from '@/lib/schemas'
 import { generateCode, hashCode, codeExpiry } from '@/lib/accessCode'
+import { seedCapabilitiesMirror } from '@/lib/capabilities'
 
 export async function GET() {
   const profile = await requireAuth()
@@ -70,19 +71,27 @@ export async function POST(request: Request) {
   if (createError) return Response.json({ error: createError.message }, { status: 400 })
 
   const userId = createData.user.id
+  const effectiveRegions = (role === 'regional' || role === 'viewer') ? (region_cods ?? []) : []
 
   const { error: profileError } = await db.from('user_profiles').insert({
     id: userId,
     email,
     full_name: full_name ?? null,
     role,
-    region_cods: (role === 'regional' || role === 'viewer') ? (region_cods ?? []) : [],
+    region_cods: effectiveRegions,
   })
 
   if (profileError) {
     await db.auth.admin.deleteUser(userId)
     return Response.json({ error: profileError.message }, { status: 500 })
   }
+
+  // Sembrar las capacidades base (espejo de rol × regiones) al momento del alta,
+  // para que el usuario nuevo no quede sin permisos cuando la RLS enforcea por
+  // `current_user_can` (mig 066+). Best-effort: un fallo acá no invalida el alta;
+  // el botón "Sincronizar permisos base" queda como red de seguridad.
+  const { error: capsError } = await seedCapabilitiesMirror(db, userId, { role, region_cods: effectiveRegions })
+  if (capsError) console.warn('[admin/users POST] no se sembraron capacidades:', capsError)
 
   // Código de un solo uso: se guarda solo el hash. Se devuelve en claro UNA vez
   // para que el admin lo entregue por un canal de confianza (no hay envío de correo).
@@ -99,5 +108,5 @@ export async function POST(request: Request) {
     return Response.json({ error: `Usuario creado pero no se pudo generar el código: ${codeError.message}` }, { status: 500 })
   }
 
-  return Response.json({ id: userId, email, role, region_cods: region_cods ?? [], codigo })
+  return Response.json({ id: userId, email, role, region_cods: effectiveRegions, codigo })
 }

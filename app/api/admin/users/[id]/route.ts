@@ -1,7 +1,8 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, type UserRole } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { adminUsersPatchSchema } from '@/lib/schemas'
 import { generateCode, hashCode, codeExpiry } from '@/lib/accessCode'
+import { seedCapabilitiesMirror, capsMatchMirror } from '@/lib/capabilities'
 import { randomBytes } from 'crypto'
 
 /**
@@ -78,6 +79,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ ok: true })
   }
 
+  // Perfil actual ANTES del update — para decidir si re-sembramos capacidades.
+  const { data: current } = await db
+    .from('user_profiles')
+    .select('role, region_cods')
+    .eq('id', id)
+    .single()
+  const oldRole = (current?.role as UserRole) ?? 'viewer'
+  const oldRegions = ((current?.region_cods as string[] | null) ?? [])
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (role !== undefined) {
     patch.role = role
@@ -89,6 +99,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { error } = await db.from('user_profiles').update(patch).eq('id', id)
   if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // Mantener las capacidades en sync con el rol base cuando cambia rol/regiones,
+  // SOLO si el usuario no las tiene personalizadas (caps == espejo del rol
+  // anterior). Si un admin editó permisos a mano desde el editor, no los pisamos.
+  // Best-effort: un fallo acá no invalida el cambio de rol.
+  const newRole = (patch.role as UserRole | undefined) ?? oldRole
+  const newRegions = (patch.region_cods as string[] | undefined) ?? oldRegions
+  const rolCambia = newRole !== oldRole
+  const regionCambia =
+    JSON.stringify([...newRegions].sort()) !== JSON.stringify([...oldRegions].sort())
+  if (rolCambia || regionCambia) {
+    if (await capsMatchMirror(db, id, { role: oldRole, region_cods: oldRegions })) {
+      const { error: seedErr } = await seedCapabilitiesMirror(db, id, { role: newRole, region_cods: newRegions })
+      if (seedErr) console.warn('[admin/users PATCH] no se re-sembraron capacidades:', seedErr)
+    }
+  }
 
   return Response.json({ ok: true })
 }
