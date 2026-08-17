@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import type { Seguimiento, Documento, SemaforoLog, Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
@@ -123,6 +123,45 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     loadData()
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
   }, [prioridad.n])
+
+  // ── A11y del diálogo (Fase 4a) ──────────────────────────────────────────────
+  // El modal se monta inline (sin portal), así que no hay un árbol hermano al que
+  // ponerle el atributo `inert`. Cubrimos las mismas tres dimensiones de otra
+  // forma: aria-modal (los lectores de pantalla ignoran el fondo), el backdrop
+  // z-50 (el mouse no alcanza los controles de atrás) y un focus-trap por teclado
+  // (handleDialogKeyDown). Al abrir movemos el foco al botón de cerrar; al cerrar
+  // lo restauramos al elemento que lo tenía (la fila/tarjeta que abrió la ficha).
+  const panelRef    = useRef<HTMLDivElement>(null)
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    closeBtnRef.current?.focus()
+    return () => { previouslyFocused?.focus?.() }
+  }, [])
+  function handleDialogKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      // Escape dentro de un campo de texto = cancelar ese campo (lo maneja el
+      // input), no cerrar la ficha: evita perder lo tipeado. Cerrar solo si el
+      // foco NO está en un input/textarea/select/contenteditable.
+      const t = e.target as HTMLElement
+      const enCampo = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable
+      if (!enCampo) { e.preventDefault(); onClose() }
+      return
+    }
+    if (e.key === 'Tab' && panelRef.current) {
+      // Focus-trap: el Tab cicla dentro del panel (equivalente por teclado a
+      // `inert` en el fondo). Solo cuenta lo realmente renderizado — el detalle
+      // colapsado y las tabs inactivas no están en el DOM, así que no aparecen.
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last  = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -350,6 +389,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={nombreLocal}
+        onKeyDown={handleDialogKeyDown}
         className="relative w-full max-w-[min(72rem,95vw)] max-h-[95vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
@@ -484,7 +528,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
                 </button>
               )}
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
+              <button ref={closeBtnRef} onClick={onClose} aria-label="Cerrar ficha" className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
                 </svg>
