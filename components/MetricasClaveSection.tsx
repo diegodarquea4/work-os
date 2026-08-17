@@ -204,7 +204,7 @@ function SeguridadSplitCard({
           )}
         </div>
       </div>
-      <p className="text-[8px] text-gray-400 mt-2 leading-tight">* Delitos de Mayor Connotación Social</p>
+      <p className="text-[10px] text-gray-500 mt-2 leading-tight">* Delitos de Mayor Connotación Social</p>
     </div>
   )
 }
@@ -393,7 +393,7 @@ export default function MetricasClaveSection({ region, compact, onVerMasIndicado
         />
       </div>
       {onVerMasIndicadores && ultimaActualizacionMetricas && (
-        <p className="text-[8px] text-gray-400 text-right mt-1">
+        <p className="text-[10px] text-gray-500 text-right mt-1">
           Última actualización: {fmtUltimaActualizacion(ultimaActualizacionMetricas)}
         </p>
       )}
