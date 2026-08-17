@@ -1141,7 +1141,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       {/* ── Table ── */}
       <div ref={tableScrollRef} className="flex-1 overflow-auto" onClick={() => showColsPanel && setShowColsPanel(false)}>
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+          <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-30">
             <tr>
               {canBulk && (
                 <th className="sticky left-0 z-20 bg-gray-50 w-10 px-3 py-2.5">
@@ -1561,7 +1561,7 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p) } }}
       role="button"
       tabIndex={0}
-      className={`cursor-pointer transition-colors ${selected ? 'bg-violet-50 hover:bg-violet-100/70' : 'hover:bg-blue-50/40'}`}
+      className={`cursor-pointer transition-colors ${selected ? 'bg-violet-50' : ''}`}
     >
       {selectable && (
         <td

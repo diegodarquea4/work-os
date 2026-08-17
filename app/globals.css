@@ -86,6 +86,17 @@ body {
   border-radius: 2px;
 }
 
+/* ─── Fila de la tabla del Dashboard: foco por teclado + columna sticky uniforme ─
+   La fila que "se abriría con Enter" (foco por ↑/↓/Tab) se marca con un
+   semi-oscurecido neutro en lugar del anillo violeta global. Hover y foco pintan
+   TODAS las celdas —incluida la columna sticky "Iniciativa", que trae su propio
+   fondo opaco para no dejar ver el scroll por detrás— así la fila entera se ve
+   pareja (antes la columna sticky quedaba blanca mientras el resto se teñía). */
+tr[data-row-index] { outline: none; }
+tr[data-row-index] > td { transition: background-color 120ms ease; }
+tr[data-row-index]:hover > td { background-color: #eff6ff; }         /* blue-50 */
+tr[data-row-index]:focus-visible > td { background-color: #e2e8f0; } /* slate-200 = la que abriría con Enter */
+
 /* ─── Reduced motion (accesibilidad, WCAG 2.3.3) ─────────────────────────────
    El panel casi no tenía guardas de movimiento (solo Spinner y 3 paneles del mapa).
    Esta regla global neutraliza transiciones y animaciones —incluido el loader
