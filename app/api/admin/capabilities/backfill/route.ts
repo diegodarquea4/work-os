@@ -25,7 +25,13 @@ export async function POST() {
     .select('id, role, region_cods')
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  const rows = (users ?? []).flatMap(u =>
+  // Solo sembramos usuarios SIN permisos aún — no pisamos concesiones ya
+  // personalizadas desde el editor (si un admin revocó algo, no se lo re-agregamos).
+  const { data: existing } = await db.from('user_capabilities').select('user_id')
+  const yaTiene = new Set((existing ?? []).map(r => r.user_id))
+  const pendientes = (users ?? []).filter(u => !yaTiene.has(u.id))
+
+  const rows = pendientes.flatMap(u =>
     capabilitiesForProfile({ role: u.role, region_cods: u.region_cods ?? [] }).map(c => ({
       user_id:        u.id,
       capability_key: c.key,
@@ -40,5 +46,5 @@ export async function POST() {
     if (upErr) return Response.json({ error: upErr.message }, { status: 500 })
   }
 
-  return Response.json({ ok: true, usuarios: users?.length ?? 0, filas: rows.length })
+  return Response.json({ ok: true, sembrados: pendientes.length, ya_tenian: yaTiene.size, filas: rows.length })
 }
