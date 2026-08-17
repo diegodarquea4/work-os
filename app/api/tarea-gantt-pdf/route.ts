@@ -22,6 +22,11 @@ export async function POST(request: Request) {
   if (!authProfile) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
+  // viewer es solo-lectura: no genera artefactos (PDF). Coherente con el resto
+  // de las acciones "operativas" (mismo criterio que cerrar sesión).
+  if (authProfile.role === 'viewer') {
+    return new Response(JSON.stringify({ error: 'Sin permiso' }), { status: 403 })
+  }
 
   let rawBody: unknown
   try { rawBody = await request.json() }
