@@ -7,7 +7,7 @@
  *   PUT  → reemplaza TODAS las capacidades del usuario por las enviadas
  *          (delete-all + insert). Body: { capabilities: [{ key, region }] }.
  */
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { ALL_CAPABILITY_KEYS, capabilitiesForProfile, type CapabilityKey } from '@/lib/permissions'
 
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   const db = getSupabaseAdmin()
@@ -51,7 +51,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   let body: unknown

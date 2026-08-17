@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ cod: string }> }) {
@@ -19,11 +19,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 export async function POST(request: Request, { params }: { params: Promise<{ cod: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin' && profile.role !== 'editor') {
+  const { cod } = await params
+  if (!(await requireCan(profile, 'docs_regionales.gestionar', cod))) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { cod } = await params
   const formData = await request.formData()
   const file = formData.get('pdf') as File | null
   if (!file) return Response.json({ error: 'No file provided' }, { status: 400 })
@@ -57,11 +57,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
 export async function DELETE(_request: Request, { params }: { params: Promise<{ cod: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin' && profile.role !== 'editor') {
+  const { cod } = await params
+  if (!(await requireCan(profile, 'docs_regionales.gestionar', cod))) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { cod } = await params
   const db = getSupabaseAdmin()
 
   await db.storage.from('plan-regional').remove([`${cod}.pdf`])

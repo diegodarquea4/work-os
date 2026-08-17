@@ -8,7 +8,7 @@
  *
  * Solo admin. POST sin body.
  */
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { capabilitiesForProfile } from '@/lib/permissions'
 
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 export async function POST() {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Sin permiso' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Sin permiso' }, { status: 403 })
 
   const db = getSupabaseAdmin()
   const { data: users, error } = await db

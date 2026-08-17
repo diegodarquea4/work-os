@@ -7,7 +7,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog, RegionEje } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { minutaPostSchema } from '@/lib/schemas'
 import {
@@ -286,11 +286,11 @@ export async function POST(request: Request) {
     cachedAiContent = cacheRow?.ai_content ?? null
     cachedNumero    = cacheRow?.numero ?? null
 
-    // Solo admin genera/regenera (server-side; la UI ya lo refleja pero no basta).
-    // Un no-admin solo puede continuar cuando existe versión guardada y NO fuerza:
-    // render puro de la versión vigente para previsualizar/descargar.
+    // Generar/regenerar requiere region.minuta_generar en esa región (hoy: solo
+    // admin). Sin la capacidad, solo se puede continuar cuando existe versión
+    // guardada y NO se fuerza: render puro de la vigente para previsualizar/descargar.
     const willGenerate = force || !cachedAiContent
-    if (willGenerate && authProfile.role !== 'admin') {
+    if (willGenerate && !(await requireCan(authProfile, 'region.minuta_generar', body.region.cod))) {
       return new Response(
         JSON.stringify({ error: force
           ? 'Solo un administrador puede regenerar la minuta.'

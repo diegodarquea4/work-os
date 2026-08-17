@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 
 /**
  * POST /api/seia-sync/trigger — botón manual "Actualizar proyectos en SEIA"
@@ -24,7 +24,7 @@ export const maxDuration = 300
 export async function POST(request: NextRequest) {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin' && profile.role !== 'editor') {
+  if (!(await requireCan(profile, 'comite.seia_sync'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -1,4 +1,4 @@
-import { requireAuth, type UserRole } from '@/lib/apiAuth'
+import { requireAuth, requireCan, type UserRole } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { adminUsersPatchSchema } from '@/lib/schemas'
 import { generateCode, hashCode, codeExpiry } from '@/lib/accessCode'
@@ -27,7 +27,7 @@ async function revokeSessionsBestEffort(userId: string): Promise<void> {
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   const parse = adminUsersPatchSchema.safeParse(await request.json())
@@ -122,7 +122,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   if (id === profile.id) return Response.json({ error: 'No puedes eliminar tu propia cuenta' }, { status: 400 })

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { can as canCap, capabilitiesForProfile, type CapabilityKey, type UserCapability } from '@/lib/permissions'
 
 export type UserRole = 'admin' | 'editor' | 'regional' | 'viewer'
 
@@ -58,4 +59,31 @@ export async function requireAuth(): Promise<UserProfile | null> {
  */
 export function canWrite(profile: UserProfile, _regionNombre?: string): boolean {
   return profile.role === 'admin' || profile.role === 'editor'
+}
+
+/**
+ * Carga las capacidades EFECTIVAS del usuario desde `user_capabilities` (fuente
+ * de verdad, respeta lo personalizado en el editor). Si la tabla está vacía para
+ * él (edge: nunca sembrado), cae al espejo del rol para no dejarlo sin acceso.
+ * Combínese con `can()` de lib/permissions para gatear por capacidad+región.
+ */
+export async function loadCapabilities(profile: UserProfile): Promise<UserCapability[]> {
+  const db = getSupabaseAdmin()
+  const { data } = await db
+    .from('user_capabilities')
+    .select('capability_key, region_cod')
+    .eq('user_id', profile.id)
+  if (data && data.length > 0) {
+    return data.map(r => ({ key: r.capability_key as CapabilityKey, region: r.region_cod as string }))
+  }
+  return capabilitiesForProfile(profile)
+}
+
+/**
+ * ¿El usuario tiene `cap` en `region` (o en '*')? Carga sus capacidades y las
+ * evalúa. Azúcar para gatear una ruta API con un solo chequeo; si una ruta hace
+ * varios, usar `loadCapabilities` una vez + `can()`.
+ */
+export async function requireCan(profile: UserProfile, cap: CapabilityKey, region?: string): Promise<boolean> {
+  return canCap(await loadCapabilities(profile), cap, region)
 }

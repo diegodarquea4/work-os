@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { adminUsersPostSchema } from '@/lib/schemas'
 import { generateCode, hashCode, codeExpiry } from '@/lib/accessCode'
@@ -7,7 +7,7 @@ import { seedCapabilitiesMirror } from '@/lib/capabilities'
 export async function GET() {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const db = getSupabaseAdmin()
   const { data: profiles, error: profileError } = await db
@@ -42,7 +42,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await requireCan(profile, 'usuarios.gestionar'))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   let rawBody: unknown
   try { rawBody = await request.json() }
