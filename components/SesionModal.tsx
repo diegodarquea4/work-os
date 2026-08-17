@@ -13,27 +13,36 @@ import type {
 } from '@/lib/types'
 import {
   institucionesSugeridas, clasificarCompromisosGabinete, filasZona3Faltantes,
-  type OrigenCompromisoGabinete,
+  agruparPorMegaproyecto, COMITES_CON_ESCALAMIENTO, type OrigenCompromisoGabinete,
 } from '@/lib/sesiones/helpers'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
+import MegaproyectoGroup from './MegaproyectoGroup'
 import { Alert } from '@/components/ui'
 
 /**
- * Formulario de sesión — comités (mig 044) y Gabinete Regional (mig 046).
- * 5 zonas EN ESTE ORDEN (el orden es producto, no estética):
+ * Formulario de sesión — comités (mig 044), Gabinete Regional (mig 046) y
+ * Comité de Infraestructura (mig 060). Zonas EN ESTE ORDEN (el orden es
+ * producto, no estética):
  *   1. Compromisos anteriores (verificación — lo primero que se ve).
  *      Gabinete: propios ∪ escalados desde comités ∪ mandatos a verificar.
+ *      Infraestructura: propios (nada escala HACIA ella).
  *   2. Asistencia (nómina fija + invitados)
  *   3. Comité: indicadores (métricas se_reporta_en_sesion precargadas).
  *      Gabinete: INICIATIVAS EN FOCO con acuerdo por iniciativa — el
- *      gabinete no digita métricas (spec gabinete §3).
- *   4. Apuntes por institución (tabs)
- *   5. Compromisos nuevos. Gabinete: además puede vincular a una iniciativa
- *      y dirigir a un comité (mandato: instancia='eje' + eje destino).
+ *      gabinete no digita métricas (spec gabinete §3). Infraestructura:
+ *      INICIATIVAS CONTEMPLADAS — las que tienen el tag de
+ *      region_config.infraestructura_tag (no en_foco: universo aparte).
+ *   4. Apuntes por institución (tabs) — solo comité/gabinete, Infraestructura
+ *      no tiene esta zona.
+ *   5. Compromisos nuevos (4 en Infraestructura, sin zona de apuntes).
+ *      Gabinete: puede vincular a una iniciativa y dirigir a un comité
+ *      (mandato: instancia='eje' + eje destino). Infraestructura: puede
+ *      vincular a una iniciativa CON el tag y enviar el compromiso al
+ *      Gabinete Regional (reusa escalado_a_gabinete, no es instancia nueva).
  *
  * El borrador se persiste EN CADA interacción (safeWrite onBlur/onClick) —
  * "Guardar borrador" solo cierra el modal. "Cerrar sesión" llama al
@@ -51,8 +60,8 @@ type PropsBase = {
   onClose: () => void
 }
 
-// Discriminated union — refleja el CHECK de la mig 046: una sesión de
-// gabinete NO tiene eje; una de comité lo exige.
+// Discriminated union — refleja el CHECK de la mig 046/057: una sesión de
+// gabinete/infraestructura NO tiene eje; una de comité lo exige.
 type Props = PropsBase & (
   | { instancia: 'eje'; eje: RegionEje }
   | {
@@ -70,12 +79,22 @@ type Props = PropsBase & (
       // sesión) — así el gabinete accede a toda la info de la iniciativa.
       onAbrirIniciativa: (p: Iniciativa) => void
     }
+  | {
+      instancia: 'infraestructura'
+      infraestructuraNombre: string
+      // Tag de region_config.infraestructura_tag — filtra la cartera para la
+      // zona 3 y el vínculo de la zona 5 (nunca en_foco, universo aparte).
+      tag: string
+      iniciativas: Iniciativa[]
+      onAbrirIniciativa: (p: Iniciativa) => void
+    }
 )
 
 // Identidad estable para la rama comité: un `[]` inline nuevo por render
 // cambiaría las deps de loadAll y relanzaría el fetch en cada render.
 const SIN_INICIATIVAS: Iniciativa[] = []
 const SIN_EJES: RegionEje[] = []
+const SIN_MEGAPROYECTOS: string[] = []
 
 const ESTADO_COMPROMISO = {
   pendiente: { label: 'Pendiente', on: 'bg-gray-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
@@ -95,10 +114,21 @@ function fmtFecha(fecha: string | null): string {
 export default function SesionModal(props: Props) {
   const { region, borradorId, currentUserEmail, onClose } = props
   const esGabinete    = props.instancia === 'gabinete'
+  const esInfraestructura = props.instancia === 'infraestructura'
+  // Ambas usan zona 3 = agenda de iniciativas (sesion_iniciativas) en vez de
+  // indicadores/reporte por institución — solo cambia la fuente de precarga
+  // (en_foco vs tag) y si hay o no zona 4 de apuntes.
+  const usaIniciativas = esGabinete || esInfraestructura
   const eje           = props.instancia === 'eje' ? props.eje : null
-  const gabIniciativas = props.instancia === 'gabinete' ? props.iniciativas : SIN_INICIATIVAS
+  // Nombre históricamente "gabIniciativas": hoy es la cartera compartida por
+  // gabinete E infraestructura (ambas la reciben como prop `iniciativas`).
+  // Chequeo inline (no `usaIniciativas`) para que TS angoste `props` acá.
+  const gabIniciativas = props.instancia === 'gabinete' || props.instancia === 'infraestructura'
+    ? props.iniciativas : SIN_INICIATIVAS
   const ejesComites   = props.instancia === 'gabinete' ? props.ejesComites : SIN_EJES
-  const abrirIniciativa = props.instancia === 'gabinete' ? props.onAbrirIniciativa : undefined
+  const abrirIniciativa = props.instancia === 'gabinete' || props.instancia === 'infraestructura'
+    ? props.onAbrirIniciativa : undefined
+  const infraTag      = props.instancia === 'infraestructura' ? props.tag : null
 
   const [sesion, setSesion]     = useState<EjeSesion | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
@@ -108,6 +138,8 @@ export default function SesionModal(props: Props) {
   // region_config es SELECT any-auth — la query es segura para todo rol.
   const { config: regionConfig } = useRegionConfig(region.cod)
   const puedeEscalar = !esGabinete && !!regionConfig?.gabinete_habilitado
+  // Megaproyectos (mig 061): sub-conjunto curado de tags — solo Infraestructura.
+  const megaproyectosInfra = regionConfig?.infraestructura_megaproyectos ?? SIN_MEGAPROYECTOS
 
   // "Temas a tratar" pendientes (mig 053) — pauta general de la reunión,
   // solo lectura en la sesión (se editan en Gabinete → Preparación; al
@@ -146,6 +178,12 @@ export default function SesionModal(props: Props) {
   // Gabinete: vínculo opcional a iniciativa + comité destino (mandato).
   const [cVinculada, setCVinculada]         = useState<Iniciativa | null>(null)
   const [cDestinoEje, setCDestinoEje]       = useState<number | ''>('')
+  // Infraestructura: '' = se gestiona en el siguiente CRI/Mesa Técnica;
+  // 'gabinete' = envía el compromiso al Gabinete Regional (reusa
+  // escalado_a_gabinete — mismo mecanismo que el toggle "Escalar").
+  const [cDestinoInfra, setCDestinoInfra]   = useState<'' | 'gabinete'>('')
+  // Infraestructura: a qué megaproyecto pertenece (mig 062) — '' = ninguno.
+  const [cMegaproyecto, setCMegaproyecto]   = useState('')
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
@@ -168,9 +206,12 @@ export default function SesionModal(props: Props) {
           .from('eje_sesiones')
           .insert({
             region_cod: region.cod,
-            instancia: esGabinete ? 'gabinete' : 'eje',
+            instancia: props.instancia,
             eje_id: eje?.id ?? null,
             fecha: hoyISO(),
+            // Default sano para que el autosave nunca bloquee en un select
+            // sin tocar — el usuario lo cambia a Mesa Técnica si corresponde.
+            tipo_comite: esInfraestructura ? 'cri' : null,
             created_by_email: currentUserEmail || null,
           })
           .select('*')
@@ -182,7 +223,7 @@ export default function SesionModal(props: Props) {
             .select('*')
             .eq('region_cod', region.cod)
             .eq('estado', 'borrador')
-          retryQ = esGabinete ? retryQ.eq('instancia', 'gabinete') : retryQ.eq('eje_id', eje!.id)
+          retryQ = props.instancia === 'eje' ? retryQ.eq('eje_id', eje!.id) : retryQ.eq('instancia', props.instancia)
           const { data: retry } = await retryQ.limit(1)
           s = (retry?.[0] as EjeSesion | undefined) ?? null
           if (!s) {
@@ -204,14 +245,16 @@ export default function SesionModal(props: Props) {
   const loadAll = useCallback(async (s: EjeSesion) => {
     const sb = getSupabase()
     // Filtro de instancia: comité = por eje_id (⇒ instancia='eje' por el
-    // CHECK de la mig 046); gabinete = por instancia sin eje.
+    // CHECK de la mig 046); gabinete/infraestructura = por instancia sin eje.
     const ABIERTO_O_CUMPLIDO_SIN_CIERRE =
       'estado.in.(pendiente,en_curso),and(estado.eq.cumplido,cerrado_en_sesion_id.is.null)'
 
     // Zona 1: compromisos de sesiones ANTERIORES aún por verificar —
     // abiertos, o cumplidos sin sesión de cierre (marcados en este borrador,
     // se pueden desmarcar). Los creados en ESTE borrador van a la zona 5.
-    // Gabinete: propios + escalados desde comités + mandatos a verificar.
+    // Gabinete: propios + escalados desde comités (COMITES_CON_ESCALAMIENTO)
+    // + mandatos a verificar. Comité/Infraestructura: query simple por
+    // instancia — nada escala HACIA ellos, no hay clasificación que hacer.
     const compPromise: PromiseLike<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]> = esGabinete
       ? (async () => {
           const [propiosRes, escaladosRes, gabSesRes] = await Promise.all([
@@ -220,7 +263,7 @@ export default function SesionModal(props: Props) {
               .neq('sesion_origen_id', s.id)
               .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE).order('created_at'),
             sb.from('sesion_compromisos').select('*')
-              .eq('region_cod', region.cod).eq('instancia', 'eje')
+              .eq('region_cod', region.cod).in('instancia', COMITES_CON_ESCALAMIENTO)
               .eq('escalado_a_gabinete', true)
               .neq('sesion_origen_id', s.id)
               .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE).order('created_at'),
@@ -242,8 +285,15 @@ export default function SesionModal(props: Props) {
             (mandatosRes.data ?? []) as SesionCompromiso[],
           )
         })()
-      : sb.from('sesion_compromisos').select('*')
+      : props.instancia === 'eje'
+      ? sb.from('sesion_compromisos').select('*')
           .eq('region_cod', region.cod).eq('eje_id', eje!.id)
+          .neq('sesion_origen_id', s.id)
+          .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE)
+          .order('created_at')
+          .then(r => (r.data ?? []) as SesionCompromiso[])
+      : sb.from('sesion_compromisos').select('*')
+          .eq('region_cod', region.cod).eq('instancia', props.instancia)
           .neq('sesion_origen_id', s.id)
           .or(ABIERTO_O_CUMPLIDO_SIN_CIERRE)
           .order('created_at')
@@ -251,10 +301,10 @@ export default function SesionModal(props: Props) {
 
     let nominaQ = sb.from('sesion_nomina').select('*')
       .eq('region_cod', region.cod).eq('activo', true)
-    nominaQ = esGabinete ? nominaQ.eq('instancia', 'gabinete') : nominaQ.eq('eje_id', eje!.id)
+    nominaQ = props.instancia === 'eje' ? nominaQ.eq('eje_id', eje!.id) : nominaQ.eq('instancia', props.instancia)
 
     let sesIdsQ = sb.from('eje_sesiones').select('id').eq('region_cod', region.cod)
-    sesIdsQ = esGabinete ? sesIdsQ.eq('instancia', 'gabinete') : sesIdsQ.eq('eje_id', eje!.id)
+    sesIdsQ = props.instancia === 'eje' ? sesIdsQ.eq('eje_id', eje!.id) : sesIdsQ.eq('instancia', props.instancia)
 
     const [comp, nominaRes, asisRes, apunRes, nuevosRes, sesIdsRes, iniRes] = await Promise.all([
       compPromise,
@@ -263,16 +313,16 @@ export default function SesionModal(props: Props) {
       sb.from('sesion_apuntes').select('*').eq('sesion_id', s.id),
       sb.from('sesion_compromisos').select('*').eq('sesion_origen_id', s.id).order('created_at'),
       sesIdsQ.limit(30),
-      // Zona 3 gabinete: agenda guardada de la sesión.
-      esGabinete
+      // Zona 3 gabinete/infraestructura: agenda guardada de la sesión.
+      usaIniciativas
         ? sb.from('sesion_iniciativas').select('*').eq('sesion_id', s.id).order('created_at')
         : Promise.resolve({ data: [] as SesionIniciativa[] }),
     ])
 
     // Zona 3 comité: reporte por institución (mig 048). Catálogo de la región
     // + valores de esta sesión + valores de la sesión cerrada anterior (WoW).
-    // El gabinete NO usa esta zona (tiene iniciativas en foco).
-    if (!esGabinete) {
+    // Gabinete/Infraestructura NO usan esta zona (tienen iniciativas).
+    if (props.instancia === 'eje') {
       const [catRes, valRes, prevSesRes] = await Promise.all([
         sb.from('comite_metrica').select('*')
           .eq('region_cod', region.cod).eq('activo', true).order('orden'),
@@ -292,14 +342,19 @@ export default function SesionModal(props: Props) {
       }
     }
 
-    // Zona 3 gabinete: precarga WYSIWYG — las iniciativas en foco que faltan
-    // en la agenda se insertan al abrir el borrador. La tabla ES la agenda:
-    // el snapshot del cierre server-side es determinista sobre estas filas.
-    if (esGabinete) {
+    // Zona 3 gabinete/infraestructura: precarga WYSIWYG — las candidatas que
+    // faltan en la agenda se insertan al abrir el borrador. La tabla ES la
+    // agenda: el snapshot del cierre server-side es determinista sobre estas
+    // filas. Gabinete precarga por "en foco"; Infraestructura por el tag de
+    // region_config.infraestructura_tag (nunca en_foco — es un universo
+    // distinto, ver requerimiento del comité).
+    if (usaIniciativas) {
       let filas = (iniRes.data ?? []) as SesionIniciativa[]
       if (s.estado === 'borrador') {
-        const enFoco = gabIniciativas.filter(p => p.en_foco === true)
-        const faltantes = filasZona3Faltantes(enFoco, filas)
+        const candidatas = esGabinete
+          ? gabIniciativas.filter(p => p.en_foco === true)
+          : gabIniciativas.filter(p => (p.tags ?? []).includes(infraTag ?? ''))
+        const faltantes = filasZona3Faltantes(candidatas, filas)
         if (faltantes.length) {
           const { data: inserted, error: insErr } = await sb
             .from('sesion_iniciativas')
@@ -343,7 +398,7 @@ export default function SesionModal(props: Props) {
       setTabInstitucion(prev => prev ?? sugeridas[0] ?? null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [region.cod, eje?.id, esGabinete, gabIniciativas])
+  }, [region.cod, eje?.id, props.instancia, esGabinete, usaIniciativas, gabIniciativas, infraTag])
 
   useEffect(() => { if (sesion) loadAll(sesion) }, [sesion, loadAll])
 
@@ -589,23 +644,33 @@ export default function SesionModal(props: Props) {
       // gabinete lo verifica por sesion_origen_id. Sin destino, queda en la
       // instancia de esta sesión.
       const destinoEjeId = esGabinete && cDestinoEje !== '' ? Number(cDestinoEje) : null
+      // Infraestructura → Gabinete: en vez de una instancia nueva, reusa el
+      // flag escalado_a_gabinete (mismo mecanismo que el toggle "Escalar" de
+      // la zona 1/5) pero expuesto en el propio formulario de creación — el
+      // compromiso sigue siendo instancia='infraestructura' (el comité lo
+      // sigue viendo) y ADEMÁS aparece en la zona 1 del gabinete.
+      const enviarAGabineteDesdeInfra = esInfraestructura && cDestinoInfra === 'gabinete'
       const rows = await safeWrite(
         getSupabase().from('sesion_compromisos').insert({
           region_cod: region.cod,
-          instancia: esGabinete ? (destinoEjeId ? 'eje' : 'gabinete') : 'eje',
-          eje_id: esGabinete ? destinoEjeId : eje!.id,
+          instancia: esGabinete ? (destinoEjeId ? 'eje' : 'gabinete') : props.instancia,
+          eje_id: esGabinete ? destinoEjeId : (props.instancia === 'eje' ? eje!.id : null),
           sesion_origen_id: sesion.id,
           descripcion: cDescripcion.trim(),
           responsable_institucion: cInstitucion.trim(),
           responsable_nombre: cNombre.trim() || null,
           plazo: cPlazo || null,
-          prioridad_id: esGabinete ? (cVinculada?.id ?? null) : null,
+          prioridad_id: usaIniciativas ? (cVinculada?.id ?? null) : null,
+          escalado_a_gabinete: enviarAGabineteDesdeInfra,
+          escalado_at: enviarAGabineteDesdeInfra ? new Date().toISOString() : null,
+          escalado_en_sesion_id: enviarAGabineteDesdeInfra ? sesion.id : null,
+          megaproyecto: esInfraestructura ? (cMegaproyecto || null) : null,
         }),
         `sesion_compromisos insert sesion=${sesion.id}`,
       )
       setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
       setCDescripcion(''); setCInstitucion(''); setCNombre(''); setCPlazo('')
-      setCVinculada(null); setCDestinoEje('')
+      setCVinculada(null); setCDestinoEje(''); setCDestinoInfra(''); setCMegaproyecto('')
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -615,7 +680,7 @@ export default function SesionModal(props: Props) {
 
   // ── Metadatos de la sesión (fecha / lugar) ────────────────────────────────
 
-  async function commitSesionField(patch: Partial<Pick<EjeSesion, 'fecha' | 'lugar'>>) {
+  async function commitSesionField(patch: Partial<Pick<EjeSesion, 'fecha' | 'lugar' | 'tipo_comite'>>) {
     if (!sesion) return
     try {
       await safeWrite(
@@ -632,9 +697,9 @@ export default function SesionModal(props: Props) {
 
   async function handleCerrar() {
     if (!sesion) return
-    const sinDatos = !esGabinete && comiteValores.length === 0
-    const msg = esGabinete
-      ? '¿Cerrar la sesión de gabinete y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.'
+    const sinDatos = props.instancia === 'eje' && comiteValores.length === 0
+    const msg = usaIniciativas
+      ? `¿Cerrar la sesión${esGabinete ? ' de gabinete' : ''} y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.`
       : sinDatos
         ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
         : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
@@ -688,14 +753,27 @@ export default function SesionModal(props: Props) {
   )
   const nombreInstancia = esGabinete
     ? (props.instancia === 'gabinete' ? props.gabineteNombre : 'Gabinete Regional')
+    : esInfraestructura
+    ? (props.instancia === 'infraestructura' ? props.infraestructuraNombre : 'Comité de Infraestructura')
     : (eje!.sesiones_nombre ?? 'Comité')
 
-  // Nombre del comité (para chips de escalado/mandato en zona 1 y 5).
-  const comiteNombre = useCallback((ejeId: number | null): string => {
-    if (ejeId == null) return 'Comité'
-    const e = ejesComites.find(x => x.id === ejeId)
+  // Nombre del comité de origen/destino (para chips de escalado/mandato en
+  // zona 1 y 5 del GABINETE). Infraestructura no tiene eje_id — se resuelve
+  // por region_config, no por el catálogo de ejes.
+  const comiteNombre = useCallback((c: Pick<SesionCompromiso, 'instancia' | 'eje_id'>): string => {
+    if (c.instancia === 'infraestructura') return regionConfig?.infraestructura_nombre ?? 'Comité de Infraestructura'
+    if (c.eje_id == null) return 'Comité'
+    const e = ejesComites.find(x => x.id === c.eje_id)
     return e?.sesiones_nombre ?? (e ? `Eje ${e.numero}` : 'Comité')
-  }, [ejesComites])
+  }, [ejesComites, regionConfig])
+
+  // Candidatas base para el typeahead y la precarga de la zona 3.
+  // Infraestructura: solo la cartera con el tag configurado — "que
+  // solamente te traiga esas" (nunca todas las iniciativas de la región).
+  const candidatosBase = useMemo(
+    () => esInfraestructura ? gabIniciativas.filter(p => (p.tags ?? []).includes(infraTag ?? '')) : gabIniciativas,
+    [gabIniciativas, esInfraestructura, infraTag],
+  )
 
   // Typeahead de iniciativas (zona 3 y vínculo de zona 5): candidatas por
   // texto, excluyendo las ya agendadas en zona 3.
@@ -703,11 +781,24 @@ export default function SesionModal(props: Props) {
     const t = q.trim().toLowerCase()
     if (t.length < 2) return []
     const agendadas = excluirAgendadas ? new Set(sesIniciativas.map(f => f.prioridad_id)) : null
-    return gabIniciativas
+    return candidatosBase
       .filter(p => !agendadas?.has(p.id))
       .filter(p => p.nombre.toLowerCase().includes(t) || (p.ministerio ?? '').toLowerCase().includes(t))
       .slice(0, 8)
-  }, [gabIniciativas, sesIniciativas])
+  }, [candidatosBase, sesIniciativas])
+
+  // Zona 3 de Infraestructura agrupada por megaproyecto (mig 061) — mismo
+  // helper que el preview del tab, misma curaduría de region_config. El
+  // gabinete NUNCA agrupa "en foco" por esto: es un concepto propio del
+  // comité, aunque comparta la fila de region_config.
+  const { grupos: gruposIniciativas, sinMegaproyecto: iniciativasSinMegaproyecto } = useMemo(() => {
+    if (!esInfraestructura) return { grupos: [] as { tag: string; items: SesionIniciativa[] }[], sinMegaproyecto: sesIniciativas }
+    return agruparPorMegaproyecto(
+      sesIniciativas,
+      fila => gabIniciativas.find(x => x.id === fila.prioridad_id)?.tags,
+      megaproyectosInfra,
+    )
+  }, [sesIniciativas, gabIniciativas, esInfraestructura, megaproyectosInfra])
 
   const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
   const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
@@ -735,7 +826,7 @@ export default function SesionModal(props: Props) {
           </div>
           <div className="px-6 py-5 space-y-3">
             <p className="text-sm text-gray-700">
-              {esGabinete
+              {usaIniciativas
                 ? cierreResultado.actaGenerada
                   ? 'Los acuerdos y compromisos quedaron sellados y el acta está disponible.'
                   : 'La sesión quedó cerrada con sus acuerdos, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
@@ -798,6 +889,20 @@ export default function SesionModal(props: Props) {
                   className="flex-1 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300"
                 />
               </label>
+              {esInfraestructura && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                  Tipo
+                  <select
+                    value={sesion?.tipo_comite ?? 'cri'}
+                    onChange={e => commitSesionField({ tipo_comite: e.target.value as 'cri' | 'mesa_tecnica' })}
+                    className="border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                    title="Comité Regional Interministerial de Infraestructura o Mesa Técnica Regional Interministerial"
+                  >
+                    <option value="cri">CRI</option>
+                    <option value="mesa_tecnica">Mesa Técnica</option>
+                  </select>
+                </label>
+              )}
             </div>
           </div>
           <button onClick={onClose} disabled={cerrando} className="text-gray-400 hover:text-gray-600 mt-0.5 disabled:opacity-50" title="Cerrar (el borrador queda guardado)">
@@ -859,12 +964,17 @@ export default function SesionModal(props: Props) {
                         <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {esGabinete && c.origenTipo === 'escalado' && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Compromiso levantado desde el comité — el comité lo sigue viendo">
-                              ⬆ {comiteNombre(c.eje_id)}
+                              ⬆ {comiteNombre(c)}
                             </span>
                           )}
                           {esGabinete && c.origenTipo === 'mandato' && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato del gabinete — se gestiona en el comité destino">
-                              → {comiteNombre(c.eje_id)}
+                              → {comiteNombre(c)}
+                            </span>
+                          )}
+                          {esInfraestructura && c.megaproyecto && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                              {c.megaproyecto}
                             </span>
                           )}
                           <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
@@ -915,6 +1025,8 @@ export default function SesionModal(props: Props) {
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
                       {esGabinete
                         ? 'La nómina del gabinete está vacía — cárgala (seremis + equipo DPR) desde el botón "Nómina" del tab Gabinete Regional.'
+                        : esInfraestructura
+                        ? 'La nómina está vacía — cárgala desde el botón "Nómina" del tab Comité de Infraestructura.'
                         : 'La nómina está vacía — agrégala desde el botón "Nómina" del panel de métricas.'}
                     </p>
                   )}
@@ -974,59 +1086,55 @@ export default function SesionModal(props: Props) {
                 </div>
               </section>
 
-              {/* ── Zona 3 (gabinete): iniciativas en foco ── */}
-              {esGabinete && (
+              {/* ── Zona 3 (gabinete: en foco · infraestructura: por tag) ── */}
+              {usaIniciativas && (
                 <section className={zoneCls}>
                   <div className={zoneHead}>
                     <span className={zoneNum}>3</span>
-                    <h3 className="text-sm font-semibold text-gray-800">Iniciativas en foco</h3>
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      {esGabinete ? 'Iniciativas en foco' : 'Iniciativas contempladas'}
+                    </h3>
                     <span className="text-xs text-gray-400 ml-auto">{sesIniciativas.length}</span>
                   </div>
                   <div className="p-3 space-y-2">
-                    {sesIniciativas.length === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-2">
-                        No hay iniciativas en foco — márcalas desde Gabinete → Preparación, o agrégalas acá.
+                    {esInfraestructura && (
+                      <p className="text-[11px] text-gray-400 -mt-0.5 mb-1">
+                        Iniciativas con la etiqueta <span className="font-semibold text-gray-500">{infraTag}</span> — no las &quot;en foco&quot; del gabinete.
                       </p>
                     )}
-                    {sesIniciativas.map(fila => {
-                      const p = gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null
-                      const sem = p ? (SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris) : null
-                      return (
-                        <div key={fila.id} className="flex items-start gap-2.5 px-3 py-2.5 bg-gray-50 rounded-lg">
-                          <button
-                            type="button"
-                            onClick={() => { if (p && abrirIniciativa) abrirIniciativa(p) }}
-                            disabled={!p}
-                            className="flex-1 min-w-0 text-left group disabled:cursor-default"
-                            title={p ? 'Ver ficha completa de la iniciativa' : undefined}
-                          >
-                            <p className="text-sm text-gray-800 leading-snug flex items-center gap-2 flex-wrap group-hover:text-violet-800">
-                              {sem && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />}
-                              <span>{p?.nombre ?? `Iniciativa #${fila.prioridad_id} (ya no está en la cartera)`}</span>
-                              {p && <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity">ver ficha →</span>}
-                            </p>
-                            {p && (
-                              <p className="text-[11px] text-gray-400 mt-0.5">
-                                {p.pct_avance}% avance
-                                {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
-                                {p.ministerio ? ` · ${p.ministerio}` : ''}
-                              </p>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => quitarIniciativa(fila)}
-                            className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
-                            title="Sacar de la agenda de esta sesión"
-                          >
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                              <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
-                            </svg>
-                          </button>
-                        </div>
-                      )
-                    })}
+                    {sesIniciativas.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        {esGabinete
+                          ? 'No hay iniciativas en foco — márcalas desde Gabinete → Preparación, o agrégalas acá.'
+                          : `No hay iniciativas con la etiqueta "${infraTag}" — agrégalas acá o etiqueta iniciativas en su ficha.`}
+                      </p>
+                    )}
+                    {gruposIniciativas.length === 0 ? (
+                      iniciativasSinMegaproyecto.map(fila => (
+                        <IniciativaAgendaRow key={fila.id} fila={fila} p={gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null} onAbrir={abrirIniciativa} onQuitar={quitarIniciativa} />
+                      ))
+                    ) : (
+                      <>
+                        {gruposIniciativas.map(g => (
+                          <MegaproyectoGroup key={g.tag} nombre={g.tag} count={g.items.length}>
+                            {g.items.map(fila => (
+                              <IniciativaAgendaRow key={fila.id} fila={fila} p={gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null} onAbrir={abrirIniciativa} onQuitar={quitarIniciativa} />
+                            ))}
+                          </MegaproyectoGroup>
+                        ))}
+                        {iniciativasSinMegaproyecto.length > 0 && (
+                          <MegaproyectoGroup nombre="Sin megaproyecto" count={iniciativasSinMegaproyecto.length} muted>
+                            {iniciativasSinMegaproyecto.map(fila => (
+                              <IniciativaAgendaRow key={fila.id} fila={fila} p={gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null} onAbrir={abrirIniciativa} onQuitar={quitarIniciativa} />
+                            ))}
+                          </MegaproyectoGroup>
+                        )}
+                      </>
+                    )}
                     <IniciativaTypeahead
-                      placeholder="+ Agregar iniciativa a la agenda (busca por nombre o ministerio)…"
+                      placeholder={esGabinete
+                        ? '+ Agregar iniciativa a la agenda (busca por nombre o ministerio)…'
+                        : `+ Agregar iniciativa con la etiqueta "${infraTag}" (busca por nombre o ministerio)…`}
                       buscar={q => buscarIniciativas(q, true)}
                       onPick={agregarIniciativa}
                     />
@@ -1035,7 +1143,7 @@ export default function SesionModal(props: Props) {
               )}
 
               {/* ── Zona 3 (comité): reporte por institución ── */}
-              {!esGabinete && (
+              {props.instancia === 'eje' && (
                 <ReporteInstitucionZona
                   sesionId={sesion.id}
                   regionCod={region.cod}
@@ -1113,7 +1221,7 @@ export default function SesionModal(props: Props) {
               </section>
               )}
 
-              {/* ── Zona compromisos nuevos (4 comité · 5 gabinete) ── */}
+              {/* ── Zona compromisos nuevos (4 comité/infraestructura · 5 gabinete) ── */}
               <section className={zoneCls}>
                 <div className={zoneHead}>
                   <span className={zoneNum}>{esGabinete ? 5 : 4}</span>
@@ -1122,7 +1230,7 @@ export default function SesionModal(props: Props) {
                 </div>
                 <div className="p-3 space-y-2">
                   {compNuevos.map(c => {
-                    const vinculada = esGabinete && c.prioridad_id != null
+                    const vinculada = usaIniciativas && c.prioridad_id != null
                       ? gabIniciativas.find(p => p.id === c.prioridad_id) ?? null
                       : null
                     const esMandato = esGabinete && c.instancia === 'eje' && c.eje_id != null
@@ -1133,7 +1241,12 @@ export default function SesionModal(props: Props) {
                           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                             {esMandato && (
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700" title="Mandato: se gestiona en la próxima sesión de ese comité">
-                                → {comiteNombre(c.eje_id)}
+                                → {comiteNombre(c)}
+                              </span>
+                            )}
+                            {esInfraestructura && c.megaproyecto && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                                {c.megaproyecto}
                               </span>
                             )}
                             <span>{c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}</span>
@@ -1208,6 +1321,47 @@ export default function SesionModal(props: Props) {
                         </select>
                       </div>
                     )}
+                    {esInfraestructura && (
+                      <div className="flex gap-2 flex-wrap items-start">
+                        <div className="flex-1 min-w-[220px]">
+                          {cVinculada ? (
+                            <div className="flex items-center gap-2 text-xs bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1.5">
+                              <span className="text-violet-800 truncate flex-1">🔗 {cVinculada.nombre}</span>
+                              <button type="button" onClick={() => setCVinculada(null)} className="text-violet-400 hover:text-violet-700" title="Quitar vínculo">✕</button>
+                            </div>
+                          ) : (
+                            <IniciativaTypeahead
+                              placeholder={`Vincular a iniciativa con etiqueta "${infraTag}" (opcional)…`}
+                              buscar={q => buscarIniciativas(q, false)}
+                              onPick={p => setCVinculada(p)}
+                              compact
+                            />
+                          )}
+                        </div>
+                        <select
+                          value={cDestinoInfra}
+                          onChange={e => setCDestinoInfra(e.target.value as '' | 'gabinete')}
+                          className={`${inputCls} w-64 text-xs py-1.5`}
+                          title="Se gestiona en el próximo CRI/Mesa Técnica de este comité, o se envía al Gabinete Regional"
+                        >
+                          <option value="">Se gestiona en el siguiente CRI/Mesa Técnica</option>
+                          <option value="gabinete">Enviar a Gabinete Regional</option>
+                        </select>
+                        {megaproyectosInfra.length > 0 && (
+                          <select
+                            value={cMegaproyecto}
+                            onChange={e => setCMegaproyecto(e.target.value)}
+                            className={`${inputCls} w-56 text-xs py-1.5`}
+                            title="A qué megaproyecto pertenece este compromiso (opcional)"
+                          >
+                            <option value="">Sin megaproyecto</option>
+                            {megaproyectosInfra.map(mp => (
+                              <option key={mp} value={mp}>{mp}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
                   </form>
                 </div>
               </section>
@@ -1238,6 +1392,50 @@ export default function SesionModal(props: Props) {
           </div>
         </footer>
       </div>
+    </div>
+  )
+}
+
+/** Fila de la agenda de iniciativas (zona 3 gabinete/infraestructura) —
+ * extraída para reusarla tanto en lista plana como agrupada por megaproyecto. */
+function IniciativaAgendaRow({ fila, p, onAbrir, onQuitar }: {
+  fila: SesionIniciativa
+  p: Iniciativa | null
+  onAbrir?: (p: Iniciativa) => void
+  onQuitar: (fila: SesionIniciativa) => void
+}) {
+  const sem = p ? (SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris) : null
+  return (
+    <div className="flex items-start gap-2.5 px-3 py-2.5 bg-gray-50 rounded-lg">
+      <button
+        type="button"
+        onClick={() => { if (p && onAbrir) onAbrir(p) }}
+        disabled={!p}
+        className="flex-1 min-w-0 text-left group disabled:cursor-default"
+        title={p ? 'Ver ficha completa de la iniciativa' : undefined}
+      >
+        <p className="text-sm text-gray-800 leading-snug flex items-center gap-2 flex-wrap group-hover:text-violet-800">
+          {sem && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />}
+          <span>{p?.nombre ?? `Iniciativa #${fila.prioridad_id} (ya no está en la cartera)`}</span>
+          {p && <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity">ver ficha →</span>}
+        </p>
+        {p && (
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            {p.pct_avance}% avance
+            {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
+            {p.ministerio ? ` · ${p.ministerio}` : ''}
+          </p>
+        )}
+      </button>
+      <button
+        onClick={() => onQuitar(fila)}
+        className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
+        title="Sacar de la agenda de esta sesión"
+      >
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+        </svg>
+      </button>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { generarActaGabinete } from './generarActaGabinete'
+import { generarActaInfraestructura } from './generarActaInfraestructura'
 import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA } from './helpers'
 import { subirActa } from './actaUpload'
 
@@ -34,6 +35,7 @@ export async function generarActa(sesionId: number): Promise<string> {
   const sesion = sesionRow as EjeSesion
 
   if (sesion.instancia === 'gabinete') return generarActaGabinete(db, sesion)
+  if (sesion.instancia === 'infraestructura') return generarActaInfraestructura(db, sesion)
 
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
 

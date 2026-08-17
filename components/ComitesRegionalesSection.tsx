@@ -9,21 +9,22 @@ import ComitePolicialTab from './ComitePolicialTab'
 import ComitePoliticoPanel from './ComitePoliticoPanel'
 import ComiteInversionPanel from './ComiteInversionPanel'
 import GabineteRegionalTab from './GabineteRegionalTab'
+import ComiteInfraestructuraTab from './ComiteInfraestructuraTab'
 
 /**
  * Sección «Comités y Gabinete Regional» de Mi Región, justo debajo de
  * «Ejes estratégicos». Agrupa las instancias de coordinación regional en
- * cuatro pestañas. Comité Policial, Gabinete Regional y Comité Seguimiento
- * de la Inversión están desarrollados; Infraestructura es placeholder
- * anunciado.
+ * cinco pestañas — Comité Policial, Comité Político, Comité de
+ * Infraestructura, Comité Económico y Gabinete Regional están todas
+ * desarrolladas.
  *
  * El Comité Policial se ancla al eje de la región con `sesiones_habilitadas`
  * (mig 044; cada región tiene exactamente uno, sesiones_nombre 'Comité
- * Policial'). Gabinete Regional y Comité Económico no
- * tienen eje: el flag de Gabinete vive en region_config (mig 046) y su tab
- * monta el módulo de sesiones en modo instancia='gabinete'; Inversión no
- * tiene flag de habilitación y su tab monta el módulo en modo
- * instancia='inversion'.
+ * Policial'). Gabinete Regional, Comité Económico y Comité de Infraestructura
+ * no tienen eje: los flags de Gabinete e Infraestructura viven en
+ * region_config (mig 046 / 057) y sus tabs montan el módulo de sesiones en
+ * modo instancia='gabinete' / 'infraestructura'; Económico no tiene flag de
+ * habilitación y su tab monta el módulo en modo instancia='inversion'.
  */
 
 type TabKey = 'policial' | 'politico' | 'infraestructura' | 'inversion' | 'gabinete'
@@ -31,7 +32,7 @@ type TabKey = 'policial' | 'politico' | 'infraestructura' | 'inversion' | 'gabin
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'politico',       label: 'Comité Político',                    ready: true  },
-  { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: false },
+  { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: true  },
   { key: 'inversion',      label: 'Comité Económico',                   ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
@@ -125,10 +126,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       ) : active === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : (
-        <Placeholder
-          titulo={`${TABS.find(t => t.key === active)?.label} — en desarrollo`}
-          texto="Esta instancia estará disponible próximamente."
-        />
+        <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       )}
     </div>
   )

@@ -31,7 +31,7 @@ const TAREA_DOT = 'bg-indigo-500'
 
 type Props = {
   seguimientos: Seguimiento[]
-  // Tareas de la iniciativa — se ubican en el calendario por fecha_vencimiento.
+  // Tareas de la iniciativa — se ubican en el calendario por fecha_termino.
   tareas?: Tarea[]
   usuarios?: { email: string; name: string }[]
   // Próximo hito declarado en la ficha de la iniciativa abierta. Si la fecha
@@ -64,8 +64,8 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
 
   const tareasByDate: Record<string, Tarea[]> = {}
   for (const t of tareas) {
-    if (!t.fecha_vencimiento) continue
-    const d = t.fecha_vencimiento.split('T')[0]
+    if (!t.fecha_termino) continue
+    const d = t.fecha_termino.split('T')[0]
     if (!tareasByDate[d]) tareasByDate[d] = []
     tareasByDate[d].push(t)
   }
@@ -155,7 +155,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
                 {dayTareas.slice(0, 4 - Math.min(entries.length, 4)).map((t, j) => (
                   <span
                     key={`t${j}`}
-                    title={`Tarea: ${t.tarea}`}
+                    title={`Tarea: ${t.nombre}`}
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${TAREA_DOT}`}
                   />
                 ))}
@@ -178,7 +178,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
         {tareas.length > 0 && (
           <div className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-full ${TAREA_DOT}`} />
-            <span className="text-xs text-gray-500">Tarea (vencimiento)</span>
+            <span className="text-xs text-gray-500">Tarea (término)</span>
           </div>
         )}
         {hitoDate && (
@@ -237,7 +237,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
                         <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Tarea</span>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full ${est.color}`}>{est.label}</span>
                       </div>
-                      <p className="text-sm text-gray-700 leading-snug">{t.tarea}</p>
+                      <p className="text-sm text-gray-700 leading-snug">{t.nombre}</p>
                       {responsableLabel(t.responsable) && <p className="text-xs text-gray-500 mt-0.5">{responsableLabel(t.responsable)}</p>}
                     </div>
                   </div>

@@ -219,3 +219,23 @@ export type PoligonoPatchBody = z.infer<typeof poligonoPatchSchema>
 // código muerto mientras no exista una ruta que reciba ese campo en el body.
 
 export const sesionIdSchema = z.coerce.number().int().positive()
+
+// ── /api/tarea-gantt-pdf POST ────────────────────────────────────────────────
+// El cliente ya tiene las tareas cargadas (vienen de la misma query RLS que
+// pinta el tab Planificación) — se mandan tal cual en vez de re-consultar la
+// BD server-side, no hay dato nuevo que exponer. `granularidad` es la que el
+// usuario tenía seleccionada en la carta Gantt al apretar "Descargar PDF".
+export const tareaGanttPdfSchema = z.object({
+  nombreIniciativa: z.string().trim().min(1).max(300),
+  granularidad: z.enum(['semana', 'mes', 'trimestre', 'anio']),
+  tareas: z.array(z.object({
+    id: z.number(),
+    nombre: z.string().max(300),
+    tarea: z.string().max(4000),
+    estado: z.enum(['completada', 'en_proceso', 'bloqueada', 'no_iniciada']),
+    fecha_inicio: z.string().nullable(),
+    fecha_termino: z.string().nullable(),
+  })).max(500),
+})
+
+export type TareaGanttPdfBody = z.infer<typeof tareaGanttPdfSchema>

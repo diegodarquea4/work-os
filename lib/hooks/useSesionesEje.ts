@@ -14,13 +14,14 @@ import { esCompromisoAbierto } from '@/lib/sesiones/helpers'
  */
 
 // Instancia cuyo resumen se pide: un comité (eje concreto) o una instancia
-// sin eje (gabinete regional, Comité Seguimiento de la Inversión). Refleja
-// el CHECK de la mig 046 en el sistema de tipos.
+// sin eje (gabinete regional, Comité Económico, Comité de Infraestructura).
+// Refleja el CHECK de la mig 046/057 en el sistema de tipos.
 export type SesionesFiltro =
   | { instancia: 'eje'; ejeId: number }
   | { instancia: 'gabinete' }
   | { instancia: 'inversion' }
   | { instancia: 'politico' }
+  | { instancia: 'infraestructura' }
 
 export type SesionesResumen = {
   compromisosAbiertos: number

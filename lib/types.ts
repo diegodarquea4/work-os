@@ -461,10 +461,12 @@ export type Documento = {
 export type Tarea = {
   id: number
   prioridad_id: number
+  nombre: string
   tarea: string
   responsable: string | null
   estado: 'completada' | 'en_proceso' | 'bloqueada' | 'no_iniciada'
-  fecha_vencimiento: string | null
+  fecha_inicio: string | null
+  fecha_termino: string | null
   comentarios: string | null
   autor: string | null
   created_at: string
@@ -521,17 +523,23 @@ export type RegionEje = {
 }
 
 // ── Sesiones (Comité Policial mig 044 · Gabinete Regional mig 046 · Comité
-// Seguimiento de la Inversión) ───────────────────────────────────────────────
+// Económico mig 049/050 · Comité de Infraestructura mig 060) ────────────────
 // Una sesión captura: verificación de compromisos → asistencia → reporte por
-// institución (comité, mig 048) / iniciativas en foco (gabinete) / oficios y
-// proyectos (inversión) → compromisos nuevos. RLS restrictiva: staff
-// todo, regional sus regiones, viewer nada. `instancia` discrimina: 'eje'
-// exige eje_id, 'gabinete'/'inversion' lo prohíben (CHECK en BD — la columna
-// nació para "Gabinete Regional"; 'inversion' se agregó después reusando el
-// mismo mecanismo, esos comités tampoco cuelgan del catálogo de Ejes
-// estratégicos, son tabs fijos de la sección Comités).
+// institución (comité policial, mig 048) / iniciativas en foco (gabinete) /
+// iniciativas con tag (infraestructura) / oficios y proyectos (económico) →
+// compromisos nuevos. RLS restrictiva: staff todo, regional sus regiones,
+// viewer nada. `instancia` discrimina: 'eje' exige eje_id, el resto
+// ('gabinete'/'inversion'/'infraestructura') lo prohíben (CHECK en BD — la
+// columna nació para "Gabinete Regional"; las demás se agregaron después
+// reusando el mismo mecanismo, esos comités tampoco cuelgan del catálogo de
+// Ejes estratégicos, son tabs fijos de la sección Comités).
 
-export type SesionInstancia = 'eje' | 'gabinete' | 'inversion' | 'politico'
+export type SesionInstancia = 'eje' | 'gabinete' | 'inversion' | 'politico' | 'infraestructura'
+
+// Comité de Infraestructura (mig 060) únicamente — 'cri' (Comité Regional
+// Interministerial de Infraestructura) o 'mesa_tecnica' (Mesa Técnica
+// Regional Interministerial). null para el resto de las instancias.
+export type TipoComiteInfraestructura = 'cri' | 'mesa_tecnica'
 
 export type EjeSesion = {
   id: number
@@ -541,6 +549,7 @@ export type EjeSesion = {
   provincia_cod: string | null   // NULL = sesión regional (capa DPP futura)
   fecha: string                  // date puro YYYY-MM-DD
   lugar: string | null
+  tipo_comite: TipoComiteInfraestructura | null
   estado: 'borrador' | 'cerrada'
   // Idempotencia del cierre: true tras completar el core del cierre (en
   // comité: aplicar suma/pulso; en gabinete no hay métricas pero el flag se
@@ -667,6 +676,12 @@ export type SesionCompromiso = {
   // Proyecto asociado (v2_proyectos_inversion), opcional — solo trazabilidad,
   // no determina el tag.
   proyecto_id: string | null
+  // Comité de Infraestructura (instancia='infraestructura') únicamente — mig
+  // 059. Uno de los tags curados en region_config.infraestructura_megaproyectos
+  // al momento de crear el compromiso; independiente de prioridad_id (un
+  // compromiso general del megaproyecto no siempre cuelga de una iniciativa
+  // puntual). NULL para el resto de las instancias.
+  megaproyecto: string | null
   created_at: string
 }
 
@@ -689,6 +704,17 @@ export type RegionConfig = {
   region_cod: string
   gabinete_habilitado: boolean
   gabinete_nombre: string
+  // Comité de Infraestructura (mig 060) — mismo mecanismo de habilitación por
+  // región que el gabinete. `infraestructura_tag` es el tag de
+  // prioridades_territoriales.tags que alimenta la zona "Iniciativas
+  // contempladas" de la sesión (arranca en 'CRI', editable sin deploy).
+  infraestructura_habilitado: boolean
+  infraestructura_nombre: string
+  infraestructura_tag: string
+  // Sub-conjunto curado de tags que agrupa "Iniciativas contempladas" (mig
+  // 058) — NO todos los tags de la región, solo los que el comité marca
+  // como megaproyecto desde el botón "Megaproyectos".
+  infraestructura_megaproyectos: string[]
 }
 
 // ── "Temas a tratar" del Gabinete Regional (mig 053) ─────────────────────────

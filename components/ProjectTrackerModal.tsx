@@ -68,6 +68,11 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [savingNombre, setSavingNombre]     = useState(false)
   const [responsable, setResponsable]       = useState<string>(prioridad.responsable ?? '')
   const [usuarios, setUsuarios]             = useState<{email: string; name: string}[]>([])
+  // Padrón acotado a la región de la iniciativa + transversales (admin/
+  // editor) — solo para el selector de Responsable de tareas en el tab
+  // Planificación. El selector de Responsable de la iniciativa (arriba)
+  // sigue usando `usuarios`, el padrón completo.
+  const [usuariosRegion, setUsuariosRegion] = useState<{email: string; name: string}[]>([])
 
   const [etapaActual, setEtapaActual]               = useState<string>(prioridad.etapa_actual ?? '')
   const [proximoHito, setProximoHito]               = useState<string>(prioridad.proximo_hito ?? '')
@@ -122,6 +127,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   useEffect(() => {
     loadData()
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
+    fetch(`/api/users?region=${encodeURIComponent(prioridad.cod)}`).then(r => r.ok ? r.json() : []).then(setUsuariosRegion)
   }, [prioridad.n])
 
   // ── A11y del diálogo (Fase 4a) ──────────────────────────────────────────────
@@ -170,7 +176,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       sb.from('seguimientos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('semaforo_log').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
-      sb.from('tareas').select('*').eq('prioridad_id', prioridad.n).order('fecha_vencimiento', { ascending: true, nullsFirst: false }),
+      sb.from('tareas').select('*').eq('prioridad_id', prioridad.n).order('fecha_termino', { ascending: true, nullsFirst: false }),
     ])
     setSeguimientos((segRes.data ?? []) as Seguimiento[])
     setDocumentos((docRes.data ?? []) as Documento[])
@@ -1127,7 +1133,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             {(['seguimiento', 'tareas', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
               const label =
                 t === 'seguimiento' ? `Seguimiento${seguimientos.length ? ` (${seguimientos.length})` : ''}` :
-                t === 'tareas'      ? `Tareas${tareas.length ? ` (${tareas.length})` : ''}` :
+                t === 'tareas'      ? `Planificación${tareas.length ? ` (${tareas.length})` : ''}` :
                 t === 'historial'   ? 'Historial' :
                 t === 'calendario'  ? 'Calendario' :
                 `Documentos${documentos.length ? ` (${documentos.length})` : ''}`
@@ -1165,8 +1171,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           ) : tab === 'tareas' ? (
             <TareasTab
               prioridadId={prioridad.n}
+              nombreIniciativa={prioridad.nombre}
               tareas={tareas}
               usuarios={usuarios}
+              usuariosRegion={usuariosRegion}
               onRefresh={loadData}
               canCreate={!!currentUserEmail}
               canDeleteAny={canEditAny}
