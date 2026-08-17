@@ -1,6 +1,13 @@
 @import "tailwindcss";
+/* Respalda el vocabulario animate-in / fade-in / slide-in-* / zoom-in que el panel
+   ya usa (dropdowns, toasts, y los enter/leave de modales). Antes esas clases no
+   generaban CSS (tailwindcss-animate no estaba) y eran no-ops silenciosos. */
+@import "tw-animate-css";
 
 :root {
+  /* Panel light-only por decisión (Diego, 2026-08): sin dark-mode. `color-scheme`
+     mantiene también los controles nativos y el scrollbar en claro. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -64,12 +71,10 @@
   --color-navy: #1a2744;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* Se eliminó el bloque @media (prefers-color-scheme: dark): invertía solo
+   --background/--foreground mientras cada card/texto queda hard-coded claro, así que
+   con el SO en oscuro el panel quedaba medio-roto (fondo negro, tarjetas blancas).
+   El panel es light-only (ver color-scheme: light arriba). */
 
 body {
   background: var(--background);
@@ -77,6 +82,31 @@ body {
   /* Geist (cargada por next/font en app/layout.tsx como --font-geist-sans);
      Arial/Helvetica de fallback. Antes esto forzaba Arial y pisaba Geist. */
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ─── Anillo de foco (red de seguridad) ──────────────────────────────────────
+   Solo los primitivos components/ui traen focus-visible; el resto del panel dejaba
+   a los usuarios de teclado sin indicador. Este default global garantiza un anillo
+   visible en cualquier elemento enfocado por teclado. Los controles que ya definen
+   su propio focus:ring / focus:outline-none ganan por especificidad, así que no se
+   duplica; esto solo cubre lo que no tenía nada. */
+:focus-visible {
+  outline: 2px solid var(--color-violet-500, #8b5cf6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ─── Reduced motion (accesibilidad, WCAG 2.3.3) ─────────────────────────────
+   El panel casi no tenía guardas de movimiento (solo Spinner y 3 paneles del mapa).
+   Esta regla global neutraliza transiciones y animaciones —incluido el loader
+   infinito de la minuta, spins y pulses— para quien pide reducir movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ─── Rich text content (Tiptap) ─────────────────────────────────────────────
