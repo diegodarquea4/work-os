@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { EmptyState } from '@/components/ui'
 
 const ESTADO_CONFIG = {
   no_iniciada: { label: 'No iniciada', color: 'bg-gray-100 text-gray-600'   },
@@ -214,12 +215,15 @@ export default function TareasTab({
       )}
 
       {tareas.length === 0 ? (
-        <div className="text-center py-10 text-gray-300">
-          <svg className="mx-auto mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-          </svg>
-          <p className="text-sm">Sin tareas registradas</p>
-        </div>
+        <EmptyState
+          title="Sin tareas registradas"
+          description="Las tareas y compromisos de esta iniciativa se listan acá."
+          icon={
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+          }
+        />
       ) : (
         <div className="overflow-x-auto -mx-6 px-6">
           <table className="w-full text-sm border-collapse">
