@@ -21,8 +21,7 @@ import type {
 // Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
 // sin confirmar. Flag temporal para esconderla de la sesión, el panel y el
 // acta sin borrar el trabajo ya hecho; sacar cuando se confirme.
-// ⚠️ Prendido a `true` SOLO para vista local — volver a `false` antes de commitear.
-export const MESA_EMPLEO_HABILITADA = true
+export const MESA_EMPLEO_HABILITADA = false
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 

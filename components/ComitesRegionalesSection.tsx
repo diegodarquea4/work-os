@@ -42,6 +42,11 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
 // desarrollo completo sigue vivo — solo se gatea su visibilidad por región.
 const ECONOMICO_ACTIVO: readonly string[] = ['I'] // Tarapacá
 
+// Comité de Infraestructura en marcha blanca: visible solo en estas regiones;
+// en el resto se muestra "Pronto" (mismo trato que Económico). El desarrollo
+// completo sigue vivo — solo se gatea su visibilidad por región.
+const INFRAESTRUCTURA_ACTIVO: readonly string[] = ['X'] // Los Lagos
+
 type Props = {
   region:     Region
   regionEjes: RegionEje[]
@@ -66,6 +71,10 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   // muestra "Pronto" (mismo trato que Infraestructura).
   const economicoActivo = ECONOMICO_ACTIVO.includes(region.cod)
 
+  // Infraestructura en marcha blanca: solo Los Lagos lo tiene activo; en el
+  // resto muestra "Pronto".
+  const infraestructuraActivo = INFRAESTRUCTURA_ACTIVO.includes(region.cod)
+
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
@@ -77,8 +86,12 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
         {TABS.map(t => {
           const isActive = active === t.key
-          // Económico hereda su estado "listo" de la región; el resto es fijo.
-          const ready = t.key === 'inversion' ? economicoActivo : t.ready
+          // Económico e Infraestructura heredan su estado "listo" de la región
+          // (marcha blanca); el resto es fijo.
+          const ready =
+            t.key === 'inversion' ? economicoActivo :
+            t.key === 'infraestructura' ? infraestructuraActivo :
+            t.ready
           return (
             <button
               key={t.key}
@@ -126,7 +139,14 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       ) : active === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : (
-        <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
+        infraestructuraActivo ? (
+          <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
+        ) : (
+          <Placeholder
+            titulo="Comité de Infraestructura — en desarrollo"
+            texto="Esta instancia estará disponible próximamente."
+          />
+        )
       )}
     </div>
   )

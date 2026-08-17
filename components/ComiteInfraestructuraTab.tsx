@@ -14,6 +14,7 @@ import NominaModal from './NominaModal'
 import MegaproyectosModal from './MegaproyectosModal'
 import MegaproyectoGroup from './MegaproyectoGroup'
 import TagChips from './TagChips'
+import { EmptyState } from '@/components/ui'
 
 /**
  * Tab "Comité de Infraestructura" de la sección Comités y Gabinete Regional
@@ -90,17 +91,17 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
 
   if (!habilitado) {
     return (
-      <div className="text-center py-10 px-6 bg-white rounded-xl border border-dashed border-gray-200">
-        <svg className="mx-auto mb-3 text-gray-300" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <p className="text-sm text-gray-600 mb-1 font-medium">Comité de Infraestructura no habilitado</p>
-        <p className="text-xs text-gray-400 max-w-md mx-auto">
-          El módulo de sesiones de este comité aún no está activo para esta región.
-        </p>
-      </div>
+      <EmptyState
+        title="Comité de Infraestructura no habilitado"
+        description="El módulo de sesiones de este comité aún no está activo para esta región."
+        icon={
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        }
+      />
     )
   }
 
@@ -108,13 +109,10 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   // este usuario solo no participa — mensaje sobrio, sin datos de sesión.
   if (!infraOn) {
     return (
-      <div className="text-center py-10 px-6 bg-white rounded-xl border border-gray-100">
-        <p className="text-sm text-gray-600 mb-1 font-medium">{nombreComite} — {region.nombre}</p>
-        <p className="text-xs text-gray-400 max-w-md mx-auto">
-          Las sesiones de este comité las gestiona el equipo DPR y la división.
-          Tu perfil no tiene acceso a este módulo.
-        </p>
-      </div>
+      <EmptyState
+        title={`${nombreComite} — ${region.nombre}`}
+        description="Las sesiones de este comité las gestiona el equipo DPR y la división. Tu perfil no tiene acceso a este módulo."
+      />
     )
   }
 
@@ -161,7 +159,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           <span className="text-[10px] text-gray-400 ml-auto">{iniciativasTag.length}</span>
         </div>
         {iniciativasTag.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-lg">
+          <p className="text-xs text-gray-500 text-center py-3 border border-dashed border-gray-200 rounded-lg">
             Ninguna iniciativa tiene la etiqueta &quot;{tag}&quot; todavía — agrégala desde la ficha de la iniciativa.
           </p>
         ) : gruposMegaproyecto.length === 0 ? (

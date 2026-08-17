@@ -237,7 +237,7 @@ export default function TareaGantt({ tareas, nombreIniciativa }: Props) {
       {rows.length === 0 ? (
         <div className="p-6 text-center">
           <p className="text-sm text-gray-500 mb-1">Sin tareas para graficar</p>
-          <p className="text-xs text-gray-400">Agrega fecha de inicio y término a las tareas para verlas acá.</p>
+          <p className="text-xs text-gray-500">Agrega fecha de inicio y término a las tareas para verlas acá.</p>
         </div>
       ) : (
         <>

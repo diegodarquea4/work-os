@@ -196,7 +196,7 @@ export default function TareasTab({
         {showGantt && (
           tareas.length > 0
             ? <TareaGantt tareas={tareas} nombreIniciativa={nombreIniciativa} />
-            : <p className="text-xs text-gray-400 mt-2 text-center">Sin tareas para graficar.</p>
+            : <p className="text-xs text-gray-500 mt-2 text-center">Sin tareas para graficar.</p>
         )}
       </div>
 
