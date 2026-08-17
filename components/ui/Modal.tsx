@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type Size = 'sm' | 'md' | 'lg' | 'xl'
@@ -28,6 +28,22 @@ type Props = {
 export function Modal({ open, onClose, title, children, footer, size = 'md', dismissable = true }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   const prevFocus = useRef<HTMLElement | null>(null)
+  // Enter/leave: se mantiene montado durante la salida (~150ms, ~75% del enter)
+  // antes de desmontar. reduced-motion: la regla global (globals.css) colapsa las
+  // transiciones a instantáneo → degrada a aparición/desaparición seca.
+  const [mounted, setMounted] = useState(open)
+  const [entered, setEntered] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      const raf = requestAnimationFrame(() => setEntered(true))
+      return () => cancelAnimationFrame(raf)
+    }
+    setEntered(false)
+    const t = window.setTimeout(() => setMounted(false), 150)
+    return () => window.clearTimeout(t)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -57,19 +73,20 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', dis
     }
   }, [open, onClose])
 
-  if (!open || typeof document === 'undefined') return null
+  if (!mounted || typeof document === 'undefined') return null
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
-      onMouseDown={dismissable ? (e) => { if (e.target === e.currentTarget) onClose() } : undefined}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className={`absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-150 ${entered ? 'opacity-100' : 'opacity-0'}`}
+        onMouseDown={dismissable ? onClose : undefined}
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className={`w-full ${SIZE[size]} max-h-[calc(100vh-2rem)] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden focus:outline-none`}
+        className={`relative w-full ${SIZE[size]} max-h-[calc(100vh-2rem)] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden focus:outline-none transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${entered ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.98]'}`}
       >
         {title && (
           <header className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-slate-100 flex-shrink-0">

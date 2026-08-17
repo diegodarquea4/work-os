@@ -145,7 +145,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       // foco NO está en un input/textarea/select/contenteditable.
       const t = e.target as HTMLElement
       const enCampo = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable
-      if (!enCampo) { e.preventDefault(); onClose() }
+      if (!enCampo) { e.preventDefault(); requestClose() }
       return
     }
     if (e.key === 'Tab' && panelRef.current) {
@@ -384,9 +384,27 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     onClose()
   }
 
+  // ── Enter/leave del modal (Fase 4b) ──────────────────────────────────────────
+  // Al montar, el backdrop hace fade y el panel entra con opacity+scale; al cerrar
+  // se reproduce la salida (~150ms, ~75% del enter) antes de desmontar (el padre
+  // quita `selected`). reduced-motion: la regla global de la Fase 1 colapsa las
+  // transiciones a instantáneo, así que degrada a aparición/desaparición seca.
+  const [entered, setEntered] = useState(false)
+  const closingRef = useRef(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  function requestClose() {
+    if (closingRef.current) return
+    closingRef.current = true
+    setEntered(false)
+    window.setTimeout(onClose, 150)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={requestClose}>
+      <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-150 ${entered ? 'opacity-100' : 'opacity-0'}`} />
 
       <div
         ref={panelRef}
@@ -394,7 +412,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
         aria-modal="true"
         aria-label={nombreLocal}
         onKeyDown={handleDialogKeyDown}
-        className="relative w-full max-w-[min(72rem,95vw)] max-h-[95vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className={`relative w-full max-w-[min(72rem,95vw)] max-h-[95vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${entered ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.98]'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -528,7 +546,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
                 </button>
               )}
-              <button ref={closeBtnRef} onClick={onClose} aria-label="Cerrar ficha" className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
+              <button ref={closeBtnRef} onClick={requestClose} aria-label="Cerrar ficha" className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
                 </svg>
