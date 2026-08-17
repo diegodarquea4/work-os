@@ -1526,6 +1526,9 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
   return (
     <tr
       onClick={() => onSelect(p)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p) } }}
+      role="button"
+      tabIndex={0}
       className={`cursor-pointer transition-colors ${selected ? 'bg-violet-50 hover:bg-violet-100/70' : 'hover:bg-blue-50/40'}`}
     >
       {selectable && (
