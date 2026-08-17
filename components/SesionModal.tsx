@@ -18,6 +18,7 @@ import {
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import { Alert } from '@/components/ui'
 
@@ -351,6 +352,9 @@ export default function SesionModal(props: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, cerrando])
+
+  // Foco inicial + restauración + focus-trap por Tab (a11y de diálogo, Fase 4a).
+  const { panelRef, onKeyDown: onDialogKeyDown } = useDialogA11y<HTMLDivElement>()
 
   // ── Zona 1: verificación de compromisos ───────────────────────────────────
 
@@ -716,7 +720,14 @@ export default function SesionModal(props: Props) {
   if (cierreResultado) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Resultado del cierre de sesión"
+          onKeyDown={onDialogKeyDown}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+        >
           <div className={`px-6 py-4 ${cierreResultado.actaGenerada ? 'bg-green-600' : 'bg-amber-500'}`}>
             <p className="text-white font-semibold text-sm">
               {cierreResultado.actaGenerada ? 'Sesión cerrada — acta generada' : 'Sesión cerrada — acta pendiente'}
@@ -755,8 +766,13 @@ export default function SesionModal(props: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => !cerrando && onClose()}>
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Sesión — ${nombreInstancia}`}
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
+        onKeyDown={onDialogKeyDown}
       >
         {/* Header */}
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3 bg-violet-50/40">
