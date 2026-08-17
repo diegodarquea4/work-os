@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
+import { operarCapForInstancia } from '@/lib/permissions'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
 import { puedeRegenerarActa } from '@/lib/sesiones/helpers'
@@ -37,7 +38,12 @@ async function loadAndGate(id: string, profile: UserProfile): Promise<Gate> {
     return { ok: false, res: NextResponse.json({ error: 'Sesión no encontrada' }, { status: 404 }) }
   }
   const sesion = data as EjeSesion
-  if (profile.role === 'regional' && !profile.region_cods.includes(sesion.region_cod)) {
+  // Operar el acta (descargar/generar) requiere operar el comité de esa instancia
+  // en esa región. Reemplaza el gate de rol+región: viewer sin la capacidad queda
+  // fuera; regional solo en sus regiones; admin/editor ('all') pasan. Instancia
+  // sin cap conocida → fail-closed.
+  const cap = operarCapForInstancia(sesion.instancia)
+  if (!cap || !(await requireCan(profile, cap, sesion.region_cod))) {
     return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
   return { ok: true, sesion }
@@ -46,8 +52,6 @@ async function loadAndGate(id: string, profile: UserProfile): Promise<Gate> {
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const { id } = await params
   const gate = await loadAndGate(id, profile)
   if (!gate.ok) return gate.res
@@ -69,8 +73,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const { id } = await params
   const gate = await loadAndGate(id, profile)
   if (!gate.ok) return gate.res

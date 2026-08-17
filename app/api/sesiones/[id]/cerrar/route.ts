@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
+import { cerrarCapForInstancia } from '@/lib/permissions'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
 import { aplicarValorMetrica, puedeCerrar, COMITES_CON_ESCALAMIENTO } from '@/lib/sesiones/helpers'
@@ -32,7 +33,6 @@ export const maxDuration = 120
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   const parse = sesionIdSchema.safeParse(id)
@@ -50,9 +50,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const guard = puedeCerrar(sesion)
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
-  // Gate región (patrón minuta): regional solo cierra sesiones de sus regiones.
-  const isRestricted = profile.role === 'regional'
-  if (isRestricted && !profile.region_cods.includes(sesion!.region_cod)) {
+  // Cerrar requiere la capacidad de cierre del comité de esa instancia en esa
+  // región. Infraestructura tiene un cap de cierre propio (mig 064); el resto
+  // pliega el cierre dentro de operar. Reemplaza el gate de rol+región: viewer sin
+  // capacidad queda fuera; regional solo en sus regiones; staff pasa. Instancia
+  // sin cap conocida → fail-closed.
+  const capCerrar = cerrarCapForInstancia(sesion!.instancia)
+  if (!capCerrar || !(await requireCan(profile, capCerrar, sesion!.region_cod))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

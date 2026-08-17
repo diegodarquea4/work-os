@@ -203,3 +203,31 @@ export function capabilitiesForProfile(
   }
   return out
 }
+
+/**
+ * Mapa `eje_sesiones.instancia` (valor en BD) → capacidad de OPERAR ese comité.
+ * OJO: la BD usa nombres históricos que NO coinciden con los slugs del catálogo
+ * — `'eje'` = Comité Policial (se ancla al eje con sesiones habilitadas) e
+ * `'inversion'` = Comité Económico. Por eso el mapeo es explícito. Instancia
+ * desconocida → null (el gate debe fallar cerrado). Fuente única para gatear las
+ * rutas de sesiones (cerrar/acta) por capacidad + región.
+ */
+export function operarCapForInstancia(instancia: string): CapabilityKey | null {
+  switch (instancia) {
+    case 'eje':             return 'comite.policial.operar'
+    case 'politico':        return 'comite.politico.operar'
+    case 'inversion':       return 'comite.economico.operar'
+    case 'gabinete':        return 'comite.gabinete.operar'
+    case 'infraestructura': return 'comite.infraestructura.operar'
+    default:                return null
+  }
+}
+
+/**
+ * Capacidad requerida para CERRAR una sesión de esa instancia. Infraestructura
+ * tiene un cap de cierre propio (mig 064); el resto pliega el cierre en operar.
+ */
+export function cerrarCapForInstancia(instancia: string): CapabilityKey | null {
+  if (instancia === 'infraestructura') return 'comite.infraestructura.cerrar'
+  return operarCapForInstancia(instancia)
+}

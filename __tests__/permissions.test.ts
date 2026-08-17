@@ -1,5 +1,42 @@
 import { describe, it, expect } from 'vitest'
-import { capabilitiesForProfile, can, ALL_CAPABILITY_KEYS } from '@/lib/permissions'
+import {
+  capabilitiesForProfile, can, ALL_CAPABILITY_KEYS,
+  operarCapForInstancia, cerrarCapForInstancia,
+} from '@/lib/permissions'
+
+/**
+ * Mapeo instancia (BD) → capacidad de comité. Los nombres de la BD NO coinciden
+ * con los slugs del catálogo ('eje'=policial, 'inversion'=económico): estos casos
+ * blindan esa desalineación (un template `comite.${instancia}.operar` fallaría).
+ */
+describe('operar/cerrarCapForInstancia — mapeo histórico', () => {
+  it('eje → Comité Policial', () => {
+    expect(operarCapForInstancia('eje')).toBe('comite.policial.operar')
+  })
+  it('inversion → Comité Económico', () => {
+    expect(operarCapForInstancia('inversion')).toBe('comite.economico.operar')
+  })
+  it('politico / gabinete / infraestructura mapean directo', () => {
+    expect(operarCapForInstancia('politico')).toBe('comite.politico.operar')
+    expect(operarCapForInstancia('gabinete')).toBe('comite.gabinete.operar')
+    expect(operarCapForInstancia('infraestructura')).toBe('comite.infraestructura.operar')
+  })
+  it('instancia desconocida → null (fail-closed)', () => {
+    expect(operarCapForInstancia('otra')).toBeNull()
+    expect(cerrarCapForInstancia('otra')).toBeNull()
+  })
+  it('cerrar de infraestructura usa el cap de cierre propio; el resto pliega en operar', () => {
+    expect(cerrarCapForInstancia('infraestructura')).toBe('comite.infraestructura.cerrar')
+    expect(cerrarCapForInstancia('eje')).toBe('comite.policial.operar')
+    expect(cerrarCapForInstancia('inversion')).toBe('comite.economico.operar')
+  })
+  it('todas las caps devueltas existen en el catálogo', () => {
+    for (const inst of ['eje', 'politico', 'inversion', 'gabinete', 'infraestructura']) {
+      expect(ALL_CAPABILITY_KEYS).toContain(operarCapForInstancia(inst))
+      expect(ALL_CAPABILITY_KEYS).toContain(cerrarCapForInstancia(inst))
+    }
+  })
+})
 
 /**
  * Fase 0 capas de usuarios — INVARIANTE DE NO-REGRESIÓN.
