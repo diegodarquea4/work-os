@@ -422,7 +422,7 @@ function ResumenModule({ initialRegionNombre }: { initialRegionNombre?: string }
                 }))
 
               if (dmcsRows.length === 0) return (
-                <p className="text-xs text-gray-400 py-2">Sin datos DMCS para la semana actual.</p>
+                <p className="text-xs text-gray-500 py-2">Sin datos DMCS para la semana actual.</p>
               )
               return (
                 <>
@@ -1107,7 +1107,7 @@ function SeguridadModule() {
                     {selectedRegion?.nombre} — {SEG_IND_LABELS[segInd]}
                   </h3>
                   {history.length === 0
-                    ? <p className="text-xs text-gray-400 text-center py-8">Sin datos disponibles</p>
+                    ? <p className="text-xs text-gray-500 text-center py-8">Sin datos disponibles</p>
                     : (
                       <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={history.map(r => ({ sem: r.semana, val: r[segInd] }))}>
@@ -1555,7 +1555,7 @@ function PibModule() {
                     <span className="text-gray-400 font-normal ml-2">(vol. encadenado base 2018)</span>
                   </h3>
                   {evoData.length === 0
-                    ? <p className="text-xs text-gray-400 text-center py-8">Sin datos</p>
+                    ? <p className="text-xs text-gray-500 text-center py-8">Sin datos</p>
                     : (
                       <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={evoData}>
@@ -1598,7 +1598,7 @@ function PibModule() {
                   </h3>
                 </div>
                 {filteredPeriods.length === 0 || allSectors.length === 0
-                  ? <p className="text-xs text-gray-400 text-center py-8">Sin datos disponibles</p>
+                  ? <p className="text-xs text-gray-500 text-center py-8">Sin datos disponibles</p>
                   : (
                     <div className="overflow-x-auto">
                       <table className="text-xs min-w-full">
@@ -2609,7 +2609,7 @@ function EmpleoModule() {
                     </div>
 
                     {periodosFiltEvo.length === 0
-                      ? <p className="text-xs text-gray-400 text-center py-8">Sin datos</p>
+                      ? <p className="text-xs text-gray-500 text-center py-8">Sin datos</p>
                       : (
                         <>
                           {/* Gráfico tasa */}

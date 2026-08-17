@@ -205,7 +205,7 @@ export default function DesalojoContextoTab({
           </p>
         )}
         {docsGenerales.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-3">Sin documentos generales todavía.</p>
+          <p className="text-xs text-gray-500 text-center py-3">Sin documentos generales todavía.</p>
         ) : (
           <ul className="space-y-1">
             {docsGenerales.map(d => (

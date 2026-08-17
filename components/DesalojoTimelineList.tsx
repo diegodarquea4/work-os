@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import type { DesalojoCapa, DesalojoPlanificacion } from '@/lib/types'
 import DesalojoTimelineCard from './DesalojoTimelineCard'
 import DesalojoTimelineEditor from './DesalojoTimelineEditor'
+import { EmptyState } from '@/components/ui'
 
 /**
  * Timeline vertical de eventos de planificación. Línea con círculos a la
@@ -83,12 +84,10 @@ export default function DesalojoTimelineList({
       </div>
 
       {eventos.length === 0 && !editorOpen && (
-        <div className="border border-dashed border-gray-300 rounded-lg px-4 py-6 text-center">
-          <p className="text-xs text-gray-500 mb-2">Sin eventos todavía.</p>
-          <p className="text-[11px] text-gray-400 leading-snug">
-            Agrega los hitos del caso: qué se hizo, en qué estás trabajando ahora, qué viene.
-          </p>
-        </div>
+        <EmptyState
+          title="Sin eventos todavía"
+          description="Agrega los hitos del caso: qué se hizo, en qué estás trabajando ahora, qué viene."
+        />
       )}
 
       {eventos.length > 0 && (

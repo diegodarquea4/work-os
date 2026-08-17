@@ -10,7 +10,7 @@ import {
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
 import { parseEjeString } from '@/lib/ejes'
-import { Alert } from '@/components/ui'
+import { Alert, EmptyState } from '@/components/ui'
 
 /**
  * Modal de gestión del catálogo de ejes de una región. Solo admin/editor DCI
@@ -236,10 +236,10 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
           {loading ? (
             <p className="text-center text-sm text-gray-400 py-6">Cargando catálogo…</p>
           ) : ejes.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-6">
-              Aún no hay ejes definidos para esta región.
-              {canEditAny && ' Usa "Agregar eje" abajo.'}
-            </p>
+            <EmptyState
+              title="Sin ejes definidos"
+              description={canEditAny ? 'Usá "Agregar eje" abajo para crear el primero.' : 'Aún no hay ejes definidos para esta región.'}
+            />
           ) : (
             <ul className="space-y-1.5">
               {ejes.map(eje => {

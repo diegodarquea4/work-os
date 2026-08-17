@@ -327,7 +327,7 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
         })}
 
         {!canEdit && temas.length === 0 && (
-          <p className="text-xs text-gray-400 italic py-2">Sin temas registrados.</p>
+          <p className="text-xs text-gray-500 italic py-2">Sin temas registrados.</p>
         )}
       </div>
 

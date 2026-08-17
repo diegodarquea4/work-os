@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import type { Oaeca } from '@/lib/types'
+import { EmptyState } from '@/components/ui'
 
 /**
  * Catálogo de OAECA (organismos que emiten oficios) — lista + alta simple.
@@ -96,7 +97,7 @@ export default function OaecaModal({ currentUserEmail, onClose }: Props) {
           {loading ? (
             <p className="text-center text-sm text-gray-400 py-8">Cargando…</p>
           ) : lista.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">Sin OAECA registradas todavía.</p>
+            <EmptyState title="Sin OAECA registradas todavía" />
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {lista.map(o => (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { EmptyState } from '@/components/ui'
 import type { EjeSesion, SesionCompromiso } from '@/lib/types'
 
 /**
@@ -116,7 +117,10 @@ export function HistorialShell({
           {loading ? (
             <p className="text-center text-sm text-slate-400 py-12">Cargando historial…</p>
           ) : isEmpty ? (
-            <p className="text-center text-sm text-slate-400 py-12">Aún no hay sesiones registradas.</p>
+            <EmptyState
+              title="Aún no hay sesiones registradas"
+              description="Las sesiones cerradas van quedando en este historial."
+            />
           ) : (
             <div className="space-y-3">{children}</div>
           )}

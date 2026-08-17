@@ -969,7 +969,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 </div>
                 <div className="p-3 space-y-2">
                   {compAnteriores.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
+                    <p className="text-xs text-gray-500 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
                   ) : compAnteriores.map(c => (
                     <div key={c.id} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg">
                       <div className="flex-1 min-w-0">
@@ -1259,7 +1259,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         />
 
                         {proyectosSesion.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-2">Sin proyectos tratados en esta sesión.</p>
+                          <p className="text-xs text-gray-500 text-center py-2">Sin proyectos tratados en esta sesión.</p>
                         ) : proyectosSesion.map(sp => {
                           const info = proyectosInfo.get(sp.proyecto_id)
                           return (

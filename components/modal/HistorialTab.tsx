@@ -63,7 +63,7 @@ export default function HistorialTab({ seguimientos, semaforoLog, semaforo, pctA
       <div>
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trayectoria del semáforo</h3>
         {semaforoLog.length === 0 ? (
-          <p className="text-xs text-gray-400">Sin cambios registrados aún</p>
+          <p className="text-xs text-gray-500">Sin cambios registrados aún</p>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-1 flex-wrap">
@@ -133,7 +133,7 @@ export default function HistorialTab({ seguimientos, semaforoLog, semaforo, pctA
             .filter(l => l.campo === 'pct_avance')
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
           if (avanceLog.length === 0) {
-            return <p className="text-xs text-gray-400">Sin cambios de avance registrados aún</p>
+            return <p className="text-xs text-gray-500">Sin cambios de avance registrados aún</p>
           }
           return (
             <div className="flex items-end gap-1 flex-wrap">

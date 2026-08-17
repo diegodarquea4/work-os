@@ -137,7 +137,7 @@ export default function FilterPopover({
           )}
           <div className="max-h-64 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-gray-400 text-center">Sin resultados</p>
+              <p className="px-3 py-4 text-xs text-gray-500 text-center">Sin resultados</p>
             ) : (
               filtered.map(o => {
                 const checked = selected.has(o.value)

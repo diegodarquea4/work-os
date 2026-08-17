@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { EmptyState } from '@/components/ui'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
@@ -135,14 +136,16 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
 
 function Placeholder({ titulo, texto }: { titulo: string; texto: string }) {
   return (
-    <div className="text-center py-10 px-6 bg-white rounded-xl border border-dashed border-gray-200">
-      <svg className="mx-auto mb-3 text-gray-300" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-      <p className="text-sm text-gray-600 mb-1 font-medium">{titulo}</p>
-      <p className="text-xs text-gray-400 max-w-md mx-auto">{texto}</p>
-    </div>
+    <EmptyState
+      title={titulo}
+      description={texto}
+      icon={
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      }
+    />
   )
 }
