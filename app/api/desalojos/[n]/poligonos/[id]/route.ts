@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { poligonoPatchSchema } from '@/lib/schemas'
 
@@ -42,7 +42,7 @@ async function assertPoligonoInCase(
 export async function PATCH(req: Request, context: Params) {
   const profile = await requireAuth()
   if (!profile)                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr, id: idStr } = await context.params
   const db = getSupabaseAdmin()
@@ -101,7 +101,7 @@ export async function PATCH(req: Request, context: Params) {
 export async function DELETE(_req: Request, context: Params) {
   const profile = await requireAuth()
   if (!profile)                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr, id: idStr } = await context.params
   const db = getSupabaseAdmin()

@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { canReadDesalojo } from '@/lib/desalojoAccess'
 import { desalojoDetallePatchSchema } from '@/lib/schemas'
@@ -66,10 +66,11 @@ export async function GET(
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 })
   }
 
-  // El bucket desalojos-docs sigue admin-only: a los regionales les damos la
-  // metadata del documento pero sin URL firmada (no descargan el archivo).
+  // Descargar docs firmados requiere la capacidad desalojos.descargar_docs (hoy:
+  // solo admin). Sin ella, se devuelve la metadata del documento pero sin URL
+  // firmada (no se descarga el archivo del bucket privado).
   const docsRaw = (docsRes.data ?? []) as DesalojoDocumento[]
-  const documentos = profile.role === 'admin'
+  const documentos = (await requireCan(profile, 'desalojos.descargar_docs'))
     ? await withSignedUrls(db, docsRaw)
     : docsRaw.map(d => ({ ...d, url: '' }))
 
@@ -90,7 +91,7 @@ export async function PATCH(
 ) {
   const profile = await requireAuth()
   if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr } = await context.params
   const n = Number(nStr)
