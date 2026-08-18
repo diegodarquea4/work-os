@@ -144,7 +144,12 @@ function getName(feature: Feature): string {
   return feature.properties?.Region ?? ''
 }
 
-function tooltipHtml(name: string, count: number): string {
+function tooltipHtml(name: string, count: number, locked = false): string {
+  // Región fuera del alcance del usuario (locked): solo el nombre, sin conteo ni
+  // detalle — no revela nada de otras regiones (decisión de Diego, 2026-08-18).
+  if (locked) {
+    return `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}</div>`
+  }
   return `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}<br>
        <span style="color:#6b7280;font-weight:400">${count} iniciativas</span></div>`
 }
@@ -219,7 +224,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       const name = getName(f)
       ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(styleFor(cod, name))
       ;(layer as { setTooltipContent?: (c: string) => void }).setTooltipContent?.(
-        tooltipHtml(name, projectCounts[name] ?? 0)
+        tooltipHtml(name, projectCounts[name] ?? 0, lockedRegions.includes(cod))
       )
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,7 +281,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
     })
 
     // Tooltip
-    layer.bindTooltip(tooltipHtml(name, count), { sticky: true, opacity: 0.95 })
+    layer.bindTooltip(tooltipHtml(name, count, locked), { sticky: true, opacity: 0.95 })
   }
 
   return (
