@@ -153,6 +153,17 @@ FROM sync_status ORDER BY last_run_at DESC;
 | `CRON_SECRET` | Server only (sync POST auth + `/api/health`) |
 | `BCCH_USER` / `BCCH_PASS` | Server only (ine-sync BCCh API) |
 | `ALERT_WEBHOOK_URL` | Opcional. Si está, `/api/health` postea alertas (Slack/Discord) |
+| `NEXT_PUBLIC_TERRITORIAL_SUPABASE_URL` / `_ANON` | **Solo el script** `snapshot-territorial.mjs` (regenerar el snapshot del modo Autoridades). NO se usan en runtime: el modo lee el snapshot estático de `public/territorial/`. |
+
+## Modo «Autoridades» del Mapa (Panel Territorial SUBDERE)
+
+La vista **Mapa** tiene dos capas conmutables (`mapaCapa` en `WorkOSApp`, persistido en `localStorage` `workos:mapaCapa`, distinto de `mapaMode` summary/preview): **PSG** (iniciativas/semáforos, histórico) y **Autoridades** (bloque político IZQ/DER/IND de la autoridad electa: alcaldes, gobernadores, diputados, senadores, delegados). Es un port fiel del Panel Territorial de Francisca Barros (SUBDERE), con look & feel work-os y **solo lectura**.
+
+- **Datos — SNAPSHOT estático (no live)**: en runtime NO se toca la Supabase de Francisca. `lib/territorial/source.ts:loadTerritorial()` hace `fetch('/territorial/snapshot.json')` (una descarga por CDN, gzip ~750 KB, cacheada — vs ~55 requests paginados/~15s del enfoque live) y corre `assembleTerritorial()` (puro, testeable, con contrato de columnas que falla ruidoso si cambia el esquema). Fotos de gobernadores en `public/territorial/fotos.json` (bajo demanda vía `loadFotoGobernador`). Hook con caché de módulo: `lib/hooks/useTerritorial.ts`. **Regenerar el snapshot** (cuando Francisca actualiza datos): `node scripts/snapshot-territorial.mjs` (baja las 9 tablas + fotos de su Supabase, escribe `public/territorial/{snapshot,fotos}.json`) y commitear la salida. El modo es 100% autocontenido: si el proyecto de Francisca se cae, sigue andando con el último snapshot. Un test offline (`__tests__/territorialSource.test.ts`) valida el snapshot commiteado en cada `npm test`.
+- **Lógica pura** (testeada, `__tests__/territorial*.test.ts`): `lib/territorial/politica.ts` (ESPECTRO_PARTIDOS verbatim, clasificación, colores), `derive.ts` (fills, mayorías, stats, procesarCongreso), `carrito.ts` (filas + export xlsx). **Llaves**: Francisca usa `codigo_region` `'01'..'16'` y `codigo_comuna` (CUT) `'01402'` (strings zero-padded); work-os usa el numérico en sus geojson → reconciliación con `cutKey`/`regionKey` (padStart) en el borde.
+- **Estado/UI**: `components/territorial/TerritorialProvider.tsx` (hook `useTerritorialMode` + contexto; tiene el `TerrState` de controles y computa el `overlay` de coloreo). ChileMap/ComunasLayer reciben `overlay`/`comunaFill` (recolor + tooltip solo-nombre); `TerritoriosLayer` dibuja distritos/circunscripciones (congreso «por distrito»). Chrome: `AutoridadesToolbar`, `AutoridadesStatBar`, `AutoridadesLeyenda`, `AutoridadesSidebar` + fichas en `cards/`, modales `ReeleccionModal`/`CarritoModal` (Excel) y `BuscadorComunas`.
+- **Geometrías**: `public/{distritos,circunscripciones}.geojson` (property `territorio`), generadas una vez con `scripts/export-territorios-geojson.mjs` (lee las tablas con geometría del proyecto de Francisca). Regiones/comunas usan los geojson que ya tenía work-os.
+- En Autoridades no aplica el bloqueo por región de las Capas de usuarios (data pública nacional): `enterDrill(region, force=true)` y `lockedRegions=[]`.
 
 ## Tailwind CSS v4
 
