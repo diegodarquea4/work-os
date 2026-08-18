@@ -17,7 +17,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { checklistItems } from '@/lib/desalojos'
 import type {
@@ -63,7 +63,7 @@ export async function GET(
 ) {
   const profile = await requireAuth()
   if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr, capa_id: cStr, fase: fStr } = await context.params
   const n      = Number(nStr)
@@ -88,7 +88,7 @@ export async function PATCH(
 ) {
   const profile = await requireAuth()
   if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr, capa_id: cStr, fase: fStr } = await context.params
   const n      = Number(nStr)

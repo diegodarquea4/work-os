@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 /**
@@ -16,8 +16,8 @@ const BUCKET = 'import-proposals'
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  // Solo admin gestiona propuestas (aprobar / rechazar).
-  if (profile.role !== 'admin') {
+  // Gestionar propuestas (aprobar / rechazar) requiere proposals.aprobar (hoy: admin).
+  if (!(await requireCan(profile, 'proposals.aprobar'))) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 

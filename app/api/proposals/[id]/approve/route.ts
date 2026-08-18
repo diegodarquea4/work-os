@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { parseImportWorkbook, buildImportPayload, flattenRowErrors } from '@/lib/importParser'
 import { applyImport, recordImportLog } from '@/lib/importApplier'
@@ -30,9 +30,9 @@ export const maxDuration = 300
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  // Solo admin puede aprobar propuestas. Editores pueden editar en línea pero
-  // no son gatekeepers de cargas masivas externas.
-  if (profile.role !== 'admin') {
+  // Aprobar propuestas requiere la capacidad proposals.aprobar (hoy: solo admin).
+  // Editores editan en línea pero no son gatekeepers de cargas masivas externas.
+  if (!(await requireCan(profile, 'proposals.aprobar'))) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 

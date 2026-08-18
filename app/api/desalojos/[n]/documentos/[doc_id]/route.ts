@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function DELETE(
@@ -17,7 +17,7 @@ export async function DELETE(
 ) {
   const profile = await requireAuth()
   if (!profile)                  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin')  return NextResponse.json({ error: 'Forbidden' },    { status: 403 })
+  if (!(await requireCan(profile, 'desalojos.editar'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { n: nStr, doc_id: dStr } = await context.params
   const n     = Number(nStr)

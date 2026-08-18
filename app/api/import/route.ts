@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { applyImport, recordImportLog, type ImportPayload } from '@/lib/importApplier'
 
@@ -20,9 +20,10 @@ export const maxDuration = 300
 export async function POST(request: Request) {
   const profile = await requireAuth()
   if (!profile) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  // Import directo es solo para admin. Editores pueden editar en línea pero no
-  // hacer cargas masivas — para regionales/viewers existe el flow de propuesta.
-  if (profile.role !== 'admin') {
+  // Import directo requiere la capacidad dashboard.importar (hoy: solo admin).
+  // Editores editan en línea pero no cargan masivo; regionales/viewers usan el
+  // flow de propuesta.
+  if (!(await requireCan(profile, 'dashboard.importar'))) {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 

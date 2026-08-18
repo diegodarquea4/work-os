@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
 
@@ -33,7 +33,7 @@ const BUCKET = 'comite-docs'
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await requireAuth()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (profile.role !== 'admin') {
+  if (!(await requireCan(profile, 'comite.borrar_sesion'))) {
     return NextResponse.json({ error: 'Solo un administrador puede borrar actas' }, { status: 403 })
   }
 

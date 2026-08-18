@@ -6,6 +6,7 @@ import type { UserRole } from '@/lib/apiAuth'
 import DocumentosRegionalesPanel from './DocumentosRegionalesPanel'
 import ImportProposalsPanel from './ImportProposalsPanel'
 import { Alert } from '@/components/ui'
+import UserPermissionsEditor from './UserPermissionsEditor'
 
 type UserRow = {
   id: string
@@ -153,6 +154,9 @@ export default function AdminUsersView() {
   const [usuariosOpen, setUsuariosOpen] = useState(false)
   // Búsqueda dentro del drawer: filtra la tabla por nombre o correo.
   const [userSearch, setUserSearch]     = useState('')
+  // Editor de permisos granulares (Fase 1 capas de usuarios).
+  const [permisosUser, setPermisosUser] = useState<UserRow | null>(null)
+  const [backfilling, setBackfilling]   = useState(false)
 
   useEffect(() => { loadUsers() }, [])
 
@@ -243,6 +247,19 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
+  // Siembra los permisos base (espejo del rol) de los usuarios que aún no tienen
+  // ninguno — para usuarios nuevos o para el primer poblado. No pisa lo ya
+  // personalizado desde el editor.
+  async function handleBackfill() {
+    if (!confirm('Sembrar los permisos base (espejo del rol) de los usuarios que aún no tienen permisos personalizados?')) return
+    setBackfilling(true)
+    const res = await fetch('/api/admin/capabilities/backfill', { method: 'POST' })
+    const body = await res.json().catch(() => ({}))
+    if (res.ok) window.alert(`Listo: ${body.sembrados} usuario(s) sembrado(s), ${body.ya_tenian} ya tenían permisos.`)
+    else setError(body.error ?? 'Error al sincronizar permisos')
+    setBackfilling(false)
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     setInviting(true)
@@ -328,6 +345,17 @@ export default function AdminUsersView() {
                 <p className="text-xs text-gray-500 mt-0.5">Administra accesos y roles del sistema</p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleBackfill}
+                  disabled={backfilling}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 hover:text-violet-700 hover:border-violet-200 transition-colors disabled:opacity-50"
+                  title="Sembrar permisos base (espejo del rol) de usuarios sin permisos aún"
+                >
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3v3H9M2 11V8h3"/><path d="M11.5 6A4.5 4.5 0 0 0 3 5.5M2.5 8A4.5 4.5 0 0 0 11 8.5"/>
+                  </svg>
+                  {backfilling ? 'Sincronizando…' : 'Sincronizar permisos base'}
+                </button>
                 <button
                   onClick={() => setShowInvite(true)}
                   className="flex items-center gap-2 px-3.5 py-2 bg-violet-700 text-white text-xs font-semibold rounded-lg hover:bg-violet-800 transition-colors"
@@ -443,6 +471,17 @@ export default function AdminUsersView() {
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setPermisosUser(u)}
+                                disabled={saving === u.id}
+                                className="flex items-center gap-1 px-2 py-1 mr-1 text-[11px] font-medium text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors disabled:opacity-40"
+                                title="Permisos granulares por sección y región"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M7 1l4.5 2v3.5c0 2.8-1.9 4.6-4.5 5.5C4.4 11.1 2.5 9.3 2.5 6.5V3L7 1z"/>
+                                </svg>
+                                Permisos
+                              </button>
                               <button
                                 onClick={() => handleForzarCambio(u.id, u.email)}
                                 disabled={saving === u.id}
@@ -587,6 +626,13 @@ export default function AdminUsersView() {
 
       {codeModal && (
         <CodeModalView email={codeModal.email} codigo={codeModal.codigo} onClose={() => setCodeModal(null)} />
+      )}
+
+      {permisosUser && (
+        <UserPermissionsEditor
+          user={permisosUser}
+          onClose={() => setPermisosUser(null)}
+        />
       )}
     </div>
   )

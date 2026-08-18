@@ -16,6 +16,7 @@ import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
+import { can, type UserCapability } from '@/lib/permissions'
 import CambiarClaveModal from './CambiarClaveModal'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
@@ -44,11 +45,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const { warning, secondsLeft, extend } = useInactivityLogout()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [capabilities, setCapabilities] = useState<UserCapability[]>([])
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [cambiarClaveOpen, setCambiarClaveOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setProfile).catch(() => null)
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return
+      setProfile(data)
+      setCapabilities(data.capabilities ?? [])  // Fase 0 capas de usuarios (aditivo)
+    }).catch(() => null)
   }, [])
 
   // Atajo global `?` (Shift+/) abre el Centro de Ayuda. Lo ignoramos si el
@@ -70,10 +76,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // Solo admin/editor pueden mutar datos en línea desde el panel. Regional y
   // viewer son solo lectura — su camino para proponer cambios es el modal
   // "Proponer actualización" en Mi Región, que pasa por revisión del admin.
-  const canEditRegion = useCallback((_regionNombreOrCod: string): boolean => {
-    if (!profile) return false
-    return profile.role === 'admin' || profile.role === 'editor'
-  }, [profile])
+  // PREGO: derivado de prego.editar en la región (PregoView pasa region_cod).
+  // Neutro hoy (admin/editor tienen la cap 'all'); refleja el editor de permisos.
+  const canEditRegion = useCallback((regionCod: string): boolean => {
+    return can(capabilities, 'prego.editar', regionCod)
+  }, [capabilities])
 
   // Cods that regional/filtered-viewer users cannot open
   const lockedRegions: string[] =
@@ -522,12 +529,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   return (
     <UserProvider
       canEditRegion={canEditRegion}
-      canEditAny={profile?.role === 'admin' || profile?.role === 'editor'}
-      // viewer pasa a solo lectura estricta a partir de etapa 2 de la
-      // consolidación backend. RLS también lo bloquea en BD.
-      canEditOperational={!!profile && profile.role !== 'viewer'}
+      // canEditAny / canEditOperational se derivan de las capacidades dentro del
+      // provider (reflejan el editor de permisos). isAdmin sigue por rol.
       isAdmin={profile?.role === 'admin'}
       userEmail={profile?.email ?? ''}
+      capabilities={capabilities}
     >
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
