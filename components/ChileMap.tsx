@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvent } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, ZoomControl, useMap, useMapEvent } from 'react-leaflet'
 import L from 'leaflet'
 import type { GeoJsonObject, Feature, FeatureCollection, Position } from 'geojson'
 import type { Layer, LeafletMouseEvent, PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getRegionColor } from '@/lib/regionColors'
+import { INE_CODE } from '@/lib/regions'
 import ComunasLayer from './ComunasLayer'
+import TerritoriosLayer from './territorial/TerritoriosLayer'
+import type { MapaAutoridadesOverlay } from './territorial/TerritorialProvider'
 
 // Bounding box de Chile continental + extremos (Arica al norte, Cabo de Hornos al sur)
 const CHILE_BOUNDS: [[number, number], [number, number]] = [[-56, -76], [-17, -66]]
@@ -134,6 +137,20 @@ type Props = {
   // de todo Chile. Ignorado mientras el drill está activo.
   focusCod?: string | null
   lockedRegions?: string[]  // cods the current user cannot open
+  // Modo «Autoridades»: recolorea región/comuna/territorio por bloque político y
+  // muestra tooltip solo con el nombre. null/undefined = modo PSG (idéntico a hoy).
+  overlay?: MapaAutoridadesOverlay | null
+  // Click en un territorio de congreso (distrito/circunscripción) en modo por distrito.
+  onSelectTerritorio?: (territorio: string) => void
+  // Click en el mapa FUERA de una región (océano/fondo) → cerrar el detalle.
+  onBackgroundClick?: () => void
+}
+
+// Clic en el fondo del mapa (no sobre una región): los clicks de features hacen
+// stopPropagation, así que este handler solo dispara en el fondo.
+function MapBackgroundClick({ onClick }: { onClick?: () => void }) {
+  useMapEvent('click', () => onClick?.())
+  return null
 }
 
 function getCod(feature: Feature): string {
@@ -144,10 +161,10 @@ function getName(feature: Feature): string {
   return feature.properties?.Region ?? ''
 }
 
-function tooltipHtml(name: string, count: number, locked = false): string {
-  // Región fuera del alcance del usuario (locked): solo el nombre, sin conteo ni
-  // detalle — no revela nada de otras regiones (decisión de Diego, 2026-08-18).
-  if (locked) {
+function tooltipHtml(name: string, count: number, locked = false, nameOnly = false): string {
+  // Región fuera del alcance del usuario (locked) o modo Autoridades (nameOnly):
+  // solo el nombre, sin conteo de iniciativas (decisión de Diego, 2026-08-18).
+  if (locked || nameOnly) {
     return `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}</div>`
   }
   return `<div style="font-size:12px;font-weight:600;line-height:1.4">${name}<br>
@@ -175,8 +192,19 @@ function buildDrillStyle(color: string, isDrilled: boolean): PathOptions {
   }
 }
 
-export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [] }: Props) {
+export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [], overlay = null, onSelectTerritorio, onBackgroundClick }: Props) {
   const geoJsonRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
+
+  // Overlay político leído vía ref por los handlers registrados una sola vez.
+  const overlayRef = useRef(overlay)
+  useEffect(() => { overlayRef.current = overlay })
+
+  // Color de una región: político (modo Autoridades) o el color fijo por región (PSG).
+  function regionColorFor(cod: string, name: string): string {
+    const ov = overlayRef.current
+    if (ov) return ov.regionFill[INE_CODE[cod]] ?? getRegionColor(name)
+    return getRegionColor(name)
+  }
 
   // Bounds de la región enfocada — identidad estable (geoData no cambia) para
   // que el effect de cámara de MapController solo corra en transiciones reales.
@@ -205,7 +233,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
   }, [])
 
   function styleFor(cod: string, name: string): PathOptions {
-    const color = getRegionColor(name)
+    const color = regionColorFor(cod, name)
     if (drillRef.current) return buildDrillStyle(color, cod === drillRef.current.regionCod)
     return buildStyle(color, cod === selectedCod, lockedRegions.includes(cod))
   }
@@ -224,16 +252,15 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       const name = getName(f)
       ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(styleFor(cod, name))
       ;(layer as { setTooltipContent?: (c: string) => void }).setTooltipContent?.(
-        tooltipHtml(name, projectCounts[name] ?? 0, lockedRegions.includes(cod))
+        tooltipHtml(name, projectCounts[name] ?? 0, lockedRegions.includes(cod), !!overlay)
       )
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCod, lockedRegions, projectCounts, drill])
+  }, [selectedCod, lockedRegions, projectCounts, drill, overlay])
 
   function onEachFeature(feature: Feature, layer: Layer) {
     const name   = getName(feature)
     const cod    = getCod(feature)
-    const color  = getRegionColor(name)
     const count  = projectCounts[name] ?? 0
     const locked = lockedRegions.includes(cod)
 
@@ -252,6 +279,8 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
         e.target.setStyle({ fillOpacity: 0.80, weight: 1.5 })
       },
       mouseout(e: LeafletMouseEvent) {
+        // color leído en vivo: en modo Autoridades el relleno cambia con los controles.
+        const color = regionColorFor(cod, name)
         const d = drillRef.current
         if (d) {
           e.target.setStyle(buildDrillStyle(color, cod === d.regionCod))
@@ -260,7 +289,9 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
         if (cod === selectedCod || locked) return
         e.target.setStyle(buildStyle(color, false, false))
       },
-      click() {
+      click(e: LeafletMouseEvent) {
+        // No dejar que el click burbujee al mapa (que cerraría el detalle).
+        L.DomEvent.stopPropagation(e)
         if (locked) return
         // Diferido para dar espacio al dblclick (drill). Si llega el segundo
         // click dentro de la ventana, este timer se cancela.
@@ -270,7 +301,8 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
           onSelectRef.current(name, cod)
         }, DBLCLICK_MS)
       },
-      dblclick() {
+      dblclick(e: LeafletMouseEvent) {
+        L.DomEvent.stopPropagation(e)
         if (clickTimerRef.current) {
           clearTimeout(clickTimerRef.current)
           clickTimerRef.current = null
@@ -281,7 +313,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
     })
 
     // Tooltip
-    layer.bindTooltip(tooltipHtml(name, count, locked), { sticky: true, opacity: 0.95 })
+    layer.bindTooltip(tooltipHtml(name, count, locked, !!overlay), { sticky: true, opacity: 0.95 })
   }
 
   return (
@@ -291,10 +323,13 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       maxBounds={MAX_BOUNDS}
       maxBoundsViscosity={1.0}
       className="h-full w-full"
-      zoomControl={true}
+      zoomControl={false}
       attributionControl={true}
       doubleClickZoom={false}
     >
+      {/* Zoom abajo a la derecha: arriba-izquierda queda para el toggle/toolbar. */}
+      <ZoomControl position="bottomright" />
+      <MapBackgroundClick onClick={onBackgroundClick} />
       <MapController drillActive={!!drill} focusBounds={focusBounds} />
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
@@ -308,7 +343,15 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       {/* Sin capa de rótulos: ni países, ni capitales, ni nombres de región
           permanentes. El nombre aparece solo en el tooltip al pasar el mouse
           (y en la barra lateral) — decisión de Diego, 2026-07-28. */}
-      {drill && (
+      {/* Congreso por distrito: capa nacional de territorios sobre la regional.
+          Excluyente con el drill comunal (en ese sub-modo el drill se ignora). */}
+      {overlay?.territorios && onSelectTerritorio ? (
+        <TerritoriosLayer
+          tipo={overlay.territorios.tipo}
+          fill={overlay.territorios.fill}
+          onSelectTerritorio={onSelectTerritorio}
+        />
+      ) : drill && (
         <ComunasLayer
           key={drill.regionIne}
           regionIne={drill.regionIne}
@@ -316,6 +359,8 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
           selectedCut={drill.selectedCut}
           statsByCut={drill.statsByCut}
           onSelectComuna={drill.onSelectComuna}
+          comunaFill={overlay?.comunaFill}
+          autoridades={!!overlay}
         />
       )}
     </MapContainer>

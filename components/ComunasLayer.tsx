@@ -59,7 +59,8 @@ function buildComunaStyle(color: string, isSelected: boolean, anySelected: boole
   }
 }
 
-function tooltipHtml(nombre: string, n: number, mm: number): string {
+function tooltipHtml(nombre: string, n: number, mm: number, nameOnly = false): string {
+  if (nameOnly) return `<div style="font-size:12px;font-weight:600;line-height:1.4">${nombre}</div>`
   return `<div style="font-size:12px;font-weight:600;line-height:1.4">${nombre}<br>
        <span style="color:#6b7280;font-weight:400">${n} iniciativa${n === 1 ? '' : 's'} · ${fmtMM(mm)}</span></div>`
 }
@@ -70,9 +71,12 @@ type Props = {
   selectedCut: number | null
   statsByCut: ReadonlyMap<number, { n: number; mm: number }>
   onSelectComuna: (cut: number, nombre: string) => void
+  /** Modo Autoridades: color de relleno por CUT (bloque político) y tooltip solo nombre. */
+  comunaFill?: Record<number, string>
+  autoridades?: boolean
 }
 
-export default function ComunasLayer({ regionIne, regionColor, selectedCut, statsByCut, onSelectComuna }: Props) {
+export default function ComunasLayer({ regionIne, regionColor, selectedCut, statsByCut, onSelectComuna, comunaFill, autoridades = false }: Props) {
   const map = useMap()
   const [fc, setFc] = useState<FeatureCollection | null>(comunaGeoCache.get(regionIne) ?? null)
   const geoRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
@@ -82,11 +86,16 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
   const selectedRef = useRef(selectedCut)
   const statsRef = useRef(statsByCut)
   const onSelectRef = useRef(onSelectComuna)
+  const fillRef = useRef(comunaFill)
   useEffect(() => {
     selectedRef.current = selectedCut
     statsRef.current = statsByCut
     onSelectRef.current = onSelectComuna
+    fillRef.current = comunaFill
   })
+
+  // Color de una comuna: político por CUT (modo Autoridades) o el color de la región.
+  const colorForCut = (cut: number, fill = fillRef.current): string => fill?.[cut] ?? regionColor
 
   // Fetch on-demand + caché. Si falla, el drill sigue vivo con la lista
   // lateral (la capa simplemente no se dibuja). El caso cacheado ya viene
@@ -128,14 +137,15 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
       if (!f) return
       const cut = getCut(f)
       ;(layer as { setStyle?: (s: PathOptions) => void }).setStyle?.(
-        buildComunaStyle(regionColor, cut === selectedCut, anySelected)
+        buildComunaStyle(colorForCut(cut, comunaFill), cut === selectedCut, anySelected)
       )
       const s = statsByCut.get(cut) ?? { n: 0, mm: 0 }
       ;(layer as { setTooltipContent?: (c: string) => void }).setTooltipContent?.(
-        tooltipHtml(getNombre(f), s.n, s.mm)
+        tooltipHtml(getNombre(f), s.n, s.mm, autoridades)
       )
     })
-  }, [selectedCut, statsByCut, regionColor])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCut, statsByCut, regionColor, comunaFill, autoridades])
 
   if (!fc) return null
 
@@ -145,7 +155,7 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
     const s = statsRef.current.get(cut) ?? { n: 0, mm: 0 }
 
     ;(layer as { setStyle?: (st: PathOptions) => void }).setStyle?.(
-      buildComunaStyle(regionColor, cut === selectedRef.current, selectedRef.current != null)
+      buildComunaStyle(colorForCut(cut), cut === selectedRef.current, selectedRef.current != null)
     )
 
     layer.on({
@@ -155,14 +165,15 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
       },
       mouseout(e: LeafletMouseEvent) {
         if (cut === selectedRef.current) return
-        e.target.setStyle(buildComunaStyle(regionColor, false, selectedRef.current != null))
+        e.target.setStyle(buildComunaStyle(colorForCut(cut), false, selectedRef.current != null))
       },
-      click() {
+      click(e: LeafletMouseEvent) {
+        L.DomEvent.stopPropagation(e)
         onSelectRef.current(cut, nombre)
       },
     })
 
-    layer.bindTooltip(tooltipHtml(nombre, s.n, s.mm), { sticky: true, opacity: 0.95 })
+    layer.bindTooltip(tooltipHtml(nombre, s.n, s.mm, autoridades), { sticky: true, opacity: 0.95 })
   }
 
   return (

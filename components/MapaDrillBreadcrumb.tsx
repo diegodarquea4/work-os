@@ -15,7 +15,7 @@ type Props = {
 
 export default function MapaDrillBreadcrumb({ regionNombre, comunaNombre, onBack }: Props) {
   return (
-    <div className="absolute top-3 left-14 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-[calc(100%-5rem)]">
+    <div className="pointer-events-auto flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
       <button
         onClick={onBack}
         title="Volver un nivel (Esc)"

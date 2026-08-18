@@ -10,6 +10,13 @@ import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
 import MapaDrillBreadcrumb from './MapaDrillBreadcrumb'
+import MapaModoToggle, { type MapaCapa } from './territorial/MapaModoToggle'
+import { TerritorialProvider, useTerritorialMode } from './territorial/TerritorialProvider'
+import AutoridadesSidebar from './territorial/AutoridadesSidebar'
+import AutoridadesToolbar from './territorial/AutoridadesToolbar'
+import AutoridadesStatBar from './territorial/AutoridadesStatBar'
+import AutoridadesLeyenda from './territorial/AutoridadesLeyenda'
+import { regionKey } from '@/lib/territorial/politica'
 import { computeComunaStats } from '@/lib/comunaStats'
 import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
 import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
@@ -241,6 +248,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   type MapaMode = 'summary' | 'preview'
   const [mapaMode, setMapaMode]                 = useState<MapaMode>('summary')
   const [previewWidthPct, setPreviewWidthPct]   = useState<number>(48)
+
+  // Capa del Mapa: 'psg' (iniciativas/semáforos, histórico) | 'autoridades'
+  // (bloque político de la autoridad electa). Distinto de `mapaMode`. Persistido.
+  const [mapaCapa, setMapaCapa] = useState<MapaCapa>('psg')
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('workos:mapaCapa')
+      if (stored === 'autoridades' || stored === 'psg') setMapaCapa(stored)
+    } catch { /* noop */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('workos:mapaCapa', mapaCapa) } catch { /* noop */ }
+  }, [mapaCapa])
+  const territorial = useTerritorialMode(view === 'mapa' && mapaCapa === 'autoridades')
   // Highlight cruzado entre sidebar y mapa: hover sobre una fila del sidebar
   // resalta el polígono correspondiente.
   const [hoveredCod, setHoveredCod]             = useState<string | null>(null)
@@ -458,8 +479,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // ── Drill comunal: transiciones ────────────────────────────────────────────
 
-  const enterDrill = useCallback((region: Region) => {
-    if (lockedRegions.includes(region.cod)) return
+  // `force` salta el bloqueo por región: en modo Autoridades los datos son
+  // públicos/nacionales, así que un usuario regional igual puede recorrer todo.
+  const enterDrill = useCallback((region: Region, force = false) => {
+    if (!force && lockedRegions.includes(region.cod)) return
     setMapDrill({ region, comuna: null })
     setSelectedRegion(null)
     setMapFocusCod(null)
@@ -469,12 +492,33 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   function handleRegionDoubleClick(_regionName: string, cod: string) {
     const found = REGIONS.find(r => r.cod === cod)
-    if (found) enterDrill(found)
+    if (found) enterDrill(found, mapaCapa === 'autoridades')
   }
 
   const selectComuna = useCallback((cut: number, nombre: string) => {
     setMapDrill(d => d ? { ...d, comuna: { cut, nombre } } : d)
   }, [])
+
+  // Navegación directa a una comuna (buscador / modal de reelección del modo
+  // Autoridades): entra al drill de su región y la selecciona.
+  const handleNavigateComuna = useCallback((cod: string, cut: number, comuna: string) => {
+    const region = REGIONS.find(r => r.cod === cod)
+    if (!region) return
+    territorial.setSelectedTerritorio(null)
+    enterDrill(region, true)
+    selectComuna(cut, comuna)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enterDrill, selectComuna, territorial.setSelectedTerritorio])
+
+  // Cierra el detalle y vuelve a la vista país: X del lateral (Autoridades) o
+  // clic en el mapa fuera de una región.
+  const clearMapSelection = useCallback(() => {
+    setSelectedRegion(null)
+    setMapDrill(null)
+    setMapFocusCod(null)
+    territorial.setSelectedTerritorio(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [territorial.setSelectedTerritorio])
 
   // Retrocede UN nivel: comuna → lista comunal → mapa de Chile.
   const drillBack = useCallback(() => {
@@ -504,6 +548,10 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     () => drillRegion ? computeComunaStats(projectsByRegion[drillRegion.nombre] ?? [], drillRegion.cod) : null,
     [drillRegion, projectsByRegion],
   )
+
+  // ¿Hay un panel PSG (preview regional / comuna) abierto que ceda ancho al mapa?
+  // Solo en modo PSG; en Autoridades el lateral es fijo (no achica el mapa).
+  const psgPanelOpen = mapaCapa === 'psg' && (mapDrill ? mapDrill.comuna != null : mapaMode === 'preview')
 
   // RAG counts per region (for sidebar). useCallback keyed on projectsByRegion
   // para que MapaSummarySidebar (que llama ragFor/avgPctFor por las 16 regiones)
@@ -727,24 +775,43 @@ export default function WorkOSApp({ projects, geoData }: Props) {
          activa cuando previewWidthPct cambia (e.g. al click del CTA, que
          anima 48% → 100% antes del setView). */}
       {view === 'mapa' && (
+       <TerritorialProvider value={territorial}>
         <div className="flex flex-1 overflow-hidden">
           {/* Mapa. Layout: con preview abierto el mapa cede el ancho del
               panel; en summary y en el drill comunal crece a full. */}
           <div
-            className="relative min-w-0 transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            className="relative isolate min-w-0 transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
-              flexGrow:   (mapDrill ? mapDrill.comuna != null : mapaMode === 'preview') ? 0 : 1,
+              // Panel PSG (preview / comuna) cede ancho al mapa. En modo Autoridades
+              // el lateral es fijo y el mapa crece (como summary).
+              flexGrow:   psgPanelOpen ? 0 : 1,
               flexShrink: 1,
-              flexBasis:  (mapDrill ? mapDrill.comuna != null : mapaMode === 'preview')
-                ? `calc(100% - min(${previewWidthPct}vw, 900px))`
-                : 'auto',
+              flexBasis:  psgPanelOpen ? `calc(100% - min(${previewWidthPct}vw, 900px))` : 'auto',
             }}
           >
-            {mapDrill && (
-              <MapaDrillBreadcrumb
-                regionNombre={mapDrill.region.nombre}
-                comunaNombre={mapDrill.comuna?.nombre ?? null}
-                onBack={drillBack}
+            {/* Columna superior-izquierda: toggle, y debajo (apilados) la barra de
+                controles de Autoridades y el breadcrumb del drill. pointer-events-none
+                deja pasar el mouse al mapa entre los chips. */}
+            <div data-autoridades-controls className="pointer-events-none absolute left-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-2">
+              <MapaModoToggle value={mapaCapa} onChange={setMapaCapa} />
+              {mapaCapa === 'autoridades' && (
+                <>
+                  <AutoridadesToolbar onNavigateComuna={handleNavigateComuna} />
+                  <AutoridadesLeyenda />
+                </>
+              )}
+              {mapDrill && (
+                <MapaDrillBreadcrumb
+                  regionNombre={mapDrill.region.nombre}
+                  comunaNombre={mapDrill.comuna?.nombre ?? null}
+                  onBack={drillBack}
+                />
+              )}
+            </div>
+            {mapaCapa === 'autoridades' && (
+              <AutoridadesStatBar
+                view={mapDrill ? 'comunas' : 'regiones'}
+                activeRegion={mapDrill ? regionKey(INE_CODE[mapDrill.region.cod]) : null}
               />
             )}
             <ChileMap
@@ -753,6 +820,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
               onRegionDoubleClick={handleRegionDoubleClick}
+              onBackgroundClick={clearMapSelection}
               focusCod={mapFocusCod}
               drill={mapDrill && comunaStats ? {
                 regionIne:      INE_CODE[mapDrill.region.cod],
@@ -762,13 +830,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 statsByCut:     comunaStats.statsByCut,
                 onSelectComuna: selectComuna,
               } : null}
-              lockedRegions={lockedRegions}
+              lockedRegions={mapaCapa === 'autoridades' ? [] : lockedRegions}
+              overlay={mapaCapa === 'autoridades' ? territorial.overlay : null}
+              onSelectTerritorio={territorial.setSelectedTerritorio}
             />
           </div>
 
           {/* Lateral del drill comunal: lista de comunas, y al seleccionar
               una, el mismo panel del preview regional filtrado por CUT. */}
-          {mapDrill && comunaStats && !mapDrill.comuna && (
+          {mapaCapa === 'psg' && mapDrill && comunaStats && !mapDrill.comuna && (
             <ComunasSidebar
               regionNombre={mapDrill.region.nombre}
               regionCod={mapDrill.region.cod}
@@ -779,7 +849,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               width={summarySidebarWidth}
             />
           )}
-          {mapDrill?.comuna && (
+          {mapaCapa === 'psg' && mapDrill?.comuna && (
             <div
               className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
               style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
@@ -795,7 +865,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           )}
 
           {/* Preview regional */}
-          {!mapDrill && mapaMode === 'preview' && selectedRegion && (
+          {mapaCapa === 'psg' && !mapDrill && mapaMode === 'preview' && selectedRegion && (
             <div
               className="flex-shrink-0 z-[1100] relative overflow-hidden shadow-xl transition-[flex-basis] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
               style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
@@ -812,7 +882,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           )}
 
           {/* Sidebar resumen (default) */}
-          {!mapDrill && mapaMode === 'summary' && (
+          {mapaCapa === 'psg' && !mapDrill && mapaMode === 'summary' && (
             <MapaSummarySidebar
               projects={visibleIniciativas}
               actividad={actividad}
@@ -829,7 +899,24 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               onResizeStart={handleSummaryResizeStart}
             />
           )}
+
+          {/* Lateral del modo Autoridades (reemplaza los laterales PSG). Mismo ancho
+              que el preview regional de PSG, para que las fichas no se corten. */}
+          {mapaCapa === 'autoridades' && (
+            <AutoridadesSidebar
+              width="clamp(420px, 34vw, 600px)"
+              regionCod={mapDrill?.region.cod ?? selectedRegion?.cod ?? null}
+              selectedCut={mapDrill?.comuna?.cut ?? null}
+              onEnterComunas={
+                (mapDrill?.region ?? selectedRegion)
+                  ? () => enterDrill((mapDrill?.region ?? selectedRegion)!, true)
+                  : undefined
+              }
+              onClose={clearMapSelection}
+            />
+          )}
         </div>
+       </TerritorialProvider>
       )}
       {/* Inactivity warning */}
       {warning && (
