@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabase } from './supabase'
 import { safeAuditWrite, safeWrite } from './dbWrite'
 import type {
@@ -74,8 +75,10 @@ const PRIORIDAD_COLS =
  * (Promise.all). El wall-clock pasa de "suma de 7 viajes" a "1 count + el viaje
  * más lento". Más proyección de columnas (PRIORIDAD_COLS) para achicar el payload.
  */
-export async function getAllIniciativas(): Promise<Iniciativa[]> {
-  const db = getSupabase()
+export async function getAllIniciativas(db: SupabaseClient = getSupabase()): Promise<Iniciativa[]> {
+  // `db` inyectable: el SSR (app/page.tsx) pasa el cliente ligado a la sesión
+  // (getSupabaseServerRead) para que la RLS scopee el load por región (Fase 3).
+  // Sin argumento, cae al cliente browser (comportamiento previo).
   const PAGE = 1000
 
   const { count, error: cErr } = await db
@@ -105,9 +108,9 @@ export async function getAllIniciativas(): Promise<Iniciativa[]> {
   return results.flat().map(mapRow)
 }
 
-/** Iniciativas for one region — used by the PDF minuta route. */
-export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
-  const { data, error } = await getSupabase()
+/** Iniciativas for one region — used by the PDF minuta route (pasa service-role). */
+export async function getIniciativasByCod(cod: string, db: SupabaseClient = getSupabase()): Promise<Iniciativa[]> {
+  const { data, error } = await db
     .from('prioridades_territoriales')
     .select(PRIORIDAD_COLS)
     .eq('cod', cod)
@@ -122,9 +125,9 @@ export async function getIniciativasByCod(cod: string): Promise<Iniciativa[]> {
 // Region Metrics
 // ---------------------------------------------------------------------------
 
-/** Full metrics row — used by the PDF minuta route. */
-export async function getMetricsByCod(cod: string): Promise<RegionMetrics | null> {
-  const { data, error } = await getSupabase()
+/** Full metrics row — used by the PDF minuta route (pasa service-role). */
+export async function getMetricsByCod(cod: string, db: SupabaseClient = getSupabase()): Promise<RegionMetrics | null> {
+  const { data, error } = await db
     .from('region_metrics')
     .select('*')
     .eq('region_cod', cod)
@@ -138,9 +141,9 @@ export async function getMetricsByCod(cod: string): Promise<RegionMetrics | null
 }
 
 /** Last seguimiento date per prioridad for a region — used by ProjectsPanel activity indicators. */
-export async function getLastActividadByCod(cod: string): Promise<Record<number, string | null>> {
+export async function getLastActividadByCod(cod: string, db: SupabaseClient = getSupabase()): Promise<Record<number, string | null>> {
   // Get prioridad IDs for this region
-  const { data: prioridades, error: pErr } = await getSupabase()
+  const { data: prioridades, error: pErr } = await db
     .from('prioridades_territoriales')
     .select('n')
     .eq('cod', cod)
@@ -149,7 +152,7 @@ export async function getLastActividadByCod(cod: string): Promise<Record<number,
 
   const ids = prioridades.map((p: { n: number }) => p.n)
 
-  const { data, error } = await getSupabase()
+  const { data, error } = await db
     .from('seguimientos')
     .select('prioridad_id, created_at')
     .in('prioridad_id', ids)
@@ -168,8 +171,8 @@ export async function getLastActividadByCod(cod: string): Promise<Record<number,
 }
 
 /** Last seguimiento date for ALL prioridades — used by NationalDashboard. */
-export async function getLastActividadAll(): Promise<Record<number, string | null>> {
-  const { data, error } = await getSupabase()
+export async function getLastActividadAll(db: SupabaseClient = getSupabase()): Promise<Record<number, string | null>> {
+  const { data, error } = await db
     .from('seguimientos')
     .select('prioridad_id, created_at')
     .order('created_at', { ascending: false })
@@ -270,8 +273,8 @@ export async function getRegionalMetricSeries(
 // ---------------------------------------------------------------------------
 
 /** Light metrics subset — used by the ProjectsPanel summary cards. */
-export async function getMetricsSummaryByCod(cod: string): Promise<Partial<RegionMetrics> | null> {
-  const { data, error } = await getSupabase()
+export async function getMetricsSummaryByCod(cod: string, db: SupabaseClient = getSupabase()): Promise<Partial<RegionMetrics> | null> {
+  const { data, error } = await db
     .from('region_metrics')
     .select(`
       region_cod, region_nombre,

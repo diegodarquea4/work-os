@@ -1,5 +1,6 @@
 import { getMetricsSummaryByCod } from '@/lib/db'
 import { requireAuth } from '@/lib/apiAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,7 @@ export async function GET(
     return Response.json({ error: 'Supabase not configured' }, { status: 503 })
   }
   const { cod } = await params
-  const data = await getMetricsSummaryByCod(cod)
+  const data = await getMetricsSummaryByCod(cod, getSupabaseAdmin())
   if (!data) return Response.json({ error: 'Not found' }, { status: 404 })
   return Response.json(data)
 }

@@ -79,7 +79,10 @@ export default function MapaSummarySidebar({
   // chica pero el orderBy depende de avgPct y queremos evitar recomputar en
   // cada render del hover (que es alto-frecuencia).
   const filas = useMemo(() => {
-    const base = REGIONS.map(region => ({
+    // Fase 3: un usuario restringido solo lista sus regiones accesibles (las
+    // locked se omiten, no se muestran en 0). Para staff/nacional lockedRegions
+    // está vacío → las 16.
+    const base = REGIONS.filter(region => !lockedRegions.includes(region.cod)).map(region => ({
       region,
       count:    projectCounts[region.nombre] ?? 0,
       avgPct:   avgPctFor(region.nombre),
@@ -120,7 +123,7 @@ export default function MapaSummarySidebar({
       <div className="px-5 py-4 border-b border-gray-100 bg-slate-50">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado por región</h3>
-          <span className="text-xs text-gray-400">16 regiones</span>
+          <span className="text-xs text-gray-400">{filas.length} {filas.length === 1 ? 'región' : 'regiones'}</span>
         </div>
         <div className="flex items-center gap-2 mb-2">
           <div className="flex-1 bg-gray-200 rounded-full h-2">
