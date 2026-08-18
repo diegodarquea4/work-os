@@ -24,21 +24,25 @@ const UserCtx = createContext<UserCtxValue>({
 
 export function UserProvider({
   canEditRegion,
-  canEditAny,
-  canEditOperational,
   isAdmin,
   userEmail,
   capabilities = [],
   children,
 }: {
   canEditRegion:      (r: string) => boolean
-  canEditAny:         boolean
-  canEditOperational: boolean
   isAdmin:            boolean
   userEmail:          string
   capabilities?:      UserCapability[]
   children:           React.ReactNode
 }) {
+  // Fase 2: los gates de edición se DERIVAN de las capacidades (no del rol), así
+  // el editor de permisos se refleja en la UI — ocultar lo revocado en vez de
+  // mostrarlo y errorear en la BD. Neutro hoy (las caps son el espejo del rol) y
+  // sin regresión de carga (pre-perfil las caps están vacías → false, igual que
+  // antes). Region-agnóstico: true si tiene la cap en ALGUNA región; los controles
+  // que necesitan precisión por-región usan useCan(cap, cod) directamente.
+  const canEditOperational = can(capabilities, 'iniciativa.editar_operativo')
+  const canEditAny         = can(capabilities, 'iniciativa.editar_definicional')
   return (
     <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, isAdmin, userEmail, capabilities }}>
       {children}
