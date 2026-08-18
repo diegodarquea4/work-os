@@ -83,6 +83,7 @@ describe('capas de usuarios — espejo de roles (Fase 0)', () => {
 
   it('viewer: lectura + aportar; nada operativo ni comités', () => {
     expect(can(viewer, 'iniciativa.editar_operativo', 'X')).toBe(false)
+    expect(can(viewer, 'iniciativa.marcar_foco', 'X')).toBe(false)  // RLS UPDATE excluye viewer hoy
     expect(can(viewer, 'iniciativa.seguimiento_crear')).toBe(true)  // INSERT abierto
     expect(can(viewer, 'planificacion.ver', 'X')).toBe(true)        // scopeado post-mig 064
     expect(can(viewer, 'planificacion.ver', 'II')).toBe(false)

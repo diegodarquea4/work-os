@@ -175,9 +175,11 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
   ],
   // viewer: secciones 'all'; solo puede aportar (seguimiento/documento abiertos)
   // + tareas/planificación 'scoped' (post mig 064). Sin operar comités.
+  // NOTA: viewer NO tiene iniciativa.marcar_foco — la RLS UPDATE de prioridades
+  // excluye a viewer hoy, así que el espejo fiel no le da foco (mig 069 lo enforcea
+  // por cap; darle marcar_foco sería una regresión de privilegio).
   viewer: [
     ...SEC_REGIONAL_VIEWER,
-    ['iniciativa.marcar_foco', 'all'],
     ['iniciativa.seguimiento_crear', 'all'], ['iniciativa.documento_subir', 'all'],
     ['dashboard.exportar', 'all'],
     ['planificacion.ver', 'scoped'], ['planificacion.editar', 'scoped'],
