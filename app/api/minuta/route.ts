@@ -195,8 +195,8 @@ export async function POST(request: Request) {
     const regionId = INE_CODE[body.region.cod]
 
     const [prioridades, metricas, seiaRes, mopRes, leystopRes, cacheRes] = await Promise.all([
-      getIniciativasByCod(body.region.cod),
-      getMetricsByCod(body.region.cod),
+      getIniciativasByCod(body.region.cod, sb),
+      getMetricsByCod(body.region.cod, sb),
       regionId !== undefined
         ? sb.from('seia_projects')
             .select('id,nombre,tipo,estado,inversion_mm,fecha_presentacion')

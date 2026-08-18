@@ -317,12 +317,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     profile?.role === 'regional' ||
     (profile?.role === 'viewer' && profile.region_cods.length > 0)
 
-  const visibleIniciativas: Iniciativa[] = needsRegionFilter
+  // Memoizado: además de estabilizar props, es la fuente de los agregados del
+  // Mapa (abajo), que deben reflejar SOLO lo que el usuario puede ver (Fase 3).
+  const visibleIniciativas: Iniciativa[] = useMemo(() => needsRegionFilter
     ? localIniciativas.filter(p => {
         const r = REGIONS.find(r => r.nombre === p.region)
         return r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
       })
-    : localIniciativas
+    : localIniciativas,
+  [localIniciativas, needsRegionFilter, profile])
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -411,23 +414,23 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // las props que bajan a ChileMap / MapaSummarySidebar.
   const { projectsByRegion, projectCounts, globalAvgPct, globalRag } = useMemo(() => {
     const byRegion: Record<string, Iniciativa[]> = {}
-    for (const p of localIniciativas) {
+    for (const p of visibleIniciativas) {
       if (!byRegion[p.region]) byRegion[p.region] = []
       byRegion[p.region].push(p)
     }
     const counts: Record<string, number> = {}
     for (const [region, list] of Object.entries(byRegion)) counts[region] = list.length
 
-    const avg = localIniciativas.length > 0
-      ? Math.round(localIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / localIniciativas.length)
+    const avg = visibleIniciativas.length > 0
+      ? Math.round(visibleIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / visibleIniciativas.length)
       : 0
     const rag = {
-      rojo:  localIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
-      ambar: localIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
-      verde: localIniciativas.filter(p => p.estado_semaforo === 'verde').length,
+      rojo:  visibleIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
+      ambar: visibleIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
+      verde: visibleIniciativas.filter(p => p.estado_semaforo === 'verde').length,
     }
     return { projectsByRegion: byRegion, projectCounts: counts, globalAvgPct: avg, globalRag: rag }
-  }, [localIniciativas])
+  }, [visibleIniciativas])
 
   const selectedIniciativas = useMemo(
     () => selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : [],
@@ -811,12 +814,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           {/* Sidebar resumen (default) */}
           {!mapDrill && mapaMode === 'summary' && (
             <MapaSummarySidebar
-              projects={localIniciativas}
+              projects={visibleIniciativas}
               actividad={actividad}
               projectCounts={projectCounts}
               globalAvgPct={globalAvgPct}
               globalRag={globalRag}
-              totalIniciativas={localIniciativas.length}
+              totalIniciativas={visibleIniciativas.length}
               lockedRegions={lockedRegions}
               ragFor={ragFor}
               avgPctFor={avgPctFor}

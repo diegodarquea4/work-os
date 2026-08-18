@@ -1,5 +1,6 @@
 import { getLastActividadByCod } from '@/lib/db'
 import { requireAuth } from '@/lib/apiAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(
   _request: Request,
@@ -7,6 +8,6 @@ export async function GET(
 ) {
   if (!await requireAuth()) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   const { cod } = await params
-  const data = await getLastActividadByCod(cod)
+  const data = await getLastActividadByCod(cod, getSupabaseAdmin())
   return Response.json(data)
 }

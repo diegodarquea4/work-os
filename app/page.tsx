@@ -18,7 +18,9 @@ export default async function Home() {
   let projects
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON) {
     const { getAllIniciativas } = await import('@/lib/db')
-    projects = await getAllIniciativas()
+    const { getSupabaseServerRead } = await import('@/lib/supabaseServer')
+    // Lectura ligada a la sesión → la RLS scopea la cartera por región (Fase 3).
+    projects = await getAllIniciativas(await getSupabaseServerRead())
   } else {
     const { getIniciativas } = await import('@/lib/projects')
     projects = getIniciativas()
