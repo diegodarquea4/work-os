@@ -206,20 +206,26 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
                   {det.temas.length > 0 && (
                     <DetalleCard>
                       <SeccionLabel>Temas a tratar</SeccionLabel>
-                      <ol className="list-decimal list-inside space-y-1.5">
+                      <div className="space-y-2">
                         {det.temas.map((t, i) => (
-                          <li key={i} className="text-sm text-slate-700 leading-snug">
-                            {t.texto}
+                          <div key={i}>
+                            <div className="flex items-start gap-2.5">
+                              <span className="w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                              <p className="flex-1 min-w-0 text-sm text-slate-700 leading-snug">{t.texto}</p>
+                            </div>
                             {t.subitems.length > 0 && (
-                              <ul className="mt-0.5 ml-5 space-y-0.5 list-none">
+                              <div className="ml-2.5 mt-1 border-l border-slate-200 pl-3 space-y-0.5">
                                 {t.subitems.map((sub, si) => (
-                                  <li key={si} className="text-[13px] text-slate-500 leading-snug">· {sub}</li>
+                                  <div key={si} className="flex items-start gap-1.5">
+                                    <span className="text-slate-400 text-sm flex-shrink-0 leading-none mt-0.5">•</span>
+                                    <p className="flex-1 min-w-0 text-[13px] text-slate-500 leading-snug">{sub}</p>
+                                  </div>
                                 ))}
-                              </ul>
+                              </div>
                             )}
-                          </li>
+                          </div>
                         ))}
-                      </ol>
+                      </div>
                     </DetalleCard>
                   )}
 

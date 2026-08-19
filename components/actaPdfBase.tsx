@@ -128,6 +128,17 @@ export const s = StyleSheet.create({
   acuerdo: { fontSize: 9.5, color: C.ink, lineHeight: 1.45, marginTop: 2 },
   vacio:   { fontSize: 9.5, color: C.faint, fontStyle: 'italic', paddingVertical: 5, paddingHorizontal: 5 },
 
+  // "Temas a tratar" — tema con badge numerado + subtemas colgando de un riel.
+  temaRow:      { flexDirection: 'column', marginBottom: 7 },
+  temaHead:     { flexDirection: 'row', alignItems: 'flex-start' },
+  temaBadge:    { width: 14, height: 14, borderRadius: 7, backgroundColor: C.inkSoft, alignItems: 'center', justifyContent: 'center', marginRight: 6, marginTop: 0.5 },
+  temaBadgeTx:  { fontSize: 7.5, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white, lineHeight: 1 },
+  temaTexto:    { flex: 1, fontSize: 10, fontFamily: 'Carlito', fontWeight: 'bold', color: C.ink, lineHeight: 1.35, marginTop: 1 },
+  subRail:      { marginLeft: 7, marginTop: 3, paddingLeft: 8, borderLeftWidth: 0.75, borderLeftColor: C.hairline },
+  subRow:       { flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 },
+  subBullet:    { width: 8, fontSize: 9, color: C.muted, lineHeight: 1.4 },
+  subTx:        { flex: 1, fontSize: 9, color: C.inkSoft, lineHeight: 1.4 },
+
   // Franja de VISTA PREVIA (solo en la preview de acta, no en el acta oficial).
   borradorBanner: { position: 'absolute', top: 4, left: 0, right: 0, backgroundColor: C.rojo, paddingVertical: 3, alignItems: 'center' },
   borradorTx:     { fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white, letterSpacing: 0.5 },
@@ -215,4 +226,39 @@ export function SeccionChip({ label }: { label: string }) {
 
 export function Vacio({ children }: { children: string }) {
   return <Text style={s.vacio}>{children}</Text>
+}
+
+// ── "Temas a tratar" (pauta general) ─────────────────────────────────────────
+
+/**
+ * Lista producida de temas: cada tema con un badge circular numerado y sus
+ * subtemas colgando de un riel de indentado con viñetas. Compartida por el acta
+ * (ActaGabinetePdf, Sección III) y el cronograma (CronogramaGabinetePdf, I) —
+ * mismo lenguaje que el editor in-app. El caller mantiene su propio <Vacio>
+ * (el texto del vacío difiere entre acta y cronograma). `wrap={false}` por tema
+ * evita partir un tema de sus subtemas en el salto de página.
+ */
+export function TemasList({ temas }: { temas: { texto: string; subitems: string[] }[] }) {
+  return (
+    <View>
+      {temas.map((t, i) => (
+        <View key={i} style={s.temaRow} wrap={false}>
+          <View style={s.temaHead}>
+            <View style={s.temaBadge}><Text style={s.temaBadgeTx}>{i + 1}</Text></View>
+            <Text style={s.temaTexto}>{t.texto}</Text>
+          </View>
+          {t.subitems.length > 0 && (
+            <View style={s.subRail}>
+              {t.subitems.map((sub, si) => (
+                <View key={si} style={s.subRow}>
+                  <Text style={s.subBullet}>•</Text>
+                  <Text style={s.subTx}>{sub}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  )
 }

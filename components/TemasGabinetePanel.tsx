@@ -20,6 +20,10 @@ import type { GabineteTema } from '@/lib/types'
  *
  * El hook useTemasGabinete vive en AttentionTray (el conteo también gatea el
  * botón "Descargar cronograma"); acá llegan `temas` + `setTemas` por props.
+ *
+ * Presentación (2026-08): cada tema con badge numerado violeta; los subtemas
+ * cuelgan de un riel de indentado con viñetas, para que el desglose sea obvio.
+ * Mismo lenguaje que el espejo read-only en SesionModal / Historial y el acta.
  */
 
 const MIN_FILAS = 4
@@ -176,132 +180,139 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
     commitSubitems(tema, tema.subitems.filter((_, i) => i !== idx))
   }
 
-  const subInputCls = 'flex-1 min-w-0 text-[13px] text-gray-600 border border-gray-100 rounded-md px-2 py-1 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-200 focus:border-violet-200'
+  const subInputCls = 'flex-1 min-w-0 text-sm text-slate-600 border border-slate-200 rounded-md px-2.5 py-1 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-200 focus:border-violet-300'
+  // Badge numerado del tema: círculo violeta (persistido) o placeholder tenue (slot vacío).
+  const badgeBase = 'w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-1'
+  const cerrarIcon = (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+    </svg>
+  )
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-100 p-4 ${className ?? ''}`}>
-      <h3 className="text-sm font-bold text-gray-800">Temas a tratar:</h3>
-      <p className="text-xs text-gray-400 mt-0.5 mb-3 leading-snug">
+    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4 ${className ?? ''}`}>
+      <h3 className="text-base font-bold text-slate-900">Temas a tratar</h3>
+      <p className="text-xs text-slate-400 mt-0.5 mb-3.5 leading-snug">
         Puntos generales para la próxima sesión (vocerías, contexto). Se archivan en el acta al cerrarla;
         los fijados (📌) se mantienen para la próxima por ser recurrentes.
       </p>
 
-      <div className="space-y-1.5">
-        {temas.map((t, i) => (
-          <div key={`${t.id}:${bump}`}>
-            <div className="group flex items-start gap-2">
-              <span className="text-xs text-gray-400 tabular-nums w-4 text-right flex-shrink-0 mt-2">{i + 1}.</span>
-              {canEdit ? (
-                <>
-                  <textarea
-                    defaultValue={t.texto}
-                    rows={1}
-                    ref={autoGrow}
-                    onInput={e => autoGrow(e.currentTarget)}
-                    onBlur={e => commitEdicion(t, e.target.value)}
-                    className="flex-1 min-w-0 text-sm text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-violet-300"
-                  />
-                  <button
-                    onClick={() => toggleFijo(t)}
-                    className={`transition-opacity mt-2 flex-shrink-0 ${t.fijo ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100'}`}
-                    title={t.fijo
-                      ? 'Tema recurrente: no se borra al cerrar la sesión. Click para dejar de fijarlo.'
-                      : 'Fijar como recurrente (no se borra al cerrar la sesión)'}
-                  >
-                    <PinIcon filled={t.fijo} />
-                  </button>
-                  <button
-                    onClick={() => quitarTema(t)}
-                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex-shrink-0"
-                    title="Quitar tema"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                      <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-                    </svg>
-                  </button>
-                </>
-              ) : (
-                <p className="flex-1 min-w-0 text-sm text-gray-700 leading-snug py-1.5">
-                  {t.fijo && <span className="text-violet-500 mr-1" title="Tema recurrente">📌</span>}
-                  {t.texto}
-                </p>
-              )}
-            </div>
-
-            {/* Sub-items del tema (mig 054) — indentados bajo el padre */}
-            {(t.subitems.length > 0 || (canEdit && (subSlots[t.id] ?? 0) > 0)) && (
-              <div className="ml-6 mt-1 space-y-1">
-                {t.subitems.map((sub, si) => (
-                  <div key={`${t.id}-s${si}:${bump}`} className="group flex items-start gap-1.5">
-                    <span className="text-gray-300 text-xs flex-shrink-0 mt-1.5">·</span>
-                    {canEdit ? (
-                      <>
-                        <textarea
-                          defaultValue={sub}
-                          rows={1}
-                          ref={autoGrow}
-                          onInput={e => autoGrow(e.currentTarget)}
-                          onBlur={e => editarSubitem(t, si, e.target.value)}
-                          className={subInputCls}
-                        />
-                        <button
-                          onClick={() => quitarSubitem(t, si)}
-                          className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0"
-                          title="Quitar subtema"
-                        >
-                          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                            <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-                          </svg>
-                        </button>
-                      </>
-                    ) : (
-                      <p className="flex-1 min-w-0 text-[13px] text-gray-600 leading-snug py-1">{sub}</p>
-                    )}
-                  </div>
-                ))}
-                {canEdit && Array.from({ length: subSlots[t.id] ?? 0 }, (_, si) => (
-                  <div key={`${t.id}-new${t.subitems.length}-${si}:${bump}`} className="group flex items-start gap-1.5">
-                    <span className="text-gray-300 text-xs flex-shrink-0 mt-1.5">·</span>
+      <div className="space-y-2.5">
+        {temas.map((t, i) => {
+          const hasSub = t.subitems.length > 0 || (canEdit && (subSlots[t.id] ?? 0) > 0)
+          return (
+            <div key={`${t.id}:${bump}`}>
+              <div className="group flex items-start gap-2.5">
+                <span className={`${badgeBase} bg-violet-700 text-white`}>{i + 1}</span>
+                {canEdit ? (
+                  <>
                     <textarea
-                      defaultValue=""
+                      defaultValue={t.texto}
                       rows={1}
-                      placeholder="Subtema…"
                       ref={autoGrow}
                       onInput={e => autoGrow(e.currentTarget)}
-                      onBlur={e => agregarSubitem(t, e.target.value)}
-                      className={`${subInputCls} border-dashed placeholder:text-gray-300 focus:border-solid`}
+                      onBlur={e => commitEdicion(t, e.target.value)}
+                      className="flex-1 min-w-0 text-[15px] text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5 leading-snug resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-violet-300"
                     />
                     <button
-                      onClick={() => setSubSlots(prev => ({ ...prev, [t.id]: Math.max(0, (prev[t.id] ?? 1) - 1) }))}
-                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0"
-                      title="Quitar subtema"
+                      onClick={() => toggleFijo(t)}
+                      className={`transition-opacity mt-1.5 flex-shrink-0 ${t.fijo ? 'text-violet-600' : 'text-slate-300 hover:text-violet-500 opacity-0 group-hover:opacity-100'}`}
+                      title={t.fijo
+                        ? 'Tema recurrente: no se borra al cerrar la sesión. Click para dejar de fijarlo.'
+                        : 'Fijar como recurrente (no se borra al cerrar la sesión)'}
                     >
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                        <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-                      </svg>
+                      <PinIcon filled={t.fijo} />
                     </button>
-                  </div>
-                ))}
+                    <button
+                      onClick={() => quitarTema(t)}
+                      className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0"
+                      title="Quitar tema"
+                    >
+                      {cerrarIcon}
+                    </button>
+                  </>
+                ) : (
+                  <p className="flex-1 min-w-0 text-[15px] text-slate-800 leading-snug py-1">
+                    {t.fijo && <span className="text-violet-500 mr-1" title="Tema recurrente">📌</span>}
+                    {t.texto}
+                  </p>
+                )}
               </div>
-            )}
 
-            {canEdit && (
-              <button
-                onClick={() => setSubSlots(prev => ({ ...prev, [t.id]: (prev[t.id] ?? 0) + 1 }))}
-                className="ml-6 mt-0.5 text-[11px] font-medium text-gray-400 hover:text-violet-700"
-              >
-                + subtema
-              </button>
-            )}
-          </div>
-        ))}
+              {/* Sub-items del tema (mig 054) — riel de indentado bajo el badge */}
+              {(hasSub || canEdit) && (
+                <div className={`ml-3 mt-1.5 ${hasSub ? 'border-l border-slate-200 pl-3 space-y-1' : 'pl-3'}`}>
+                  {t.subitems.map((sub, si) => (
+                    <div key={`${t.id}-s${si}:${bump}`} className="group flex items-start gap-1.5">
+                      <span className="text-slate-400 text-sm flex-shrink-0 mt-1 leading-none">•</span>
+                      {canEdit ? (
+                        <>
+                          <textarea
+                            defaultValue={sub}
+                            rows={1}
+                            ref={autoGrow}
+                            onInput={e => autoGrow(e.currentTarget)}
+                            onBlur={e => editarSubitem(t, si, e.target.value)}
+                            className={subInputCls}
+                          />
+                          <button
+                            onClick={() => quitarSubitem(t, si)}
+                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex-shrink-0"
+                            title="Quitar subtema"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                            </svg>
+                          </button>
+                        </>
+                      ) : (
+                        <p className="flex-1 min-w-0 text-sm text-slate-600 leading-snug py-1">{sub}</p>
+                      )}
+                    </div>
+                  ))}
+                  {canEdit && Array.from({ length: subSlots[t.id] ?? 0 }, (_, si) => (
+                    <div key={`${t.id}-new${t.subitems.length}-${si}:${bump}`} className="group flex items-start gap-1.5">
+                      <span className="text-slate-300 text-sm flex-shrink-0 mt-1 leading-none">•</span>
+                      <textarea
+                        defaultValue=""
+                        rows={1}
+                        placeholder="Subtema…"
+                        ref={autoGrow}
+                        onInput={e => autoGrow(e.currentTarget)}
+                        onBlur={e => agregarSubitem(t, e.target.value)}
+                        className={`${subInputCls} border-dashed placeholder:text-slate-300 focus:border-solid`}
+                      />
+                      <button
+                        onClick={() => setSubSlots(prev => ({ ...prev, [t.id]: Math.max(0, (prev[t.id] ?? 1) - 1) }))}
+                        className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex-shrink-0"
+                        title="Quitar subtema"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                          <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  {canEdit && (
+                    <button
+                      onClick={() => setSubSlots(prev => ({ ...prev, [t.id]: (prev[t.id] ?? 0) + 1 }))}
+                      className="text-[11px] font-medium text-slate-400 hover:text-violet-700"
+                    >
+                      + subtema
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {canEdit && Array.from({ length: emptyCount }, (_, i) => {
           // Los slots más allá del mínimo de relleno son "agregados" → borrables.
           const esAgregado = i >= baseEmpty
           return (
-            <div key={`new-${temas.length}-${i}-${bump}`} className="group flex items-start gap-2">
-              <span className="text-xs text-gray-300 tabular-nums w-4 text-right flex-shrink-0 mt-2">{temas.length + i + 1}.</span>
+            <div key={`new-${temas.length}-${i}-${bump}`} className="group flex items-start gap-2.5">
+              <span className={`${badgeBase} border border-dashed border-slate-300 text-slate-300`}>{temas.length + i + 1}</span>
               <textarea
                 defaultValue=""
                 rows={1}
@@ -309,17 +320,15 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
                 ref={autoGrow}
                 onInput={e => autoGrow(e.currentTarget)}
                 onBlur={e => commitNuevo(e.target.value)}
-                className="flex-1 min-w-0 text-sm text-gray-700 border border-dashed border-gray-200 rounded-lg px-2.5 py-1.5 leading-snug resize-none overflow-hidden placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-solid focus:border-violet-300"
+                className="flex-1 min-w-0 text-[15px] text-slate-800 border border-dashed border-slate-200 rounded-lg px-3 py-1.5 leading-snug resize-none overflow-hidden placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-300 focus:border-solid focus:border-violet-300"
               />
               {esAgregado && (
                 <button
                   onClick={() => setExtraSlots(s => Math.max(0, s - 1))}
-                  className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex-shrink-0"
+                  className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 flex-shrink-0"
                   title="Quitar fila"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-                  </svg>
+                  {cerrarIcon}
                 </button>
               )}
             </div>
@@ -327,14 +336,14 @@ export default function TemasGabinetePanel({ regionCod, temas, setTemas, classNa
         })}
 
         {!canEdit && temas.length === 0 && (
-          <p className="text-xs text-gray-500 italic py-2">Sin temas registrados.</p>
+          <p className="text-xs text-slate-500 italic py-2">Sin temas registrados.</p>
         )}
       </div>
 
       {canEdit && (
         <button
           onClick={() => setExtraSlots(s => s + 1)}
-          className="mt-2.5 text-xs font-medium text-violet-700 hover:text-violet-900 hover:underline"
+          className="mt-3 text-sm font-semibold text-violet-700 hover:text-violet-900 hover:underline"
         >
           + Agregar tema
         </button>

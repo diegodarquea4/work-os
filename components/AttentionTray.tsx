@@ -529,7 +529,7 @@ export default function AttentionTray({
               regionCod={regionCodActive}
               temas={temas}
               setTemas={setTemas}
-              className="w-72 flex-shrink-0 sticky top-0"
+              className="w-96 flex-shrink-0 sticky top-0"
             />
           )}
           <div className={temasVisible ? 'flex-1 min-w-0' : undefined}>

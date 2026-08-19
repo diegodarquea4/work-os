@@ -111,6 +111,16 @@ function fmtFecha(fecha: string | null): string {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Chevron de expandir/colapsar una zona (rota 180° al abrir). */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"
+      className={`flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}>
+      <path d="M2.5 4.5L6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function SesionModal(props: Props) {
   const { region, borradorId, currentUserEmail, onClose } = props
   const esGabinete    = props.instancia === 'gabinete'
@@ -149,6 +159,8 @@ export default function SesionModal(props: Props) {
   const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
   const [asistencia, setAsistencia]         = useState<SesionAsistencia[]>([])
+  // Zona Asistencia colapsable — para ganar espacio en el acta en curso.
+  const [asistenciaOpen, setAsistenciaOpen] = useState(true)
   // Zona 3 comité: reporte de métricas por institución (mig 048 — reemplaza
   // los indicadores suma/pulso). Catálogo por región + valores de la sesión +
   // valores de la sesión cerrada anterior (WoW).
@@ -885,7 +897,7 @@ export default function SesionModal(props: Props) {
         role="dialog"
         aria-modal="true"
         aria-label={`Sesión — ${nombreInstancia}`}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
         onKeyDown={onDialogKeyDown}
       >
@@ -948,24 +960,33 @@ export default function SesionModal(props: Props) {
                   Sin número: no altera la numeración producto de las zonas 1-5. */}
               {esGabinete && temasGabinete.length > 0 && (
                 <section className="border border-violet-100 rounded-xl bg-violet-50/40 px-4 py-3">
-                  <p className="text-xs font-semibold text-violet-800 uppercase tracking-wide mb-1.5">
+                  <p className="text-xs font-semibold text-violet-800 uppercase tracking-wide mb-2.5">
                     Temas a tratar — preparación
                   </p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    {temasGabinete.map(t => (
-                      <li key={t.id} className="text-sm text-gray-700 leading-snug">
-                        {t.texto}
+                  <div className="space-y-2">
+                    {temasGabinete.map((t, i) => (
+                      <div key={t.id}>
+                        <div className="flex items-start gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                          <p className="flex-1 min-w-0 text-sm text-slate-800 leading-snug">
+                            {t.fijo && <span className="text-violet-500 mr-1" title="Tema recurrente">📌</span>}
+                            {t.texto}
+                          </p>
+                        </div>
                         {t.subitems.length > 0 && (
-                          <ul className="mt-0.5 ml-5 space-y-0.5 list-none">
+                          <div className="ml-2.5 mt-1 border-l border-violet-200 pl-3 space-y-0.5">
                             {t.subitems.map((sub, si) => (
-                              <li key={si} className="text-[13px] text-gray-500 leading-snug">· {sub}</li>
+                              <div key={si} className="flex items-start gap-1.5">
+                                <span className="text-slate-400 text-sm flex-shrink-0 leading-none mt-0.5">•</span>
+                                <p className="flex-1 min-w-0 text-[13px] text-slate-600 leading-snug">{sub}</p>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         )}
-                      </li>
+                      </div>
                     ))}
-                  </ol>
-                  <p className="text-[10px] text-gray-400 mt-1.5">
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">
                     Se editan en Gabinete → Preparación; quedan en el acta al cerrar la sesión.
                   </p>
                 </section>
@@ -1039,11 +1060,13 @@ export default function SesionModal(props: Props) {
 
               {/* ── Zona 2: asistencia ── */}
               <section className={zoneCls}>
-                <div className={zoneHead}>
+                <button type="button" onClick={() => setAsistenciaOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
                   <span className={zoneNum}>2</span>
                   <h3 className="text-sm font-semibold text-gray-800">Asistencia</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{presentes} presente{presentes === 1 ? '' : 's'}</span>
-                </div>
+                  <span className="text-xs text-gray-400 ml-auto mr-2">{presentes} presente{presentes === 1 ? '' : 's'}</span>
+                  <Chevron open={asistenciaOpen} />
+                </button>
+                {asistenciaOpen && (
                 <div className="p-3">
                   {nomina.length === 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
@@ -1108,6 +1131,7 @@ export default function SesionModal(props: Props) {
                     </button>
                   </form>
                 </div>
+                )}
               </section>
 
               {/* ── Zona 3 (gabinete: en foco · infraestructura: por tag) ── */}
