@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Exporta las geometrías de distritos y circunscripciones del Panel Territorial
- * SUBDERE (Supabase externo de Francisca Barros) a archivos GeoJSON estáticos en
- * `public/`, para que el modo «Autoridades» del Mapa las dibuje con Leaflet sin
- * bajar geometría en runtime.
+ * SUBDERE (Supabase externo de Francisca Barros) a archivos GeoJSON en
+ * `territorial-data/` (FUERA de `public/`: se sirven gateados por
+ * /api/territorial/[asset]), para que el modo «Autoridades» del Mapa las dibuje
+ * con Leaflet sin bajar geometría en runtime.
  *
  * Normaliza la propiedad identificadora a `territorio` (las tablas la traen como
  * `distrito` / `circunscripcion`), que es la llave con la que el modo Autoridades
@@ -71,11 +72,11 @@ async function exportar(tabla, campoId, salida) {
       geometry: r.geometria,
     }))
   const fc = { type: 'FeatureCollection', features }
-  const ruta = new URL(`../public/${salida}`, import.meta.url)
+  const ruta = new URL(`../territorial-data/${salida}`, import.meta.url)
   writeFileSync(ruta, JSON.stringify(fc))
   console.log(`✓ ${salida}: ${features.length} features (de ${rows.length} filas)`)
 }
 
 await exportar('distritos', 'distrito', 'distritos.geojson')
 await exportar('circunscripciones', 'circunscripcion', 'circunscripciones.geojson')
-console.log('Listo. Commitear public/distritos.geojson y public/circunscripciones.geojson.')
+console.log('Listo. Commitear territorial-data/distritos.geojson y territorial-data/circunscripciones.geojson.')

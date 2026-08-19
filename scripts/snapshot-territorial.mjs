@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Genera el SNAPSHOT estático del modo «Autoridades» a partir del Supabase externo
- * de Francisca Barros (SUBDERE). Baja las 9 tablas de datos (crudas, sin geometría)
- * + las fotos de gobernadores y las escribe como JSON en `public/territorial/`.
+ * Genera el SNAPSHOT del modo «Autoridades» a partir del Supabase externo de
+ * Francisca Barros (SUBDERE). Baja las 9 tablas de datos (crudas, sin geometría)
+ * + las fotos de gobernadores y las escribe como JSON en `territorial-data/`
+ * (FUERA de `public/`: se sirven gateados por /api/territorial/[asset], que exige
+ * la capacidad `mapa.autoridades`).
  *
- * En runtime, `lib/territorial/source.ts` lee estos archivos (una sola descarga por
- * CDN, cacheada) en vez de paginar la Supabase de Francisca (~55 requests, ~15s).
+ * En runtime, `lib/territorial/source.ts` los pide a esa ruta (un fetch por sesión,
+ * cacheado en módulo) en vez de paginar la Supabase de Francisca (~55 requests).
  * Resultado: carga ~1-2s y CERO dependencia de Francisca en producción.
  *
  * Se corre a mano cuando Francisca actualiza datos (o desde un cron), y se commitea
@@ -104,12 +106,12 @@ if (fotosCompartidas.length) {
   console.log('  ✓ ninguna foto se comparte entre regiones distintas.')
 }
 
-const outDir = new URL('../public/territorial/', import.meta.url)
+const outDir = new URL('../territorial-data/', import.meta.url)
 mkdirSync(outDir, { recursive: true })
 writeFileSync(new URL('snapshot.json', outDir), JSON.stringify(raw))
 writeFileSync(new URL('fotos.json', outDir), JSON.stringify(fotos))
 
 console.log('')
-console.log(`✓ public/territorial/snapshot.json  (${kb(raw)} KB sin comprimir)`)
-console.log(`✓ public/territorial/fotos.json     (${kb(fotos)} KB sin comprimir)`)
-console.log('Commitear public/territorial/*.json. Vercel los sirve gzip por CDN.')
+console.log(`✓ territorial-data/snapshot.json  (${kb(raw)} KB sin comprimir)`)
+console.log(`✓ territorial-data/fotos.json     (${kb(fotos)} KB sin comprimir)`)
+console.log('Commitear territorial-data/*.json. Se sirven gateados por /api/territorial/[asset].')
