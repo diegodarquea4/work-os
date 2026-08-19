@@ -19,6 +19,8 @@ import {
  */
 
 export type ActaInfraestructuraData = ActaBranding & {
+  /** Vista previa (sesión aún abierta): marca el PDF como borrador. */
+  borrador?: boolean
   nombreInstancia: string
   tipoComite: 'cri' | 'mesa_tecnica' | null
   tag: string
@@ -79,6 +81,7 @@ export default function ActaInfraestructuraPdf({ data }: { data: ActaInfraestruc
           fecha={fmtFecha(data.fecha)}
           sesionLabel={`Sesión N° ${data.sesionNumero}`}
           footerLeft={footerLeft}
+          borrador={data.borrador}
         />
 
         <TitleBlock

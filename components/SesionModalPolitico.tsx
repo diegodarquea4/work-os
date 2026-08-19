@@ -184,6 +184,7 @@ export default function SesionModalPolitico({
 
   // Cierre
   const [cerrando, setCerrando]             = useState(false)
+  const [previewActa, setPreviewActa]       = useState(false)
   const [cierreResultado, setCierreResultado] = useState<{ actaGenerada: boolean; error?: string } | null>(null)
 
   // ── Init: reabrir o crear el borrador; precargar asistencia si es nuevo ──────
@@ -499,6 +500,28 @@ export default function SesionModalPolitico({
     const body = await res.json().catch(() => ({}))
     if (res.ok && body.url) window.open(body.url, '_blank')
     else window.alert(body.error ?? 'No se pudo obtener el acta')
+  }
+
+  // Vista previa del acta con el estado actual (sin cerrar). PDF marcado "BORRADOR".
+  async function handlePreviewActa() {
+    if (!sesion || previewActa) return
+    setPreviewActa(true)
+    try {
+      const res = await fetch(`/api/sesiones/${sesion.id}/acta/preview`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        window.alert(body.error ?? `No se pudo generar la vista previa (HTTP ${res.status})`)
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch {
+      window.alert('Error de red generando la vista previa del acta.')
+    } finally {
+      setPreviewActa(false)
+    }
   }
 
   // ── Derivados ─────────────────────────────────────────────────────────────
@@ -867,16 +890,16 @@ export default function SesionModalPolitico({
         </div>
 
         {/* Footer */}
-        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-gray-400">El borrador se guarda automáticamente con cada cambio.</p>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={cerrando} className="text-sm px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-white disabled:opacity-50">
-              Guardar borrador
-            </button>
-            <button onClick={handleCerrar} disabled={cerrando || !sesion} className="text-sm px-4 py-2 bg-violet-700 text-white font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50">
-              {cerrando ? 'Cerrando…' : 'Cerrar sesión y generar acta'}
-            </button>
-          </div>
+        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
+          <button onClick={onClose} disabled={cerrando} className="text-sm px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-white disabled:opacity-50 whitespace-nowrap">
+            Guardar borrador
+          </button>
+          <button onClick={handlePreviewActa} disabled={cerrando || previewActa || !sesion} title="Ver el acta con el estado actual, antes de cerrar (borrador)" className="text-sm px-4 py-2 border border-violet-200 text-violet-700 font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 whitespace-nowrap">
+            {previewActa ? 'Generando…' : 'Previsualizar acta'}
+          </button>
+          <button onClick={handleCerrar} disabled={cerrando || !sesion} className="text-sm px-4 py-2 bg-violet-700 text-white font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50 whitespace-nowrap">
+            {cerrando ? 'Cerrando…' : 'Cerrar sesión y generar acta'}
+          </button>
         </footer>
       </div>
     </div>

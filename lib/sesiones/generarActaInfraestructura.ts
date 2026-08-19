@@ -5,14 +5,15 @@ import { registerPdfFonts } from '@/lib/pdfFonts'
 import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
-import { subirActa } from './actaUpload'
+import { verificadosOr, type ActaOpts } from './generarActa'
 import ActaInfraestructuraPdf, { type ActaInfraestructuraData } from '@/components/ActaInfraestructuraPdf'
 
 /**
- * Builder del acta de una sesión del Comité de Infraestructura cerrada (mig
- * 057). Lo invoca generarActa() (el entry point único despacha por
- * instancia). Igual que los demás builders: NUNCA toca métricas ni
- * compromisos — solo lee, renderiza y sube.
+ * Renderiza el acta de una sesión del Comité de Infraestructura a un buffer (mig
+ * 057). Lo invoca renderActaBuffer() (el entry point único despacha por
+ * instancia). La SUBIDA la hace generarActa (cierre). NUNCA toca métricas ni
+ * compromisos. En `opts.preview` lee el estado BORRADOR (semáforos en vivo, N°
+ * que le tocará, quien previsualiza) y el PDF se marca "BORRADOR".
  *
  * A diferencia del gabinete, acá NO hay clasificación de compromisos
  * (propios/escalados/mandatos): nada escala HACIA Infraestructura, así que
@@ -20,7 +21,7 @@ import ActaInfraestructuraPdf, { type ActaInfraestructuraData } from '@/componen
  * los que el propio comité mandó al Gabinete Regional (escalado_a_gabinete).
  */
 
-export async function generarActaInfraestructura(db: SupabaseClient, sesion: EjeSesion): Promise<string> {
+export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
   const sesionId = sesion.id
 
   const [numRes, asisRes, iniRes, verifRes, nuevosRes, cfgRes] = await Promise.all([
@@ -31,9 +32,10 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
-    // Iniciativas contempladas — snapshot ya escrito por el cierre.
+    // Iniciativas contempladas. En preview no hay snapshot todavía → traemos
+    // también el semáforo/avance EN VIVO para mostrar lo que capturará el cierre.
     db.from('sesion_iniciativas')
-      .select('*, prioridad:prioridades_territoriales(nombre)')
+      .select('*, prioridad:prioridades_territoriales(nombre, estado_semaforo, pct_avance)')
       .eq('sesion_id', sesionId)
       .order('created_at'),
     // Verificados: compromisos de sesiones anteriores — cumplidos en esta
@@ -41,7 +43,7 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
     db.from('sesion_compromisos').select('*')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'infraestructura')
       .neq('sesion_origen_id', sesionId)
-      .or(`cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`),
+      .or(verificadosOr(sesionId, opts.preview)),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     db.from('region_config').select('infraestructura_nombre, infraestructura_tag')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
@@ -49,7 +51,7 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
-  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+  const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
   type AsisRow = {
     presente: boolean
@@ -57,7 +59,7 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
     invitado_institucion: string | null
     nomina: { nombre: string; cargo: string | null; institucion: string; calidad: 'titular' | 'suplente' } | null
   }
-  type IniRow = SesionIniciativa & { prioridad: { nombre: string } | null }
+  type IniRow = SesionIniciativa & { prioridad: { nombre: string; estado_semaforo?: string | null; pct_avance?: number | null } | null }
 
   const nuevos = (nuevosRes.data ?? []) as SesionCompromiso[]
   const vinculadasIds = nuevos.map(c => c.prioridad_id).filter((x): x is number => x != null)
@@ -78,7 +80,7 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -88,8 +90,10 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
     })),
     iniciativas: ((iniRes.data ?? []) as unknown as IniRow[]).map(ini => ({
       nombre:    ini.prioridad?.nombre ?? `Iniciativa #${ini.prioridad_id}`,
-      semaforo:  ini.semaforo_al_momento,
-      pctAvance: ini.pct_avance_al_momento != null ? Number(ini.pct_avance_al_momento) : null,
+      semaforo:  opts.preview ? (ini.prioridad?.estado_semaforo ?? null) : ini.semaforo_al_momento,
+      pctAvance: opts.preview
+        ? (ini.prioridad?.pct_avance != null ? Number(ini.prioridad.pct_avance) : null)
+        : (ini.pct_avance_al_momento != null ? Number(ini.pct_avance_al_momento) : null),
       acuerdo:   ini.acuerdo,
     })),
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
@@ -110,11 +114,12 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
       megaproyecto:     c.megaproyecto,
       iniciativaNombre: c.prioridad_id != null ? nombresVinculadas.get(c.prioridad_id) ?? null : null,
     })),
-    generadoPor: sesion.closed_by_email,
+    generadoPor: opts.preview ? (opts.currentUserEmail ?? null) : sesion.closed_by_email,
+    borrador:    opts.preview,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
   }
 
-  // ── Render + upload ────────────────────────────────────────────────────────
+  // ── Render (la subida la hace generarActa) ─────────────────────────────────
   registerPdfFonts()
   const dataConBranding: ActaInfraestructuraData = {
     ...data,
@@ -124,7 +129,5 @@ export async function generarActaInfraestructura(db: SupabaseClient, sesion: Eje
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que generarActa.ts/generarActaGabinete.ts).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaInfraestructuraPdf as any, { data: dataConBranding }) as any)
-
-  return subirActa(db, sesion, buffer)
+  return renderToBuffer(React.createElement(ActaInfraestructuraPdf as any, { data: dataConBranding }) as any)
 }

@@ -21,6 +21,8 @@ import {
  */
 
 export type ActaGabineteData = ActaBranding & {
+  /** Vista previa (sesión aún abierta): marca el PDF como borrador. */
+  borrador?: boolean
   nombreInstancia: string
   regionNombre: string
   sesionNumero: number
@@ -81,6 +83,7 @@ export default function ActaGabinetePdf({ data }: { data: ActaGabineteData }) {
           fecha={fmtFecha(data.fecha)}
           sesionLabel={`Sesión N° ${data.sesionNumero}`}
           footerLeft={footerLeft}
+          borrador={data.borrador}
         />
 
         <TitleBlock
