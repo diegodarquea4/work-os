@@ -251,10 +251,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // Capa del Mapa: 'psg' (iniciativas/semáforos, histórico) | 'autoridades'
   // (bloque político de la autoridad electa). Distinto de `mapaMode`. Persistido.
-  // El modo «Autoridades» es SOLO para admins: la capa EFECTIVA (`mapaCapa`) se
-  // fuerza a 'psg' para el resto —aunque localStorage traiga 'autoridades' de una
-  // sesión admin previa en la misma máquina— y el toggle no se muestra.
-  const isAdmin = profile?.role === 'admin'
+  // El modo «Autoridades» requiere la capacidad `mapa.autoridades` (admin por
+  // defecto; concedible a usuarios puntuales —incluidos regionales— desde
+  // Usuarios→Permisos). Sin ella la capa EFECTIVA (`mapaCapa`) se fuerza a 'psg'
+  // —aunque localStorage traiga 'autoridades'— y el toggle no se muestra.
+  const puedeVerAutoridades = can(capabilities, 'mapa.autoridades')
   const [mapaCapaPref, setMapaCapaPref] = useState<MapaCapa>('psg')
   useEffect(() => {
     try {
@@ -265,7 +266,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   useEffect(() => {
     try { localStorage.setItem('workos:mapaCapa', mapaCapaPref) } catch { /* noop */ }
   }, [mapaCapaPref])
-  const mapaCapa: MapaCapa = isAdmin ? mapaCapaPref : 'psg'
+  const mapaCapa: MapaCapa = puedeVerAutoridades ? mapaCapaPref : 'psg'
   const territorial = useTerritorialMode(view === 'mapa' && mapaCapa === 'autoridades')
   // Highlight cruzado entre sidebar y mapa: hover sobre una fila del sidebar
   // resalta el polígono correspondiente.
@@ -798,7 +799,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 controles de Autoridades y el breadcrumb del drill. pointer-events-none
                 deja pasar el mouse al mapa entre los chips. */}
             <div data-autoridades-controls className="pointer-events-none absolute left-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-2">
-              {isAdmin && <MapaModoToggle value={mapaCapa} onChange={setMapaCapaPref} />}
+              {puedeVerAutoridades && <MapaModoToggle value={mapaCapa} onChange={setMapaCapaPref} />}
               {mapaCapa === 'autoridades' && (
                 <>
                   <AutoridadesToolbar onNavigateComuna={handleNavigateComuna} />

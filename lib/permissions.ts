@@ -42,6 +42,8 @@ export const FUNCTIONS = [
   { key: 'iniciativa.seguimiento_crear',   label: 'Crear seguimiento',                               group: 'Ficha de iniciativa' },
   { key: 'iniciativa.documento_subir',     label: 'Subir documento',                                 group: 'Ficha de iniciativa' },
   { key: 'iniciativa.gestionar_ajeno',     label: 'Editar/borrar ítems de otros',                    group: 'Ficha de iniciativa' },
+  // Mapa
+  { key: 'mapa.autoridades', label: 'Ver Autoridades (colores políticos)', group: 'Mapa' },
   // Dashboard
   { key: 'dashboard.importar',      label: 'Importar Excel',    group: 'Dashboard' },
   { key: 'dashboard.edicion_masiva', label: 'Edición masiva',   group: 'Dashboard' },
@@ -123,6 +125,7 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
   // admin: todo, en todas las regiones.
   admin: [
     ...SEC_STAFF_FULL, ['sec.desalojos', 'all'], ['sec.permisos', 'all'],
+    ['mapa.autoridades', 'all'],
     ['iniciativa.editar_operativo', 'all'], ['iniciativa.editar_definicional', 'all'],
     ['iniciativa.editar_capa', 'all'], ['iniciativa.marcar_foco', 'all'],
     ['iniciativa.marcar_desalojo', 'all'], ['iniciativa.eliminar', 'all'],
