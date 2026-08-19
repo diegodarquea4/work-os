@@ -54,6 +54,16 @@ const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
 const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
 const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
 
+/** Chevron de expandir/colapsar una zona (rota 180° al abrir). */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"
+      className={`flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}>
+      <path d="M2.5 4.5L6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
@@ -161,6 +171,8 @@ export default function SesionModalPolitico({
   const [initError, setInitError] = useState<string | null>(null)
 
   const [asistencia, setAsistencia]         = useState<SesionAsistencia[]>([])
+  // Zona Asistencia colapsable — para ganar espacio en el acta en curso.
+  const [asistenciaOpen, setAsistenciaOpen] = useState(true)
   const [temas, setTemas]                   = useState<SesionTema[]>([])
   const [compAnteriores, setCompAnteriores] = useState<SesionCompromiso[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
@@ -592,7 +604,7 @@ export default function SesionModalPolitico({
         role="dialog"
         aria-modal="true"
         aria-label={`Sesión — ${NOMBRE_COMITE}`}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
         onKeyDown={onDialogKeyDown}
       >
@@ -639,11 +651,13 @@ export default function SesionModalPolitico({
             <>
               {/* ── Zona 1: asistencia ── */}
               <section className={zoneCls}>
-                <div className={zoneHead}>
+                <button type="button" onClick={() => setAsistenciaOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
                   <span className={zoneNum}>1</span>
                   <h3 className="text-sm font-semibold text-gray-800">Asistencia</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{presentes} presente{presentes === 1 ? '' : 's'}</span>
-                </div>
+                  <span className="text-xs text-gray-400 ml-auto mr-2">{presentes} presente{presentes === 1 ? '' : 's'}</span>
+                  <Chevron open={asistenciaOpen} />
+                </button>
+                {asistenciaOpen && (
                 <div className="p-3">
                   {asistencia.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-2">
@@ -685,6 +699,7 @@ export default function SesionModalPolitico({
                     </button>
                   </form>
                 </div>
+                )}
               </section>
 
               {/* ── Zona 2: temas conversados (destacada) ── */}

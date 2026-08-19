@@ -1,7 +1,7 @@
 import { Document, Page, Text, View } from '@react-pdf/renderer'
 import {
   s, C, fmtFecha,
-  PageChrome, TitleBlock, SH, MetaRow, EstadoChip, Vacio,
+  PageChrome, TitleBlock, SH, MetaRow, EstadoChip, Vacio, TemasList,
   type ActaBranding,
 } from './actaPdfBase'
 
@@ -86,20 +86,9 @@ export default function CronogramaGabinetePdf({ data }: { data: CronogramaGabine
         <SH>I. Temas a tratar</SH>
         {data.temas.length === 0 ? (
           <Vacio>Sin temas generales registrados en la preparación.</Vacio>
-        ) : data.temas.map((t, i) => (
-          <View key={i} style={[s.tr, { flexDirection: 'column' }]} wrap={false}>
-            <View style={{ flexDirection: 'row' }}>
-              <Text style={[s.td, { width: 18, color: C.muted }]}>{i + 1}</Text>
-              <Text style={[s.td, { flex: 1 }]}>{t.texto}</Text>
-            </View>
-            {t.subitems.map((sub, si) => (
-              <View key={si} style={{ flexDirection: 'row', marginTop: 1.5 }}>
-                <Text style={[s.td, { width: 30, color: C.muted, fontSize: 8.5, textAlign: 'right', paddingRight: 4 }]}>·</Text>
-                <Text style={[s.td, { flex: 1, color: C.muted, fontSize: 8.5 }]}>{sub}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
+        ) : (
+          <TemasList temas={data.temas} />
+        )}
 
         {/* II. Compromisos por verificar */}
         <SH>II. Compromisos por verificar</SH>

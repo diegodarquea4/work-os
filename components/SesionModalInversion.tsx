@@ -318,6 +318,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // Colapso de las dos secciones nuevas — ambas arrancan abiertas.
   const [mesaEmpleoOpen, setMesaEmpleoOpen]     = useState(true)
   const [seguimientoOpen, setSeguimientoOpen]   = useState(true)
+  // Zona Integrantes colapsable — para ganar espacio en el acta en curso.
+  const [integrantesOpen, setIntegrantesOpen]   = useState(true)
 
   // Invitado form
   const [invNombre, setInvNombre]           = useState('')
@@ -869,7 +871,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         role="dialog"
         aria-modal="true"
         aria-label={`Sesión — ${NOMBRE_COMITE}`}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
         onKeyDown={onDialogKeyDown}
       >
@@ -916,11 +918,13 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
             <>
               {/* ── Zona 1: integrantes ── */}
               <section className={zoneCls}>
-                <div className={zoneHead}>
+                <button type="button" onClick={() => setIntegrantesOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
                   <span className={zoneNum}>1</span>
                   <h3 className="text-sm font-semibold text-gray-800">Integrantes</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{presentes} presente{presentes === 1 ? '' : 's'}</span>
-                </div>
+                  <span className="text-xs text-gray-400 ml-auto mr-2">{presentes} presente{presentes === 1 ? '' : 's'}</span>
+                  <Chevron open={integrantesOpen} />
+                </button>
+                {integrantesOpen && (
                 <div className="p-3">
                   {nomina.length === 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
@@ -981,6 +985,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     </button>
                   </form>
                 </div>
+                )}
               </section>
 
               {/* ── Zona 2: compromisos anteriores (de cualquier sección, o generales) ── */}
