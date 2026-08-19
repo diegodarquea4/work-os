@@ -16,6 +16,8 @@ import {
  */
 
 export type ActaData = ActaBranding & {
+  /** Vista previa (sesión aún abierta): marca el PDF como borrador. */
+  borrador?: boolean
   // 'policial' → sección III es el reporte por institución (mig 048).
   // 'inversion' (Comité Económico) → sección III es Mesa Empleo (Meta
   // Empleo, mig 052), IV/V son Proyectos/Oficios tratados (Seguimiento de
@@ -119,6 +121,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           fecha={fmtFecha(data.fecha)}
           sesionLabel={`Sesión N° ${data.sesionNumero}`}
           footerLeft={footerLeft}
+          borrador={data.borrador}
         />
 
         <TitleBlock

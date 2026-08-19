@@ -6,17 +6,21 @@ import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
 import { panoramaPorEje, clasificarCompromisosGabinete, COMITES_CON_ESCALAMIENTO } from './helpers'
-import { subirActa } from './actaUpload'
+import { verificadosOr, type ActaOpts } from './generarActa'
 import ActaGabinetePdf, { type ActaGabineteData } from '@/components/ActaGabinetePdf'
 
 /**
- * Builder del acta de una sesión de GABINETE cerrada (spec gabinete §7.4).
- * Lo invoca generarActa() (el entry point único despacha por instancia — el
- * contrato de /cerrar y /acta no cambia). Igual que el builder de comité:
- * NUNCA toca métricas ni compromisos — solo lee, renderiza y sube.
+ * Renderiza el acta de una sesión de GABINETE a un buffer (spec gabinete §7.4).
+ * Lo invoca renderActaBuffer() (el entry point único despacha por instancia). La
+ * SUBIDA la hace generarActa (cierre). NUNCA toca métricas ni compromisos.
+ *
+ * En `opts.preview` (sesión aún abierta) lee el estado BORRADOR: los "temas a
+ * tratar" desde el pool pendiente (aún sin sesion_id), los semáforos EN VIVO de
+ * las iniciativas (el snapshot recién se escribe al cerrar), el N° que le tocará
+ * y quien previsualiza como preside/generado-por. El PDF se marca "BORRADOR".
  */
 
-export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion): Promise<string> {
+export async function renderActaGabineteBuffer(db: SupabaseClient, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
   const sesionId = sesion.id
 
   const [numRes, asisRes, iniRes, prioRegionRes, apunRes, gabSesRes, nuevosRes, ejesRes, temasRes] = await Promise.all([
@@ -27,9 +31,11 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
-    // Iniciativas tratadas — snapshot ya escrito por el cierre.
+    // Iniciativas tratadas. En preview no hay snapshot todavía → traemos también
+    // el semáforo/avance EN VIVO de la iniciativa para mostrar lo que capturará
+    // el cierre.
     db.from('sesion_iniciativas')
-      .select('*, prioridad:prioridades_territoriales(nombre)')
+      .select('*, prioridad:prioridades_territoriales(nombre, estado_semaforo, pct_avance)')
       .eq('sesion_id', sesionId)
       .order('created_at'),
     // Panorama por eje: TODAS las iniciativas de la región al cierre.
@@ -41,14 +47,18 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       .eq('region_cod', sesion.region_cod).eq('instancia', 'gabinete'),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     db.from('region_ejes').select('id, numero, sesiones_nombre').eq('region_cod', sesion.region_cod),
-    // "Temas a tratar" archivados a esta sesión por el cierre (mig 053/054) —
-    // el stamping corre ANTES de generarActa, así que acá ya tienen sesion_id.
-    db.from('gabinete_temas').select('texto, subitems').eq('sesion_id', sesionId).order('orden').order('id'),
+    // "Temas a tratar" archivados a esta sesión por el cierre (mig 053/054) — el
+    // stamping corre ANTES de generarActa, así que en el cierre ya tienen
+    // sesion_id. En preview aún NO están estampados → los leemos del pool
+    // pendiente de la región (sesion_id nulo), que es lo que el cierre archivará.
+    opts.preview
+      ? db.from('gabinete_temas').select('texto, subitems').eq('region_cod', sesion.region_cod).is('sesion_id', null).order('orden').order('id')
+      : db.from('gabinete_temas').select('texto, subitems').eq('sesion_id', sesionId).order('orden').order('id'),
   ])
 
   // Verificados (zona 1 de la sesión): propios + escalados + mandatos —
   // cumplidos en esta sesión o aún abiertos.
-  const VERIF = `cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`
+  const VERIF = verificadosOr(sesionId, opts.preview)
   const gabIds = ((gabSesRes.data ?? []) as { id: number }[]).map(r => r.id).filter(id => id !== sesionId)
   const [propiosRes, escaladosRes, mandatosRes] = await Promise.all([
     db.from('sesion_compromisos').select('*')
@@ -100,7 +110,7 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
   // N° correlativo: posición por fecha (id desempate) entre cerradas gabinete.
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
-  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+  const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
 
@@ -110,7 +120,7 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
     invitado_institucion: string | null
     nomina: { nombre: string; cargo: string | null; institucion: string; calidad: 'titular' | 'suplente' } | null
   }
-  type IniRow = SesionIniciativa & { prioridad: { nombre: string } | null }
+  type IniRow = SesionIniciativa & { prioridad: { nombre: string; estado_semaforo?: string | null; pct_avance?: number | null } | null }
 
   const data: ActaGabineteData = {
     nombreInstancia: (cfg?.gabinete_nombre as string | undefined) ?? 'Gabinete Regional',
@@ -118,7 +128,7 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -137,8 +147,10 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
     ),
     iniciativas: ((iniRes.data ?? []) as unknown as IniRow[]).map(ini => ({
       nombre:    ini.prioridad?.nombre ?? `Iniciativa #${ini.prioridad_id}`,
-      semaforo:  ini.semaforo_al_momento,
-      pctAvance: ini.pct_avance_al_momento != null ? Number(ini.pct_avance_al_momento) : null,
+      semaforo:  opts.preview ? (ini.prioridad?.estado_semaforo ?? null) : ini.semaforo_al_momento,
+      pctAvance: opts.preview
+        ? (ini.prioridad?.pct_avance != null ? Number(ini.prioridad.pct_avance) : null)
+        : (ini.pct_avance_al_momento != null ? Number(ini.pct_avance_al_momento) : null),
       acuerdo:   ini.acuerdo,
     })),
     apuntes: ((apunRes.data ?? []) as { institucion: string; texto: string }[])
@@ -160,11 +172,12 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
       mandatoComite:    c.instancia === 'eje' && c.eje_id != null ? ejesPorId.get(c.eje_id) ?? 'Comité' : null,
       iniciativaNombre: c.prioridad_id != null ? nombresVinculadas.get(c.prioridad_id) ?? null : null,
     })),
-    generadoPor: sesion.closed_by_email,
+    generadoPor: opts.preview ? (opts.currentUserEmail ?? null) : sesion.closed_by_email,
+    borrador:    opts.preview,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
   }
 
-  // ── Render + upload ────────────────────────────────────────────────────────
+  // ── Render (la subida la hace generarActa) ─────────────────────────────────
   registerPdfFonts()
   const dataConBranding: ActaGabineteData = {
     ...data,
@@ -174,7 +187,5 @@ export async function generarActaGabinete(db: SupabaseClient, sesion: EjeSesion)
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que generarActa.ts).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaGabinetePdf as any, { data: dataConBranding }) as any)
-
-  return subirActa(db, sesion, buffer)
+  return renderToBuffer(React.createElement(ActaGabinetePdf as any, { data: dataConBranding }) as any)
 }

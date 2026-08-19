@@ -127,20 +127,30 @@ export const s = StyleSheet.create({
 
   acuerdo: { fontSize: 9.5, color: C.ink, lineHeight: 1.45, marginTop: 2 },
   vacio:   { fontSize: 9.5, color: C.faint, fontStyle: 'italic', paddingVertical: 5, paddingHorizontal: 5 },
+
+  // Franja de VISTA PREVIA (solo en la preview de acta, no en el acta oficial).
+  borradorBanner: { position: 'absolute', top: 4, left: 0, right: 0, backgroundColor: C.rojo, paddingVertical: 3, alignItems: 'center' },
+  borradorTx:     { fontSize: 8, fontFamily: 'Carlito', fontWeight: 'bold', color: C.white, letterSpacing: 0.5 },
 })
 
 // ── Chrome fijo (encabezado + pie) ──────────────────────────────────────────
 
 export function PageChrome({
-  branding, fecha, sesionLabel, footerLeft,
+  branding, fecha, sesionLabel, footerLeft, borrador,
 }: {
   branding: ActaBranding
   fecha: string          // ya formateado (día de generación / de la sesión)
   sesionLabel: string    // p. ej. "Sesión N° 3"
   footerLeft: string     // crédito del pie ("Generado por PSG · …")
+  borrador?: boolean     // true en la vista previa → franja "BORRADOR" en cada página
 }) {
   return (
     <>
+      {borrador && (
+        <View style={s.borradorBanner} fixed>
+          <Text style={s.borradorTx}>BORRADOR · VISTA PREVIA — no es el acta oficial de la sesión</Text>
+        </View>
+      )}
       <View style={s.header} fixed>
         {branding.logoDataUrl
           ? <Image src={branding.logoDataUrl} style={s.headerLogo} />

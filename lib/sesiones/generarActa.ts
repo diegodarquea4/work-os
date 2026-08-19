@@ -6,8 +6,8 @@ import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
-import { generarActaGabinete } from './generarActaGabinete'
-import { generarActaInfraestructura } from './generarActaInfraestructura'
+import { renderActaGabineteBuffer } from './generarActaGabinete'
+import { renderActaInfraestructuraBuffer } from './generarActaInfraestructura'
 import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA } from './helpers'
 import { subirActa } from './actaUpload'
 
@@ -25,26 +25,41 @@ import { subirActa } from './actaUpload'
  * (subió pero no alcanzó a guardar acta_path).
  */
 
-export async function generarActa(sesionId: number): Promise<string> {
-  const db = getSupabaseAdmin()
+/**
+ * Opciones de generación del acta. En `preview` se lee el estado BORRADOR (la
+ * sesión aún abierta, sin los efectos del cierre) y el PDF se marca como vista
+ * previa; `currentUserEmail` es quien previsualiza (para «preside»/«generado por»).
+ */
+export type ActaOpts = { preview: boolean; currentUserEmail?: string | null }
 
-  // ── Cargar todo lo que el acta necesita ────────────────────────────────────
-  const { data: sesionRow, error: sesErr } = await db
-    .from('eje_sesiones').select('*').eq('id', sesionId).single()
-  if (sesErr || !sesionRow) throw new Error(`Sesión ${sesionId} no encontrada`)
-  const sesion = sesionRow as EjeSesion
+const OPTS_CIERRE: ActaOpts = { preview: false }
 
-  if (sesion.instancia === 'gabinete') return generarActaGabinete(db, sesion)
-  if (sesion.instancia === 'infraestructura') return generarActaInfraestructura(db, sesion)
+/**
+ * Cláusula `.or()` de los compromisos "verificados". En preview incluye además
+ * los marcados "cumplido" aún SIN sellar — los que ESTE cierre sellará — para que
+ * la vista previa muestre lo mismo que quedará en el acta al cerrar.
+ */
+export function verificadosOr(sesionId: number, preview: boolean): string {
+  return preview
+    ? `cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso),and(estado.eq.cumplido,cerrado_en_sesion_id.is.null)`
+    : `cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`
+}
+
+/**
+ * Renderiza el PDF del acta a un buffer SIN subirlo. Despacha por instancia.
+ * Compartido por `generarActa` (cierre → sube) y la vista previa (devuelve el
+ * PDF inline). NUNCA toca métricas/compromisos — solo lee, renderiza.
+ */
+export async function renderActaBuffer(db: Db, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
+  if (sesion.instancia === 'gabinete') return renderActaGabineteBuffer(db, sesion, opts)
+  if (sesion.instancia === 'infraestructura') return renderActaInfraestructuraBuffer(db, sesion, opts)
 
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
-
   const data: ActaData =
-    sesion.instancia === 'inversion' ? await armarActaInversion(db, sesion, sesionId, regionNombre)
-    : sesion.instancia === 'politico' ? await armarActaPolitico(db, sesion, sesionId, regionNombre)
-    : await armarActaPolicial(db, sesion, sesionId, regionNombre)
+    sesion.instancia === 'inversion' ? await armarActaInversion(db, sesion, sesion.id, regionNombre, opts)
+    : sesion.instancia === 'politico' ? await armarActaPolitico(db, sesion, sesion.id, regionNombre, opts)
+    : await armarActaPolicial(db, sesion, sesion.id, regionNombre, opts)
 
-  // ── Render + upload ────────────────────────────────────────────────────────
   registerPdfFonts()
   const dataConBranding: ActaData = {
     ...data,
@@ -54,8 +69,22 @@ export async function generarActa(sesionId: number): Promise<string> {
   // Cast as any: conflicto de tipos conocido de @react-pdf/renderer con
   // componentes funcionales (mismo patrón que minuta/route.ts y renderPdf.tsx).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(ActaComitePdf as any, { data: dataConBranding }) as any)
+  return renderToBuffer(React.createElement(ActaComitePdf as any, { data: dataConBranding }) as any)
+}
 
+/**
+ * Genera el acta PDF de una sesión CERRADA y la sube al bucket comite-docs.
+ * Compartido por POST /cerrar (paso final) y POST /acta (reintento). El entry
+ * point único despacha por instancia dentro de `renderActaBuffer`.
+ */
+export async function generarActa(sesionId: number): Promise<string> {
+  const db = getSupabaseAdmin()
+  const { data: sesionRow, error: sesErr } = await db
+    .from('eje_sesiones').select('*').eq('id', sesionId).single()
+  if (sesErr || !sesionRow) throw new Error(`Sesión ${sesionId} no encontrada`)
+  const sesion = sesionRow as EjeSesion
+
+  const buffer = await renderActaBuffer(db, sesion, OPTS_CIERRE)
   return subirActa(db, sesion, buffer)
 }
 
@@ -69,7 +98,7 @@ type AsisRow = {
 type Db = ReturnType<typeof getSupabaseAdmin>
 
 /** Comité Policial — reporte por institución (mig 048). */
-async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
+async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
   const [ejeRes, numRes, asisRes, valRes, catRes, verifRes, nuevosRes] = await Promise.all([
     db.from('region_ejes').select('sesiones_nombre').eq('id', sesion.eje_id).single(),
     // N° de sesión = cerradas anteriores del (región, eje) hasta esta fecha/id
@@ -86,7 +115,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     db.from('sesion_compromisos').select('*')
       .eq('region_cod', sesion.region_cod).eq('eje_id', sesion.eje_id)
       .neq('sesion_origen_id', sesionId)
-      .or(`cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`),
+      .or(verificadosOr(sesionId, opts.preview)),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
   ])
 
@@ -97,7 +126,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
   // N° correlativo: posición por fecha (y id como desempate) entre cerradas.
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
-  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+  const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
   return {
     variante: 'policial',
@@ -106,7 +135,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -149,7 +178,8 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
       plazo:       c.plazo,
       seccion:     null,
     })),
-    generadoPor: sesion.closed_by_email,
+    generadoPor: opts.preview ? (opts.currentUserEmail ?? null) : sesion.closed_by_email,
+    borrador:    opts.preview,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
   }
 }
@@ -158,7 +188,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
  * Comité Económico — sin eje (mig 049): nombre fijo, sin
  * indicadores/apuntes; en su lugar, proyectos tratados y oficios tratados.
  */
-async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
+async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
   const [
     numRes, asisRes, proyRes, verifRes, nuevosRes, oficVerifRes, oficNuevosRes,
     metaRegionRes, subRegionRes,
@@ -176,14 +206,16 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_compromisos').select('*')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'inversion')
       .neq('sesion_origen_id', sesionId)
-      .or(`cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`),
+      .or(verificadosOr(sesionId, opts.preview)),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     // Oficios: verificados (resueltos en esta sesión o aún pendientes) +
     // nuevos (marcados "tratado" durante esta sesión) — mismo criterio.
     db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
       .eq('region_cod', sesion.region_cod)
       .neq('sesion_origen_id', sesionId)
-      .or(`resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente`),
+      .or(opts.preview
+        ? `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente,and(estado.eq.resuelto,resuelto_en_sesion_id.is.null)`
+        : `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente`),
     db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
       .eq('sesion_origen_id', sesionId).order('created_at'),
     // Mesa Empleo (mig 052): el cierre ya sumó el valor de esta sesión al
@@ -197,7 +229,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
-  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+  const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
   type OficioConNombres = SesionOficioTratado & { oaeca: { nombre: string } | null; proyecto: { nombre: string } | null }
   const oficios = [
@@ -231,7 +263,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -266,7 +298,8 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
       plazo:       c.plazo,
       seccion:     c.seccion,
     })),
-    generadoPor: sesion.closed_by_email,
+    generadoPor: opts.preview ? (opts.currentUserEmail ?? null) : sesion.closed_by_email,
+    borrador:    opts.preview,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
   }
 }
@@ -275,7 +308,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
  * Comité Político — sin eje (mig 059): asistencia ad-hoc + temas conversados
  * (lista con subpuntos) + compromisos. Sin indicadores/proyectos/oficios.
  */
-async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string): Promise<ActaData> {
+async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
   const [numRes, asisRes, temasRes, verifRes, nuevosRes] = await Promise.all([
     db.from('eje_sesiones').select('id, fecha')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'politico').eq('estado', 'cerrada'),
@@ -288,7 +321,7 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
     db.from('sesion_compromisos').select('*')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'politico')
       .neq('sesion_origen_id', sesionId)
-      .or(`cerrado_en_sesion_id.eq.${sesionId},estado.in.(pendiente,en_curso)`),
+      .or(verificadosOr(sesionId, opts.preview)),
     // Nuevos: TODO lo originado en esta sesión, incluida la delegación a otras
     // instancias (sin filtro de instancia — igual que inversion).
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
@@ -296,7 +329,7 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
-  const sesionNumero = Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
+  const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
   return {
     variante: 'politico',
@@ -305,7 +338,7 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: sesion.closed_by_email ?? sesion.created_by_email,
+    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -337,7 +370,8 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
       plazo:       c.plazo,
       seccion:     null,
     })),
-    generadoPor: sesion.closed_by_email,
+    generadoPor: opts.preview ? (opts.currentUserEmail ?? null) : sesion.closed_by_email,
+    borrador:    opts.preview,
     generadoEn:  new Date().toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }),
   }
 }
