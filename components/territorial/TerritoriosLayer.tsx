@@ -19,7 +19,7 @@ import type { Layer, LeafletMouseEvent, PathOptions } from 'leaflet'
 const geoCache = new Map<string, FeatureCollection>()
 
 function archivoDe(tipo: 'distrito' | 'circunscripcion'): string {
-  return tipo === 'distrito' ? '/distritos.geojson' : '/circunscripciones.geojson'
+  return tipo === 'distrito' ? '/api/territorial/distritos' : '/api/territorial/circunscripciones'
 }
 
 function getTerritorio(f: Feature): string {

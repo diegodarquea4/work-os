@@ -1,9 +1,10 @@
 /**
- * Carga de datos del modo «Autoridades». Lee el SNAPSHOT estático generado por
- * `scripts/snapshot-territorial.mjs` (`public/territorial/snapshot.json` + `fotos.json`),
- * NO la Supabase de Francisca en runtime: una descarga por CDN (cacheada) en vez de
- * ~55 requests paginados, y CERO dependencia externa en producción. El snapshot se
- * regenera y commitea cuando Francisca actualiza datos.
+ * Carga de datos del modo «Autoridades». Lee el SNAPSHOT generado por
+ * `scripts/snapshot-territorial.mjs` (`territorial-data/{snapshot,fotos}.json`),
+ * NO la Supabase de Francisca en runtime. GATE DURO: los archivos NO están en
+ * `public/`; se sirven por `/api/territorial/[asset]`, que exige la capacidad
+ * `mapa.autoridades` server-side (401/403 si no). El snapshot se regenera y
+ * commitea cuando Francisca actualiza datos.
  *
  * `assembleTerritorial(raw)` (puro, testeable) arma las estructuras indexadas y chequea
  * el contrato de columnas (falta una → error ruidoso, no mapa gris). SIN geometrías:
@@ -17,8 +18,8 @@ import type {
   CongresoRow, CongresoReeleccionRow, DelegadoRow, AnioMunicipal, Contrincante,
 } from './types'
 
-const SNAPSHOT_PATH = '/territorial/snapshot.json'
-const FOTOS_PATH = '/territorial/fotos.json'
+const SNAPSHOT_PATH = '/api/territorial/snapshot'
+const FOTOS_PATH = '/api/territorial/fotos'
 
 // ── Contrato: si una tabla no trae una columna esperada, fallar ruidoso ──────
 function assertColumns(tabla: string, rows: Record<string, unknown>[], expected: string[]): void {
@@ -172,7 +173,10 @@ export function assembleTerritorial(raw: RawTerritorial): TerritorialData {
 /** Lee el snapshot estático y arma la estructura. Se ejecuta una vez al entrar al modo. */
 export async function loadTerritorial(): Promise<TerritorialData> {
   const res = await fetch(SNAPSHOT_PATH)
-  if (!res.ok) throw new Error(`Modo Autoridades: no se pudo cargar el snapshot (HTTP ${res.status}). ¿Falta correr scripts/snapshot-territorial.mjs?`)
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw new Error('Modo Autoridades: sin permiso para ver estos datos.')
+    throw new Error(`Modo Autoridades: no se pudo cargar el snapshot (HTTP ${res.status}). ¿Falta correr scripts/snapshot-territorial.mjs?`)
+  }
   const raw = (await res.json()) as RawTerritorial
   return assembleTerritorial(raw)
 }

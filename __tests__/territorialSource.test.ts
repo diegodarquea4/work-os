@@ -75,10 +75,11 @@ describe('assembleTerritorial — contrato', () => {
 })
 
 // ── Snapshot commiteado: se ensambla y colorea offline (sin red) ──────────────
-// Valida el archivo REAL que se sirve en producción (public/territorial/snapshot.json),
-// generado por scripts/snapshot-territorial.mjs. Si el snapshot falta o cambió de
-// forma, este test lo detecta en cada `npm test`.
-const SNAPSHOT = new URL('../public/territorial/snapshot.json', import.meta.url)
+// Valida el archivo REAL que se sirve en producción (territorial-data/snapshot.json,
+// fuera de public/ — gate duro por /api/territorial), generado por
+// scripts/snapshot-territorial.mjs. Si el snapshot falta o cambió de forma, este
+// test lo detecta en cada `npm test`.
+const SNAPSHOT = new URL('../territorial-data/snapshot.json', import.meta.url)
 describe.skipIf(!existsSync(SNAPSHOT))('snapshot commiteado — pipeline completo offline', () => {
   it('ensambla y colorea las 16 regiones y todas las comunas', async () => {
     const { fillForRegion, fillForComuna, computeStats } = await import('@/lib/territorial/derive')
