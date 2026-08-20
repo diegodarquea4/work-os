@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, Modal } from '@/components/ui'
 import TareaGantt from './TareaGantt'
 
 const ESTADO_CONFIG = {
@@ -368,7 +368,7 @@ export default function TareasTab({
       )}
 
       {/* Agregar tarea — bajo la lista, no arriba. */}
-      {!showForm && canCreate && (
+      {canCreate && (
         <button
           onClick={() => setShowForm(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mt-5"
@@ -380,8 +380,28 @@ export default function TareasTab({
         </button>
       )}
 
-      {showForm && (
-        <div className="bg-gray-50 rounded-xl p-4 mt-5 space-y-3">
+      <Modal
+        open={showForm}
+        onClose={resetForm}
+        title="Agregar tarea"
+        size="lg"
+        dismissable={!saving}
+        footer={
+          <>
+            <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !formNombre.trim()}
+              className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre</label>
             <input
@@ -455,20 +475,8 @@ export default function TareasTab({
               Se registrará a tu nombre: <span className="font-mono">{currentUserEmail}</span>
             </p>
           )}
-          <div className="flex gap-2 justify-end">
-            <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !formNombre.trim()}
-              className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
-            >
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

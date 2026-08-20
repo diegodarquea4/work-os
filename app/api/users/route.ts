@@ -20,8 +20,15 @@ export async function GET(req: Request) {
   const region = new URL(req.url).searchParams.get('region')
 
   const db = getSupabaseAdmin()
-  const { data: { users }, error } = await db.auth.admin.listUsers()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // `listUsers` pagina (50 por página por default) — hay que recorrer todas
+  // las páginas o el padrón se corta silenciosamente pasado ese umbral.
+  const users: { email?: string; user_metadata?: { full_name?: string } }[] = []
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    users.push(...data.users)
+    if (data.users.length < 1000) break
+  }
 
   const list = users
     .map(u => ({ email: u.email ?? '', name: u.user_metadata?.full_name ?? u.email ?? '' }))
