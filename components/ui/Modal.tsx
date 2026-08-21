@@ -45,6 +45,14 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', dis
     return () => window.clearTimeout(t)
   }, [open])
 
+  // `onClose` vía ref, no en las deps del efecto de abajo: los callers pasan
+  // funciones inline (ej. onClose={resetForm}) que son una referencia NUEVA en
+  // cada render del padre — incluido cada tecla tipeada en un input de adentro.
+  // Con onClose en las deps, el efecto se re-ejecutaba en cada keystroke y
+  // `panel?.focus()` le robaba el foco al input de vuelta al panel del modal.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
+
   useEffect(() => {
     if (!open) return
     prevFocus.current = document.activeElement as HTMLElement | null
@@ -54,7 +62,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', dis
     document.body.style.overflow = 'hidden'
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return }
       if (e.key === 'Tab' && panel) {
         const f = panel.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])',
@@ -71,7 +79,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', dis
       document.body.style.overflow = prevOverflow
       prevFocus.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!mounted || typeof document === 'undefined') return null
 

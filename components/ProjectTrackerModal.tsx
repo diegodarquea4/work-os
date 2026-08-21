@@ -8,8 +8,10 @@ import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
 import { SEMAFORO_CONFIG, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { composeEjeLabel } from '@/lib/ejes'
 import { comunasDeRegion, comunaNombre, normalizeComunaText } from '@/lib/comunas'
+import { tagColor } from '@/lib/tagColor'
 import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
@@ -68,6 +70,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [nombreLocal, setNombreLocal]       = useState<string>(prioridad.nombre)
   const [editingNombre, setEditingNombre]   = useState(false)
   const [savingNombre, setSavingNombre]     = useState(false)
+  const [descripcionLocal, setDescripcionLocal] = useState<string>(prioridad.descripcion ?? '')
+  const [editingDescripcion, setEditingDescripcion] = useState(false)
+  const [savingDescripcion, setSavingDescripcion]   = useState(false)
+  const [descripcionExpanded, setDescripcionExpanded] = useState(false)
+  const [descripcionOverflow, setDescripcionOverflow]  = useState(false)
+  const descripcionRef = useRef<HTMLParagraphElement>(null)
   const [responsable, setResponsable]       = useState<string>(prioridad.responsable ?? '')
   const [usuarios, setUsuarios]             = useState<{email: string; name: string}[]>([])
   // Padrón acotado a la región de la iniciativa + transversales (admin/
@@ -135,6 +143,15 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // dato estructural. Si la iniciativa todavía no tiene eje_id (legacy),
   // cae al string original sin lookup.
   const { ejes: regionEjes } = useRegionEjes(prioridad.cod)
+  // Etiquetas "funcionales" — las que el sistema reconoce y usa para algo
+  // (CRI/tag del Comité de Infraestructura de la región, megaproyectos
+  // curados por ese comité) llevan color pastel. Cualquier otra etiqueta es
+  // texto libre sin función propia y se muestra neutra, como antes.
+  const { config: regionConfigTags } = useRegionConfig(prioridad.cod)
+  const etiquetasFuncionales = new Set(
+    [regionConfigTags?.infraestructura_tag, ...(regionConfigTags?.infraestructura_megaproyectos ?? [])]
+      .filter((t): t is string => !!t),
+  )
   const ejeFromCatalog = prioridad.eje_id
     ? regionEjes.find(e => e.id === prioridad.eje_id)
     : undefined
@@ -147,6 +164,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
     fetch(`/api/users?region=${encodeURIComponent(prioridad.cod)}`).then(r => r.ok ? r.json() : []).then(setUsuariosRegion)
   }, [prioridad.n])
+
+  // "Ver más..." de la descripción solo aparece si el texto REALMENTE se
+  // corta con el line-clamp-2 — medido contra el DOM (scrollHeight vs
+  // clientHeight), no por un largo de string heurístico (dos líneas caben
+  // distinto según qué tan largas son las palabras). Solo se puede medir
+  // mientras está clampeado (expandido, clientHeight = scrollHeight siempre)
+  // — el valor queda cacheado en el state así que "Ver menos" se sigue
+  // mostrando una vez expandido.
+  useEffect(() => {
+    if (descripcionExpanded) return
+    function medir() {
+      const el = descripcionRef.current
+      setDescripcionOverflow(!!el && el.scrollHeight > el.clientHeight + 1)
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [descripcionLocal, descripcionExpanded])
 
   useEffect(() => {
     // Vía API (cliente admin) y no el cliente RLS directo — `prioridades_
@@ -550,8 +585,56 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {nombreLocal}
                 </p>
               )}
-              {prioridad.descripcion && (
-                <p className="text-xs text-gray-500 leading-relaxed mt-1 line-clamp-2">{prioridad.descripcion}</p>
+              {editingDescripcion && canEditAny ? (
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={descripcionLocal}
+                  disabled={savingDescripcion}
+                  onChange={e => setDescripcionLocal(e.target.value)}
+                  onBlur={async () => {
+                    const val = descripcionLocal.trim()
+                    setEditingDescripcion(false)
+                    if (val === (prioridad.descripcion ?? '')) return
+                    setSavingDescripcion(true)
+                    try {
+                      await safeWrite(
+                        getSupabase().from('prioridades_territoriales').update({ descripcion: val || null }).eq('id', prioridad.id),
+                        `descripcion n=${prioridad.n}`,
+                      )
+                      onUpdatePrioridad(prioridad.n, { descripcion: val || null })
+                    } catch (err) {
+                      setDescripcionLocal(prioridad.descripcion ?? '')
+                      window.alert((err as Error).message)
+                    } finally {
+                      setSavingDescripcion(false)
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setDescripcionLocal(prioridad.descripcion ?? ''); setEditingDescripcion(false) }
+                  }}
+                  className="text-xs text-gray-700 leading-relaxed mt-1 w-full rounded px-1 -mx-1 bg-white ring-1 ring-blue-300 focus:ring-blue-500 focus:outline-none resize-none"
+                />
+              ) : (
+                <div>
+                  <p
+                    ref={descripcionRef}
+                    onClick={() => canEditAny && setEditingDescripcion(true)}
+                    title={canEditAny ? 'Click para editar la descripción' : undefined}
+                    className={`text-xs leading-relaxed mt-1 ${descripcionExpanded ? '' : 'line-clamp-2'} ${canEditAny ? 'cursor-text hover:bg-gray-50 rounded px-1 -mx-1' : ''} ${descripcionLocal ? 'text-gray-500' : 'text-gray-300 italic'}`}
+                  >
+                    {descripcionLocal || (canEditAny ? 'Sin descripción — click para agregar' : 'Sin descripción')}
+                  </p>
+                  {descripcionOverflow && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setDescripcionExpanded(v => !v) }}
+                      className="text-[10px] text-slate-500 hover:text-slate-800 font-medium px-1"
+                    >
+                      {descripcionExpanded ? 'Ver menos' : 'Ver más...'}
+                    </button>
+                  )}
+                </div>
               )}
               <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 flex-wrap">
                 <span>{prioridad.region}</span>
@@ -624,9 +707,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     </div>
                   )}
                 </div>
-                {prioridad.codigo_iniciativa && (
-                  <span className="font-mono text-gray-400">{prioridad.codigo_iniciativa}</span>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -680,24 +760,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-colors duration-150" />
                 {enFoco ? 'En foco' : 'Marcar foco'}
               </button>
-              {/* Toggle "Marcar como desalojo" — admin only. Diferenciador
-                  para casos de la Mesa Interministerial. Convive con el
-                  flag amber de foco sin pisarse (color slate distinto). */}
-              {isAdmin && (
-                <button
-                  onClick={handleToggleDesalojo}
-                  disabled={savingDesalojo}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-[background-color,color,box-shadow] duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:opacity-50 ring-1 ${
-                    esDesalojo
-                      ? 'bg-slate-700 text-white hover:bg-slate-800 ring-slate-700'
-                      : 'text-gray-500 hover:bg-gray-100 ring-gray-200'
-                  }`}
-                  title={esDesalojo ? 'Quitar marca de desalojo' : 'Marcar como caso de desalojo'}
-                >
-                  <HomeIcon filled={esDesalojo} className="w-3.5 h-3.5 transition-colors duration-150" />
-                  {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
-                </button>
-              )}
               <button ref={closeBtnRef} onClick={requestClose} aria-label="Cerrar ficha" className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
@@ -706,10 +768,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </div>
           </div>
 
-          {/* Detalle colapsable: ministerio, etiquetas, semáforo/avance y metadatos.
+          {/* Ministerio, Etiquetas y Semáforo/Avance quedan siempre visibles —
+              solo la grilla de metadata (Responsable en adelante) es colapsable.
               Al minimizar, el contenido de abajo (Seguimiento/Tareas/…) gana espacio. */}
-          {!detailCollapsed && (
-          <>
           {/* Ministerio — multi-select editable */}
           <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingMinisterio ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-xs text-gray-400">Ministerio:</span>
@@ -762,20 +823,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               Enter dispara commit; Backspace en input vacío quita el último. */}
           <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingTags ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-xs text-gray-400">Etiquetas:</span>
-            {tagsLocal.length === 0 && (
+            {tagsLocal.length === 0 && !esDesalojo && (
               <span className="text-xs text-gray-400 italic">Sin etiquetas</span>
             )}
-            {tagsLocal.map(t => (
-              <span
-                key={t}
-                className="text-xs bg-gray-50 text-gray-700 pl-2 pr-1 py-0.5 rounded-md border border-gray-200 flex items-center gap-1"
-              >
-                {t}
-                {canEdit && (
+            {/* Desalojo — mismo diseño de chip que una etiqueta cualquiera,
+                pero en negro para diferenciarla: es un flag admin-only real
+                (es_desalojo), no un tag del array `tags`. Lo que significa un
+                desalojo y cómo se gestiona (desalojo_detalle, Mesa
+                Interministerial) no cambia — solo cambió dónde se selecciona. */}
+            {esDesalojo && (
+              <span className="text-xs bg-slate-900 text-white pl-2 pr-1 py-0.5 rounded-md flex items-center gap-1">
+                <HomeIcon filled className="w-3 h-3" />
+                Desalojo
+                {isAdmin && (
                   <button
-                    onClick={() => saveTags(tagsLocal.filter(x => x !== t))}
-                    className="text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-red-50"
-                    title={`Quitar ${t}`}
+                    onClick={handleToggleDesalojo}
+                    disabled={savingDesalojo}
+                    className="text-slate-300 hover:text-white transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-white/10"
+                    title="Quitar marca de desalojo"
                   >
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M1 1l6 6M7 1L1 7"/>
@@ -783,7 +848,30 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </button>
                 )}
               </span>
-            ))}
+            )}
+            {tagsLocal.map(t => {
+              const funcional = etiquetasFuncionales.has(t)
+              const c = funcional ? tagColor(t) : { bg: 'bg-gray-50', text: 'text-gray-700' }
+              return (
+                <span
+                  key={t}
+                  className={`text-xs ${c.bg} ${c.text} pl-2 pr-1 py-0.5 rounded-md flex items-center gap-1 ${funcional ? '' : 'border border-gray-200'}`}
+                >
+                  {t}
+                  {canEdit && (
+                    <button
+                      onClick={() => saveTags(tagsLocal.filter(x => x !== t))}
+                      className="text-current opacity-50 hover:opacity-100 transition-opacity flex items-center justify-center w-4 h-4 rounded hover:bg-black/10"
+                      title={`Quitar ${t}`}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 1l6 6M7 1L1 7"/>
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              )
+            })}
             {canEdit ? (
               <div className="relative">
                 <input
@@ -809,9 +897,26 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   const q = tagDraft.trim().toLowerCase()
                   const sugerencias = universoEtiquetas
                     .filter(t => t.toLowerCase().includes(q) && !tagsLocal.includes(t))
-                  if (sugerencias.length === 0) return null
+                  // Desalojo aparece como sugerencia especial (admin-only, no
+                  // viene del universo de tags) cuando el texto tipeado matchea.
+                  const sugerirDesalojo = isAdmin && !esDesalojo && 'desalojo'.includes(q)
+                  if (sugerencias.length === 0 && !sugerirDesalojo) return null
                   return (
                     <div className="absolute z-10 top-full left-0 mt-1 min-w-[160px] max-w-[260px] max-h-52 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {sugerirDesalojo && (
+                        <button
+                          type="button"
+                          onMouseDown={e => {
+                            e.preventDefault()
+                            handleToggleDesalojo()
+                            setTagDraft('')
+                          }}
+                          className="flex items-center gap-1.5 w-full text-left text-xs px-2.5 py-1.5 text-white bg-slate-900 hover:bg-slate-800 truncate"
+                        >
+                          <HomeIcon filled className="w-3 h-3" />
+                          Desalojo
+                        </button>
+                      )}
                       {sugerencias.map(s => (
                         <button
                           key={s}
@@ -834,7 +939,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 })()}
               </div>
             ) : (
-              tagsLocal.length === 0 && (
+              tagsLocal.length === 0 && !esDesalojo && (
                 <span className="text-xs text-gray-400 italic">
                   Para agregar etiquetas, propónlo en tu carga semanal de Excel.
                 </span>
@@ -895,19 +1000,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               {savingPct && <span className="text-xs text-gray-400 ml-1">…</span>}
             </div>
 
-            {/* Minimizar el detalle — a la altura de Estado/Avance (lo que oculta) */}
+            {/* Único toggle de la metadata (Responsable en adelante) — Estado/
+                Avance quedan siempre visibles junto con Ministerio y Etiquetas,
+                así que este botón (acá, siempre a la vista) alcanza solo: sin
+                texto, solo la flecha, apuntando hacia el lado que va a hacer. */}
             <button
               onClick={toggleDetail}
               className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
-              title="Minimizar el detalle (más espacio abajo)"
-              aria-expanded={true}
+              title={detailCollapsed ? 'Mostrar el detalle' : 'Minimizar el detalle (más espacio abajo)'}
+              aria-expanded={!detailCollapsed}
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12l5-5 5 5"/>
+                <path d={detailCollapsed ? 'M5 8l5 5 5-5' : 'M5 12l5-5 5 5'}/>
               </svg>
             </button>
           </div>
 
+          {!detailCollapsed && (
+          <>
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-x-3 px-3 py-1 bg-gray-50 rounded-xl mb-2 text-xs">
           <div className="flex flex-col divide-y divide-gray-200/60">
@@ -1284,23 +1394,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </div>{/* end right col */}
           </div>{/* end metadata grid */}
           </>
-          )}
-
-          {/* Detalle minimizado: afordancia para volver a mostrarlo */}
-          {detailCollapsed && (
-            <div className="flex justify-end mb-1">
-              <button
-                onClick={toggleDetail}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                title="Mostrar el detalle"
-                aria-expanded={false}
-              >
-                Mostrar detalle
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 8l5 5 5-5"/>
-                </svg>
-              </button>
-            </div>
           )}
 
           {/* Tabs */}
