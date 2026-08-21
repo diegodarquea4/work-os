@@ -7,11 +7,10 @@ const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
   reunion: { label: 'Reunión', color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
   hito:    { label: 'Hito',    color: 'bg-green-100 text-green-700',   dot: 'bg-green-500'  },
-  alerta:  { label: 'Alerta',  color: 'bg-red-100 text-red-700',       dot: 'bg-red-500'    },
 } as const
 
 const ESTADO_CONFIG = {
-  en_curso:   { label: 'En curso',   color: 'bg-blue-100 text-blue-700'   },
+  en_curso:   { label: 'Avanzando',  color: 'bg-blue-100 text-blue-700'   },
   completado: { label: 'Completado', color: 'bg-green-100 text-green-700' },
   bloqueado:  { label: 'Bloqueado',  color: 'bg-red-100 text-red-700'     },
   pendiente:  { label: 'Pendiente',  color: 'bg-gray-100 text-gray-600'   },

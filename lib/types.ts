@@ -436,14 +436,52 @@ export type RegionMetrics = {
 }
 
 // ── Project Tracker ───────────────────────────────────────────────────────────
+
+// Asistente de un Hito/Reunión — `email` no-null cuando está linkeado a un
+// usuario del sistema (elegido del padrón regional, selección múltiple),
+// null si es una persona externa cargada a mano. La institución solo se
+// pide para personas externas — un usuario del sistema ya tiene perfil.
+export type SeguimientoAsistente = {
+  nombre: string
+  institucion: string
+  email: string | null
+}
+
 export type Seguimiento = {
   id: number
   prioridad_id: number
   fecha: string
-  tipo: 'avance' | 'reunion' | 'hito' | 'alerta'
+  tipo: 'avance' | 'reunion' | 'hito'
   descripcion: string
   autor: string | null
   estado: 'en_curso' | 'completado' | 'bloqueado' | 'pendiente' | null
+  created_at: string
+  // Hito: nombre/hora/lugar propios (fecha ya existía). Reunión: nombre
+  // opcional; descripcion pasa a significar "temas tratados y notas"
+  // (fusionados en un solo campo). `notas` queda solo para reuniones
+  // antiguas creadas antes de la fusión — ya no se escribe desde el form.
+  nombre: string | null
+  hora: string | null
+  lugar: string | null
+  notas: string | null
+  asistentes: SeguimientoAsistente[]
+  // Presencia = ya derivado como "tema a tratar" a Gabinete Regional
+  // (gabinete_temas.id). Alcance v1: solo Gabinete.
+  derivado_gabinete_tema_id: number | null
+}
+
+// Compromiso tomado en una Reunión (mig 074) — tabla propia de Seguimiento,
+// deliberadamente aislada de `sesion_compromisos` (comités).
+export type SeguimientoCompromiso = {
+  id: number
+  seguimiento_id: number
+  prioridad_id: number
+  descripcion: string
+  responsable_nombre: string | null
+  responsable_institucion: string | null
+  plazo: string | null
+  estado: 'pendiente' | 'en_curso' | 'cumplido'
+  autor: string | null
   created_at: string
 }
 

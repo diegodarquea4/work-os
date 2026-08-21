@@ -183,9 +183,6 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
       {/* Semáforo */}
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
 
-      {/* Badge desalojo — inline, antes del nombre, solo si está marcado */}
-      {esDesalojo && <DesalojoBadge size="sm" className="flex-shrink-0" />}
-
       {/* Badge capa — solo si no es lll (default), para no saturar */}
       <CapaBadge value={p.capa} size="sm" hideDefault className="flex-shrink-0" />
 
@@ -200,7 +197,7 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
       </span>
 
       {/* Tags — máximo 1 visible en la card horizontal para no romper layout */}
-      <TagChips tags={p.tags} max={1} className="flex-shrink-0" />
+      <TagChips tags={p.tags} max={1} className="flex-shrink-0" esDesalojo={esDesalojo} />
 
       {/* Responsable (sin @domain) */}
       {responsableShort && (

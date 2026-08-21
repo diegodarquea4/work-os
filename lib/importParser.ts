@@ -381,7 +381,16 @@ export function parseImportWorkbook(
     }
     const pctStr = col(row, '% Avance')
     if (pctStr !== undefined && pctStr !== '') {
-      const n = parseInt(String(pctStr).replace(',', '.'), 10)
+      let num = Number(String(pctStr).replace(',', '.').replace('%', '').trim())
+      // Celda con formato de porcentaje en Excel: XLSX.utils.sheet_to_json usa
+      // raw:true, así que "85%" formateado así llega como fracción (0.85) y no
+      // como 85 — sin este ajuste el avance se guardaba truncado a 0 (parseInt
+      // de "0.85" corta en el punto). Un valor > 0 y <= 1 solo puede venir de
+      // una celda de este tipo (nadie carga "0,5%" de avance a mano).
+      if (!isNaN(num) && num > 0 && num <= 1) {
+        num = num * 100
+      }
+      const n = Math.round(num)
       if (isNaN(n) || n < 0 || n > 100) {
         rowErrors.push(`% Avance «${pctStr}»: debe ser un número entero de 0 a 100.`)
       } else {
