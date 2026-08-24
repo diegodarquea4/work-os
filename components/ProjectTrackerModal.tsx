@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import type { Seguimiento, Documento, SemaforoLog, Tarea } from '@/lib/types'
+import type { Seguimiento, SeguimientoCompromiso, Documento, SemaforoLog, Tarea } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
 import { SEMAFORO_CONFIG, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { composeEjeLabel } from '@/lib/ejes'
+import { comunasDeRegion, comunaNombre, normalizeComunaText } from '@/lib/comunas'
+import { tagColor } from '@/lib/tagColor'
 import SeguimientoTab from './modal/SeguimientoTab'
 import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
@@ -53,9 +56,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     })
   }
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([])
+  const [seguimientoCompromisos, setSeguimientoCompromisos] = useState<SeguimientoCompromiso[]>([])
   const [documentos, setDocumentos]     = useState<Documento[]>([])
   const [semaforoLog, setSemaforoLog]   = useState<SemaforoLog[]>([])
   const [tareas, setTareas]             = useState<Tarea[]>([])
+  // Constancia "Tratado en Gabinete N° X" (v2, mig 074): sesiones de gabinete
+  // cerradas que trataron esta iniciativa (vínculo por id estable). Tolerante:
+  // vacío si la tabla no existe (pre-migración) o si RLS la oculta.
+  const [gabineteTratado, setGabineteTratado] = useState<{ numero: number; fecha: string }[]>([])
   const [loading, setLoading]           = useState(true)
 
   const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
@@ -66,6 +74,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [nombreLocal, setNombreLocal]       = useState<string>(prioridad.nombre)
   const [editingNombre, setEditingNombre]   = useState(false)
   const [savingNombre, setSavingNombre]     = useState(false)
+  const [descripcionLocal, setDescripcionLocal] = useState<string>(prioridad.descripcion ?? '')
+  const [editingDescripcion, setEditingDescripcion] = useState(false)
+  const [savingDescripcion, setSavingDescripcion]   = useState(false)
+  const [descripcionExpanded, setDescripcionExpanded] = useState(false)
+  const [descripcionOverflow, setDescripcionOverflow]  = useState(false)
+  const descripcionRef = useRef<HTMLParagraphElement>(null)
   const [responsable, setResponsable]       = useState<string>(prioridad.responsable ?? '')
   const [usuarios, setUsuarios]             = useState<{email: string; name: string}[]>([])
   // Padrón acotado a la región de la iniciativa + transversales (admin/
@@ -90,6 +104,22 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const [tagsLocal, setTagsLocal]                   = useState<string[]>(prioridad.tags ?? [])
   const [tagDraft, setTagDraft]                     = useState<string>('')
   const [savingTags, setSavingTags]                 = useState(false)
+  // Universo de etiquetas ya usadas en otras iniciativas (visibles según RLS
+  // del usuario) — para sugerir mientras se escribe y evitar duplicados por
+  // variantes de tipeo (ej. "Salud" vs "salud "). Se carga una sola vez.
+  const [universoEtiquetas, setUniversoEtiquetas]   = useState<string[]>([])
+  // Comunas — igual espíritu que Tags pero restringido al catálogo oficial
+  // (data/comunas-cut.json, 345 CUT vía comunasDeRegion) en vez de texto libre:
+  // el picker solo deja elegir comunas que existen. `comuna` (texto) queda como
+  // espejo legible y `alcance_regional` se recalcula con el mismo criterio que
+  // usa el importador (mig 045) — vacío = alcance regional.
+  const [comunaCodsLocal, setComunaCodsLocal]       = useState<number[]>(prioridad.comuna_cods ?? [])
+  const [comunaQuery, setComunaQuery]               = useState<string>('')
+  const [savingComunas, setSavingComunas]           = useState(false)
+  // Popover de edición, anclado al texto "· <comuna>" del header (no es una
+  // sección aparte) — se abre al click, se cierra al click afuera.
+  const [editingComunas, setEditingComunas]         = useState(false)
+  const comunasPopoverRef = useRef<HTMLDivElement>(null)
   const [enFoco, setEnFoco]                         = useState<boolean>(prioridad.en_foco === true)
   const [savingFoco, setSavingFoco]                 = useState(false)
   // Marca admin-only para casos de la Mesa Interministerial de Desalojos
@@ -117,6 +147,15 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // dato estructural. Si la iniciativa todavía no tiene eje_id (legacy),
   // cae al string original sin lookup.
   const { ejes: regionEjes } = useRegionEjes(prioridad.cod)
+  // Etiquetas "funcionales" — las que el sistema reconoce y usa para algo
+  // (CRI/tag del Comité de Infraestructura de la región, megaproyectos
+  // curados por ese comité) llevan color pastel. Cualquier otra etiqueta es
+  // texto libre sin función propia y se muestra neutra, como antes.
+  const { config: regionConfigTags } = useRegionConfig(prioridad.cod)
+  const etiquetasFuncionales = new Set(
+    [regionConfigTags?.infraestructura_tag, ...(regionConfigTags?.infraestructura_megaproyectos ?? [])]
+      .filter((t): t is string => !!t),
+  )
   const ejeFromCatalog = prioridad.eje_id
     ? regionEjes.find(e => e.id === prioridad.eje_id)
     : undefined
@@ -129,6 +168,42 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios)
     fetch(`/api/users?region=${encodeURIComponent(prioridad.cod)}`).then(r => r.ok ? r.json() : []).then(setUsuariosRegion)
   }, [prioridad.n])
+
+  // "Ver más..." de la descripción solo aparece si el texto REALMENTE se
+  // corta con el line-clamp-2 — medido contra el DOM (scrollHeight vs
+  // clientHeight), no por un largo de string heurístico (dos líneas caben
+  // distinto según qué tan largas son las palabras). Solo se puede medir
+  // mientras está clampeado (expandido, clientHeight = scrollHeight siempre)
+  // — el valor queda cacheado en el state así que "Ver menos" se sigue
+  // mostrando una vez expandido.
+  useEffect(() => {
+    if (descripcionExpanded) return
+    function medir() {
+      const el = descripcionRef.current
+      setDescripcionOverflow(!!el && el.scrollHeight > el.clientHeight + 1)
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [descripcionLocal, descripcionExpanded])
+
+  useEffect(() => {
+    // Vía API (cliente admin) y no el cliente RLS directo — `prioridades_
+    // territoriales` está scopeada por región (mig 072) y esto necesita el
+    // universo completo del panel, no solo lo que ve la región del usuario.
+    fetch('/api/tags').then(r => r.ok ? r.json() : []).then(setUniversoEtiquetas)
+  }, [])
+
+  useEffect(() => {
+    if (!editingComunas) return
+    function onMouseDown(e: MouseEvent) {
+      if (comunasPopoverRef.current && !comunasPopoverRef.current.contains(e.target as Node)) {
+        setEditingComunas(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [editingComunas])
 
   // ── A11y del diálogo (Fase 4a) ──────────────────────────────────────────────
   // El modal se monta inline (sin portal), así que no hay un árbol hermano al que
@@ -172,16 +247,36 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   async function loadData() {
     setLoading(true)
     const sb = getSupabase()
-    const [segRes, docRes, logRes, tareasRes] = await Promise.all([
+    const [segRes, compRes, docRes, logRes, tareasRes] = await Promise.all([
       sb.from('seguimientos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
+      sb.from('seguimiento_compromisos').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
       sb.from('documentos_prioridad').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: false }),
       sb.from('semaforo_log').select('*').eq('prioridad_id', prioridad.n).order('created_at', { ascending: true }),
       sb.from('tareas').select('*').eq('prioridad_id', prioridad.n).order('fecha_termino', { ascending: true, nullsFirst: false }),
     ])
     setSeguimientos((segRes.data ?? []) as Seguimiento[])
+    setSeguimientoCompromisos((compRes.data ?? []) as SeguimientoCompromiso[])
     setDocumentos((docRes.data ?? []) as Documento[])
     setSemaforoLog((logRes.data ?? []) as SemaforoLog[])
     setTareas((tareasRes.data ?? []) as Tarea[])
+
+    // Constancia de tratamiento en Gabinete (v2). Query aislada y tolerante a
+    // error: si gabinete_tema_iniciativas no existe aún (pre-migración) o RLS la
+    // bloquea (viewer), `data` viene null y la constancia queda vacía — nunca
+    // rompe la ficha. Vínculo por prioridad.id (llave estable), NO por n.
+    type GabRow = { tema: { sesion: { numero: number | null; fecha: string; estado: string; instancia: string } | null } | null }
+    const { data: gabData } = await sb
+      .from('gabinete_tema_iniciativas')
+      .select('tema:gabinete_temas(sesion:eje_sesiones(numero, fecha, estado, instancia))')
+      .eq('prioridad_id', prioridad.id)
+    const tratado = new Map<number, { numero: number; fecha: string }>()
+    for (const r of (gabData ?? []) as unknown as GabRow[]) {
+      const s = r.tema?.sesion
+      if (s && s.estado === 'cerrada' && s.instancia === 'gabinete' && s.numero != null) {
+        tratado.set(s.numero, { numero: s.numero, fecha: s.fecha })
+      }
+    }
+    setGabineteTratado([...tratado.values()].sort((a, b) => a.numero - b.numero))
     setLoading(false)
   }
 
@@ -229,6 +324,19 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     } finally {
       setSavingSem(false)
     }
+  }
+
+  // Mapeo estado de un "avance" (Seguimiento) → semáforo de la iniciativa.
+  // bloqueado→rojo, pendiente→ámbar, en_curso/completado→verde — calca los
+  // labels ya vigentes (Avanzando/Pendiente/Frenado). Reusa handleSaveSemaforo
+  // (mismo UPDATE + audit log que el selector manual del header).
+  const ESTADO_AVANCE_A_SEMAFORO: Record<string, SemaforoKey> = {
+    bloqueado: 'rojo', pendiente: 'ambar', en_curso: 'verde', completado: 'verde',
+  }
+  function handleAvanceEstadoChange(estado: string) {
+    const next = ESTADO_AVANCE_A_SEMAFORO[estado]
+    if (!next || next === semaforo) return
+    handleSaveSemaforo(next)
   }
 
   async function saveMetaField(field: string, value: string) {
@@ -296,6 +404,33 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
     if (tagsLocal.includes(v)) { setTagDraft(''); return }
     saveTags([...tagsLocal, v])
     setTagDraft('')
+  }
+
+  // Comunas: dedup + `comuna` (texto) recompuesto como espejo de los nombres
+  // elegidos + `alcance_regional` recalculado — mismos tres campos que escribe
+  // el importador (lib/importParser.ts), mismo criterio (vacío = regional).
+  async function saveComunas(nextCods: number[]) {
+    const cleaned = Array.from(new Set(nextCods))
+    const prev = comunaCodsLocal
+    const comunaTexto = cleaned.map(c => comunaNombre(c)).filter((n): n is string => !!n).join('; ')
+    setSavingComunas(true)
+    setComunaCodsLocal(cleaned)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({
+          comuna_cods: cleaned,
+          comuna: comunaTexto || null,
+          alcance_regional: cleaned.length === 0,
+        }).eq('id', prioridad.id),
+        `comuna_cods n=${prioridad.n}`,
+      )
+      onUpdatePrioridad(prioridad.n, { comuna_cods: cleaned, comuna: comunaTexto || null, alcance_regional: cleaned.length === 0 })
+    } catch (err) {
+      setComunaCodsLocal(prev)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingComunas(false)
+    }
   }
 
   async function handleToggleFoco() {
@@ -472,15 +607,128 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   {nombreLocal}
                 </p>
               )}
-              {prioridad.descripcion && (
-                <p className="text-xs text-gray-500 leading-relaxed mt-1 line-clamp-2">{prioridad.descripcion}</p>
+              {editingDescripcion && canEditAny ? (
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={descripcionLocal}
+                  disabled={savingDescripcion}
+                  onChange={e => setDescripcionLocal(e.target.value)}
+                  onBlur={async () => {
+                    const val = descripcionLocal.trim()
+                    setEditingDescripcion(false)
+                    if (val === (prioridad.descripcion ?? '')) return
+                    setSavingDescripcion(true)
+                    try {
+                      await safeWrite(
+                        getSupabase().from('prioridades_territoriales').update({ descripcion: val || null }).eq('id', prioridad.id),
+                        `descripcion n=${prioridad.n}`,
+                      )
+                      onUpdatePrioridad(prioridad.n, { descripcion: val || null })
+                    } catch (err) {
+                      setDescripcionLocal(prioridad.descripcion ?? '')
+                      window.alert((err as Error).message)
+                    } finally {
+                      setSavingDescripcion(false)
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setDescripcionLocal(prioridad.descripcion ?? ''); setEditingDescripcion(false) }
+                  }}
+                  className="text-xs text-gray-700 leading-relaxed mt-1 w-full rounded px-1 -mx-1 bg-white ring-1 ring-blue-300 focus:ring-blue-500 focus:outline-none resize-none"
+                />
+              ) : (
+                <div>
+                  <p
+                    ref={descripcionRef}
+                    onClick={() => canEditAny && setEditingDescripcion(true)}
+                    title={canEditAny ? 'Click para editar la descripción' : undefined}
+                    className={`text-xs leading-relaxed mt-1 ${descripcionExpanded ? '' : 'line-clamp-2'} ${canEditAny ? 'cursor-text hover:bg-gray-50 rounded px-1 -mx-1' : ''} ${descripcionLocal ? 'text-gray-500' : 'text-gray-300 italic'}`}
+                  >
+                    {descripcionLocal || (canEditAny ? 'Sin descripción — click para agregar' : 'Sin descripción')}
+                  </p>
+                  {descripcionOverflow && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setDescripcionExpanded(v => !v) }}
+                      className="text-[10px] text-slate-500 hover:text-slate-800 font-medium px-1"
+                    >
+                      {descripcionExpanded ? 'Ver menos' : 'Ver más...'}
+                    </button>
+                  )}
+                </div>
               )}
               <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 flex-wrap">
                 <span>{prioridad.region}</span>
-                {prioridad.comuna && <><span>·</span><span>{prioridad.comuna}</span></>}
-                {prioridad.codigo_iniciativa && (
-                  <span className="font-mono text-gray-400">{prioridad.codigo_iniciativa}</span>
-                )}
+                <span>·</span>
+                <div className="relative" ref={comunasPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => canEdit && setEditingComunas(v => !v)}
+                    title={canEdit ? 'Click para modificar comunas' : undefined}
+                    className={canEdit ? 'hover:text-slate-700 hover:underline underline-offset-2' : ''}
+                  >
+                    {comunaCodsLocal.length > 0
+                      ? comunaCodsLocal.map(c => comunaNombre(c) ?? c).join(', ')
+                      : (prioridad.alcance_regional ? 'Alcance regional' : 'Sin comuna')}
+                  </button>
+                  {canEdit && editingComunas && (
+                    <div className={`absolute z-10 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 space-y-1.5 ${savingComunas ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {comunaCodsLocal.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {comunaCodsLocal.map(cut => (
+                            <span
+                              key={cut}
+                              className="text-xs bg-gray-50 text-gray-700 pl-2 pr-1 py-0.5 rounded-md border border-gray-200 flex items-center gap-1"
+                            >
+                              {comunaNombre(cut) ?? cut}
+                              <button
+                                onClick={() => saveComunas(comunaCodsLocal.filter(c => c !== cut))}
+                                className="text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-red-50"
+                                title={`Quitar ${comunaNombre(cut) ?? cut}`}
+                              >
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M1 1l6 6M7 1L1 7"/>
+                                </svg>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <input
+                        type="text"
+                        autoFocus
+                        value={comunaQuery}
+                        onChange={e => setComunaQuery(e.target.value)}
+                        placeholder="Buscar comuna…"
+                        className="w-full text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-700 placeholder-gray-400 outline-none focus:border-slate-300 focus:ring-1 focus:ring-slate-200"
+                      />
+                      {comunaQuery.trim() && (() => {
+                        const q = normalizeComunaText(comunaQuery.trim())
+                        const sugerencias = comunasDeRegion(prioridad.cod)
+                          .filter(c => normalizeComunaText(c.nombre).includes(q) && !comunaCodsLocal.includes(c.cut))
+                        return (
+                          <div className="max-h-40 overflow-y-auto border-t border-gray-100 pt-1">
+                            {sugerencias.length === 0 ? (
+                              <p className="text-xs text-gray-400 px-1 py-1">Sin coincidencias en {prioridad.region}</p>
+                            ) : (
+                              sugerencias.map(c => (
+                                <button
+                                  key={c.cut}
+                                  type="button"
+                                  onClick={() => { saveComunas([...comunaCodsLocal, c.cut]); setComunaQuery('') }}
+                                  className="block w-full text-left text-xs px-1.5 py-1 rounded text-gray-700 hover:bg-gray-50 truncate"
+                                >
+                                  {c.nombre}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -534,24 +782,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <FlagIcon filled={enFoco} className="w-3.5 h-3.5 transition-colors duration-150" />
                 {enFoco ? 'En foco' : 'Marcar foco'}
               </button>
-              {/* Toggle "Marcar como desalojo" — admin only. Diferenciador
-                  para casos de la Mesa Interministerial. Convive con el
-                  flag amber de foco sin pisarse (color slate distinto). */}
-              {isAdmin && (
-                <button
-                  onClick={handleToggleDesalojo}
-                  disabled={savingDesalojo}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-[background-color,color,box-shadow] duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:opacity-50 ring-1 ${
-                    esDesalojo
-                      ? 'bg-slate-700 text-white hover:bg-slate-800 ring-slate-700'
-                      : 'text-gray-500 hover:bg-gray-100 ring-gray-200'
-                  }`}
-                  title={esDesalojo ? 'Quitar marca de desalojo' : 'Marcar como caso de desalojo'}
-                >
-                  <HomeIcon filled={esDesalojo} className="w-3.5 h-3.5 transition-colors duration-150" />
-                  {esDesalojo ? 'Desalojo' : 'Marcar desalojo'}
-                </button>
-              )}
               <button ref={closeBtnRef} onClick={requestClose} aria-label="Cerrar ficha" className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
@@ -560,10 +790,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             </div>
           </div>
 
-          {/* Detalle colapsable: ministerio, etiquetas, semáforo/avance y metadatos.
+          {/* Ministerio, Etiquetas y Semáforo/Avance quedan siempre visibles —
+              solo la grilla de metadata (Responsable en adelante) es colapsable.
               Al minimizar, el contenido de abajo (Seguimiento/Tareas/…) gana espacio. */}
-          {!detailCollapsed && (
-          <>
           {/* Ministerio — multi-select editable */}
           <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingMinisterio ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-xs text-gray-400">Ministerio:</span>
@@ -616,20 +845,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               Enter dispara commit; Backspace en input vacío quita el último. */}
           <div className={`flex flex-wrap items-center gap-1.5 mb-3 ${savingTags ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-xs text-gray-400">Etiquetas:</span>
-            {tagsLocal.length === 0 && (
+            {tagsLocal.length === 0 && !esDesalojo && (
               <span className="text-xs text-gray-400 italic">Sin etiquetas</span>
             )}
-            {tagsLocal.map(t => (
-              <span
-                key={t}
-                className="text-xs bg-gray-50 text-gray-700 pl-2 pr-1 py-0.5 rounded-md border border-gray-200 flex items-center gap-1"
-              >
-                {t}
-                {canEdit && (
+            {/* Desalojo — mismo diseño de chip que una etiqueta cualquiera,
+                pero en negro para diferenciarla: es un flag admin-only real
+                (es_desalojo), no un tag del array `tags`. Lo que significa un
+                desalojo y cómo se gestiona (desalojo_detalle, Mesa
+                Interministerial) no cambia — solo cambió dónde se selecciona. */}
+            {esDesalojo && (
+              <span className="text-xs bg-slate-900 text-white pl-2 pr-1 py-0.5 rounded-md flex items-center gap-1">
+                <HomeIcon filled className="w-3 h-3" />
+                Desalojo
+                {isAdmin && (
                   <button
-                    onClick={() => saveTags(tagsLocal.filter(x => x !== t))}
-                    className="text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-red-50"
-                    title={`Quitar ${t}`}
+                    onClick={handleToggleDesalojo}
+                    disabled={savingDesalojo}
+                    className="text-slate-300 hover:text-white transition-colors flex items-center justify-center w-4 h-4 rounded hover:bg-white/10"
+                    title="Quitar marca de desalojo"
                   >
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M1 1l6 6M7 1L1 7"/>
@@ -637,9 +870,33 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   </button>
                 )}
               </span>
-            ))}
+            )}
+            {tagsLocal.map(t => {
+              const funcional = etiquetasFuncionales.has(t)
+              const c = funcional ? tagColor(t) : { bg: 'bg-gray-50', text: 'text-gray-700' }
+              return (
+                <span
+                  key={t}
+                  className={`text-xs ${c.bg} ${c.text} pl-2 pr-1 py-0.5 rounded-md flex items-center gap-1 ${funcional ? '' : 'border border-gray-200'}`}
+                >
+                  {t}
+                  {canEdit && (
+                    <button
+                      onClick={() => saveTags(tagsLocal.filter(x => x !== t))}
+                      className="text-current opacity-50 hover:opacity-100 transition-opacity flex items-center justify-center w-4 h-4 rounded hover:bg-black/10"
+                      title={`Quitar ${t}`}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 1l6 6M7 1L1 7"/>
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              )
+            })}
             {canEdit ? (
-              <input
+              <div className="relative">
+                <input
                 type="text"
                 value={tagDraft}
                 onChange={e => setTagDraft(e.target.value)}
@@ -657,9 +914,54 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 onBlur={commitTagDraft}
                 placeholder="+ etiqueta"
                 className="text-xs px-2 py-0.5 rounded-md border border-dashed border-gray-300 text-gray-700 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-200 min-w-[100px]"
-              />
+                />
+                {tagDraft.trim() && (() => {
+                  const q = tagDraft.trim().toLowerCase()
+                  const sugerencias = universoEtiquetas
+                    .filter(t => t.toLowerCase().includes(q) && !tagsLocal.includes(t))
+                  // Desalojo aparece como sugerencia especial (admin-only, no
+                  // viene del universo de tags) cuando el texto tipeado matchea.
+                  const sugerirDesalojo = isAdmin && !esDesalojo && 'desalojo'.includes(q)
+                  if (sugerencias.length === 0 && !sugerirDesalojo) return null
+                  return (
+                    <div className="absolute z-10 top-full left-0 mt-1 min-w-[160px] max-w-[260px] max-h-52 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {sugerirDesalojo && (
+                        <button
+                          type="button"
+                          onMouseDown={e => {
+                            e.preventDefault()
+                            handleToggleDesalojo()
+                            setTagDraft('')
+                          }}
+                          className="flex items-center gap-1.5 w-full text-left text-xs px-2.5 py-1.5 text-white bg-slate-900 hover:bg-slate-800 truncate"
+                        >
+                          <HomeIcon filled className="w-3 h-3" />
+                          Desalojo
+                        </button>
+                      )}
+                      {sugerencias.map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          // onMouseDown (no onClick) para que dispare antes del
+                          // onBlur del input — si no, el blur comitea el texto
+                          // tipeado como tag nuevo antes de que el click llegue.
+                          onMouseDown={e => {
+                            e.preventDefault()
+                            saveTags([...tagsLocal, s])
+                            setTagDraft('')
+                          }}
+                          className="block w-full text-left text-xs px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 truncate"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
             ) : (
-              tagsLocal.length === 0 && (
+              tagsLocal.length === 0 && !esDesalojo && (
                 <span className="text-xs text-gray-400 italic">
                   Para agregar etiquetas, propónlo en tu carga semanal de Excel.
                 </span>
@@ -720,19 +1022,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               {savingPct && <span className="text-xs text-gray-400 ml-1">…</span>}
             </div>
 
-            {/* Minimizar el detalle — a la altura de Estado/Avance (lo que oculta) */}
+            {/* Único toggle de la metadata (Responsable en adelante) — Estado/
+                Avance quedan siempre visibles junto con Ministerio y Etiquetas,
+                así que este botón (acá, siempre a la vista) alcanza solo: sin
+                texto, solo la flecha, apuntando hacia el lado que va a hacer. */}
             <button
               onClick={toggleDetail}
               className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
-              title="Minimizar el detalle (más espacio abajo)"
-              aria-expanded={true}
+              title={detailCollapsed ? 'Mostrar el detalle' : 'Minimizar el detalle (más espacio abajo)'}
+              aria-expanded={!detailCollapsed}
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12l5-5 5 5"/>
+                <path d={detailCollapsed ? 'M5 8l5 5 5-5' : 'M5 12l5-5 5 5'}/>
               </svg>
             </button>
           </div>
 
+          {!detailCollapsed && (
+          <>
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-x-3 px-3 py-1 bg-gray-50 rounded-xl mb-2 text-xs">
           <div className="flex flex-col divide-y divide-gray-200/60">
@@ -1111,23 +1418,6 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </>
           )}
 
-          {/* Detalle minimizado: afordancia para volver a mostrarlo */}
-          {detailCollapsed && (
-            <div className="flex justify-end mb-1">
-              <button
-                onClick={toggleDetail}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                title="Mostrar el detalle"
-                aria-expanded={false}
-              >
-                Mostrar detalle
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 8l5 5 5-5"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
           {/* Tabs */}
           <div className="flex mt-1">
             {(['seguimiento', 'tareas', 'historial', 'calendario', 'documentos'] as Tab[]).map(t => {
@@ -1159,15 +1449,33 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando...</div>
           ) : tab === 'seguimiento' ? (
-            <SeguimientoTab
-              prioridadId={prioridad.n}
-              prioridadIdEstable={prioridad.id}
-              seguimientos={seguimientos}
-              onRefresh={loadData}
-              canCreate={!!currentUserEmail}
-              canDeleteAny={canEditAny}
-              currentUserEmail={currentUserEmail}
-            />
+            <>
+              {gabineteTratado.length > 0 && (
+                <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 border border-violet-100">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Tratado en Gabinete Regional</span>
+                  {gabineteTratado.map(g => (
+                    <span key={g.numero} className="inline-flex items-center gap-1 text-xs font-semibold text-violet-800 bg-white border border-violet-200 rounded-full px-2 py-0.5">
+                      N° {g.numero}
+                      <span className="text-violet-400 font-normal">· {new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <SeguimientoTab
+                prioridadId={prioridad.n}
+                prioridadIdEstable={prioridad.id}
+                nombreIniciativa={prioridad.nombre}
+                regionCod={prioridad.cod}
+                seguimientos={seguimientos}
+                compromisos={seguimientoCompromisos}
+                usuarios={usuarios}
+                onRefresh={loadData}
+                onAvanceEstadoChange={handleAvanceEstadoChange}
+                canCreate={!!currentUserEmail}
+                canDeleteAny={canEditAny}
+                currentUserEmail={currentUserEmail}
+              />
+            </>
           ) : tab === 'tareas' ? (
             <TareasTab
               prioridadId={prioridad.n}

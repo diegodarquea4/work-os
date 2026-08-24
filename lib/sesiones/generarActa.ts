@@ -7,8 +7,10 @@ import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionOficioTratado, ComiteMetrica, SesionComiteValor } from '@/lib/types'
 import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { renderActaGabineteBuffer } from './generarActaGabinete'
+import { renderActaGabineteV2Buffer } from './generarActaGabineteV2'
 import { renderActaInfraestructuraBuffer } from './generarActaInfraestructura'
-import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA } from './helpers'
+import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA, COMITE_INSTITUCIONES } from './helpers'
+import { resolvePreside } from './preside'
 import { subirActa } from './actaUpload'
 
 /**
@@ -51,7 +53,13 @@ export function verificadosOr(sesionId: number, preview: boolean): string {
  * PDF inline). NUNCA toca métricas/compromisos — solo lee, renderiza.
  */
 export async function renderActaBuffer(db: Db, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
-  if (sesion.instancia === 'gabinete') return renderActaGabineteBuffer(db, sesion, opts)
+  if (sesion.instancia === 'gabinete') {
+    // Discriminador de formato (mig 074): v2 (pauta) vs v1 (histórico). El
+    // guard `=== 2` deja todo lo existente en v1 (formato_acta default 1).
+    return sesion.formato_acta === 2
+      ? renderActaGabineteV2Buffer(db, sesion, opts)
+      : renderActaGabineteBuffer(db, sesion, opts)
+  }
   if (sesion.instancia === 'infraestructura') return renderActaInfraestructuraBuffer(db, sesion, opts)
 
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
@@ -99,7 +107,7 @@ type Db = ReturnType<typeof getSupabaseAdmin>
 
 /** Comité Policial — reporte por institución (mig 048). */
 async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
-  const [ejeRes, numRes, asisRes, valRes, catRes, verifRes, nuevosRes] = await Promise.all([
+  const [ejeRes, numRes, asisRes, valRes, catRes, instRes, verifRes, nuevosRes, preside] = await Promise.all([
     db.from('region_ejes').select('sesiones_nombre').eq('id', sesion.eje_id).single(),
     // N° de sesión = cerradas anteriores del (región, eje) hasta esta fecha/id
     db.from('eje_sesiones').select('id, fecha')
@@ -110,6 +118,8 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     // Reporte por institución (mig 048): valores de la sesión + catálogo.
     db.from('sesion_comite_valor').select('*').eq('sesion_id', sesionId),
     db.from('comite_metrica').select('*').eq('region_cod', sesion.region_cod),
+    // Instituciones de la región (mig 078): base 4 + propias, en orden.
+    db.from('comite_institucion').select('clave, nombre').eq('region_cod', sesion.region_cod).eq('activo', true).order('orden'),
     // Verificados: compromisos de sesiones anteriores — cumplidos en esta
     // sesión o aún abiertos (se reporta su estado resultante)
     db.from('sesion_compromisos').select('*')
@@ -117,11 +127,17 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
       .neq('sesion_origen_id', sesionId)
       .or(verificadosOr(sesionId, opts.preview)),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
+    resolvePreside(db, sesion, opts),
   ])
 
   const catalogo = (catRes.data ?? []) as ComiteMetrica[]
   const valores  = ((valRes.data ?? []) as SesionComiteValor[])
     .map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] }))
+  // Instituciones de la región (mig 078): con catálogo vacío, las 4 base.
+  const instRows = (instRes.data ?? []) as { clave: string; nombre: string }[]
+  const instituciones = instRows.length > 0
+    ? instRows.map(r => ({ key: r.clave, label: r.nombre }))
+    : COMITE_INSTITUCIONES.map(i => ({ key: i.key as string, label: i.label }))
 
   // N° correlativo: posición por fecha (y id como desempate) entre cerradas.
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -135,7 +151,8 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
+    preside,
+    comentarios: sesion.comentarios,
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -145,7 +162,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
     })),
     // Reporte por institución: solo instituciones con datos; en cada fila el
     // valor viene pre-formateado y el desglose sin sub-valores vacíos.
-    instituciones: agruparPorInstitucion(catalogo, valores, true)
+    instituciones: agruparPorInstitucion(catalogo, valores, true, instituciones)
       .filter(g => g.filas.length > 0)
       .map(g => ({
         label: g.label,
@@ -191,7 +208,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
 async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
   const [
     numRes, asisRes, proyRes, verifRes, nuevosRes, oficVerifRes, oficNuevosRes,
-    metaRegionRes, subRegionRes,
+    metaRegionRes, subRegionRes, preside,
   ] = await Promise.all([
     db.from('eje_sesiones').select('id, fecha')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'inversion').eq('estado', 'cerrada'),
@@ -225,6 +242,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     // Subsidios (mig 055): mismo criterio — se lee post-cierre.
     db.from('region_subsidio_empleo').select('cupos, postulados, entregados, empresas_postulantes')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
+    resolvePreside(db, sesion, opts),
   ])
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -263,7 +281,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
+    preside,
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,
@@ -309,7 +327,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
  * (lista con subpuntos) + compromisos. Sin indicadores/proyectos/oficios.
  */
 async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
-  const [numRes, asisRes, temasRes, verifRes, nuevosRes] = await Promise.all([
+  const [numRes, asisRes, temasRes, verifRes, nuevosRes, preside] = await Promise.all([
     db.from('eje_sesiones').select('id, fecha')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'politico').eq('estado', 'cerrada'),
     db.from('sesion_asistencia')
@@ -325,6 +343,7 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
     // Nuevos: TODO lo originado en esta sesión, incluida la delegación a otras
     // instancias (sin filtro de instancia — igual que inversion).
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
+    resolvePreside(db, sesion, opts),
   ])
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -338,7 +357,7 @@ async function armarActaPolitico(db: Db, sesion: EjeSesion, sesionId: number, re
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
+    preside,
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,

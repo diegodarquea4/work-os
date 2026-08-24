@@ -37,7 +37,7 @@ const MetricasView     = dynamic(() => import('./MetricasView'))
 // spec gabinete §7.1): la Bandeja vive como pane "Preparación" dentro de
 // Gabinete (KanbanView). El valor guardado en localStorage se migra en la
 // hidratación (no hay deep links por URL — la vista persiste solo ahí).
-type View = 'mapa' | 'dashboard' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas'
+type View = 'mapa' | 'dashboard' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas' | 'catalogo-comite'
 
 type Props = {
   projects: Iniciativa[]
@@ -47,6 +47,7 @@ type Props = {
 const AdminUsersView  = dynamic(() => import('./AdminUsersView'))
 const VistaRegional   = dynamic(() => import('./VistaRegional'))
 const AyudaModal      = dynamic(() => import('./AyudaModal'))
+const CatalogoComiteNacional = dynamic(() => import('./CatalogoComiteNacional'))
 
 export default function WorkOSApp({ projects, geoData }: Props) {
   const { warning, secondsLeft, extend } = useInactivityLogout()
@@ -133,7 +134,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     try {
       const storedView   = localStorage.getItem('workos:view')
       const storedRegion = localStorage.getItem('workos:activeRegion')
-      const validViews: View[] = ['mapa', 'dashboard', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas']
+      const validViews: View[] = ['mapa', 'dashboard', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas', 'catalogo-comite']
       if (storedView === 'atencion') {
         // Fusión Atención+Gabinete: quien tenía la Bandeja guardada aterriza
         // en Gabinete con el pane Preparación abierto (su bandeja de siempre).
@@ -739,6 +740,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
         </div>
       )}
 
+      {/* Catálogo nacional de métricas del Comité Policial (mig 079) —
+          gate por capacidad (admin por defecto). Doble check botón + render. */}
+      {view === 'catalogo-comite' && can(capabilities, 'comite.metricas.catalogo') && (
+        <div className="flex-1 overflow-y-auto">
+          <CatalogoComiteNacional />
+        </div>
+      )}
+
       {/* Desalojos view — admin (edición) + regional (solo lectura, sus regiones).
           Doble check (botón + render) para que un user que manualmente cambie
           `view` via devtools no vea contenido fuera de su rol. La protección real
@@ -1019,6 +1028,21 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <path d="M9 7.5c1.5 0 2.5 1 2.5 2.5"/>
               </svg>
               Permisos
+            </button>
+          )}
+          {can(capabilities, 'comite.metricas.catalogo') && (
+            <button
+              onClick={() => { setView('catalogo-comite'); setGearOpen(false) }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === 'catalogo-comite'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+                <path d="M1.5 2.5h9M1.5 6h9M1.5 9.5h9M3.5 1v3M6.5 4.5v3M3.5 8v3" strokeLinecap="round"/>
+              </svg>
+              Catálogo de métricas
             </button>
           )}
           {(profile?.role === 'admin' || profile?.role === 'editor') && (

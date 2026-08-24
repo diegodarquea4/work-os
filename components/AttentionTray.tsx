@@ -684,8 +684,8 @@ export default function AttentionTray({
                   <FlagIcon className="w-8 h-8 text-gray-300 mx-auto mb-3" />
                   <p className="text-sm text-gray-600 mb-1 font-medium">Sin iniciativas en foco</p>
                   <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                    Marcá iniciativas con la bandera desde el Kanban o el panel de detalle para verlas acá.
-                    {sugUniqueCount > 0 && ' Mientras tanto, revisá las sugerencias automáticas abajo.'}
+                    Marca iniciativas con la bandera desde el Kanban o el panel de detalle para verlas aquí.
+                    {sugUniqueCount > 0 && ' Mientras tanto, revisa las sugerencias automáticas abajo.'}
                   </p>
                 </div>
               ) : (
@@ -850,7 +850,6 @@ const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, show
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sem.dot}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            {p.es_desalojo && <DesalojoBadge size="sm" />}
             <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-slate-900">
               {p.nombre}
             </p>
@@ -860,7 +859,7 @@ const IniciativaFocoRow = memo(function IniciativaFocoRow({ p, canEditFoco, show
             <span className="text-xs px-1.5 py-0 rounded-full font-medium bg-gray-100 text-gray-600">
               {p.eje}
             </span>
-            <TagChips tags={p.tags} max={2} />
+            <TagChips tags={p.tags} max={2} esDesalojo={p.es_desalojo} />
             {p.responsable && (
               <span className="truncate max-w-[140px]" title={p.responsable}>· {formatResponsableDisplay(p.responsable)}</span>
             )}

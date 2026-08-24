@@ -212,13 +212,23 @@ export type PoligonoPostBody  = z.infer<typeof poligonoPostSchema>
 export type PoligonoPatchBody = z.infer<typeof poligonoPatchSchema>
 
 // ── /api/sesiones/[id]/* — Módulo Sesiones (comités mig 044 + gabinete 046) ──
-// Las rutas /cerrar y /acta no llevan body (el borrador ya está persistido
-// client-side vía safeWrite); solo se valida el param dinámico. Por lo mismo
-// NO hay schema zod para `instancia` ('eje'|'gabinete'): el enforcement es el
-// CHECK de BD (mig 046) sobre los inserts client-side — un enum acá sería
+// Las rutas /cerrar, /acta y /enviar-pauta no llevan body (el borrador ya está
+// persistido client-side vía safeWrite); solo se valida el param dinámico. Por
+// lo mismo NO hay schema zod para `instancia` ('eje'|'gabinete'): el enforcement
+// es el CHECK de BD (mig 046) sobre los inserts client-side — un enum acá sería
 // código muerto mientras no exista una ruta que reciba ese campo en el body.
 
 export const sesionIdSchema = z.coerce.number().int().positive()
+
+// ── /api/sesiones/[id]/hoja-conduccion POST — Gabinete v2 (mig 074) ──────────
+// Hoja de conducción de 2 caras (descarga binaria, patrón /api/cronograma-gabinete).
+// Body opcional: `horaInicio` "HH:MM" — la hora de partida elegida por el DPR,
+// base de la hora objetivo por punto. Sin body, el server usa un default.
+export const hojaConduccionSchema = z.object({
+  horaInicio: z.string().regex(/^\d{1,2}:\d{2}$/, 'hora en formato HH:MM').optional(),
+})
+
+export type HojaConduccionBody = z.infer<typeof hojaConduccionSchema>
 
 // ── /api/tarea-gantt-pdf POST ────────────────────────────────────────────────
 // El cliente ya tiene las tareas cargadas (vienen de la misma query RLS que

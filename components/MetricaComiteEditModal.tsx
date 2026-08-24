@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
-import type { ComiteInstitucion, ComiteMetrica } from '@/lib/types'
+import type { ComiteMetrica } from '@/lib/types'
 import { COMITE_INSTITUCIONES } from '@/lib/sesiones/helpers'
 import { Alert } from '@/components/ui'
 
@@ -20,14 +20,15 @@ type Props = {
   onClose: () => void
   metrica?: ComiteMetrica | null   // null = creación
   regionCod: string
-  institucion: ComiteInstitucion   // preseleccionada (sub-tab activo)
+  institucion: string              // clave preseleccionada (sub-tab activo)
+  institucionLabel?: string        // etiqueta (mig 078 — instituciones dinámicas)
   currentUserEmail: string
   ordenSugerido: number            // último orden + 1 al crear
   onSaved: () => void
 }
 
 export default function MetricaComiteEditModal({
-  open, onClose, metrica, regionCod, institucion, currentUserEmail, ordenSugerido, onSaved,
+  open, onClose, metrica, regionCod, institucion, institucionLabel, currentUserEmail, ordenSugerido, onSaved,
 }: Props) {
   const isEdit = !!metrica
   // El modal se monta fresco por apertura (el padre lo renderiza condicional),
@@ -40,7 +41,7 @@ export default function MetricaComiteEditModal({
 
   if (!open) return null
 
-  const instLabel = COMITE_INSTITUCIONES.find(i => i.key === institucion)?.label ?? institucion
+  const instLabel = institucionLabel ?? COMITE_INSTITUCIONES.find(i => i.key === institucion)?.label ?? institucion
 
   function handleClose() { if (!saving) onClose() }
 

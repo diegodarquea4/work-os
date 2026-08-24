@@ -87,6 +87,36 @@ export default function NominaModal({ region, instancia, eje, nombreInstancia, o
     }
   }
 
+  // Marca a UNA persona como quien preside por defecto (mig 077). El índice
+  // único uq_sesion_nomina_preside exige ≤1 por alcance → traspaso: apago al
+  // actual y prendo al nuevo (nunca un "clear-all" ciego que dispararía el
+  // throw de safeWrite por 0 filas).
+  async function handleTogglePreside(m: SesionNomina) {
+    const actual = miembros.find(x => x.preside && x.id !== m.id)
+    try {
+      if (m.preside) {
+        await safeWrite(
+          getSupabase().from('sesion_nomina').update({ preside: false }).eq('id', m.id),
+          `sesion_nomina preside off id=${m.id}`,
+        )
+      } else {
+        if (actual) {
+          await safeWrite(
+            getSupabase().from('sesion_nomina').update({ preside: false }).eq('id', actual.id),
+            `sesion_nomina preside off id=${actual.id}`,
+          )
+        }
+        await safeWrite(
+          getSupabase().from('sesion_nomina').update({ preside: true }).eq('id', m.id),
+          `sesion_nomina preside on id=${m.id}`,
+        )
+      }
+      await load()
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
   async function handleDesactivar(m: SesionNomina) {
     if (!confirm(`¿Quitar a ${m.nombre} de la nómina?\n\nDeja de aparecer en la asistencia de las próximas sesiones; las actas anteriores no cambian.`)) return
     try {
@@ -190,11 +220,29 @@ export default function NominaModal({ region, instancia, eje, nombreInstancia, o
                       {m.institucion}{m.cargo ? ` · ${m.cargo}` : ''}
                     </p>
                   </div>
+                  {m.preside && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-violet-600 text-white">
+                      Preside
+                    </span>
+                  )}
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
                     m.calidad === 'titular' ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'
                   }`}>
                     {CALIDAD_LABEL[m.calidad]}
                   </span>
+                  <button
+                    onClick={() => handleTogglePreside(m)}
+                    className={`p-1 rounded flex-shrink-0 transition-opacity ${
+                      m.preside
+                        ? 'text-violet-600'
+                        : 'text-gray-300 hover:text-violet-500 hover:bg-violet-50 opacity-0 group-hover:opacity-100'
+                    }`}
+                    title={m.preside ? 'Quitar como quien preside' : 'Marcar como quien preside'}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 12 12" fill={m.preside ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+                      <path d="M6 1l1.4 3 3.3.3-2.5 2.2.75 3.2L6 8.1 3.05 9.9l.75-3.2L1.3 4.3l3.3-.3z"/>
+                    </svg>
+                  </button>
                   <button
                     onClick={() => handleDesactivar(m)}
                     className="p-1 text-gray-300 hover:text-red-500 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
@@ -207,6 +255,13 @@ export default function NominaModal({ region, instancia, eje, nombreInstancia, o
                 </div>
               ))}
             </div>
+          )}
+
+          {!loading && miembros.length > 0 && (
+            <p className="text-[11px] text-gray-400 mt-3 leading-snug">
+              La estrella marca quién <span className="font-medium text-violet-500">preside</span> por defecto en el acta.
+              Aplica a las próximas sesiones — las actas ya cerradas no cambian.
+            </p>
           )}
         </div>
       </div>

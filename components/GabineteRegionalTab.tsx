@@ -1,15 +1,16 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
-import { useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { getSupabase } from '@/lib/supabase'
+import { useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
-import SesionModal from './SesionModal'
 import HistorialSesionesModal from './HistorialSesionesModal'
 import NominaModal from './NominaModal'
+import ConsolaSesionGabinete from './gabinete/ConsolaSesionGabinete'
 
 /**
  * Tab "Gabinete Regional" de la sección Comités y Gabinete Regional
@@ -22,24 +23,27 @@ import NominaModal from './NominaModal'
  * "no habilitado".
  *
  * El gabinete NO digita métricas: este tab no tiene lista de métricas — solo
- * strip de estado + Nueva sesión / Nómina / Historial (el resumen del plan
- * vive en "Ejes estratégicos" y en la sesión misma como zona 3).
+ * strip de estado + Abrir sesión (Consola v2) / Nómina / Historial. La sesión
+ * se ARMA en Gabinete → Preparación (stepper) y se CORRE acá en la Consola; el
+ * SesionModal v1 quedó retirado del gabinete (cutover v2).
  */
 
 type Props = {
   region: Region
+  // Aún lo pasa ComitesRegionalesSection; el gabinete v2 ya no lo usa (era para
+  // los ejes destino de mandatos del SesionModal, ya retirado). Se conserva en
+  // el contrato para no tocar el call-site.
   regionEjes: RegionEje[]
   // Cartera de la región (regionIniciativas de VistaRegional) — alimenta la
-  // zona 3 del SesionModal y los typeaheads sin queries nuevas.
+  // Consola (iniciativas en foco, typeaheads) sin queries nuevas.
   iniciativas: Iniciativa[]
   // Abrir la ficha completa de una iniciativa (VistaRegional la monta con su
-  // ProjectTrackerModal, por encima de la sesión) — desde la zona 3.
+  // ProjectTrackerModal, por encima de la Consola).
   onAbrirIniciativa: (p: Iniciativa) => void
 }
 
-export default function GabineteRegionalTab({ region, regionEjes, iniciativas, onAbrirIniciativa }: Props) {
+export default function GabineteRegionalTab({ region, iniciativas, onAbrirIniciativa }: Props) {
   const canEditOperational = useCanEditOperational()
-  const userEmail          = useCurrentUserEmail()
   const { config, loading: configLoading } = useRegionConfig(region.cod)
 
   const habilitado = !!config?.gabinete_habilitado
@@ -47,16 +51,27 @@ export default function GabineteRegionalTab({ region, regionEjes, iniciativas, o
   // Gate único del módulo (patrón sesionesOn del drawer): sin él, ni queries.
   const gabineteOn = habilitado && canEditOperational
 
-  const [sesionOpen, setSesionOpen]       = useState(false)
+  const [consolaOpen, setConsolaOpen]     = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
   const [nominaOpen, setNominaOpen]       = useState(false)
   const { resumen, refresh: refreshResumen } = useSesionesResumen(
     region.cod, { instancia: 'gabinete' }, gabineteOn,
   )
 
-  // Comités con sesiones habilitadas — destino de mandatos y origen de
-  // escalados dentro del SesionModal.
-  const ejesComites = useMemo(() => regionEjes.filter(e => e.sesiones_habilitadas), [regionEjes])
+  // ¿Hay una sesión PREPARADA lista para abrir? Es un borrador v2 (formato_acta=2,
+  // nace en Preparación). El SesionModal v1 se retiró del gabinete: las sesiones
+  // se arman en Preparación (stepper) y se corren en la Consola. Un borrador v1
+  // legado (si quedara alguno) NO abre nada acá — se limpia en la migración de
+  // cutover; lo único que corre es la Consola.
+  const [borrador, setBorrador] = useState<{ formato: number | null; fecha: string } | null>(null)
+  useEffect(() => {
+    if (!gabineteOn || !resumen.borradorId) { setBorrador(null); return }
+    let cancel = false
+    getSupabase().from('eje_sesiones').select('formato_acta, fecha').eq('id', resumen.borradorId).maybeSingle()
+      .then(({ data }) => { if (!cancel) setBorrador(data ? { formato: (data.formato_acta as number | null) ?? null, fecha: data.fecha as string } : null) })
+    return () => { cancel = true }
+  }, [gabineteOn, resumen.borradorId])
+  const sesionPreparada = !!resumen.borradorId && borrador?.formato === 2
 
   if (configLoading) {
     return <div className="py-10 text-center text-sm text-gray-400">Cargando gabinete…</div>
@@ -97,17 +112,24 @@ export default function GabineteRegionalTab({ region, regionEjes, iniciativas, o
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Acciones */}
       <div className="px-4 pt-4 pb-2">
-        <button
-          onClick={() => setSesionOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
-          title={resumen.borradorId ? 'Continuar el borrador de sesión' : `Nueva sesión de ${gabineteNombre}`}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3" width="10" height="9" rx="1.5"/>
-            <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
-          </svg>
-          {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
-        </button>
+        {sesionPreparada ? (
+          <button
+            onClick={() => setConsolaOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
+            title="Conducir la sesión del gabinete"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+              <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
+            </svg>
+            Abrir sesión
+          </button>
+        ) : (
+          <div className="w-full flex items-start gap-2.5 py-2.5 px-3 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-slate-500 text-[13px] leading-snug">
+            <svg className="flex-none mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <span>No hay sesión preparada. Arma la pauta en <b className="font-semibold text-slate-600">Gabinete → Preparación</b> y vuelve para abrirla.</span>
+          </div>
+        )}
       </div>
 
       {/* Strip resumen (patrón del drawer del comité) */}
@@ -159,23 +181,24 @@ export default function GabineteRegionalTab({ region, regionEjes, iniciativas, o
         </div>
       </div>
 
-      {/* Modales (solo montan con el gate activo) */}
-      {sesionOpen && (
-        <SesionModal
+      {/* Consola en sala (v2): superficie a pantalla completa. El cierre en 4
+          movimientos vive dentro de la consola ("Terminar gabinete →" → fase
+          cierre); el SesionModal clásico ya no interviene en v2. */}
+      {consolaOpen && resumen.borradorId && (
+        <ConsolaSesionGabinete
           region={region}
-          instancia="gabinete"
           gabineteNombre={gabineteNombre}
-          iniciativas={iniciativas}
-          ejesComites={ejesComites}
-          onAbrirIniciativa={onAbrirIniciativa}
-          borradorId={resumen.borradorId}
-          currentUserEmail={userEmail}
-          onClose={() => {
-            setSesionOpen(false)
-            refreshResumen()
-          }}
+          sesionId={resumen.borradorId}
+          fecha={borrador?.fecha ?? ''}
+          numeroLabel="Sesión en curso"
+          projects={iniciativas}
+          canEdit={canEditOperational}
+          onOpenIniciativa={onAbrirIniciativa}
+          onClose={() => { setConsolaOpen(false); refreshResumen() }}
         />
       )}
+
+      {/* Modales (solo montan con el gate activo) */}
       {historialOpen && (
         <HistorialSesionesModal
           region={region}

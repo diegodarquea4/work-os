@@ -18,9 +18,11 @@ import {
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
+import { useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import MegaproyectoGroup from './MegaproyectoGroup'
+import CapturaSalaGabinete from './gabinete/CapturaSalaGabinete'
 import { Alert } from '@/components/ui'
 
 /**
@@ -142,6 +144,11 @@ export default function SesionModal(props: Props) {
 
   const [sesion, setSesion]     = useState<EjeSesion | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
+  // Gabinete v2 (pauta como columna vertebral, mig 074): la captura en sala
+  // (relato + intervenciones por punto) reemplaza la zona 4 de apuntes por
+  // institución, y los compromisos se ligan a un punto de la pauta. esV2 es
+  // falso mientras la sesión no exista o sea formato_acta=1 (todo el histórico).
+  const esV2 = esGabinete && sesion?.formato_acta === 2
 
   // "Escalar a gabinete" (subsidiariedad, spec gabinete §7.3): solo en
   // sesiones de COMITÉ y solo si la región tiene el gabinete habilitado.
@@ -167,6 +174,9 @@ export default function SesionModal(props: Props) {
   const [comiteCatalogo, setComiteCatalogo]     = useState<ComiteMetrica[]>([])
   const [comiteValores, setComiteValores]       = useState<SesionComiteValor[]>([])
   const [comiteValoresPrev, setComiteValoresPrev] = useState<Map<number, SesionComiteValor>>(new Map())
+  // Instituciones que reportan (mig 078) — dinámicas por región (4 base + propias).
+  const { instituciones: comiteInstituciones, refresh: reloadComiteInstituciones } =
+    useInstitucionesComite(region.cod, props.instancia === 'eje')
   // Zona 4 gabinete: apuntes por institución (el comité ya no usa esta zona).
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
   const [instituciones, setInstituciones]   = useState<string[]>([])
@@ -196,6 +206,11 @@ export default function SesionModal(props: Props) {
   const [cDestinoInfra, setCDestinoInfra]   = useState<'' | 'gabinete'>('')
   // Infraestructura: a qué megaproyecto pertenece (mig 062) — '' = ninguno.
   const [cMegaproyecto, setCMegaproyecto]   = useState('')
+  // Gabinete v2: punto de la pauta al que se liga el compromiso ('' = sin punto).
+  const [cTemaId, setCTemaId]               = useState<number | ''>('')
+  // Gabinete v2: puntos de la pauta de esta sesión (id + título), para el
+  // selector de tema de los compromisos y el conteo de la captura en sala.
+  const [puntosV2, setPuntosV2]             = useState<{ id: number; titulo: string; orden: number }[]>([])
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
@@ -225,6 +240,11 @@ export default function SesionModal(props: Props) {
             // Default sano para que el autosave nunca bloquee en un select
             // sin tocar — el usuario lo cambia a Mesa Técnica si corresponde.
             tipo_comite: esInfraestructura ? 'cri' : null,
+            // Gabinete v2 (mig 074, aplicada): los borradores nuevos de gabinete
+            // nacen v2 (pauta como columna vertebral). El resto sigue en v1 (el
+            // discriminador solo pesa en el acta de gabinete). Los borradores v1
+            // preexistentes se cierran como v1.
+            formato_acta: props.instancia === 'gabinete' ? 2 : 1,
             created_by_email: currentUserEmail || null,
           })
           .select('*')
@@ -254,6 +274,21 @@ export default function SesionModal(props: Props) {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Gabinete v2: puntos de la pauta de esta sesión (para el selector de tema de
+  // los compromisos). La captura en sala carga su propio detalle por separado.
+  useEffect(() => {
+    if (!esV2 || !sesion) { setPuntosV2([]); return }
+    let cancelled = false
+    getSupabase().from('gabinete_temas').select('id, titulo, texto, orden')
+      .eq('sesion_id', sesion.id).order('orden').order('id')
+      .then(({ data }) => {
+        if (cancelled) return
+        setPuntosV2(((data ?? []) as { id: number; titulo: string | null; texto: string | null; orden: number }[])
+          .map(t => ({ id: t.id, titulo: (t.titulo ?? t.texto ?? '').trim() || '(sin título)', orden: t.orden })))
+      })
+    return () => { cancelled = true }
+  }, [esV2, sesion])
 
   const loadAll = useCallback(async (s: EjeSesion) => {
     const sb = getSupabase()
@@ -678,12 +713,15 @@ export default function SesionModal(props: Props) {
           escalado_at: enviarAGabineteDesdeInfra ? new Date().toISOString() : null,
           escalado_en_sesion_id: enviarAGabineteDesdeInfra ? sesion.id : null,
           megaproyecto: esInfraestructura ? (cMegaproyecto || null) : null,
+          // v2: liga el compromiso a un punto de la pauta (mig 074). En un mandato
+          // a comité el tema_id igual queda (traza el origen dentro del gabinete).
+          tema_id: esV2 && cTemaId !== '' ? Number(cTemaId) : null,
         }),
         `sesion_compromisos insert sesion=${sesion.id}`,
       )
       setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
       setCDescripcion(''); setCInstitucion(''); setCNombre(''); setCPlazo('')
-      setCVinculada(null); setCDestinoEje(''); setCDestinoInfra(''); setCMegaproyecto('')
+      setCVinculada(null); setCDestinoEje(''); setCDestinoInfra(''); setCMegaproyecto(''); setCTemaId('')
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -693,7 +731,7 @@ export default function SesionModal(props: Props) {
 
   // ── Metadatos de la sesión (fecha / lugar) ────────────────────────────────
 
-  async function commitSesionField(patch: Partial<Pick<EjeSesion, 'fecha' | 'lugar' | 'tipo_comite'>>) {
+  async function commitSesionField(patch: Partial<Pick<EjeSesion, 'fecha' | 'lugar' | 'tipo_comite' | 'comentarios'>>) {
     if (!sesion) return
     try {
       await safeWrite(
@@ -958,7 +996,7 @@ export default function SesionModal(props: Props) {
             <>
               {/* Pauta general de la reunión (solo gabinete, solo lectura).
                   Sin número: no altera la numeración producto de las zonas 1-5. */}
-              {esGabinete && temasGabinete.length > 0 && (
+              {esGabinete && !esV2 && temasGabinete.length > 0 && (
                 <section className="border border-violet-100 rounded-xl bg-violet-50/40 px-4 py-3">
                   <p className="text-xs font-semibold text-violet-800 uppercase tracking-wide mb-2.5">
                     Temas a tratar — preparación
@@ -1200,11 +1238,50 @@ export default function SesionModal(props: Props) {
                   valoresPrev={comiteValoresPrev}
                   currentUserEmail={currentUserEmail}
                   onCatalogoChange={reloadComiteCatalogo}
+                  instituciones={comiteInstituciones}
+                  onInstitucionesChange={reloadComiteInstituciones}
                 />
               )}
 
-              {/* ── Zona 4 (gabinete): apuntes por institución ── */}
-              {esGabinete && (
+              {/* ── Zona 3b (comité): comentarios generales de la reunión (mig 077) ── */}
+              {props.instancia === 'eje' && sesion && (
+                <section className={zoneCls}>
+                  <div className={zoneHead}>
+                    <svg className="w-4 h-4 text-violet-700 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <h3 className="text-sm font-semibold text-gray-800">Comentarios generales de la reunión</h3>
+                  </div>
+                  <div className="p-3">
+                    <textarea
+                      key={`coment-${sesion.id}`}
+                      defaultValue={sesion.comentarios ?? ''}
+                      onBlur={e => commitSesionField({ comentarios: e.target.value.trim() || null })}
+                      disabled={sesion.estado !== 'borrador'}
+                      rows={3}
+                      placeholder="Comentarios transversales de la sesión (no atados a una institución ni a una métrica)…"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-y disabled:bg-slate-50 disabled:text-slate-500"
+                    />
+                  </div>
+                </section>
+              )}
+
+              {/* ── Zona 4 (gabinete v2): captura en sala por punto de pauta ── */}
+              {esV2 && sesion && (
+              <section className={zoneCls}>
+                <div className={zoneHead}>
+                  <span className={zoneNum}>4</span>
+                  <h3 className="text-sm font-semibold text-gray-800">Desarrollo en sala</h3>
+                  <span className="text-xs text-gray-400 ml-auto">{puntosV2.length} puntos</span>
+                </div>
+                <div className="p-3">
+                  <CapturaSalaGabinete sesionId={sesion.id} canEdit={sesion.estado === 'borrador'} />
+                </div>
+              </section>
+              )}
+
+              {/* ── Zona 4 (gabinete v1): apuntes por institución ── */}
+              {esGabinete && !esV2 && (
               <section className={zoneCls}>
                 <div className={zoneHead}>
                   <span className={zoneNum}>4</span>
@@ -1356,6 +1433,19 @@ export default function SesionModal(props: Props) {
                             />
                           )}
                         </div>
+                        {esV2 && puntosV2.length > 0 && (
+                          <select
+                            value={cTemaId}
+                            onChange={e => setCTemaId(e.target.value === '' ? '' : Number(e.target.value))}
+                            className={`${inputCls} w-52 text-xs py-1.5`}
+                            title="Ligar el compromiso a un punto de la pauta: aparece bajo ese punto en el acta"
+                          >
+                            <option value="">Sin punto de la pauta</option>
+                            {puntosV2.map(p => (
+                              <option key={p.id} value={p.id}>Punto {p.orden}: {p.titulo.slice(0, 36)}</option>
+                            ))}
+                          </select>
+                        )}
                         <select
                           value={cDestinoEje}
                           onChange={e => setCDestinoEje(e.target.value === '' ? '' : Number(e.target.value))}

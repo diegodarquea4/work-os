@@ -89,10 +89,11 @@ export function agruparPorInstitucion(
   catalogo: ComiteMetrica[],
   valores: SesionComiteValor[],
   soloConValor = false,
-): { institucion: ComiteInstitucion; label: string; filas: FilaComite[] }[] {
+  instituciones: { key: string; label: string }[] = COMITE_INSTITUCIONES,
+): { institucion: string; label: string; filas: FilaComite[] }[] {
   const porMetrica = new Map<number, SesionComiteValor>()
   for (const v of valores) porMetrica.set(v.metrica_id, v)
-  return COMITE_INSTITUCIONES.map(inst => {
+  return instituciones.map(inst => {
     const filas = catalogo
       .filter(m => m.institucion === inst.key && m.activo)
       .sort((a, b) => a.orden - b.orden || a.id - b.id)
@@ -100,6 +101,59 @@ export function agruparPorInstitucion(
       .filter(f => !soloConValor || tieneValorComite(f.valor))
     return { institucion: inst.key, label: inst.label, filas }
   })
+}
+
+/**
+ * Slug (clave) de una institución nueva del Comité Policial (mig 078): sin
+ * acentos, minúscula, no-alfanuméricos → '_' (colapsados), sin '_' en bordes.
+ * Único frente a las claves existentes (sufijo _2, _3…). Vacío tras normalizar
+ * → 'institucion'. La clave es lo que se guarda en comite_metrica.institucion.
+ */
+export function slugifyInstitucion(nombre: string, clavesExistentes: string[]): string {
+  const base = nombre
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'institucion'
+  const usadas = new Set(clavesExistentes)
+  if (!usadas.has(base)) return base
+  let i = 2
+  while (usadas.has(`${base}_${i}`)) i++
+  return `${base}_${i}`
+}
+
+/**
+ * Reconciliación de la adopción de métricas estándar por región (mig 079).
+ * Adoptar = una fila comite_metrica ACTIVA con ese estandar_id. Devuelve, por
+ * estándar: si está adoptado, el id de una fila inactiva reactivable (reactivar
+ * en vez de insertar → no rompe el UNIQUE parcial) y el id de la fila activa
+ * (para desmarcar). Puro y testeable — es la parte frágil de la adopción.
+ */
+export type AdopcionEstandar = {
+  estandarId: number
+  adoptado: boolean
+  reactivarId: number | null   // fila inactiva a reactivar al marcar
+  filaActivaId: number | null  // fila activa a desactivar al desmarcar
+}
+
+export function reconciliarAdopcion(
+  estandarIds: number[],
+  filas: { id: number; estandar_id: number | null; activo: boolean }[],
+): AdopcionEstandar[] {
+  const activa = new Map<number, number>()
+  const inactiva = new Map<number, number>()
+  for (const f of filas) {
+    if (f.estandar_id == null) continue
+    if (f.activo) activa.set(f.estandar_id, f.id)
+    else if (!inactiva.has(f.estandar_id)) inactiva.set(f.estandar_id, f.id)
+  }
+  return estandarIds.map(id => ({
+    estandarId: id,
+    adoptado: activa.has(id),
+    reactivarId: inactiva.get(id) ?? null,
+    filaActivaId: activa.get(id) ?? null,
+  }))
 }
 
 /**
@@ -364,4 +418,62 @@ export function puedeRegenerarActa(sesion: SesionEstado | null): GuardResultado 
     return { ok: false, status: 409, error: 'El acta ya fue generada y no se regenera' }
   }
   return { ok: true }
+}
+
+// ── Cierre del Gabinete v2 (mig 074) — regla 2 del spec ──────────────────────
+// "No se cierra el gabinete con compromisos sin confirmar ni con puntos de la
+// pauta sin estado de cierre." Puro y testeable; lo aplica el cierre server-side
+// (cerrar/route.ts, solo para gabinete formato_acta=2) y lo espeja el pre-flight
+// de la consola (CierreGabinete) para que el usuario nunca choque contra el 409.
+
+export type BloqueosCierreV2 = { puntosSinEstado: string[]; comprSinConfirmar: string[] }
+
+export function bloqueosCierreGabineteV2(
+  puntos: { titulo: string | null; texto: string | null; estado_cierre: string | null }[],
+  comprHoy: { descripcion: string; confirmado: boolean }[],
+): BloqueosCierreV2 {
+  const nombre = (p: { titulo: string | null; texto: string | null }) =>
+    ((p.titulo ?? p.texto) ?? '').trim() || '(sin título)'
+  return {
+    puntosSinEstado:  puntos.filter(p => !p.estado_cierre).map(nombre),
+    comprSinConfirmar: comprHoy.filter(c => !c.confirmado).map(c => c.descripcion),
+  }
+}
+
+/** ¿Los bloqueos permiten cerrar? (sin puntos sin estado ni compromisos sin confirmar). */
+export function cierreV2Habilitado(b: BloqueosCierreV2): boolean {
+  return b.puntosSinEstado.length === 0 && b.comprSinConfirmar.length === 0
+}
+
+// ── Hoja de conducción del Gabinete v2 (mig 074) — helpers puros ─────────────
+// Lógica frágil de la hoja de 2 caras, fuera del componente/assembler para
+// testearla sin arrastrar @react-pdf ni Supabase.
+
+/**
+ * Suma minutos a una hora "HH:MM" y devuelve "HH:MM" (aritmética pura, 24h con
+ * wrap). Alimenta la HORA OBJETIVO por punto (acumulado sobre la hora de
+ * inicio). Input mal formado → se devuelve tal cual (nunca revienta el render).
+ */
+export function sumaHora(inicio: string, minutos: number): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(inicio.trim())
+  if (!m) return inicio
+  const total = (Number(m[1]) * 60 + Number(m[2]) + minutos) % (24 * 60)
+  const norm = ((total % (24 * 60)) + 24 * 60) % (24 * 60)   // minutos negativos → wrap positivo
+  const hh = Math.floor(norm / 60)
+  const mm = norm % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+}
+
+/**
+ * Semana de vida de un compromiso pendiente para la cara 2 ("2.ª semana"), o
+ * null si no aplica. Día 0-6 = "1.ª semana". Fecha futura o inválida → null.
+ */
+export function edadEnSemanas(desdeISO: string | null, ahora: Date): string | null {
+  if (!desdeISO) return null
+  const desde = new Date(desdeISO)
+  if (Number.isNaN(desde.getTime())) return null
+  const dias = Math.floor((ahora.getTime() - desde.getTime()) / 86_400_000)
+  if (dias < 0) return null
+  const semana = Math.floor(dias / 7) + 1
+  return `${semana}.ª semana`
 }

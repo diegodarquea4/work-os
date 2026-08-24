@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
-import type { ComiteInstitucion, ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
-import { COMITE_INSTITUCIONES, deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
+import type { ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
+import { deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
+import type { InstitucionComite } from '@/lib/hooks/useComiteMetricas'
 import MetricaComiteEditModal from './MetricaComiteEditModal'
+import MetricasComiteModal from './MetricasComiteModal'
 
 /**
  * Zona "Reporte por institución" de la sesión de Comité Policial (mig 048).
@@ -28,21 +30,30 @@ type Props = {
   valoresPrev: Map<number, SesionComiteValor>   // WoW: sesión cerrada anterior
   currentUserEmail: string
   onCatalogoChange: () => void                  // recarga el catálogo en el padre
+  instituciones: InstitucionComite[]            // dinámicas por región (mig 078)
+  onInstitucionesChange: () => void             // recarga la lista de instituciones
 }
 
 export default function ReporteInstitucionZona({
   sesionId, regionCod, catalogo, valoresIniciales, valoresPrev, currentUserEmail, onCatalogoChange,
+  instituciones, onInstitucionesChange,
 }: Props) {
   const [valores, setValores] = useState<SesionComiteValor[]>(
     () => valoresIniciales.map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] })),
   )
-  const [inst, setInst] = useState<ComiteInstitucion>('carabineros')
+  const [inst, setInst] = useState<string>('carabineros')
   const [editModal, setEditModal] = useState<{ metrica: ComiteMetrica | null } | null>(null)
+  const [metricasModal, setMetricasModal] = useState(false)
+
+  // Institución seleccionada segura: si la elegida ya no está en la lista
+  // (borrada), cae a la primera (las 4 base siempre están).
+  const instSel = instituciones.some(i => i.key === inst) ? inst : (instituciones[0]?.key ?? 'carabineros')
+  const instLabel = instituciones.find(i => i.key === instSel)?.label ?? instSel
 
   const filas = catalogo
-    .filter(m => m.institucion === inst && m.activo)
+    .filter(m => m.institucion === instSel && m.activo)
     .sort((a, b) => a.orden - b.orden || a.id - b.id)
-  const ordenSugerido = Math.max(0, ...catalogo.filter(m => m.institucion === inst).map(m => m.orden)) + 1
+  const ordenSugerido = Math.max(0, ...catalogo.filter(m => m.institucion === instSel).map(m => m.orden)) + 1
 
   function valorDe(metricaId: number): SesionComiteValor {
     return valores.find(v => v.metrica_id === metricaId)
@@ -114,10 +125,10 @@ export default function ReporteInstitucionZona({
         <h3 className="text-sm font-semibold text-gray-800">Reporte por institución</h3>
       </div>
 
-      {/* Sub-tabs de institución (fijas) */}
+      {/* Sub-tabs de institución (dinámicas por región, mig 078) */}
       <div className="flex flex-wrap gap-1 px-3 pt-3">
-        {COMITE_INSTITUCIONES.map(i => {
-          const activa = inst === i.key
+        {instituciones.map(i => {
+          const activa = instSel === i.key
           const conDato = catalogo.some(m => m.institucion === i.key && m.activo && tieneValorComite(valores.find(v => v.metrica_id === m.id) ?? null))
           return (
             <button
@@ -138,7 +149,7 @@ export default function ReporteInstitucionZona({
       <div className="p-3 space-y-3">
         {filas.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-2">
-            Sin métricas para {COMITE_INSTITUCIONES.find(i => i.key === inst)?.label}. Agrega la primera con “+ métrica”.
+            Sin métricas para {instLabel}. Agrega la primera con “+ métrica”.
           </p>
         )}
 
@@ -244,12 +255,22 @@ export default function ReporteInstitucionZona({
           )
         })}
 
-        <button
-          onClick={() => setEditModal({ metrica: null })}
-          className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
-        >
-          + métrica de {COMITE_INSTITUCIONES.find(i => i.key === inst)?.label}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setEditModal({ metrica: null })}
+            className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+          >
+            + métrica de {instLabel}
+          </button>
+          <span className="text-gray-200">·</span>
+          <button
+            onClick={() => setMetricasModal(true)}
+            className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+            title="Instituciones y métricas estándar (formato check)"
+          >
+            Métricas
+          </button>
+        </div>
       </div>
 
       {editModal && (
@@ -257,11 +278,21 @@ export default function ReporteInstitucionZona({
           open
           metrica={editModal.metrica}
           regionCod={regionCod}
-          institucion={inst}
+          institucion={instSel}
+          institucionLabel={instLabel}
           currentUserEmail={currentUserEmail}
           ordenSugerido={ordenSugerido}
           onClose={() => setEditModal(null)}
           onSaved={onCatalogoChange}
+        />
+      )}
+
+      {metricasModal && (
+        <MetricasComiteModal
+          regionCod={regionCod}
+          currentUserEmail={currentUserEmail}
+          onClose={() => setMetricasModal(false)}
+          onSaved={() => { onCatalogoChange(); onInstitucionesChange() }}
         />
       )}
     </section>

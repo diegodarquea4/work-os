@@ -18,7 +18,6 @@ import type { RegionEje } from '@/lib/types'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import TagChips from './TagChips'
-import DesalojoBadge from './DesalojoBadge'
 import { CapaBadge } from './CapaBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
@@ -1590,7 +1589,6 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
       {visibleCols.has('iniciativa') && (
         <td className={`sticky ${selectable ? 'left-10' : 'left-0'} z-10 ${selected ? 'bg-violet-50' : 'bg-white'} px-3 py-3.5 max-w-xs shadow-[2px_0_0_0_rgba(0,0,0,0.04)]`}>
           <div className="flex items-start gap-1.5">
-            {p.es_desalojo && <DesalojoBadge size="sm" className="mt-px" />}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{p.nombre}</p>
               <span className="text-xs text-gray-400 mt-0.5 block">{(p.ministerio ?? 'Sin asignar').replace(/;/g, ' · ')}</span>
@@ -1767,9 +1765,9 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
       )}
       {visibleCols.has('tags') && (
         <td className="px-3 py-3.5 max-w-[220px]">
-          {(p.tags?.length ?? 0) === 0
+          {(p.tags?.length ?? 0) === 0 && !p.es_desalojo
             ? <span className="text-xs text-gray-300">—</span>
-            : <TagChips tags={p.tags} max={3} />}
+            : <TagChips tags={p.tags} max={3} esDesalojo={p.es_desalojo} />}
         </td>
       )}
     </tr>

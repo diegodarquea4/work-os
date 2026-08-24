@@ -3,7 +3,7 @@ import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { cerrarCapForInstancia } from '@/lib/permissions'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
-import { aplicarValorMetrica, puedeCerrar, COMITES_CON_ESCALAMIENTO } from '@/lib/sesiones/helpers'
+import { aplicarValorMetrica, puedeCerrar, bloqueosCierreGabineteV2, cierreV2Habilitado, COMITES_CON_ESCALAMIENTO } from '@/lib/sesiones/helpers'
 import { generarActa } from '@/lib/sesiones/generarActa'
 import type { EjeSesion, SesionValor } from '@/lib/types'
 
@@ -85,6 +85,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .from('region_ejes').select('sesiones_habilitadas').eq('id', sesion!.eje_id).single()
     if (!ejeRow?.sesiones_habilitadas) {
       return NextResponse.json({ error: 'El eje no tiene sesiones habilitadas' }, { status: 422 })
+    }
+  }
+
+  // ── Gabinete v2: regla 2 del cierre (spec §8) ─────────────────────────────
+  // No se cierra con compromisos de hoy sin confirmar ni con puntos de la pauta
+  // sin estado de cierre. Se valida ANTES del claim (idempotente, sin efectos).
+  // El pre-flight de la consola (CierreGabinete) ya lo espeja — este guard es la
+  // red de seguridad server-side. Solo v2 (formato_acta=2): v1 no tiene el
+  // concepto de pauta ni de confirmado.
+  if (esGabinete && sesion!.formato_acta === 2) {
+    const [temasRes, comprHoyRes] = await Promise.all([
+      db.from('gabinete_temas').select('titulo, texto, estado_cierre').eq('sesion_id', sesionId),
+      db.from('sesion_compromisos').select('descripcion, confirmado').eq('sesion_origen_id', sesionId),
+    ])
+    const bloqueos = bloqueosCierreGabineteV2(
+      (temasRes.data ?? []) as { titulo: string | null; texto: string | null; estado_cierre: string | null }[],
+      (comprHoyRes.data ?? []) as { descripcion: string; confirmado: boolean }[],
+    )
+    if (!cierreV2Habilitado(bloqueos)) {
+      return NextResponse.json(
+        {
+          error: 'El gabinete no se puede cerrar todavía',
+          puntos_sin_estado: bloqueos.puntosSinEstado,
+          compromisos_sin_confirmar: bloqueos.comprSinConfirmar,
+        },
+        { status: 409 },
+      )
     }
   }
 
@@ -190,48 +217,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  // ── Gabinete: archivar los "Temas a tratar" pendientes a esta sesión ───────
-  // (mig 053). ANTES del acta: el builder lee por sesion_id, y el reintento
-  // POST /acta también. No-abortante: si falla, los temas siguen pendientes y
-  // los barre el próximo cierre (mismo criterio que el snapshot de iniciativas).
-  //
-  // Temas FIJOS (mig 057, recurrentes): NO se consumen — el original queda
-  // pendiente para la próxima Preparación. Para que igual queden registrados en
-  // el acta/historial de ESTA sesión, se inserta una COPIA archivada
-  // (sesion_id set, fijo=false). Orden: primero la copia de los fijos, después
-  // el archivo de los no fijos (filtros disjuntos por `fijo`, sin solaparse).
-  if (esGabinete) {
-    const { data: fijos, error: fijosErr } = await db
-      .from('gabinete_temas')
-      .select('texto, subitems, orden, created_by_email')
-      .eq('region_cod', sesion!.region_cod)
-      .is('sesion_id', null)
-      .eq('fijo', true)
-    if (fijosErr) {
-      console.error('[sesiones/cerrar] fallo leyendo temas fijos', { sesionId, fijosErr })
-    } else if (fijos && fijos.length > 0) {
-      const copias = (fijos as { texto: string; subitems: unknown; orden: number; created_by_email: string | null }[])
-        .map(t => ({
-          region_cod:       sesion!.region_cod,
-          texto:            t.texto,
-          subitems:         t.subitems,
-          orden:            t.orden,
-          sesion_id:        sesionId,
-          fijo:             false,   // la copia es un registro archivado, no recurrente
-          created_by_email: t.created_by_email,
-        }))
-      const { error: copiaErr } = await db.from('gabinete_temas').insert(copias)
-      if (copiaErr) {
-        console.error('[sesiones/cerrar] fallo copiando temas fijos al acta', { sesionId, copiaErr })
-      }
-    }
-
+  // ── Gabinete v1: archivar los "Temas a tratar" del pool a esta sesión (mig
+  // 053). En v2 (pauta, formato_acta=2) los puntos ya nacen con sesion_id en la
+  // Preparación, así que NO se barre el pool. Los temas FIJOS se jubilaron (mig
+  // 076 → gabinete_recurrentes): ya no hay copia-al-cierre. Guard `!== 2` (no
+  // `=== 1`) para tolerar el estado pre-migración 074, donde la columna
+  // formato_acta aún no existe y llega undefined → se comporta como v1.
+  // ANTES del acta: el builder v1 lee por sesion_id, y el reintento POST /acta
+  // también. No-abortante: si falla, los temas siguen pendientes y los barre el
+  // próximo cierre (mismo criterio que el snapshot de iniciativas).
+  if (esGabinete && sesion!.formato_acta !== 2) {
     const { error: temasErr } = await db
       .from('gabinete_temas')
       .update({ sesion_id: sesionId })
       .eq('region_cod', sesion!.region_cod)
       .is('sesion_id', null)
-      .eq('fijo', false)
     if (temasErr) {
       console.error('[sesiones/cerrar] fallo archivando temas a tratar', { sesionId, temasErr })
     }

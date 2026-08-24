@@ -749,6 +749,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                         eje={selectedEje}
                         onClose={() => setSelectedEjeIdForMetrics(null)}
                         showSesiones={false}
+                        iniciativas={regionIniciativas}
                       />
                     </div>
                   )

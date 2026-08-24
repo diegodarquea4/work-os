@@ -11,7 +11,9 @@ import TagChips from './TagChips'
 import { FlagIcon } from './icons/FlagIcon'
 import DesalojoBadge from './DesalojoBadge'
 import { CapaBadge } from './CapaBadge'
-import { useCanEditOperational } from '@/lib/context/UserContext'
+import { useCanEditOperational, useIsAdmin, useCan } from '@/lib/context/UserContext'
+import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
+import PreparacionGabinete from './gabinete/PreparacionGabinete'
 import { normalizeMinisterio } from '@/lib/ministerios'
 import { compareCarteras } from '@/lib/cartera'
 // Pane Preparación (fusión Atención+Gabinete). Import estático: KanbanView ya
@@ -183,9 +185,6 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
       {/* Semáforo */}
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
 
-      {/* Badge desalojo — inline, antes del nombre, solo si está marcado */}
-      {esDesalojo && <DesalojoBadge size="sm" className="flex-shrink-0" />}
-
       {/* Badge capa — solo si no es lll (default), para no saturar */}
       <CapaBadge value={p.capa} size="sm" hideDefault className="flex-shrink-0" />
 
@@ -200,7 +199,7 @@ const MinistryRow = memo(function MinistryRow({ p, onSelect, onToggleFoco, canEd
       </span>
 
       {/* Tags — máximo 1 visible en la card horizontal para no romper layout */}
-      <TagChips tags={p.tags} max={1} className="flex-shrink-0" />
+      <TagChips tags={p.tags} max={1} className="flex-shrink-0" esDesalojo={esDesalojo} />
 
       {/* Responsable (sin @domain) */}
       {responsableShort && (
@@ -251,6 +250,23 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
     return sorted[0] ?? 'todas'
   }, [activeRegionName, projects])
   const setFilterRegion = onActiveRegionChange
+  // Gabinete v2 (mig 074): en regiones con gabinete habilitado, la Preparación
+  // es el stepper de pauta (Pendientes → Pauta → Revisar). En el resto sigue la
+  // Bandeja embebida. La región activa la maneja el select global.
+  const regionActiva = useMemo(() => REGIONS.find(r => r.nombre === filterRegion) ?? null, [filterRegion])
+  const { config: regionCfg } = useRegionConfig(regionActiva?.cod ?? '')
+  const mostrarStepperV2 = !!regionActiva && !!regionCfg?.gabinete_habilitado
+  // Visibilidad de la sección Preparación (cap `comite.gabinete.preparar`):
+  // admin siempre; editor/regional solo si un admin se la encendió por región en
+  // Usuarios → Permisos; viewer nunca. Es gate de VISIBILIDAD (los writes de la
+  // pauta ya los protege la RLS por `comite.gabinete.operar`).
+  const isAdmin = useIsAdmin()
+  const canPreparar = useCan('comite.gabinete.preparar', regionActiva?.cod)
+  const puedeVerPreparacion = isAdmin || canPreparar
+  // Sin permiso, la pestaña Preparación no existe → si el pane arranca ahí, cae a Tablero.
+  useEffect(() => {
+    if (pane === 'preparacion' && !puedeVerPreparacion) setPane('tablero')
+  }, [pane, puedeVerPreparacion])
   // Filtros del panel "Filtros" — solo los que tienen uso real en la mesa
   // de Gabinete: estado del compromiso (semáforo), prioridad, capa de
   // importancia, etapa actual, etiquetas y "en foco". Eliminados respecto
@@ -523,27 +539,31 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           chicas el contenido se pliegue sin romper el layout horizontal. */}
       <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white flex items-center gap-3 flex-wrap min-w-0">
         {/* Switch de sub-vista: Preparación (curaduría) | Tablero (kanban).
-            Mismo patrón visual del toggle de agrupación. */}
-        <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
-          <button
-            onClick={() => setPane('preparacion')}
-            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              pane === 'preparacion' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            title="Preparar la sesión: foco, sugerencias y compromisos levantados desde comités"
-          >
-            Preparación
-          </button>
-          <button
-            onClick={() => setPane('tablero')}
-            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              pane === 'tablero' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
-            }`}
-            title="Tablero de la cartera por ministerio/eje"
-          >
-            Tablero
-          </button>
-        </div>
+            La pestaña Preparación solo aparece con el permiso `comite.gabinete.preparar`
+            (admin siempre; editor/regional por concesión en Permisos). Sin permiso
+            se muestra solo el Tablero, sin toggle. */}
+        {puedeVerPreparacion && (
+          <div className="flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => setPane('preparacion')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                pane === 'preparacion' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Preparar la sesión: foco, sugerencias y compromisos levantados desde comités"
+            >
+              Preparación
+            </button>
+            <button
+              onClick={() => setPane('tablero')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                pane === 'tablero' ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Tablero de la cartera por ministerio/eje"
+            >
+              Tablero
+            </button>
+          </div>
+        )}
 
         <select
           value={filterRegion}
@@ -716,20 +736,32 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
       {/* ── Pane Preparación — la ex Bandeja de Atención embebida (fusión
           spec gabinete §7.1). La región la maneja el select de esta toolbar
           (mismo state global), por eso AttentionTray va en modo embedded. */}
-      {pane === 'preparacion' && (
-        <div className="flex-1 overflow-hidden flex">
-          <AttentionTray
-            embedded
-            projects={projects}
-            actividad={actividad}
-            actividadLoading={actividadLoading}
-            onUpdatePrioridad={onUpdatePrioridad}
-            onDeletePrioridad={onDeletePrioridad}
-            activeRegionName={activeRegionName}
-            onActiveRegionChange={onActiveRegionChange}
-            allowedRegionNames={allowedRegionNames}
-          />
-        </div>
+      {pane === 'preparacion' && puedeVerPreparacion && (
+        mostrarStepperV2 && regionActiva ? (
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            <PreparacionGabinete
+              region={{ cod: regionActiva.cod, nombre: regionActiva.nombre }}
+              projects={projects.filter(p => p.cod === regionActiva.cod)}
+              canOperar={canEditFoco}
+              onOpenIniciativa={id => { const p = projects.find(x => x.id === id); if (p) setSelected(p) }}
+              onQuitarFoco={id => { const p = projects.find(x => x.id === id); if (p) handleToggleFoco(p.n, id, false) }}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-hidden flex">
+            <AttentionTray
+              embedded
+              projects={projects}
+              actividad={actividad}
+              actividadLoading={actividadLoading}
+              onUpdatePrioridad={onUpdatePrioridad}
+              onDeletePrioridad={onDeletePrioridad}
+              activeRegionName={activeRegionName}
+              onActiveRegionChange={onActiveRegionChange}
+              allowedRegionNames={allowedRegionNames}
+            />
+          </div>
+        )
       )}
 
       {/* Panel inline de Filtros — solo se muestra con región seleccionada y

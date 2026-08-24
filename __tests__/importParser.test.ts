@@ -187,3 +187,70 @@ describe('parseImportWorkbook — comuna deriva comuna_cods + alcance_regional',
     expect(classifyError(rows[0].errors[0]).family).toBe('comuna-invalida')
   })
 })
+
+// ── % Avance — celdas con formato de porcentaje en Excel ─────────────────────
+// XLSX.utils.sheet_to_json usa raw:true: si la columna está formateada como
+// porcentaje, "85%" llega como el número crudo 0.85, no como 85. Sin el ajuste
+// en el parser, el avance se guardaba truncado (parseInt de "0.85" da 0).
+
+const HEADERS_PCT = [...HEADERS, '% Avance']
+
+function parseAvanceRow(value: string | number) {
+  const row: (string | number)[] = HEADERS_PCT.map(h => (h === '#' ? '1' : ''))
+  row[row.length - 1] = value
+  const buf = buildWorkbook(HEADERS_PCT, [row])
+  return parseImportWorkbook(buf, existing, new Map())
+}
+
+/** Fuerza formato de celda de porcentaje sobre el valor crudo (fracción) —
+ *  simula lo que Excel produce cuando el delegado escribe "85%" en una
+ *  columna formateada como %, en vez de escribir el número plano. */
+function parseAvancePercentFormatted(fraction: number) {
+  const row = HEADERS_PCT.map(h => (h === '#' ? '1' : ''))
+  const aoa = [HEADERS_PCT, row]
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const cellRef = XLSX.utils.encode_cell({ r: 1, c: HEADERS_PCT.length - 1 })
+  ws[cellRef] = { t: 'n', v: fraction, z: '0%' }
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Carga')
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+  return parseImportWorkbook(buf, existing, new Map())
+}
+
+describe('parseImportWorkbook — % Avance no se trunca con celdas formateadas como %', () => {
+  it('celda formateada como % (valor crudo 0.85) se guarda como 85, no 0', () => {
+    const { rows } = parseAvancePercentFormatted(0.85)
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.pct_avance).toBe(85)
+  })
+
+  it('100% formateado se guarda como 100, no como 1', () => {
+    const { rows } = parseAvancePercentFormatted(1)
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.pct_avance).toBe(100)
+  })
+
+  it('un número plano (sin formato %) sigue funcionando igual que antes', () => {
+    const { rows } = parseAvanceRow(42)
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.pct_avance).toBe(42)
+  })
+
+  it('texto "85%" (no celda numérica) también resuelve a 85', () => {
+    const { rows } = parseAvanceRow('85%')
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.pct_avance).toBe(85)
+  })
+
+  it('0% se sigue guardando como 0', () => {
+    const { rows } = parseAvancePercentFormatted(0)
+    expect(rows[0].errors).toEqual([])
+    expect(rows[0].patch.pct_avance).toBe(0)
+  })
+
+  it('un valor fuera de rango sigue marcando error', () => {
+    const { rows } = parseAvanceRow('150')
+    expect(rows[0].errors).toHaveLength(1)
+    expect(rows[0].errors[0]).toContain('% Avance')
+  })
+})

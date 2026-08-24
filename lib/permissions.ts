@@ -64,11 +64,13 @@ export const FUNCTIONS = [
   { key: 'comite.politico.operar',        label: 'Operar Comité Político',        group: 'Comités' },
   { key: 'comite.economico.operar',       label: 'Operar Comité Económico',       group: 'Comités' },
   { key: 'comite.gabinete.operar',        label: 'Operar Gabinete Regional',      group: 'Comités' },
+  { key: 'comite.gabinete.preparar',      label: 'Preparar Gabinete Regional (armar pauta)', group: 'Comités' },
   { key: 'comite.infraestructura.operar', label: 'Operar Comité de Infraestructura', group: 'Comités' },
   { key: 'comite.infraestructura.cerrar', label: 'Cerrar sesión de Infraestructura', group: 'Comités' },
   { key: 'comite.infraestructura.configurar', label: 'Configurar Comité de Infraestructura', group: 'Comités' },
   { key: 'comite.borrar_sesion',          label: 'Borrar sesión del historial',   group: 'Comités' },
   { key: 'comite.seia_sync',              label: 'Sincronizar SEIA',              group: 'Comités' },
+  { key: 'comite.metricas.catalogo',      label: 'Gestionar catálogo nacional de métricas', group: 'Comités' },
   // Desalojos
   { key: 'desalojos.editar',         label: 'Editar desalojos',        group: 'Desalojos' },
   { key: 'desalojos.descargar_docs', label: 'Descargar docs firmados', group: 'Desalojos' },
@@ -137,8 +139,14 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
     ['metrica.definir', 'all'], ['metrica.reportar_valor', 'all'],
     ['comite.policial.operar', 'all'], ['comite.politico.operar', 'all'],
     ['comite.economico.operar', 'all'], ['comite.gabinete.operar', 'all'],
+    // Preparación del Gabinete: admin siempre; editor/regional NO por defecto
+    // (se concede por región en Usuarios → Permisos). Visibilidad de la sección.
+    ['comite.gabinete.preparar', 'all'],
     ['comite.infraestructura.operar', 'all'], ['comite.infraestructura.cerrar', 'all'],
     ['comite.infraestructura.configurar', 'all'], ['comite.borrar_sesion', 'all'], ['comite.seia_sync', 'all'],
+    // Catálogo nacional de métricas del Comité Policial: admin-only (gate duro
+    // en RLS por rol; acá es el gate de UI).
+    ['comite.metricas.catalogo', 'all'],
     ['desalojos.editar', 'all'], ['desalojos.descargar_docs', 'all'],
     ['prego.editar', 'all'], ['usuarios.gestionar', 'all'],
     ['docs_regionales.gestionar', 'all'], ['proposals.aprobar', 'all'],

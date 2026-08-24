@@ -2,14 +2,15 @@
 
 import { useState } from 'react'
 import type { Region } from '@/lib/regions'
-import type { ComiteInstitucion, RegionEje } from '@/lib/types'
+import type { RegionEje } from '@/lib/types'
 import { useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
-import { useCatalogoComite, useSeriesComite } from '@/lib/hooks/useComiteMetricas'
-import { COMITE_INSTITUCIONES, deltaPulso } from '@/lib/sesiones/helpers'
+import { useCatalogoComite, useSeriesComite, useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
+import { deltaPulso } from '@/lib/sesiones/helpers'
 import SesionModal from './SesionModal'
 import HistorialSesionesModal from './HistorialSesionesModal'
 import NominaModal from './NominaModal'
+import MetricasComiteModal from './MetricasComiteModal'
 
 /**
  * Tab "Comité Policial" de la sección Comités y Gabinete Regional (Mi Región).
@@ -34,11 +35,13 @@ export default function ComitePolicialTab({ region, eje }: Props) {
   const [sesionOpen, setSesionOpen]       = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
   const [nominaOpen, setNominaOpen]       = useState(false)
-  const [inst, setInst]                   = useState<ComiteInstitucion>('carabineros')
+  const [metricasModal, setMetricasModal] = useState(false)
+  const [inst, setInst]                   = useState<string>('carabineros')
   const [seriesKey, setSeriesKey]         = useState(0)   // bump tras cerrar sesión
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'eje', ejeId: eje.id }, sesionesOn)
   const { catalogo, refresh: refreshCatalogo } = useCatalogoComite(region.cod, sesionesOn)
+  const { instituciones, refresh: refreshInstituciones } = useInstitucionesComite(region.cod, sesionesOn)
   const series = useSeriesComite(region.cod, eje.id, sesionesOn, seriesKey)
 
   if (!sesionesOn) {
@@ -52,8 +55,11 @@ export default function ComitePolicialTab({ region, eje }: Props) {
     )
   }
 
-  const numericas = catalogo.filter(m => m.institucion === inst && m.activo && m.tipo === 'numerico')
-  const textos    = catalogo.filter(m => m.institucion === inst && m.activo && m.tipo === 'texto')
+  // Institución seleccionada segura (si la elegida ya no está, primera).
+  const instSel   = instituciones.some(i => i.key === inst) ? inst : (instituciones[0]?.key ?? 'carabineros')
+  const instLabel = instituciones.find(i => i.key === instSel)?.label ?? instSel
+  const numericas = catalogo.filter(m => m.institucion === instSel && m.activo && m.tipo === 'numerico')
+  const textos    = catalogo.filter(m => m.institucion === instSel && m.activo && m.tipo === 'texto')
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -86,12 +92,12 @@ export default function ComitePolicialTab({ region, eje }: Props) {
       {/* General del comité: seguimiento WoW por institución */}
       <div className="px-4 pb-3">
         <div className="flex flex-wrap gap-1 mb-3">
-          {COMITE_INSTITUCIONES.map(i => (
+          {instituciones.map(i => (
             <button
               key={i.key}
               onClick={() => setInst(i.key)}
               className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
-                inst === i.key ? 'bg-violet-700 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                instSel === i.key ? 'bg-violet-700 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
               {i.label}
@@ -99,9 +105,9 @@ export default function ComitePolicialTab({ region, eje }: Props) {
           ))}
         </div>
 
-        {catalogo.filter(m => m.institucion === inst && m.activo).length === 0 ? (
+        {catalogo.filter(m => m.institucion === instSel && m.activo).length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-6">
-            Aún no hay métricas para {COMITE_INSTITUCIONES.find(i => i.key === inst)?.label}. Se definen al tomar una sesión.
+            Aún no hay métricas para {instLabel}. Se definen al tomar una sesión.
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -149,6 +155,8 @@ export default function ComitePolicialTab({ region, eje }: Props) {
       <div className="border-t border-violet-100 bg-violet-50/50 px-4 py-2.5 flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Sesiones de {nombreInstancia}</span>
         <div className="flex items-center gap-2">
+          <button onClick={() => setMetricasModal(true)} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline" title="Instituciones y métricas estándar">Métricas</button>
+          <span className="text-violet-200">|</span>
           <button onClick={() => setNominaOpen(true)} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline" title="Nómina del comité">Nómina</button>
           <span className="text-violet-200">|</span>
           <button onClick={() => setHistorialOpen(true)} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline">Ver historial →</button>
@@ -186,6 +194,14 @@ export default function ComitePolicialTab({ region, eje }: Props) {
           eje={eje}
           nombreInstancia={nombreInstancia}
           onClose={() => setNominaOpen(false)}
+        />
+      )}
+      {metricasModal && (
+        <MetricasComiteModal
+          regionCod={region.cod}
+          currentUserEmail={userEmail}
+          onClose={() => setMetricasModal(false)}
+          onSaved={() => { refreshInstituciones(); refreshCatalogo() }}
         />
       )}
     </div>

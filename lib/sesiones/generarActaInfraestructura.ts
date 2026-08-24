@@ -6,6 +6,7 @@ import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
 import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
 import { verificadosOr, type ActaOpts } from './generarActa'
+import { resolvePreside } from './preside'
 import ActaInfraestructuraPdf, { type ActaInfraestructuraData } from '@/components/ActaInfraestructuraPdf'
 
 /**
@@ -24,7 +25,7 @@ import ActaInfraestructuraPdf, { type ActaInfraestructuraData } from '@/componen
 export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
   const sesionId = sesion.id
 
-  const [numRes, asisRes, iniRes, verifRes, nuevosRes, cfgRes] = await Promise.all([
+  const [numRes, asisRes, iniRes, verifRes, nuevosRes, cfgRes, preside] = await Promise.all([
     // N° de sesión = cerradas de Infraestructura de la región (correlativo
     // propio, independiente de los otros comités).
     db.from('eje_sesiones').select('id, fecha')
@@ -47,6 +48,7 @@ export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     db.from('region_config').select('infraestructura_nombre, infraestructura_tag')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
+    resolvePreside(db, sesion, opts),
   ])
 
   const cerradas = ((numRes.data ?? []) as { id: number; fecha: string }[])
@@ -80,7 +82,7 @@ export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
+    preside,
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,

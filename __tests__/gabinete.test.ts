@@ -6,6 +6,8 @@ import {
   actaStoragePath,
   puedeCerrar,
   puedeRegenerarActa,
+  bloqueosCierreGabineteV2,
+  cierreV2Habilitado,
 } from '@/lib/sesiones/helpers'
 import type { SesionCompromiso } from '@/lib/types'
 
@@ -158,5 +160,41 @@ describe('guards de cierre en instancia gabinete', () => {
     // Si el cierre NO seteara el flag, el reintento quedaría bloqueado en 409:
     const bloqueado = puedeRegenerarActa({ estado: 'cerrada', metricas_aplicadas: false, acta_path: null })
     expect(bloqueado.ok).toBe(false)
+  })
+})
+
+// ── Regla 2 del cierre v2: puntos con estado + compromisos confirmados ────────
+
+describe('bloqueosCierreGabineteV2 — regla 2 del cierre en 4 movimientos', () => {
+  it('sin bloqueos cuando todo punto tiene estado y todo compromiso está confirmado', () => {
+    const b = bloqueosCierreGabineteV2(
+      [{ titulo: 'PSG', texto: '', estado_cierre: 'tratado' }, { titulo: 'Máfil', texto: '', estado_cierre: 'sin_novedades' }],
+      [{ descripcion: 'Informe', confirmado: true }],
+    )
+    expect(b.puntosSinEstado).toEqual([])
+    expect(b.comprSinConfirmar).toEqual([])
+    expect(cierreV2Habilitado(b)).toBe(true)
+  })
+
+  it('lista los puntos sin estado (usa titulo, cae a texto, luego a "(sin título)")', () => {
+    const b = bloqueosCierreGabineteV2(
+      [
+        { titulo: 'Con estado', texto: '', estado_cierre: 'tratado' },
+        { titulo: null, texto: 'Legado sin título nuevo', estado_cierre: null },
+        { titulo: '  ', texto: '', estado_cierre: null },
+      ],
+      [],
+    )
+    expect(b.puntosSinEstado).toEqual(['Legado sin título nuevo', '(sin título)'])
+    expect(cierreV2Habilitado(b)).toBe(false)
+  })
+
+  it('lista los compromisos de hoy sin confirmar y bloquea el cierre', () => {
+    const b = bloqueosCierreGabineteV2(
+      [{ titulo: 'PSG', texto: '', estado_cierre: 'tratado' }],
+      [{ descripcion: 'Confirmado', confirmado: true }, { descripcion: 'Sin confirmar', confirmado: false }],
+    )
+    expect(b.comprSinConfirmar).toEqual(['Sin confirmar'])
+    expect(cierreV2Habilitado(b)).toBe(false)
   })
 })

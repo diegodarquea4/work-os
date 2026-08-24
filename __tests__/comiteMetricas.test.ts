@@ -4,6 +4,8 @@ import {
   formatoValorComite,
   tieneValorComite,
   deltaPulso,
+  slugifyInstitucion,
+  reconciliarAdopcion,
   COMITE_INSTITUCIONES,
 } from '@/lib/sesiones/helpers'
 import type { ComiteMetrica, SesionComiteValor } from '@/lib/types'
@@ -19,6 +21,8 @@ function metrica(over: Partial<ComiteMetrica> & { id: number }): ComiteMetrica {
     unidad: null,
     orden: 0,
     activo: true,
+    estandar_id: null,
+    origen: 'propia',
     ...over,
   }
 }
@@ -69,6 +73,71 @@ describe('agruparPorInstitucion', () => {
     const vals = [valor({ id: 10, metrica_id: 1, valor_num: 5 })]
     const carab = agruparPorInstitucion(cat, vals, true)[0]
     expect(carab.filas.map(f => f.metrica.id)).toEqual([1])
+  })
+
+  it('acepta una lista de instituciones dinámica (mig 078) e incluye las custom', () => {
+    const cat = [
+      metrica({ id: 1, institucion: 'carabineros' }),
+      metrica({ id: 2, institucion: 'fiscalia' }),
+    ]
+    const insts = [
+      { key: 'carabineros', label: 'Carabineros' },
+      { key: 'fiscalia', label: 'Fiscalía' },
+    ]
+    const grupos = agruparPorInstitucion(cat, [], false, insts)
+    expect(grupos.map(g => g.label)).toEqual(['Carabineros', 'Fiscalía'])
+    expect(grupos.find(g => g.institucion === 'fiscalia')!.filas.map(f => f.metrica.id)).toEqual([2])
+  })
+
+  it('con lista dinámica, una métrica de institución fuera de la lista no aparece', () => {
+    const cat = [metrica({ id: 9, institucion: 'pdi' })]
+    const grupos = agruparPorInstitucion(cat, [], false, [{ key: 'carabineros', label: 'Carabineros' }])
+    expect(grupos.flatMap(g => g.filas)).toHaveLength(0)
+  })
+})
+
+// ── slugifyInstitucion (mig 078) ─────────────────────────────────────────────
+
+describe('slugifyInstitucion', () => {
+  it('sin acentos, minúscula, espacios/signos → _', () => {
+    expect(slugifyInstitucion('Fiscalía Regional', [])).toBe('fiscalia_regional')
+    expect(slugifyInstitucion('SENDA', [])).toBe('senda')
+    expect(slugifyInstitucion('  Municipalidad  ', [])).toBe('municipalidad')
+  })
+  it('colapsa separadores y recorta bordes', () => {
+    expect(slugifyInstitucion('P.D.I. — Zona', [])).toBe('p_d_i_zona')
+  })
+  it('uniquifica frente a claves existentes', () => {
+    expect(slugifyInstitucion('Fiscalía', ['fiscalia'])).toBe('fiscalia_2')
+    expect(slugifyInstitucion('Fiscalía', ['fiscalia', 'fiscalia_2'])).toBe('fiscalia_3')
+  })
+  it('nombre sin alfanuméricos → institucion', () => {
+    expect(slugifyInstitucion('—', [])).toBe('institucion')
+  })
+})
+
+// ── reconciliarAdopcion (mig 079) ────────────────────────────────────────────
+
+describe('reconciliarAdopcion', () => {
+  it('estándar sin fila → no adoptado, sin ids (se insertaría)', () => {
+    const [r] = reconciliarAdopcion([1], [])
+    expect(r).toEqual({ estandarId: 1, adoptado: false, reactivarId: null, filaActivaId: null })
+  })
+  it('fila activa → adoptado, con filaActivaId (desmarcar)', () => {
+    const [r] = reconciliarAdopcion([1], [{ id: 50, estandar_id: 1, activo: true }])
+    expect(r.adoptado).toBe(true)
+    expect(r.filaActivaId).toBe(50)
+    expect(r.reactivarId).toBeNull()
+  })
+  it('fila inactiva → no adoptado, con reactivarId (reactivar en vez de insertar)', () => {
+    const [r] = reconciliarAdopcion([1], [{ id: 50, estandar_id: 1, activo: false }])
+    expect(r.adoptado).toBe(false)
+    expect(r.reactivarId).toBe(50)
+    expect(r.filaActivaId).toBeNull()
+  })
+  it('ignora filas sin estandar_id (métricas propias)', () => {
+    const [r] = reconciliarAdopcion([1], [{ id: 7, estandar_id: null, activo: true }])
+    expect(r.adoptado).toBe(false)
   })
 })
 

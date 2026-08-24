@@ -7,6 +7,7 @@ import { REGIONS } from '@/lib/regions'
 import type { EjeSesion, SesionCompromiso, SesionIniciativa } from '@/lib/types'
 import { panoramaPorEje, clasificarCompromisosGabinete, COMITES_CON_ESCALAMIENTO } from './helpers'
 import { verificadosOr, type ActaOpts } from './generarActa'
+import { resolvePreside } from './preside'
 import ActaGabinetePdf, { type ActaGabineteData } from '@/components/ActaGabinetePdf'
 
 /**
@@ -23,7 +24,7 @@ import ActaGabinetePdf, { type ActaGabineteData } from '@/components/ActaGabinet
 export async function renderActaGabineteBuffer(db: SupabaseClient, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
   const sesionId = sesion.id
 
-  const [numRes, asisRes, iniRes, prioRegionRes, apunRes, gabSesRes, nuevosRes, ejesRes, temasRes] = await Promise.all([
+  const [numRes, asisRes, iniRes, prioRegionRes, apunRes, gabSesRes, nuevosRes, ejesRes, temasRes, preside] = await Promise.all([
     // N° de sesión = cerradas de gabinete de la región (correlativo propio,
     // independiente de los comités).
     db.from('eje_sesiones').select('id, fecha')
@@ -54,6 +55,7 @@ export async function renderActaGabineteBuffer(db: SupabaseClient, sesion: EjeSe
     opts.preview
       ? db.from('gabinete_temas').select('texto, subitems').eq('region_cod', sesion.region_cod).is('sesion_id', null).order('orden').order('id')
       : db.from('gabinete_temas').select('texto, subitems').eq('sesion_id', sesionId).order('orden').order('id'),
+    resolvePreside(db, sesion, opts),
   ])
 
   // Verificados (zona 1 de la sesión): propios + escalados + mandatos —
@@ -128,7 +130,7 @@ export async function renderActaGabineteBuffer(db: SupabaseClient, sesion: EjeSe
     sesionNumero,
     fecha: sesion.fecha,
     lugar: sesion.lugar,
-    preside: opts.preview ? (opts.currentUserEmail ?? sesion.created_by_email) : (sesion.closed_by_email ?? sesion.created_by_email),
+    preside,
     asistencia: ((asisRes.data ?? []) as unknown as AsisRow[]).map(a => ({
       nombre:      a.nomina?.nombre ?? a.invitado_nombre ?? '—',
       cargo:       a.nomina?.cargo ?? null,

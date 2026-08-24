@@ -436,14 +436,52 @@ export type RegionMetrics = {
 }
 
 // ── Project Tracker ───────────────────────────────────────────────────────────
+
+// Asistente de un Hito/Reunión — `email` no-null cuando está linkeado a un
+// usuario del sistema (elegido del padrón regional, selección múltiple),
+// null si es una persona externa cargada a mano. La institución solo se
+// pide para personas externas — un usuario del sistema ya tiene perfil.
+export type SeguimientoAsistente = {
+  nombre: string
+  institucion: string
+  email: string | null
+}
+
 export type Seguimiento = {
   id: number
   prioridad_id: number
   fecha: string
-  tipo: 'avance' | 'reunion' | 'hito' | 'alerta'
+  tipo: 'avance' | 'reunion' | 'hito'
   descripcion: string
   autor: string | null
   estado: 'en_curso' | 'completado' | 'bloqueado' | 'pendiente' | null
+  created_at: string
+  // Hito: nombre/hora/lugar propios (fecha ya existía). Reunión: nombre
+  // opcional; descripcion pasa a significar "temas tratados y notas"
+  // (fusionados en un solo campo). `notas` queda solo para reuniones
+  // antiguas creadas antes de la fusión — ya no se escribe desde el form.
+  nombre: string | null
+  hora: string | null
+  lugar: string | null
+  notas: string | null
+  asistentes: SeguimientoAsistente[]
+  // Presencia = ya derivado como "tema a tratar" a Gabinete Regional
+  // (gabinete_temas.id). Alcance v1: solo Gabinete.
+  derivado_gabinete_tema_id: number | null
+}
+
+// Compromiso tomado en una Reunión (mig 081) — tabla propia de Seguimiento,
+// deliberadamente aislada de `sesion_compromisos` (comités).
+export type SeguimientoCompromiso = {
+  id: number
+  seguimiento_id: number
+  prioridad_id: number
+  descripcion: string
+  responsable_nombre: string | null
+  responsable_institucion: string | null
+  plazo: string | null
+  estado: 'pendiente' | 'en_curso' | 'cumplido'
+  autor: string | null
   created_at: string
 }
 
@@ -483,6 +521,9 @@ export type Metrica = {
   // la transición — las filas migradas tienen eje_id, las pre-migración
   // pueden no tenerlo.
   eje_id?: number | null
+  // Vínculo opcional a una iniciativa específica (mig 080). id estable de
+  // prioridades_territoriales (nunca n). Campo de definición (solo metrica.definir).
+  prioridad_id: number | null
   titulo: string
   descripcion: string | null
   objetivo: number
@@ -560,6 +601,14 @@ export type EjeSesion = {
   closed_by_email: string | null
   created_at: string
   closed_at: string | null
+  // ── Gabinete v2 (mig 074) ──
+  pauta_enviada_at: string | null  // set al enviar la pauta; la fase de pauta se deriva de acá
+  numero: number | null            // correlativo estampado (backfill de cerradas); NULL en preview/borrador
+  origen: 'panel' | 'historica'
+  formato_acta: number             // 1 = v1 (histórico) · 2 = v2 (pauta) — discriminador del render del acta
+  // Comentarios generales de la reunión (mig 077). Texto libre a nivel sesión
+  // (distinto de apuntes por institución / observaciones por métrica).
+  comentarios: string | null
 }
 
 export type SesionNomina = {
@@ -573,6 +622,9 @@ export type SesionNomina = {
   institucion: string
   calidad: 'titular' | 'suplente'
   activo: boolean
+  // ≤1 por alcance (región+instancia[+eje]): quien preside por defecto (mig 077).
+  // El acta lo prefiere sobre el derivado por email.
+  preside: boolean
   created_at: string
 }
 
@@ -611,16 +663,47 @@ export type SesionTema = {
 }
 
 // ── Reporte de métricas por institución del Comité Policial (mig 048) ────────
-// Reemplaza el modelo suma/pulso EN LA SESIÓN de comité. Institución fija
+// Reemplaza el modelo suma/pulso EN LA SESIÓN de comité. Las 4 base
 // (Carabineros/PDI/Armada/Gendarmería); catálogo POR REGIÓN.
+//
+// Claves base — fallback cuando comite_institucion está vacío + seed + tests.
+// La institución en la BD pasó a TEXT libre (mig 078): cada región suma las
+// suyas. Por eso ComiteMetrica.institucion es `string`, no esta unión.
 export type ComiteInstitucion = 'carabineros' | 'pdi' | 'armada' | 'gendarmeria'
+
+// Ítem del catálogo por región de instituciones (comite_institucion, mig 078).
+// `clave` es el slug guardado en comite_metrica.institucion.
+export type ComiteInstitucionCatalogo = {
+  id: number
+  region_cod: string
+  clave: string
+  nombre: string
+  orden: number
+  activo: boolean
+}
 
 // Ítem del catálogo (comite_metrica) — la DEFINICIÓN de una métrica por
 // institución. `numerico` alimenta el seguimiento WoW; `texto` es bloque libre.
 export type ComiteMetrica = {
   id: number
   region_cod: string
-  institucion: ComiteInstitucion
+  institucion: string
+  nombre: string
+  tipo: 'numerico' | 'texto'
+  unidad: string | null
+  orden: number
+  activo: boolean
+  // Adopción del catálogo nacional (mig 079): estandar_id apunta a la fila
+  // estándar copiada; origen distingue 'estandar' (adoptada) de 'propia'.
+  estandar_id: number | null
+  origen: 'estandar' | 'propia'
+}
+
+// Ítem del catálogo NACIONAL de métricas estándar (comite_metrica_estandar,
+// mig 079). Admin lo define una vez; cada región adopta con check las que usa.
+export type ComiteMetricaEstandar = {
+  id: number
+  institucion: string
   nombre: string
   tipo: 'numerico' | 'texto'
   unidad: string | null
@@ -683,6 +766,16 @@ export type SesionCompromiso = {
   // puntual). NULL para el resto de las instancias.
   megaproyecto: string | null
   created_at: string
+  // ── Gabinete v2 (mig 074) ──
+  // Punto de pauta al que pertenece el compromiso (nace del tema). NULL = legado
+  // o compromiso de comité. ON DELETE RESTRICT en BD.
+  tema_id: number | null
+  // Borrador vs confirmado: solo la captura de gabinete v2 crea false; el cierre
+  // exige confirmarlos o descartarlos. Default true → legado y comités confirmados.
+  confirmado: boolean
+  plazo_tipo: 'fecha' | 'permanente' | 'por_definir'
+  responsable_todas: boolean          // "Todas las carteras" (responsable colectivo)
+  verificado_en_sala_sesion_id: number | null  // sesión en cuya sala se tocó "Cumplido"
 }
 
 // Agenda + snapshot de las iniciativas tratadas en una sesión de gabinete
@@ -725,17 +818,80 @@ export type RegionConfig = {
 export type GabineteTema = {
   id: number
   region_cod: string
-  texto: string
+  texto: string           // v1: el texto del tema. v2: el DETALLE (usar titulo ?? texto)
   // Sub-items del tema (mig 054) — strings libres en JSONB, misma fila
   // (patrón desglose de sesion_comite_valor).
   subitems: string[]
   orden: number
   sesion_id: number | null
-  // Tema recurrente (mig 057): si es true, al cerrar la sesión NO se consume —
-  // sigue pendiente para la próxima Preparación (se archiva una copia al acta).
+  // DEPRECADO (mig 074): reemplazado por gabinete_recurrentes. Ya no se escribe
+  // en v2; sigue en la columna por las filas legado hasta la migración de PR-2.
   fijo: boolean
   created_at: string
   created_by_email: string | null
+  // ── Gabinete v2 (mig 074) — el punto de pauta ──
+  titulo: string | null            // título del punto (v1 usaba texto)
+  proposito: string | null         // "la pregunta"; NOT NULL vía zod salvo origen='en_sala'
+  minutos: number                  // referencia para la hora objetivo de la hoja de conducción
+  origen: 'manual' | 'pospuesto' | 'anotado' | 'sugerido' | 'recurrente' | 'en_sala' | 'legado'
+  recurrente_id: number | null     // serie recurrente de la que nació (trazabilidad)
+  estado_cierre: 'tratado' | 'sin_novedades' | 'pospuesto' | 'retirado' | null  // decidido al cerrar
+}
+
+// ── Gabinete v2 (mig 074) ────────────────────────────────────────────────────
+
+// Plantilla de puntos recurrentes por región (PSG, probidad, visitas…).
+// Reemplaza el mecanismo `fijo`+copia-al-cierre. Al preparar la pauta se
+// insertan como puntos borrador de la sesión (gabinete_temas.recurrente_id).
+export type GabineteRecurrente = {
+  id: number
+  region_cod: string
+  titulo: string
+  detalle: string | null
+  proposito_plantilla: string | null
+  activo: boolean
+  orden: number
+  created_at: string
+  created_by_email: string | null
+}
+
+// Responsables múltiples de un punto de pauta. orden=1 = cartera principal
+// (precarga responsable de compromisos e intervenciones).
+export type GabineteTemaCartera = {
+  tema_id: number
+  institucion: string
+  orden: number
+}
+
+// Vínculo N:N tema ↔ iniciativa del PREGO, por llave estable id (nunca n).
+export type GabineteTemaIniciativa = {
+  tema_id: number
+  prioridad_id: number
+}
+
+// Apuntes por tema en dos niveles (corrección #1 del dev — NO cabe en
+// sesion_apuntes). institucion NULL = relato general del tema; institucion
+// NOT NULL = intervención atribuida a una cartera (varias por tema/cartera).
+export type SesionIntervencion = {
+  id: number
+  sesion_id: number
+  tema_id: number
+  institucion: string | null
+  texto: string
+  orden: number
+  created_at: string
+  created_by_email: string | null
+}
+
+// Vocerías de la semana (día · vocero · tema). Salen en el acta y se precargan
+// como recordatorio en la preparación siguiente.
+export type SesionVoceria = {
+  id: number
+  sesion_id: number
+  dia: string
+  vocero: string
+  tema_texto: string
+  orden: number
 }
 
 // ── Comité Económico ──────────────────────────────────────────────────────────

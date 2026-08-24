@@ -6,6 +6,7 @@ import { safeWrite } from '@/lib/dbWrite'
 import type { Metrica, RegionEje } from '@/lib/types'
 import { composeEjeLabel } from '@/lib/ejes'
 import { Alert } from '@/components/ui'
+import { useAnchoredDropdown, DropdownPanel } from './gabinete/pickers'
 
 /**
  * Modal compacto para crear o editar la DEFINICIÓN de una métrica por eje
@@ -37,6 +38,9 @@ type Props = {
   sesionesOn?: boolean
   // "+ indicador no contemplado" desde SesionModal: prefija el checkbox.
   defaultsSesion?: { se_reporta_en_sesion: boolean }
+  // Cartera del eje (mig 080): para vincular opcionalmente la métrica a una
+  // iniciativa específica. Vacío/ausente → no se muestra el selector.
+  iniciativas?: { id: number; nombre: string }[]
 }
 
 export default function MetricaEditModal({
@@ -50,6 +54,7 @@ export default function MetricaEditModal({
   onSaved,
   sesionesOn = false,
   defaultsSesion,
+  iniciativas,
 }: Props) {
   const displayLabel = ejeLabel ?? composeEjeLabel(eje.numero, eje.nombre)
   const isEdit = !!metrica
@@ -59,6 +64,7 @@ export default function MetricaEditModal({
   const [unidad, setUnidad]           = useState('')
   const [tipo, setTipo]               = useState<'suma' | 'pulso'>('suma')
   const [enSesion, setEnSesion]       = useState(false)
+  const [prioridadId, setPrioridadId] = useState<number | null>(null)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
@@ -71,6 +77,7 @@ export default function MetricaEditModal({
     setUnidad(metrica?.unidad ?? '')
     setTipo(metrica?.tipo ?? 'suma')
     setEnSesion(metrica?.se_reporta_en_sesion ?? defaultsSesion?.se_reporta_en_sesion ?? false)
+    setPrioridadId(metrica?.prioridad_id ?? null)
     setError(null)
   }, [open, metrica, defaultsSesion])
 
@@ -105,6 +112,7 @@ export default function MetricaEditModal({
       // (o los defaults suma/false) — el payload es idéntico al histórico.
       tipo,
       se_reporta_en_sesion: enSesion,
+      prioridad_id: prioridadId,
       updated_at:  new Date().toISOString(),
     }
     // En INSERT: setea eje_id (FK) Y eje string denormalizado (compat).
@@ -193,6 +201,17 @@ export default function MetricaEditModal({
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 resize-none"
             />
           </div>
+
+          {/* Vínculo opcional a una iniciativa del eje (mig 080) — dropdown
+              flotante estándar del panel (portal, no deforma el modal). */}
+          {iniciativas && iniciativas.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Iniciativa vinculada <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <IniciativaPicker iniciativas={iniciativas} value={prioridadId} onChange={setPrioridadId} />
+            </div>
+          )}
 
           {/* Tipo + reporte en sesión — solo con el módulo Sesiones activo */}
           {sesionesOn && (
@@ -296,5 +315,56 @@ export default function MetricaEditModal({
         </form>
       </div>
     </div>
+  )
+}
+
+/**
+ * Selector de iniciativa (mig 080) con el dropdown flotante estándar del panel
+ * (mismo `useAnchoredDropdown`/`DropdownPanel` del Gabinete): se monta en un
+ * portal a document.body con position:fixed, así NO estira ni deforma el modal
+ * ni se recorta por su overflow-hidden.
+ */
+function IniciativaPicker({ iniciativas, value, onChange }: {
+  iniciativas: { id: number; nombre: string }[]
+  value: number | null
+  onChange: (id: number | null) => void
+}) {
+  const { open, setOpen, pos, triggerRef, panelRef, abrir } = useAnchoredDropdown()
+  const sel = value != null ? iniciativas.find(i => i.id === value) : null
+  return (
+    <>
+      <button
+        type="button" ref={triggerRef}
+        onClick={() => { if (open) setOpen(false); else abrir() }}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 border rounded-lg text-sm text-left bg-white transition-colors ${
+          open ? 'border-violet-400 ring-2 ring-violet-200' : 'border-slate-200 hover:border-violet-300'
+        }`}
+      >
+        <span className={sel ? 'text-slate-900 truncate' : 'text-slate-400'}>{sel ? sel.nombre : '— Sin iniciativa —'}</span>
+        <svg className={`w-3.5 h-3.5 text-slate-400 flex-none transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M2.5 4.5L6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && pos && (
+        <DropdownPanel pos={pos} panelRef={panelRef}>
+          <div className="max-h-56 overflow-y-auto py-1">
+            <button
+              type="button" onClick={() => { onChange(null); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-violet-50 border-b border-slate-50 ${value == null ? 'text-violet-700 font-medium' : 'text-slate-500'}`}
+            >
+              — Sin iniciativa —
+            </button>
+            {iniciativas.map(i => (
+              <button
+                key={i.id} type="button" onClick={() => { onChange(i.id); setOpen(false) }}
+                className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-violet-50 border-b border-slate-50 last:border-0 truncate ${value === i.id ? 'text-violet-700 font-medium' : 'text-slate-700'}`}
+              >
+                {i.nombre}
+              </button>
+            ))}
+          </div>
+        </DropdownPanel>
+      )}
+    </>
   )
 }

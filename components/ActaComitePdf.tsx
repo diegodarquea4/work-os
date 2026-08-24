@@ -31,6 +31,9 @@ export type ActaData = ActaBranding & {
   fecha: string                       // YYYY-MM-DD
   lugar: string | null
   preside: string | null
+  // Comentarios generales de la reunión (mig 077) — solo variante 'policial'
+  // por ahora. Bloque sin numerar para no renumerar III/IV.
+  comentarios?: string | null
   asistencia: {
     nombre: string
     cargo: string | null
@@ -202,6 +205,13 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
                 </View>
               )
             })}
+            {/* Comentarios generales de la reunión (mig 077) — sin numerar */}
+            {data.comentarios && data.comentarios.trim() && (
+              <View style={[s.block, { marginTop: 6 }]} wrap={false}>
+                <Text style={s.blockName}>Comentarios generales</Text>
+                <Text style={s.blockText}>{data.comentarios}</Text>
+              </View>
+            )}
           </>
         ) : data.variante === 'politico' ? (
           <>

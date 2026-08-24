@@ -51,9 +51,12 @@ type Props = {
   // El módulo se movió a la sección Comités, así que el drawer que abre desde
   // «Ejes estratégicos» lo pasa en false para no duplicarlo.
   showSesiones?: boolean
+  // Cartera de la región (mig 080): para vincular una métrica a una iniciativa
+  // del eje. El drawer filtra por eje_id. Ausente → no se ofrece el vínculo.
+  iniciativas?: { id: number; eje_id?: number | null; nombre: string }[]
 }
 
-export default function MetricasEjeDrawer({ region, eje, onClose, embedded = false, showSesiones = true }: Props) {
+export default function MetricasEjeDrawer({ region, eje, onClose, embedded = false, showSesiones = true, iniciativas }: Props) {
   const canEditAny         = useCanEditAny()
   const canEditOperational = useCanEditOperational()
   const userEmail          = useCurrentUserEmail()
@@ -62,6 +65,10 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
   // queda fuera — la RLS de sesion_* igual se lo negaría) + que el contenedor
   // pida mostrarlo (solo el tab Comité Policial, no el drawer de eje).
   const sesionesOn = eje.sesiones_habilitadas && canEditOperational && showSesiones
+
+  // Iniciativas del eje (para el vínculo métrica↔iniciativa, mig 080).
+  const iniciativasEje = (iniciativas ?? []).filter(i => i.eje_id === eje.id)
+  const nombrePorIniciativa = new Map(iniciativasEje.map(i => [i.id, i.nombre]))
 
   const [metricas, setMetricas] = useState<Metrica[]>([])
   const [loading, setLoading]   = useState(true)
@@ -215,6 +222,7 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
                   isConfirmingDelete={confirmDelete === m.id}
                   onCancelDelete={() => setConfirmDelete(null)}
                   onConfirmDelete={() => handleDelete(m.id)}
+                  iniciativaNombre={m.prioridad_id != null ? nombrePorIniciativa.get(m.prioridad_id) : undefined}
                 />
               ))}
             </div>
@@ -258,6 +266,7 @@ export default function MetricasEjeDrawer({ region, eje, onClose, embedded = fal
         currentUserEmail={userEmail}
         onSaved={loadMetricas}
         sesionesOn={sesionesOn}
+        iniciativas={iniciativasEje.map(i => ({ id: i.id, nombre: i.nombre }))}
       />
 
       {/* Módulo Sesiones — modales (solo montan con el gate activo) */}
@@ -319,10 +328,13 @@ function MetricaCard({
   isConfirmingDelete,
   onCancelDelete,
   onConfirmDelete,
+  iniciativaNombre,
 }: {
   m: Metrica
   canEditAny: boolean
   canEditOperational: boolean
+  // Nombre de la iniciativa vinculada (mig 080), si la métrica apunta a una.
+  iniciativaNombre?: string
   // Módulo Sesiones visible para este usuario/eje. Con false la card pulso
   // degrada a "solo valor" y NO consulta la serie (RLS negaría a viewer).
   sesionesOn: boolean
@@ -456,6 +468,16 @@ function MetricaCard({
           </div>
         )}
       </div>
+
+      {iniciativaNombre && (
+        <div className="inline-flex items-center gap-1 text-[11px] text-violet-700 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5 mb-2 max-w-full">
+          <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <span className="truncate">{iniciativaNombre}</span>
+        </div>
+      )}
 
       {m.descripcion && (
         <p className="text-xs text-gray-500 mb-3 leading-snug">{m.descripcion}</p>
