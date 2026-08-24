@@ -37,6 +37,15 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
   const [loading, setLoading]     = useState(true)
   const [busy, setBusy]           = useState(false)
   const [fNombre, setFNombre]     = useState('')
+  const [colapsadas, setColapsadas] = useState<Set<number>>(new Set())
+
+  function toggleColapso(instId: number) {
+    setColapsadas(prev => {
+      const next = new Set(prev)
+      if (next.has(instId)) next.delete(instId); else next.add(instId)
+      return next
+    })
+  }
 
   const load = useCallback(async () => {
     const sb = getSupabase()
@@ -162,11 +171,19 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
             <div className="space-y-4">
               {grupos.map(({ inst, esBase, items }) => {
                 const adoptadas = items.filter(e => adopcion.get(e.id)?.adoptado).length
+                const colapsado = colapsadas.has(inst.id)
                 return (
                   <div key={inst.id}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-wider text-violet-700 truncate">{inst.nombre}</p>
+                        <button onClick={() => toggleColapso(inst.id)}
+                          className="flex items-center gap-1.5 min-w-0 group" title={colapsado ? 'Expandir' : 'Minimizar'}>
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
+                            className={`text-violet-400 flex-none transition-transform ${colapsado ? '-rotate-90' : ''}`}>
+                            <path d="M2 3.5L5 6.5L8 3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          <p className="text-xs font-bold uppercase tracking-wider text-violet-700 group-hover:text-violet-900 truncate">{inst.nombre}</p>
+                        </button>
                         {!esBase && (
                           <button onClick={() => quitarInstitucion(inst)} disabled={busy}
                             className="text-gray-300 hover:text-red-500 flex-none disabled:opacity-40" title="Quitar institución">
@@ -185,7 +202,7 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
                         </div>
                       )}
                     </div>
-                    {items.length === 0 ? (
+                    {!colapsado && (items.length === 0 ? (
                       <p className="text-[11px] text-gray-400 italic px-1 pb-1">
                         Sin métricas estándar nacionales para esta institución{esBase ? '' : ' (agrégalas en la sesión con «+ métrica»)'}.
                       </p>
@@ -209,7 +226,7 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
                           )
                         })}
                       </div>
-                    )}
+                    ))}
                   </div>
                 )
               })}

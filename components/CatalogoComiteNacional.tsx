@@ -21,6 +21,15 @@ export default function CatalogoComiteNacional() {
   const userEmail = useCurrentUserEmail()
   const { estandares, loading, refresh } = useEstandaresComite(true)
   const [editor, setEditor] = useState<{ estandar: ComiteMetricaEstandar | null; institucion: string } | null>(null)
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set())
+
+  function toggleColapso(key: string) {
+    setColapsadas(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -40,10 +49,19 @@ export default function CatalogoComiteNacional() {
             const items = estandares
               .filter(e => e.institucion === inst.key)
               .sort((a, b) => a.orden - b.orden || a.id - b.id)
+            const colapsado = colapsadas.has(inst.key)
             return (
               <section key={inst.key} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-slate-800">{inst.label}</h2>
+                  <button onClick={() => toggleColapso(inst.key)}
+                    className="flex items-center gap-2 min-w-0 group" title={colapsado ? 'Expandir' : 'Minimizar'}>
+                    <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
+                      className={`text-slate-400 flex-none transition-transform ${colapsado ? '-rotate-90' : ''}`}>
+                      <path d="M2 3.5L5 6.5L8 3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <h2 className="text-sm font-bold text-slate-800 group-hover:text-slate-900">{inst.label}</h2>
+                    <span className="text-[11px] text-slate-400 font-normal">{items.length}</span>
+                  </button>
                   <button
                     onClick={() => setEditor({ estandar: null, institucion: inst.key })}
                     className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
@@ -51,6 +69,7 @@ export default function CatalogoComiteNacional() {
                     + métrica
                   </button>
                 </div>
+                {!colapsado && (
                 <div className="divide-y divide-slate-50">
                   {items.length === 0 ? (
                     <p className="text-xs text-slate-400 px-4 py-3">Sin métricas estándar para {inst.label}.</p>
@@ -70,6 +89,7 @@ export default function CatalogoComiteNacional() {
                     </button>
                   ))}
                 </div>
+                )}
               </section>
             )
           })}
