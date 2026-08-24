@@ -38,6 +38,8 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
   const [busy, setBusy]           = useState(false)
   const [fNombre, setFNombre]     = useState('')
   const [colapsadas, setColapsadas] = useState<Set<number>>(new Set())
+  const [seleccion, setSeleccion]   = useState<Set<number>>(new Set())   // estandar_id marcados localmente; se aplican al Guardar
+  const [inicializado, setInicializado] = useState(false)
 
   function toggleColapso(instId: number) {
     setColapsadas(prev => {
@@ -60,16 +62,40 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const adopcion = useMemo(() => {
     const list = reconciliarAdopcion(estandares.map(e => e.id), regionRows)
     return new Map(list.map(a => [a.estandarId, a]))
   }, [estandares, regionRows])
+
+  // Lo que el SERVIDOR tiene adoptado hoy (para el diff con la selección local).
+  const adoptadosServidor = useMemo(
+    () => new Set(estandares.filter(e => adopcion.get(e.id)?.adoptado).map(e => e.id)),
+    [estandares, adopcion])
+
+  // Sembrar la selección local una sola vez, tras el primer load.
+  useEffect(() => {
+    if (inicializado || estLoading || loading) return
+    setSeleccion(new Set(adoptadosServidor))
+    setInicializado(true)
+  }, [inicializado, estLoading, loading, adoptadosServidor])
+
+  // ¿La selección local difiere de lo guardado?
+  const dirty = useMemo(() => {
+    if (seleccion.size !== adoptadosServidor.size) return true
+    for (const id of seleccion) if (!adoptadosServidor.has(id)) return true
+    return false
+  }, [seleccion, adoptadosServidor])
+
+  const handleClose = useCallback(() => {
+    if (dirty && !window.confirm('Tienes cambios sin guardar en la selección de métricas. ¿Cerrar y descartarlos?')) return
+    onClose()
+  }, [dirty, onClose])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') handleClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleClose])
 
   // Instituciones de la región (base + propias) con sus métricas nacionales.
   const grupos = useMemo(() => instRows.map(inst => ({
@@ -99,22 +125,33 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
     }
   }
 
-  async function toggle(est: ComiteMetricaEstandar) {
+  // La selección es LOCAL e instantánea; los cambios se aplican al Guardar.
+  function toggle(est: ComiteMetricaEstandar) {
     if (busy) return
-    setBusy(true)
-    try {
-      await setAdoptado(est, !adopcion.get(est.id)?.adoptado)
-      await load(); onSaved()
-    } catch (err) { window.alert((err as Error).message) }
-    finally { setBusy(false) }
+    setSeleccion(prev => {
+      const next = new Set(prev)
+      if (next.has(est.id)) next.delete(est.id); else next.add(est.id)
+      return next
+    })
   }
 
-  async function marcarGrupo(items: ComiteMetricaEstandar[], on: boolean) {
+  function marcarGrupo(items: ComiteMetricaEstandar[], on: boolean) {
     if (busy) return
+    setSeleccion(prev => {
+      const next = new Set(prev)
+      for (const est of items) { if (on) next.add(est.id); else next.delete(est.id) }
+      return next
+    })
+  }
+
+  // Aplica en la BD SOLO lo que cambió respecto de lo guardado, en una pasada.
+  async function guardar() {
+    if (busy || !dirty) return
     setBusy(true)
     try {
-      for (const est of items) {
-        if (!!adopcion.get(est.id)?.adoptado !== on) await setAdoptado(est, on)
+      for (const est of estandares) {
+        const quiero = seleccion.has(est.id)
+        if (quiero !== adoptadosServidor.has(est.id)) await setAdoptado(est, quiero)
       }
       await load(); onSaved()
     } catch (err) { window.alert((err as Error).message) }
@@ -152,14 +189,14 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
   const cargando = estLoading || loading
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={handleClose}>
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
             <p className="text-base font-semibold text-gray-900">Métricas</p>
             <p className="text-xs text-gray-500 mt-0.5">Por institución, marca las del catálogo nacional que reporta tu región.</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">
+          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 mt-0.5" title="Cerrar">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l12 12M16 4L4 16"/></svg>
           </button>
         </header>
@@ -170,7 +207,7 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
           ) : (
             <div className="space-y-4">
               {grupos.map(({ inst, esBase, items }) => {
-                const adoptadas = items.filter(e => adopcion.get(e.id)?.adoptado).length
+                const adoptadas = items.filter(e => seleccion.has(e.id)).length
                 const colapsado = colapsadas.has(inst.id)
                 return (
                   <div key={inst.id}>
@@ -209,7 +246,7 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
                     ) : (
                       <div className="space-y-1">
                         {items.map(est => {
-                          const on = !!adopcion.get(est.id)?.adoptado
+                          const on = seleccion.has(est.id)
                           return (
                             <label key={est.id}
                               className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
@@ -234,19 +271,29 @@ export default function MetricasComiteModal({ regionCod, currentUserEmail, onClo
           )}
         </div>
 
-        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 space-y-2">
+        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 space-y-2.5">
+          {/* Agregar institución — acción inmediata, aparte de la selección de métricas */}
           <form onSubmit={agregarInstitucion} className="flex items-center gap-2">
             <input type="text" value={fNombre} onChange={e => setFNombre(e.target.value)}
               placeholder="Agregar institución (ej. Fiscalía, SENDA)…"
               className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300" />
             <button type="submit" disabled={busy || !fNombre.trim()}
-              className="text-sm bg-violet-700 text-white px-4 py-2 rounded-lg hover:bg-violet-800 disabled:opacity-50 flex-shrink-0">
+              className="text-sm border border-violet-300 text-violet-700 px-3 py-2 rounded-lg hover:bg-violet-50 disabled:opacity-50 flex-shrink-0">
               Agregar
             </button>
           </form>
-          <p className="text-[11px] text-gray-400 leading-snug">
-            Adoptar copia la métrica al catálogo de tu región; los valores se cargan en la sesión. El catálogo nacional lo define la división.
-          </p>
+          {/* Guardar la selección de métricas */}
+          <div className="flex items-center justify-between gap-3 pt-0.5">
+            <p className="text-[11px] leading-snug flex-1 min-w-0">
+              {dirty
+                ? <span className="text-amber-600 font-medium">Cambios sin guardar en la selección.</span>
+                : <span className="text-gray-400">Marca las métricas que reporta tu región y guarda.</span>}
+            </p>
+            <button onClick={guardar} disabled={busy || !dirty}
+              className="text-sm bg-violet-700 text-white px-5 py-2 rounded-lg hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0">
+              {busy ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
         </footer>
       </div>
     </div>
