@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
+import { toMetricsRegionName, fromMetricsRegionName } from '@/lib/regions'
 
 export type EmpleoRow = {
   nombre_region: string
@@ -79,12 +80,17 @@ export function useMetricasEmpleoTodas() {
         const periodos = [...periodSet].sort()
 
         // region → periodo → { tasa, ocu }
+        // Normalizamos al nombre de UI acá — RM/Magallanes vienen de
+        // registros_bce_empleo con otro nombre (ver toMetricsRegionName) —
+        // para que las claves calcen con `Region.nombre` en todo el resto
+        // del panel (selects, comparaciones, rankings).
         const regionMap: Record<string, Record<string, { tasa?: number | null; ocu?: number | null }>> = {}
         for (const r of all) {
-          if (!regionMap[r.nombre_region]) regionMap[r.nombre_region] = {}
-          if (!regionMap[r.nombre_region][r.periodo]) regionMap[r.nombre_region][r.periodo] = {}
-          if (r.indicador === 'Tasa de desocupación') regionMap[r.nombre_region][r.periodo].tasa = r.valor
-          if (r.indicador === 'Ocupados')             regionMap[r.nombre_region][r.periodo].ocu  = r.valor
+          const reg = fromMetricsRegionName(r.nombre_region)
+          if (!regionMap[reg]) regionMap[reg] = {}
+          if (!regionMap[reg][r.periodo]) regionMap[reg][r.periodo] = {}
+          if (r.indicador === 'Tasa de desocupación') regionMap[reg][r.periodo].tasa = r.valor
+          if (r.indicador === 'Ocupados')             regionMap[reg][r.periodo].ocu  = r.valor
         }
 
         // Armar datos por región alineados al array global de períodos
@@ -153,6 +159,7 @@ export function useMetricasEmpleoRegion(regionNombre: string | null) {
 
   useEffect(() => {
     if (!regionNombre) { setSerie([]); return }
+    const nombreDb = toMetricsRegionName(regionNombre)
     let cancelled = false
     setLoading(true)
     async function load() {
@@ -161,7 +168,7 @@ export function useMetricasEmpleoRegion(regionNombre: string | null) {
         const { data, error } = await sb
           .from('registros_bce_empleo')
           .select('nombre_region,periodo,indicador,valor')
-          .eq('nombre_region', regionNombre)
+          .eq('nombre_region', nombreDb)
           .order('periodo', { ascending: true })
         if (cancelled) return
         if (!error && data) {
@@ -218,9 +225,10 @@ export function useMetricasEmpleoResumen() {
         if (cancelled) return
         const result: Record<string, { tasa: number | null; ocupados: number | null; periodo: string }> = {}
         for (const row of (rows ?? []) as EmpleoRow[]) {
-          if (!result[row.nombre_region]) result[row.nombre_region] = { tasa: null, ocupados: null, periodo: latestPeriod }
-          if (row.indicador === 'Tasa de desocupación') result[row.nombre_region].tasa     = row.valor
-          if (row.indicador === 'Ocupados')             result[row.nombre_region].ocupados = row.valor
+          const reg = fromMetricsRegionName(row.nombre_region)
+          if (!result[reg]) result[reg] = { tasa: null, ocupados: null, periodo: latestPeriod }
+          if (row.indicador === 'Tasa de desocupación') result[reg].tasa     = row.valor
+          if (row.indicador === 'Ocupados')             result[reg].ocupados = row.valor
         }
         if (!cancelled) setData(result)
       } catch { /* silent */ } finally {

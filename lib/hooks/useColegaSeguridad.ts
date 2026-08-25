@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabaseColega } from '@/lib/supabaseColega'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, fromMetricsRegionName } from '@/lib/regions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +80,10 @@ export function useColegaSeguridadAll(id_semana?: number) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mapped = (data as any[]).map(r => ({
             ...r,
+            // RM/Magallanes vienen de registros_leystop con otro nombre
+            // (ver toMetricsRegionName) — normalizamos acá para que calce
+            // con `Region.nombre` en comparaciones/filtros del panel.
+            nombre_region: fromMetricsRegionName(r.nombre_region),
             n_1: r.pct_1, n_2: r.pct_2, n_3: r.pct_3, n_4: r.pct_4, n_5: r.pct_5,
           })) as LeystopRow[]
           setRows(mapped)

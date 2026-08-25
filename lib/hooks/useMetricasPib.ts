@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { toMetricsRegionName, fromMetricsRegionName } from '@/lib/regions'
 
 export type PibRow = {
   nombre_region: string | null
@@ -41,6 +42,7 @@ export function useMetricasPibRegion(regionNombre: string | null) {
 
   useEffect(() => {
     if (!regionNombre) { setRows([]); return }
+    const nombreDb = toMetricsRegionName(regionNombre)
     let cancelled = false
     setLoading(true)
     async function load() {
@@ -53,7 +55,7 @@ export function useMetricasPibRegion(regionNombre: string | null) {
           const { data, error } = await sb
             .from('registros_bce')
             .select('nombre_region,periodo,valor_corregido,indicador_limpio,unidad_limpia,series_id')
-            .eq('nombre_region', regionNombre)
+            .eq('nombre_region', nombreDb)
             // Orden determinístico: una región tiene ~2.500-3.600 filas en
             // registros_bce → esta query pagina. Sin ORDER BY estable, .range()
             // puede saltar/duplicar filas entre páginas → sectores/evolución del
@@ -134,9 +136,14 @@ export function useMetricasPibNacional() {
           añoSet.add(year)
           const target = r.unidad_limpia === PIB_UNIDAD_NOM ? valoresNom : valores
           if (r.nombre_region) {
-            regSet.add(r.nombre_region)
-            if (!target[r.nombre_region]) target[r.nombre_region] = {}
-            target[r.nombre_region][year] = r.valor_corregido
+            // Normalizamos al nombre de UI acá — RM/Magallanes vienen de
+            // registros_bce con otro nombre (ver toMetricsRegionName) — para
+            // que las claves calcen con `Region.nombre` en todo el resto del
+            // panel (selects, comparaciones, rankings).
+            const regionUI = fromMetricsRegionName(r.nombre_region)
+            regSet.add(regionUI)
+            if (!target[regionUI]) target[regionUI] = {}
+            target[regionUI][year] = r.valor_corregido
           } else if (r.indicador_limpio === 'Extrarregional' && r.unidad_limpia === PIB_UNIDAD_ENC) {
             extrarregional[year] = r.valor_corregido
           }
@@ -189,8 +196,9 @@ export function useMetricasPibResumen() {
         const byRegion: Record<string, { pib: number; sortKey: string; year: string }> = {}
         for (const r of annual) {
           const { year, sortKey } = parsePeriodo(r.periodo)
-          if (!byRegion[r.nombre_region!] || sortKey > byRegion[r.nombre_region!].sortKey) {
-            byRegion[r.nombre_region!] = { pib: r.valor_corregido!, sortKey, year }
+          const regionUI = fromMetricsRegionName(r.nombre_region!)
+          if (!byRegion[regionUI] || sortKey > byRegion[regionUI].sortKey) {
+            byRegion[regionUI] = { pib: r.valor_corregido!, sortKey, year }
           }
         }
         if (!cancelled) {

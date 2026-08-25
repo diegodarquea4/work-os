@@ -14,7 +14,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Region } from '@/lib/regions'
-import { TOTAL_KM2 } from '@/lib/regions'
+import { TOTAL_KM2, toMetricsRegionName, fromMetricsRegionName } from '@/lib/regions'
 import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
 import type { CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 
@@ -128,7 +128,7 @@ async function fetchAllPibRows(
       .order('series_id', { ascending: true })
       .order('periodo', { ascending: true })
       .range(offset, offset + pageSize - 1)
-    if (filtro.nombreRegion) query = query.eq('nombre_region', filtro.nombreRegion)
+    if (filtro.nombreRegion) query = query.eq('nombre_region', toMetricsRegionName(filtro.nombreRegion))
     if (filtro.soloNoNull) query = query.not('nombre_region', 'is', null)
     const { data, error } = await query
     if (error || !data?.length) break
@@ -162,11 +162,15 @@ export async function fetchPibContexto(sb: SupabaseClient, regionNombre: string)
   const annual = allRowsReal
     .filter(r => r.indicador_limpio === 'PIB' && r.series_id?.endsWith('A') && r.valor_corregido != null)
 
+  // Normalizamos al nombre de UI acá — RM/Magallanes vienen de registros_bce
+  // con otro nombre (ver toMetricsRegionName) — para que `latestByRegion.get(regionNombre)`
+  // calce con el `region.nombre` que pasa el llamador.
   const latestByRegion = new Map<string, { valor: number; periodo: string }>()
   for (const r of annual) {
-    const prev = latestByRegion.get(r.nombre_region)
+    const regionUI = fromMetricsRegionName(r.nombre_region)
+    const prev = latestByRegion.get(regionUI)
     if (!prev || r.periodo > prev.periodo) {
-      latestByRegion.set(r.nombre_region, { valor: r.valor_corregido as number, periodo: r.periodo })
+      latestByRegion.set(regionUI, { valor: r.valor_corregido as number, periodo: r.periodo })
     }
   }
 
@@ -305,11 +309,16 @@ function ultimoValido(vals: (number | null)[]): { idx: number; valor: number | n
  */
 export async function fetchEmpleoContexto(sb: SupabaseClient, regionNombre: string): Promise<EmpleoContexto> {
   const allRows = await fetchAllEmpleoRows(sb)
+  // Normalizamos al nombre de UI acá — RM/Magallanes vienen de
+  // registros_bce_empleo con otro nombre (ver toMetricsRegionName) — para
+  // que `byRegion.get(regionNombre)` calce con el `region.nombre` que pasa
+  // el llamador.
   const byRegion = new Map<string, EmpleoRow[]>()
   for (const r of allRows) {
-    const arr = byRegion.get(r.nombre_region) ?? []
+    const regionUI = fromMetricsRegionName(r.nombre_region)
+    const arr = byRegion.get(regionUI) ?? []
     arr.push(r)
-    byRegion.set(r.nombre_region, arr)
+    byRegion.set(regionUI, arr)
   }
 
   const latestByRegion = new Map<string, number>()
@@ -397,16 +406,13 @@ type CasenDatosJson = {
 }
 
 /**
- * `casen_regiones.region` no usa los mismos nombres que `lib/regions.ts`
- * para RM y XII (viene del JSON fuente CASEN, no de nuestro catálogo):
- * 'Metropolitana de Santiago' en vez de 'Metropolitana', y 'Magallanes' en
- * vez de 'Magallanes y Antártica'. `registros_bce`/`registros_bce_empleo`
- * sí calzan 1:1 con `region.nombre` — no necesitan este mapeo.
+ * `casen_regiones.region` usa el mismo nombre "de fuente" que
+ * `registros_bce`/`registros_bce_empleo`/`registros_leystop*` para RM y XII
+ * — ver `toMetricsRegionName` en `lib/regions.ts` (única fuente de verdad
+ * para este mapeo; antes vivía duplicado acá).
  */
 function casenRegionName(region: Region): string {
-  if (region.cod === 'RM') return 'Metropolitana de Santiago'
-  if (region.cod === 'XII') return 'Magallanes'
-  return region.nombre
+  return toMetricsRegionName(region.nombre)
 }
 
 export async function fetchCasenContexto(sb: SupabaseClient, region: Region): Promise<CasenContexto | null> {

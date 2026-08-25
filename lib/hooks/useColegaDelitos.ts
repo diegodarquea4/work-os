@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabaseColega } from '@/lib/supabaseColega'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, fromMetricsRegionName } from '@/lib/regions'
 
 export type DelitosRow = {
   id: number
@@ -87,8 +87,14 @@ export function useColegaDelitosAll(id_semana?: number) {
 
         if (cancelled) return
         if (data) {
-          setRows(data as unknown as DelitosRow[])
-          setSemana((data as unknown as DelitosRow[])[0]?.semana ?? '')
+          // RM/Magallanes vienen de registros_leystop_delitos con otro
+          // nombre (ver toMetricsRegionName) — normalizamos acá para que
+          // calce con `Region.nombre` en comparaciones/filtros del panel.
+          const mapped = (data as unknown as DelitosRow[]).map(r => ({
+            ...r, nombre_region: fromMetricsRegionName(r.nombre_region),
+          }))
+          setRows(mapped)
+          setSemana(mapped[0]?.semana ?? '')
         }
         setLoading(false)
       } catch {

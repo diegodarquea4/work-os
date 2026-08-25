@@ -66,10 +66,32 @@ export const BCCh_PIB_CODE: Record<string, string> = {
   '13': 'RM', '14': 'XIV', '15': 'XV',  '16': 'XVI',
 }
 
-/** ISO 3166-2:CL subdivision codes — prefix segment of codigo_iniciativa (XX-NNN-NNN) */
+/** ISO 3166-2:CL subdivision codes — prefix segment de codigo_iniciativa (XX-NNN-NNN) */
 export const ISO_CODE: Record<string, string> = {
   XV: 'AP', I: 'TA',   II: 'AN',  III: 'AT',
   IV: 'CO', V: 'VS',   RM: 'RM',  VI: 'LI',
   VII: 'ML', XVI: 'NB', VIII: 'BI', IX: 'AR',
   XIV: 'LR', X: 'LL',  XI: 'AI',  XII: 'MA',
+}
+
+/**
+ * Nombre de región tal como aparece en las tablas externas de métricas
+ * (`registros_bce`, `registros_bce_empleo`, `registros_leystop`,
+ * `registros_leystop_delitos`, `casen_regiones`, `regiones`) — difiere de
+ * `Region.nombre` solo para RM ('Metropolitana de Santiago') y XII
+ * ('Magallanes'), que vienen de las fuentes fuente (BCCh/INE/CASEN/LeyStop)
+ * con su nombre oficial/abreviado en vez del nombre corto de la UI. Las
+ * otras 14 regiones calzan 1:1 — verificado contra las tablas en Supabase.
+ */
+export function toMetricsRegionName(nombreUI: string): string {
+  if (nombreUI === 'Metropolitana') return 'Metropolitana de Santiago'
+  if (nombreUI === 'Magallanes y Antártica') return 'Magallanes'
+  return nombreUI
+}
+
+/** Inverso de {@link toMetricsRegionName}: nombre de una tabla de métricas → `Region.nombre` de la UI. */
+export function fromMetricsRegionName(nombreDb: string): string {
+  if (nombreDb === 'Metropolitana de Santiago') return 'Metropolitana'
+  if (nombreDb === 'Magallanes') return 'Magallanes y Antártica'
+  return nombreDb
 }
