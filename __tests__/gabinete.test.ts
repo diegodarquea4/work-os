@@ -35,6 +35,13 @@ function comp(over: Partial<SesionCompromiso> & { id: number }): SesionCompromis
     proyecto_id: null,
     megaproyecto: null,
     created_at: `2026-07-0${(over.id % 9) + 1}T10:00:00Z`,
+    // Gabinete v2 (mig 074) — legado/comités confirmados por default, sin
+    // tema ni verificación de sala hasta que el fixture lo pise via `over`.
+    tema_id: null,
+    confirmado: true,
+    plazo_tipo: 'por_definir',
+    responsable_todas: false,
+    verificado_en_sala_sesion_id: null,
     ...over,
   }
 }

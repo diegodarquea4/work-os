@@ -21,6 +21,7 @@ import {
 type Props = {
   region: Region
   onClose: () => void
+  initialSesionId?: number | null
 }
 
 type DetalleSesion = {
@@ -41,7 +42,7 @@ const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
   general:                'General',
 }
 
-export default function HistorialSesionesInversionModal({ region, onClose }: Props) {
+export default function HistorialSesionesInversionModal({ region, onClose, initialSesionId = null }: Props) {
   const [sesiones, setSesiones] = useState<SesionResumen[]>([])
   const [loading, setLoading]   = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -102,6 +103,13 @@ export default function HistorialSesionesInversionModal({ region, onClose }: Pro
       },
     }))
   }
+
+  useEffect(() => {
+    if (!initialSesionId || expandedId === initialSesionId) return
+    const s = sesiones.find(x => x.id === initialSesionId)
+    if (s) toggleExpand(s)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiones, initialSesionId])
 
   return (
     <HistorialShell

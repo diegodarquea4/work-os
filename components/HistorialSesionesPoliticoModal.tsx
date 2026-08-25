@@ -21,6 +21,7 @@ import {
 type Props = {
   region: Region
   onClose: () => void
+  initialSesionId?: number | null
 }
 
 type DetalleSesion = {
@@ -29,7 +30,7 @@ type DetalleSesion = {
   compromisos: SesionCompromiso[]
 }
 
-export default function HistorialSesionesPoliticoModal({ region, onClose }: Props) {
+export default function HistorialSesionesPoliticoModal({ region, onClose, initialSesionId = null }: Props) {
   const isAdmin = useIsAdmin()
   const [sesiones, setSesiones] = useState<SesionResumen[]>([])
   const [loading, setLoading]   = useState(true)
@@ -83,6 +84,13 @@ export default function HistorialSesionesPoliticoModal({ region, onClose }: Prop
       },
     }))
   }
+
+  useEffect(() => {
+    if (!initialSesionId || expandedId === initialSesionId) return
+    const s = sesiones.find(x => x.id === initialSesionId)
+    if (s) toggleExpand(s)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiones, initialSesionId])
 
   return (
     <HistorialShell

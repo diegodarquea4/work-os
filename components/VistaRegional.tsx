@@ -7,7 +7,7 @@ import { safeWrite } from '@/lib/dbWrite'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { PregoRow } from '@/lib/types'
+import type { PregoRow, EjeSesion } from '@/lib/types'
 import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
@@ -18,11 +18,16 @@ import MetricasEjeDrawer from './MetricasEjeDrawer'
 import ComitesRegionalesSection from './ComitesRegionalesSection'
 import RegionEjesPanel from './RegionEjesPanel'
 import ProjectTrackerModal from './ProjectTrackerModal'
+import RegionCalendarioModal from './RegionCalendarioModal'
+import HistorialSesionesModal from './HistorialSesionesModal'
+import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
+import HistorialSesionesPoliticoModal from './HistorialSesionesPoliticoModal'
 import DesalojoBadge from './DesalojoBadge'
 import { FlagIcon } from './icons/FlagIcon'
 import MetricasClaveSection, { MetricCard } from './MetricasClaveSection'
 import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
+import { composeEjeLabel } from '@/lib/ejes'
 import {
   diasHastaHito,
   ejeBreakdownFor,
@@ -112,6 +117,10 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   const [prego, setPrego] = useState<PregoRow | null>(null)
   // Ficha abierta desde la sección "En foco" (mismo modal que Atención/Kanban).
   const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
+  const [calendarioOpen, setCalendarioOpen] = useState(false)
+  // Deep-link desde el calendario regional: click en un item de "Comités y
+  // Gabinetes" abre el historial de esa instancia con la sesión ya expandida.
+  const [selectedSesion, setSelectedSesion] = useState<EjeSesion | null>(null)
 
   // (El default de región ahora viene del state global activeRegionName,
   // sincronizado en WorkOSApp y persistido en localStorage. El useMemo de
@@ -520,6 +529,19 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
 
               {/* Buttons */}
               <div className="flex items-center gap-2">
+                {region && (
+                  <button
+                    onClick={() => setCalendarioOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Calendario de 6 semanas: reuniones, hitos, comités y gabinetes de la región"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1.5" y="2" width="9" height="8.5" rx="1"/>
+                      <path d="M1.5 4.5h9M4 1v2M8 1v2"/>
+                    </svg>
+                    Calendario
+                  </button>
+                )}
                 {region && canPropose && (
                   <button
                     onClick={() => setProposeModalOpen(true)}
@@ -888,6 +910,70 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           onClose={() => setSelectedIniciativa(null)}
           onUpdatePrioridad={handleUpdateAndRefresh}
           onDeletePrioridad={onDeletePrioridad}
+        />
+      )}
+
+      {/* ── Calendario regional: reuniones, hitos, comités y gabinetes ──────── */}
+      {region && (
+        <RegionCalendarioModal
+          open={calendarioOpen}
+          onClose={() => setCalendarioOpen(false)}
+          region={region}
+          iniciativas={regionIniciativas}
+          onSelectIniciativa={setSelectedIniciativa}
+          onSelectSesion={setSelectedSesion}
+        />
+      )}
+
+      {/* ── Historial de una sesión puntual (deep-link desde el calendario) ─
+          Cada instancia tiene su propio modal de historial (mismas piezas de
+          ./historial/historialUi, distinto detalle de fondo por comité) — acá
+          solo se elige cuál montar según `selectedSesion.instancia`. */}
+      {region && selectedSesion?.instancia === 'gabinete' && (
+        <HistorialSesionesModal
+          region={region}
+          instancia="gabinete"
+          eje={null}
+          nombreInstancia="Gabinete Regional"
+          initialSesionId={selectedSesion.id}
+          onClose={() => setSelectedSesion(null)}
+        />
+      )}
+      {region && selectedSesion?.instancia === 'infraestructura' && (
+        <HistorialSesionesModal
+          region={region}
+          instancia="infraestructura"
+          eje={null}
+          nombreInstancia="Comité de Infraestructura"
+          initialSesionId={selectedSesion.id}
+          onClose={() => setSelectedSesion(null)}
+        />
+      )}
+      {region && selectedSesion?.instancia === 'eje' && (() => {
+        const eje = regionEjes.find(e => e.id === selectedSesion.eje_id) ?? null
+        return (
+          <HistorialSesionesModal
+            region={region}
+            instancia="eje"
+            eje={eje}
+            nombreInstancia={eje ? composeEjeLabel(eje.numero, eje.nombre) : 'Comité'}
+            initialSesionId={selectedSesion.id}
+            onClose={() => setSelectedSesion(null)}
+          />
+        )
+      })()}
+      {region && selectedSesion?.instancia === 'inversion' && (
+        <HistorialSesionesInversionModal
+          region={region}
+          initialSesionId={selectedSesion.id}
+          onClose={() => setSelectedSesion(null)}
+        />
+      )}
+      {region && selectedSesion?.instancia === 'politico' && (
+        <HistorialSesionesPoliticoModal
+          region={region}
+          initialSesionId={selectedSesion.id}
+          onClose={() => setSelectedSesion(null)}
         />
       )}
 

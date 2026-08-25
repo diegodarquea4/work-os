@@ -31,6 +31,9 @@ type Props = {
   eje: RegionEje | null          // null ⇔ instancia≠'eje'
   nombreInstancia: string
   onClose: () => void
+  // Deep-link (ej. desde el calendario regional): abre directo con esta
+  // sesión expandida en vez de arrancar con la lista colapsada.
+  initialSesionId?: number | null
 }
 
 type DetalleSesion = {
@@ -50,7 +53,7 @@ const SEM_DOT: Record<string, string> = {
   rojo: 'bg-red-500', ambar: 'bg-amber-400', verde: 'bg-green-500',
 }
 
-export default function HistorialSesionesModal({ region, instancia, eje, nombreInstancia, onClose }: Props) {
+export default function HistorialSesionesModal({ region, instancia, eje, nombreInstancia, onClose, initialSesionId = null }: Props) {
   const [sesiones, setSesiones] = useState<SesionResumen[]>([])
   const [loading, setLoading]   = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -131,6 +134,15 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
       },
     }))
   }
+
+  // Deep-link: una vez cargada la lista, expande directo la sesión pedida
+  // (ej. click en un item de Comités y Gabinetes del calendario regional).
+  useEffect(() => {
+    if (!initialSesionId || expandedId === initialSesionId) return
+    const s = sesiones.find(x => x.id === initialSesionId)
+    if (s) toggleExpand(s)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiones, initialSesionId])
 
   return (
     <HistorialShell

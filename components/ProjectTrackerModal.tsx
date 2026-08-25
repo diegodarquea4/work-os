@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import type { Seguimiento, SeguimientoCompromiso, Documento, SemaforoLog, Tarea } from '@/lib/types'
+import type { Seguimiento, SeguimientoCompromiso, Documento, SemaforoLog, Tarea, EjeSesion } from '@/lib/types'
+import { REGIONS } from '@/lib/regions'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
@@ -17,6 +18,7 @@ import HistorialTab   from './modal/HistorialTab'
 import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
 import TareasTab      from './modal/TareasTab'
+import HistorialSesionesModal from './HistorialSesionesModal'
 import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 import { HomeIcon } from './icons/HomeIcon'
@@ -64,6 +66,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // cerradas que trataron esta iniciativa (vínculo por id estable). Tolerante:
   // vacío si la tabla no existe (pre-migración) o si RLS la oculta.
   const [gabineteTratado, setGabineteTratado] = useState<{ numero: number; fecha: string }[]>([])
+  // Sesiones de Gabinete/Infraestructura donde esta iniciativa estuvo en la
+  // agenda (sesion_iniciativas — cubre borrador Y cerrada, a diferencia de
+  // gabineteTratado que solo mira cerradas vía la pauta v2). Alimenta el tab
+  // Calendario; click en una abre su historial (mismo mecanismo que el
+  // calendario regional).
+  const [sesionesTratada, setSesionesTratada] = useState<EjeSesion[]>([])
+  const [selectedSesionTratada, setSelectedSesionTratada] = useState<EjeSesion | null>(null)
   const [loading, setLoading]           = useState(true)
 
   const [semaforo, setSemaforo]       = useState<SemaforoKey>(prioridad.estado_semaforo as SemaforoKey ?? 'gris')
@@ -147,6 +156,10 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // dato estructural. Si la iniciativa todavía no tiene eje_id (legacy),
   // cae al string original sin lookup.
   const { ejes: regionEjes } = useRegionEjes(prioridad.cod)
+  // Region completa (no solo el cod) — la necesita el historial de sesiones
+  // que se abre desde el tab Calendario (Gabinete/Infraestructura donde se
+  // trató esta iniciativa).
+  const region = REGIONS.find(r => r.cod === prioridad.cod) ?? null
   // Etiquetas "funcionales" — las que el sistema reconoce y usa para algo
   // (CRI/tag del Comité de Infraestructura de la región, megaproyectos
   // curados por ese comité) llevan color pastel. Cualquier otra etiqueta es
@@ -277,6 +290,23 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
       }
     }
     setGabineteTratado([...tratado.values()].sort((a, b) => a.numero - b.numero))
+
+    // Sesiones de Gabinete/Infraestructura con esta iniciativa en la agenda
+    // (sesion_iniciativas — solo esas dos instancias la usan; los demás
+    // comités no vinculan iniciativas puntuales). Tolerante al mismo criterio
+    // que gabineteTratado arriba.
+    type TratadaRow = { sesion: EjeSesion | null }
+    const { data: tratadaData } = await sb
+      .from('sesion_iniciativas')
+      .select('sesion:eje_sesiones(*)')
+      .eq('prioridad_id', prioridad.id)
+    setSesionesTratada(
+      ((tratadaData ?? []) as unknown as TratadaRow[])
+        .map(r => r.sesion)
+        .filter((s): s is EjeSesion => !!s)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    )
+
     setLoading(false)
   }
 
@@ -1497,6 +1527,13 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
               usuarios={usuarios}
               fechaProximoHito={fechaProximoHito || null}
               proximoHitoTexto={proximoHito || null}
+              comites={sesionesTratada.map(s => ({
+                sesion: s,
+                titulo: s.instancia === 'gabinete'
+                  ? (regionConfigTags?.gabinete_nombre || 'Gabinete Regional')
+                  : (regionConfigTags?.infraestructura_nombre || 'Comité de Infraestructura'),
+              }))}
+              onSelectSesion={setSelectedSesionTratada}
             />
           ) : (
             <DocumentosTab
@@ -1545,6 +1582,28 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           </div>
         )}
       </div>
+
+      {/* ── Historial de una sesión puntual (deep-link desde el tab Calendario) ── */}
+      {region && selectedSesionTratada?.instancia === 'gabinete' && (
+        <HistorialSesionesModal
+          region={region}
+          instancia="gabinete"
+          eje={null}
+          nombreInstancia={regionConfigTags?.gabinete_nombre || 'Gabinete Regional'}
+          initialSesionId={selectedSesionTratada.id}
+          onClose={() => setSelectedSesionTratada(null)}
+        />
+      )}
+      {region && selectedSesionTratada?.instancia === 'infraestructura' && (
+        <HistorialSesionesModal
+          region={region}
+          instancia="infraestructura"
+          eje={null}
+          nombreInstancia={regionConfigTags?.infraestructura_nombre || 'Comité de Infraestructura'}
+          initialSesionId={selectedSesionTratada.id}
+          onClose={() => setSelectedSesionTratada(null)}
+        />
+      )}
     </div>
   )
 }

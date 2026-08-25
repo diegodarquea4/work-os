@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import type { Seguimiento, Tarea } from '@/lib/types'
+import { useMemo, useState } from 'react'
+import type { Seguimiento, Tarea, EjeSesion } from '@/lib/types'
 
 const TIPO_CONFIG = {
   avance:  { label: 'Avance',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
@@ -25,8 +25,13 @@ const TAREA_ESTADO_CONFIG = {
 
 // Las tareas se distinguen de los seguimientos con un dot índigo propio —
 // no comparten paleta con TIPO_CONFIG para que se puedan diferenciar de un
-// vistazo en el mismo día.
+// vistazo en el mismo día. Comités/Gabinete usa ámbar, mismo criterio que el
+// calendario regional (RegionCalendarioModal) — misma categoría, mismo color.
 const TAREA_DOT = 'bg-indigo-500'
+const COMITE_DOT = 'bg-amber-500'
+const COMITE_BADGE = 'bg-amber-100 text-amber-700'
+
+type ComiteItem = { sesion: EjeSesion; titulo: string }
 
 type Props = {
   seguimientos: Seguimiento[]
@@ -39,20 +44,45 @@ type Props = {
   // es lo que se prometió" de "esto es lo que pasó".
   fechaProximoHito?: string | null
   proximoHitoTexto?: string | null
+  // Sesiones de Gabinete/Infraestructura donde esta iniciativa estuvo en la
+  // agenda — click abre el historial de esa sesión (mismo mecanismo que el
+  // calendario regional).
+  comites?: ComiteItem[]
+  onSelectSesion?: (s: EjeSesion) => void
 }
 
-export default function CalendarioTab({ seguimientos, tareas = [], usuarios = [], fechaProximoHito, proximoHitoTexto }: Props) {
-  const [calMonth, setCalMonth] = useState(() => new Date())
-  const [calDay, setCalDay]     = useState<string | null>(null)
+function mondayOf(d: Date): Date {
+  const x = new Date(d)
+  const dow = (x.getDay() + 6) % 7 // 0 = lunes
+  x.setDate(x.getDate() - dow)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
+// Fecha local YYYY-MM-DD — evita el corrimiento de toISOString() en UTC.
+function toISO(d: Date): string {
+  return d.toLocaleDateString('en-CA')
+}
 
-  const today = new Date().toISOString().split('T')[0]
-  const year  = calMonth.getFullYear()
-  const month = calMonth.getMonth()
+export default function CalendarioTab({
+  seguimientos, tareas = [], usuarios = [], fechaProximoHito, proximoHitoTexto,
+  comites = [], onSelectSesion,
+}: Props) {
+  // Mismo formato que el calendario regional: 6 semanas fijas, la primera es
+  // la que contiene el día 1 del mes mostrado, navegación por mes.
+  const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()))
+  const [calDay, setCalDay] = useState<string | null>(null)
 
-  function responsableLabel(email: string | null) {
-    if (!email) return null
-    return usuarios.find(u => u.email === email)?.name ?? email
-  }
+  const weekStart = useMemo(() => mondayOf(monthAnchor), [monthAnchor])
+  const days = useMemo(() => Array.from({ length: 42 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  const today = toISO(new Date())
 
   const byDate: Record<string, Seguimiento[]> = {}
   for (const s of seguimientos) {
@@ -69,19 +99,26 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
     tareasByDate[d].push(t)
   }
 
-  const firstDow = new Date(year, month, 1).getDay()
-  const offset   = (firstDow + 6) % 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells: (string | null)[] = Array(offset).fill(null)
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+  const comitesByDate: Record<string, ComiteItem[]> = {}
+  for (const c of comites) {
+    const d = c.sesion.fecha
+    if (!comitesByDate[d]) comitesByDate[d] = []
+    comitesByDate[d].push(c)
   }
-  while (cells.length % 7 !== 0) cells.push(null)
 
-  const _mn = calMonth.toLocaleDateString('es-CL', { month: 'long' })
-  const monthLabel = `${_mn.charAt(0).toUpperCase() + _mn.slice(1)} ${calMonth.getFullYear()}`
+  function responsableLabel(email: string | null) {
+    if (!email) return null
+    return usuarios.find(u => u.email === email)?.name ?? email
+  }
+
+  const monthLabel = (() => {
+    const s = monthAnchor.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  })()
+
   const selectedEntries = calDay ? (byDate[calDay] ?? []) : []
   const selectedTareas  = calDay ? (tareasByDate[calDay] ?? []) : []
+  const selectedComites = calDay ? (comitesByDate[calDay] ?? []) : []
 
   // Normaliza fecha_proximo_hito a YYYY-MM-DD para matchear contra dateStr
   // de las celdas. Soporta tanto el formato puro ISO como timestamp con hora
@@ -93,17 +130,29 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
     <div className="px-6 py-4">
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => setCalMonth(new Date(year, month - 1, 1))}
+          onClick={() => setMonthAnchor(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+          title="Mes anterior"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M9 2L4 7l5 5"/>
           </svg>
         </button>
-        <span className="text-sm font-medium text-gray-800 capitalize">{monthLabel}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-800">{monthLabel}</span>
+          {toISO(monthAnchor) !== toISO(startOfMonth(new Date())) && (
+            <button
+              onClick={() => setMonthAnchor(startOfMonth(new Date()))}
+              className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
+            >
+              Hoy
+            </button>
+          )}
+        </div>
         <button
-          onClick={() => setCalMonth(new Date(year, month + 1, 1))}
+          onClick={() => setMonthAnchor(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+          title="Mes siguiente"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M5 2l5 5-5 5"/>
@@ -118,14 +167,16 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
       </div>
 
       <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
-        {cells.map((dateStr, i) => {
-          if (!dateStr) return <div key={i} className="bg-white h-16" />
+        {days.map((d, i) => {
+          const dateStr      = toISO(d)
           const entries      = byDate[dateStr] ?? []
           const dayTareas    = tareasByDate[dateStr] ?? []
-          const isToday    = dateStr === today
-          const isSelected = dateStr === calDay
-          const isHito     = dateStr === hitoDate
-          const dayNum     = parseInt(dateStr.split('-')[2])
+          const dayComites   = comitesByDate[dateStr] ?? []
+          const isToday      = dateStr === today
+          const isSelected   = dateStr === calDay
+          const isHito       = dateStr === hitoDate
+          const isOtherMonth = d.getMonth() !== monthAnchor.getMonth()
+          const total        = entries.length + dayTareas.length + dayComites.length
           return (
             <button
               key={i}
@@ -133,7 +184,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
               title={isHito ? hitoTooltip : undefined}
               className={`bg-white h-16 p-1.5 flex flex-col items-start transition-colors hover:bg-slate-50 relative ${
                 isSelected ? 'bg-slate-50 ring-2 ring-inset ring-slate-900' : ''
-              }`}
+              } ${isOtherMonth ? 'opacity-40' : ''}`}
             >
               {/* Ring del próximo hito: anillo distintivo (no dot lleno) para
                   separar "fecha comprometida" de "evento ocurrido". Usa el
@@ -142,7 +193,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
                 isHito && !isToday ? 'ring-2 ring-amber-500 text-amber-700 font-semibold' :
                 isToday ? 'bg-slate-900 text-white' :
                 'text-gray-600'
-              }`}>{dayNum}</span>
+              }`}>{d.getDate()}</span>
               <div className="flex flex-wrap gap-0.5 mt-0.5">
                 {entries.slice(0, 4).map((s, j) => (
                   <span
@@ -151,15 +202,22 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${TIPO_CONFIG[s.tipo]?.dot ?? 'bg-gray-300'}`}
                   />
                 ))}
-                {dayTareas.slice(0, 4 - Math.min(entries.length, 4)).map((t, j) => (
+                {dayTareas.slice(0, Math.max(0, 4 - entries.length)).map((t, j) => (
                   <span
                     key={`t${j}`}
                     title={`Tarea: ${t.nombre}`}
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${TAREA_DOT}`}
                   />
                 ))}
-                {entries.length + dayTareas.length > 4 && (
-                  <span className="text-xs text-gray-400 leading-none">+{entries.length + dayTareas.length - 4}</span>
+                {dayComites.slice(0, Math.max(0, 4 - entries.length - dayTareas.length)).map((c, j) => (
+                  <span
+                    key={`c${j}`}
+                    title={`${c.titulo}: tratada acá`}
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${COMITE_DOT}`}
+                  />
+                ))}
+                {total > 4 && (
+                  <span className="text-xs text-gray-400 leading-none">+{total - 4}</span>
                 )}
               </div>
             </button>
@@ -180,6 +238,12 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
             <span className="text-xs text-gray-500">Tarea (término)</span>
           </div>
         )}
+        {comites.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 rounded-full ${COMITE_DOT}`} />
+            <span className="text-xs text-gray-500">Tratada en comité/gabinete</span>
+          </div>
+        )}
         {hitoDate && (
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full ring-2 ring-amber-500" />
@@ -192,7 +256,7 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
         <div className="mt-4 border-t border-gray-100 pt-4">
           <p className="text-xs font-medium text-gray-500 mb-3">
             {new Date(calDay + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            {selectedEntries.length === 0 && selectedTareas.length === 0 && calDay !== hitoDate && ' — Sin actividad'}
+            {selectedEntries.length === 0 && selectedTareas.length === 0 && selectedComites.length === 0 && calDay !== hitoDate && ' — Sin actividad'}
           </p>
           {calDay === hitoDate && (
             <div className="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
@@ -201,6 +265,28 @@ export default function CalendarioTab({ seguimientos, tareas = [], usuarios = []
                 <p className="text-xs font-semibold text-amber-800">Próximo hito comprometido</p>
                 {proximoHitoTexto && <p className="text-sm text-amber-900 leading-snug mt-0.5">{proximoHitoTexto}</p>}
               </div>
+            </div>
+          )}
+          {selectedComites.length > 0 && (
+            <div className="space-y-2 mb-2">
+              {selectedComites.map((c, i) => {
+                const clickable = !!onSelectSesion
+                const Wrapper = clickable ? 'button' : 'div'
+                return (
+                  <Wrapper
+                    key={i}
+                    {...(clickable ? { onClick: () => onSelectSesion!(c.sesion) } : {})}
+                    className={`w-full flex gap-3 items-start p-2.5 rounded-lg bg-gray-50 text-left ${clickable ? 'hover:bg-gray-100 transition-colors cursor-pointer' : ''}`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${COMITE_DOT}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${COMITE_BADGE}`}>Comité/Gabinete</span>
+                      <p className="text-sm text-gray-700 leading-snug mt-0.5">{c.titulo}</p>
+                      {c.sesion.lugar && <p className="text-xs text-gray-500 mt-0.5">📍 {c.sesion.lugar}</p>}
+                    </div>
+                  </Wrapper>
+                )
+              })}
             </div>
           )}
           {selectedEntries.length > 0 && (
