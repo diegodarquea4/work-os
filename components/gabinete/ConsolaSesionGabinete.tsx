@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { SEMAFORO_CONFIG } from '@/lib/config'
+import { getSupabase } from '@/lib/supabase'
+import { safeWrite } from '@/lib/dbWrite'
 import { useCurrentUserEmail } from '@/lib/context/UserContext'
 import { usePautaGabinete, type PautaPunto, type PautaIniciativa } from '@/lib/hooks/usePautaGabinete'
 import { useSalaGabinete, type SalaApi } from '@/lib/hooks/useSalaGabinete'
@@ -40,6 +42,12 @@ function iniDesdeProyecto(p: Iniciativa): PautaIniciativa {
   return { prioridad_id: p.id, nombre: p.nombre, pctAvance: p.es_desalojo ? null : p.pct_avance, semaforo: p.estado_semaforo, es_desalojo: p.es_desalojo }
 }
 
+// Fecha ISO (YYYY-MM-DD) → legible; anclada a mediodía para no correr de día por TZ.
+function fmtFecha(iso: string): string {
+  if (!iso) return '—'
+  return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 type Props = {
   region: Region
   gabineteNombre: string
@@ -60,6 +68,23 @@ export default function ConsolaSesionGabinete(props: Props) {
 
   const [fase, setFase] = useState<'sala' | 'cierre'>('sala')
   const [asistOpen, setAsistOpen] = useState(false)
+  // Fecha del gabinete: se crea con la del día, pero se puede corregir (p. ej.
+  // si la sesión se carga al día siguiente). Estado local → refleja al instante
+  // y fluye al cierre (el acta usa eje_sesiones.fecha).
+  const [fechaLocal, setFechaLocal]   = useState(fecha)
+  const [fechaEdit, setFechaEdit]     = useState(false)
+  const [savingFecha, setSavingFecha] = useState(false)
+
+  async function guardarFecha(nueva: string) {
+    if (!nueva || nueva === fechaLocal) { setFechaEdit(false); return }
+    setSavingFecha(true)
+    try {
+      await safeWrite(getSupabase().from('eje_sesiones').update({ fecha: nueva }).eq('id', sesionId),
+        `eje_sesiones fecha id=${sesionId}`)
+      setFechaLocal(nueva)
+    } catch (err) { window.alert((err as Error).message) }
+    finally { setSavingFecha(false); setFechaEdit(false) }
+  }
   const [active, setActive] = useState<number | 'vocerias'>(0)
   // active numérico = id del punto; 0 hasta que carga → se resuelve al primero.
   const puntoActivo = useMemo<PautaPunto | null>(() => {
@@ -76,8 +101,26 @@ export default function ConsolaSesionGabinete(props: Props) {
     <div className="fixed inset-0 z-[70] bg-slate-50 flex flex-col">
       {/* Header */}
       <header className="flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-200 flex-none flex-wrap">
-        <span className="text-[14.5px] font-bold text-slate-900">
-          {gabineteNombre} <span className="font-medium text-slate-400">· {numeroLabel} · {fecha}</span>
+        <span className="text-[14.5px] font-bold text-slate-900 inline-flex items-center gap-1.5 flex-wrap">
+          {gabineteNombre}
+          <span className="font-medium text-slate-400">· {numeroLabel} ·</span>
+          {canEdit ? (
+            fechaEdit ? (
+              <input type="date" autoFocus defaultValue={fechaLocal} disabled={savingFecha}
+                onChange={e => guardarFecha(e.target.value)}
+                onBlur={() => setFechaEdit(false)}
+                className="text-[13px] font-medium border border-violet-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-violet-200" />
+            ) : (
+              <button onClick={() => setFechaEdit(true)} disabled={savingFecha}
+                title="Editar la fecha del gabinete (por si se carga otro día)"
+                className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-violet-700 border-b border-dashed border-slate-300 hover:border-violet-400 disabled:opacity-50">
+                {savingFecha ? 'Guardando…' : fmtFecha(fechaLocal)}
+                {!savingFecha && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>}
+              </button>
+            )
+          ) : (
+            <span className="font-medium text-slate-400">{fmtFecha(fechaLocal)}</span>
+          )}
         </span>
         <span className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> En sesión
@@ -180,7 +223,7 @@ export default function ConsolaSesionGabinete(props: Props) {
         <CierreGabinete
           gabineteNombre={gabineteNombre}
           sesionId={sesionId}
-          fecha={fecha}
+          fecha={fechaLocal}
           numeroLabel={numeroLabel}
           pauta={pauta}
           sala={sala}
