@@ -1246,14 +1246,14 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-28 flex-shrink-0">Al término gob.</span>
               <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full cursor-pointer hover:brightness-95 transition-all group w-44 ${
-                estadoTerminoGob === 'En operación' || estadoTerminoGob === 'Terminado' ? 'bg-green-100' :
+                estadoTerminoGob === 'En Operación' || estadoTerminoGob === 'Terminado' ? 'bg-green-100' :
                 estadoTerminoGob === 'En ejecución'  ? 'bg-blue-100'   :
                 estadoTerminoGob === 'En diseño'     ? 'bg-violet-100' :
                 estadoTerminoGob === 'En licitación' || estadoTerminoGob === 'En preinversión' ? 'bg-orange-100' :
                 estadoTerminoGob === 'Sin iniciar'   ? 'bg-gray-100'   : 'bg-gray-100'
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
                 <span className={`text-xs font-medium truncate flex-1 ${
-                  estadoTerminoGob === 'En operación' || estadoTerminoGob === 'Terminado' ? 'text-green-700' :
+                  estadoTerminoGob === 'En Operación' || estadoTerminoGob === 'Terminado' ? 'text-green-700' :
                   estadoTerminoGob === 'En ejecución'  ? 'text-blue-700'   :
                   estadoTerminoGob === 'En diseño'     ? 'text-violet-700' :
                   estadoTerminoGob === 'En licitación' || estadoTerminoGob === 'En preinversión' ? 'text-orange-700' :
@@ -1278,7 +1278,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   <option>En diseño</option>
                   <option>En licitación</option>
                   <option>En ejecución</option>
-                  <option>En operación</option>
+                  <option>En Operación</option>
                   <option>Terminado</option>
                 </select>
               </label>
