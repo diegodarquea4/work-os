@@ -81,14 +81,31 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Solo admin/editor pueden mutar datos en línea desde el panel. Regional y
-  // viewer son solo lectura — su camino para proponer cambios es el modal
-  // "Proponer actualización" en Mi Región, que pasa por revisión del admin.
-  // PREGO: derivado de prego.editar en la región (PregoView pasa region_cod).
-  // Neutro hoy (admin/editor tienen la cap 'all'); refleja el editor de permisos.
-  const canEditRegion = useCallback((regionCod: string): boolean => {
-    return can(capabilities, 'prego.editar', regionCod)
-  }, [capabilities])
+  // Las capacidades se guardan por COD de región ('VIII'); las fichas pasan el
+  // NOMBRE ('Biobío') y PREGO pasa el cod. Normalizamos a cod antes de chequear
+  // (sin esto, un usuario scopeado nunca matchea y solo admin '*' pasaba).
+  const codeForRegionArg = useCallback((regionNombreOrCod: string): string => {
+    if (REGIONS.some(r => r.cod === regionNombreOrCod)) return regionNombreOrCod
+    return REGIONS.find(r => r.nombre === regionNombreOrCod)?.cod ?? regionNombreOrCod
+  }, [])
+
+  // Edición ESTRUCTURAL de la ficha de iniciativa por región (ministerio, etapa,
+  // comuna, inversión, BIP, fuente de financiamiento, hito, etc.). Antes era
+  // admin/editor; ahora se deriva de la capacidad granular
+  // `iniciativa.editar_definicional`, así un regional que la tenga concedida para
+  // su región (p.ej. desde Usuarios → Permisos) puede editar la ficha completa.
+  // Es el superset de edición: el trigger de la BD trata editar_definicional como
+  // "puede modificar cualquier columna". Refleja el editor de permisos.
+  const canEditRegion = useCallback((regionNombreOrCod: string): boolean => {
+    return can(capabilities, 'iniciativa.editar_definicional', codeForRegionArg(regionNombreOrCod))
+  }, [capabilities, codeForRegionArg])
+
+  // PREGO tiene su PROPIA capacidad por región (`prego.editar`) — no reusar la de
+  // la ficha, son permisos distintos (un usuario puede editar iniciativas y no
+  // PREGO, o al revés).
+  const canEditPregoRegion = useCallback((regionNombreOrCod: string): boolean => {
+    return can(capabilities, 'prego.editar', codeForRegionArg(regionNombreOrCod))
+  }, [capabilities, codeForRegionArg])
 
   // Cods that regional/filtered-viewer users cannot open
   const lockedRegions: string[] =
@@ -736,7 +753,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {/* PREGO view — admin/editor only */}
       {view === 'prego' && (profile?.role === 'admin' || profile?.role === 'editor') && (
         <div className="flex-1 overflow-hidden">
-          <PregoView canEditRegion={canEditRegion} />
+          <PregoView canEditRegion={canEditPregoRegion} />
         </div>
       )}
 
