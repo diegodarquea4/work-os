@@ -198,6 +198,39 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
 }
 
 /**
+ * Caps que el preset regional marca `'all'`: globales incluso para un usuario de
+ * región (secciones + exportar / marcar_foco / crear seguimiento / subir
+ * documento). Se derivan del preset para no duplicar la lista.
+ */
+const REGIONAL_GLOBAL_CAPS: Set<string> = new Set(
+  ROLE_PRESETS.regional.filter(([, policy]) => policy === 'all').map(([key]) => key),
+)
+
+/**
+ * Alcance de región por DEFECTO al conceder una capacidad a un usuario en
+ * Usuarios → Permisos, según su footprint de acceso:
+ *   - Usuario con acceso a todas las regiones (sin `region_cods`, p.ej. admin) →
+ *     `'*'` (todas).
+ *   - Usuario de región (`region_cods`) → sus regiones para las caps operativas;
+ *     `'*'` para las globales (`sec.*` y las que el preset regional marca `all`,
+ *     que se chequean sin región).
+ *
+ * Fail-closed: una cap operativa desconocida cae en `'scoped'` (nunca `'*'`), así
+ * conceder un permiso a un usuario de región NO lo habilita en las 16 regiones
+ * por accidente. `can()` sin región igual matchea filas scoped, así que ninguna
+ * cap se rompe por acotarla.
+ */
+export function defaultRegionScopeForCap(
+  capKey: string,
+  regionCods: string[],
+): { mode: 'all' | 'scoped'; cods: string[] } {
+  if (regionCods.length === 0) return { mode: 'all', cods: [] }
+  if (capKey.startsWith('sec.')) return { mode: 'all', cods: [] }
+  if (REGIONAL_GLOBAL_CAPS.has(capKey)) return { mode: 'all', cods: [] }
+  return { mode: 'scoped', cods: [...regionCods] }
+}
+
+/**
  * Deriva las capacidades espejo de un perfil (rol × region_cods). Fuente única
  * usada por `/api/me` (lo que ve el cliente) y por el backfill de
  * `user_capabilities`. Determinístico → reproduce exactamente el acceso de hoy.

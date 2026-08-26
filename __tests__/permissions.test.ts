@@ -1,8 +1,40 @@
 import { describe, it, expect } from 'vitest'
 import {
   capabilitiesForProfile, can, ALL_CAPABILITY_KEYS,
-  operarCapForInstancia, cerrarCapForInstancia,
+  operarCapForInstancia, cerrarCapForInstancia, defaultRegionScopeForCap,
 } from '@/lib/permissions'
+
+/**
+ * Región por defecto al conceder una capacidad (Usuarios → Permisos). El bug
+ * previo: toda cap nueva arrancaba en '*' (todas), lo que sobre-concedía a un
+ * usuario de región las 16 regiones. Ahora sigue el footprint del usuario.
+ */
+describe('defaultRegionScopeForCap — región por defecto al conceder', () => {
+  it('usuario con acceso a todas (sin region_cods) → todas para cualquier cap', () => {
+    expect(defaultRegionScopeForCap('region.gestionar_ejes', [])).toEqual({ mode: 'all', cods: [] })
+    expect(defaultRegionScopeForCap('comite.gabinete.operar', [])).toEqual({ mode: 'all', cods: [] })
+  })
+
+  it('usuario de región → sus regiones para caps operativas', () => {
+    expect(defaultRegionScopeForCap('comite.gabinete.operar', ['X'])).toEqual({ mode: 'scoped', cods: ['X'] })
+    expect(defaultRegionScopeForCap('metrica.definir', ['XIV'])).toEqual({ mode: 'scoped', cods: ['XIV'] })
+    // multi-región: todas las suyas
+    expect(defaultRegionScopeForCap('region.gestionar_ejes', ['X', 'XIV'])).toEqual({ mode: 'scoped', cods: ['X', 'XIV'] })
+  })
+
+  it('usuario de región → globales (secciones + preset regional "all") quedan en todas', () => {
+    expect(defaultRegionScopeForCap('sec.dashboard', ['X'])).toEqual({ mode: 'all', cods: [] })
+    expect(defaultRegionScopeForCap('sec.permisos', ['X'])).toEqual({ mode: 'all', cods: [] })     // sec.* siempre global
+    expect(defaultRegionScopeForCap('dashboard.exportar', ['X'])).toEqual({ mode: 'all', cods: [] })
+    expect(defaultRegionScopeForCap('iniciativa.seguimiento_crear', ['X'])).toEqual({ mode: 'all', cods: [] })
+    expect(defaultRegionScopeForCap('iniciativa.marcar_foco', ['X'])).toEqual({ mode: 'all', cods: [] })
+  })
+
+  it('cap operativa no-preset (admin) concedida a usuario de región → fail-closed (scoped, nunca "*")', () => {
+    expect(defaultRegionScopeForCap('desalojos.editar', ['VIII'])).toEqual({ mode: 'scoped', cods: ['VIII'] })
+    expect(defaultRegionScopeForCap('iniciativa.eliminar', ['VIII'])).toEqual({ mode: 'scoped', cods: ['VIII'] })
+  })
+})
 
 /**
  * Mapeo instancia (BD) → capacidad de comité. Los nombres de la BD NO coinciden

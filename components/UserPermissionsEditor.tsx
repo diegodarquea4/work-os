@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
 import {
-  SECTIONS, FUNCTIONS, ALL_CAPABILITY_KEYS, ROLE_PRESETS,
+  SECTIONS, FUNCTIONS, ALL_CAPABILITY_KEYS, ROLE_PRESETS, defaultRegionScopeForCap,
 } from '@/lib/permissions'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import { Alert } from '@/components/ui'
@@ -26,14 +26,22 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 const SECCIONES_AREA = '__secciones__'
 
-function emptyCaps(): Caps {
+// El alcance de región por DEFECTO de cada cap depende del footprint del usuario:
+// un usuario de región arranca scoped a su(s) región(es) para las caps operativas
+// (y '*' para secciones/globales); un usuario con acceso a todas → '*'. Así, al
+// prender un permiso nuevo, la región queda bien sin tener que ajustarla a mano
+// (evita el over-grant a las 16 regiones). Ver defaultRegionScopeForCap.
+function emptyCaps(regionCods: string[]): Caps {
   const s: Caps = {}
-  for (const k of ALL_CAPABILITY_KEYS) s[k] = { on: false, mode: 'all', cods: [] }
+  for (const k of ALL_CAPABILITY_KEYS) {
+    const def = defaultRegionScopeForCap(k, regionCods)
+    s[k] = { on: false, mode: def.mode, cods: def.cods }
+  }
   return s
 }
 
 function capsFromPreset(role: UserRole, regionCods: string[]): Caps {
-  const s = emptyCaps()
+  const s = emptyCaps(regionCods)
   for (const [key, policy] of ROLE_PRESETS[role] ?? []) {
     s[key] = policy === 'all'
       ? { on: true, mode: 'all', cods: [] }
@@ -161,7 +169,7 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
     onKeyDown(e)
   }
 
-  const [caps, setCaps]       = useState<Caps>(emptyCaps())
+  const [caps, setCaps]       = useState<Caps>(() => emptyCaps(user.region_cods))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState<string | null>(null)
@@ -174,7 +182,7 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
         if (data?.capabilities) {
           const byKey = new Map<string, string[]>()
           for (const c of data.capabilities) byKey.set(c.key, [...(byKey.get(c.key) ?? []), c.region])
-          const next = emptyCaps()
+          const next = emptyCaps(user.region_cods)
           for (const k of ALL_CAPABILITY_KEYS) {
             const regions = byKey.get(k)
             if (!regions?.length) continue
