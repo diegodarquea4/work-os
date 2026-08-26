@@ -231,6 +231,19 @@ export function defaultRegionScopeForCap(
 }
 
 /**
+ * Una capacidad es GLOBAL (no tiene sentido acotarla por región) si es de sección
+ * (`sec.*`) o si el preset regional la marca `'all'` (exportar / marcar en foco /
+ * crear seguimiento / subir documento / exportar Gantt): esas se chequean sin
+ * región y se guardan en `'*'`. El resto son OPERATIVAS y sí se acotan por región.
+ * En el editor de Permisos, las globales van como sí/no (nunca muestran el picker
+ * de región); las operativas muestran el picker solo si el usuario tiene más de
+ * una región (o todas).
+ */
+export function isGlobalCap(capKey: string): boolean {
+  return capKey.startsWith('sec.') || REGIONAL_GLOBAL_CAPS.has(capKey)
+}
+
+/**
  * Deriva las capacidades espejo de un perfil (rol × region_cods). Fuente única
  * usada por `/api/me` (lo que ve el cliente) y por el backfill de
  * `user_capabilities`. Determinístico → reproduce exactamente el acceso de hoy.

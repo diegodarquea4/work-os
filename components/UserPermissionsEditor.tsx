@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
 import {
-  SECTIONS, FUNCTIONS, ALL_CAPABILITY_KEYS, ROLE_PRESETS, defaultRegionScopeForCap,
+  SECTIONS, FUNCTIONS, ALL_CAPABILITY_KEYS, ROLE_PRESETS, defaultRegionScopeForCap, isGlobalCap,
 } from '@/lib/permissions'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import { Alert } from '@/components/ui'
@@ -50,11 +51,34 @@ function capsFromPreset(role: UserRole, regionCods: string[]): Caps {
   return s
 }
 
-/** Alcance regional de una capacidad: "Todas" o una selección — dropdown fijo
- *  para escapar el overflow del modal. */
-function RegionScope({ state, disabled, onChange }: {
+// Filas (clave, región) a guardar para una capacidad concedida, según el
+// footprint del usuario. Fail-closed y sin re-guardar el over-grant '*':
+//   - global (sec.* / preset regional 'all')      → '*'.
+//   - usuario de UNA región                        → esa región (sin picker en la UI).
+//   - usuario con TODAS las regiones (footprint 0) → honra el picker ('*' o selección).
+//   - usuario multi-región                         → acotado a su footprint (sin '*').
+function rowsForCap(k: string, s: CapState, footprint: string[]): { key: string; region: string }[] {
+  if (isGlobalCap(k)) return [{ key: k, region: '*' }]
+  if (footprint.length === 1) return [{ key: k, region: footprint[0] }]
+  if (footprint.length === 0) {
+    if (s.mode === 'all') return [{ key: k, region: '*' }]
+    return s.cods.map(c => ({ key: k, region: c }))
+  }
+  const cods = s.mode === 'all' ? [...footprint] : s.cods.filter(c => footprint.includes(c))
+  return cods.map(c => ({ key: k, region: c }))
+}
+
+/** Alcance regional de una capacidad OPERATIVA para usuarios multi-región o con
+ *  acceso a todas. El menú se portalea a `document.body`: el modal tiene
+ *  `transform` (scale) + `overflow-hidden`, que atraparían/cliparían un
+ *  `position: fixed` renderizado dentro. `regions` es la lista elegible (el
+ *  footprint del usuario, o las 16 si tiene todas); `allowWildcard` habilita la
+ *  opción '*' (solo para usuarios con acceso a todas). */
+function RegionScope({ state, disabled, regions, allowWildcard, onChange }: {
   state: CapState
   disabled: boolean
+  regions: { cod: string; nombre: string }[]
+  allowWildcard: boolean
   onChange: (next: { mode: 'all' | 'scoped'; cods: string[] }) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -83,16 +107,59 @@ function RegionScope({ state, disabled, onChange }: {
   }
 
   function toggleCod(cod: string) {
-    const has = state.cods.includes(cod)
-    const cods = has ? state.cods.filter(c => c !== cod) : [...state.cods, cod]
+    const base = state.mode === 'scoped' ? state.cods : []
+    const has = base.includes(cod)
+    const cods = has ? base.filter(c => c !== cod) : [...base, cod]
     onChange({ mode: 'scoped', cods })
   }
 
-  const label = state.mode === 'all'
+  // "Todas" = wildcard '*' (acceso a todas) o todas sus regiones (multi-región).
+  const allCods = regions.map(r => r.cod)
+  const isAll = allowWildcard
+    ? state.mode === 'all'
+    : state.mode === 'scoped' && allCods.length > 0 && allCods.every(c => state.cods.includes(c))
+  function selectAll() {
+    onChange(allowWildcard ? { mode: 'all', cods: [] } : { mode: 'scoped', cods: [...allCods] })
+    setOpen(false)
+  }
+
+  const label = isAll
     ? 'Todas'
     : state.cods.length === 0 ? 'Sin región'
-    : state.cods.length === 1 ? (REGIONS.find(r => r.cod === state.cods[0])?.nombre ?? state.cods[0])
+    : state.cods.length === 1 ? (regions.find(r => r.cod === state.cods[0])?.nombre ?? state.cods[0])
     : `${state.cods.length} regiones`
+
+  const menu = open && pos && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+      className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-52 max-h-72 overflow-y-auto"
+    >
+      <button
+        type="button"
+        onClick={selectAll}
+        className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-50 ${isAll ? 'text-violet-700 font-medium' : 'text-gray-700'}`}
+      >
+        <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${isAll ? 'border-violet-600' : 'border-gray-300'}`}>
+          {isAll && <span className="w-1.5 h-1.5 rounded-full bg-violet-600" />}
+        </span>
+        <span className="text-xs">{allowWildcard ? 'Todas las regiones' : 'Todas sus regiones'}</span>
+      </button>
+      <div className="my-1 border-t border-gray-100" />
+      {regions.map(r => (
+        <label key={r.cod} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={state.mode === 'scoped' && state.cods.includes(r.cod)}
+            onChange={() => toggleCod(r.cod)}
+            className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
+          />
+          <span className="text-xs text-gray-700">{r.nombre}</span>
+        </label>
+      ))}
+    </div>,
+    document.body,
+  ) : null
 
   return (
     <>
@@ -102,7 +169,7 @@ function RegionScope({ state, disabled, onChange }: {
         disabled={disabled}
         onClick={handleOpen}
         className={`flex items-center gap-1 text-[11px] border rounded px-2 py-1 min-w-[104px] justify-between transition-colors disabled:opacity-40 ${
-          state.mode === 'all'
+          isAll
             ? 'border-gray-200 text-gray-500 hover:border-gray-300'
             : 'border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-300'
         }`}
@@ -110,36 +177,7 @@ function RegionScope({ state, disabled, onChange }: {
         <span className="truncate">{label}</span>
         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1.5 3L4 5.5L6.5 3"/></svg>
       </button>
-      {open && pos && (
-        <div
-          ref={menuRef}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-52 max-h-72 overflow-y-auto"
-        >
-          <button
-            type="button"
-            onClick={() => { onChange({ mode: 'all', cods: [] }); setOpen(false) }}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-50 ${state.mode === 'all' ? 'text-violet-700 font-medium' : 'text-gray-700'}`}
-          >
-            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${state.mode === 'all' ? 'border-violet-600' : 'border-gray-300'}`}>
-              {state.mode === 'all' && <span className="w-1.5 h-1.5 rounded-full bg-violet-600" />}
-            </span>
-            <span className="text-xs">Todas las regiones</span>
-          </button>
-          <div className="my-1 border-t border-gray-100" />
-          {REGIONS.map(r => (
-            <label key={r.cod} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={state.mode === 'scoped' && state.cods.includes(r.cod)}
-                onChange={() => toggleCod(r.cod)}
-                className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
-              />
-              <span className="text-xs text-gray-700">{r.nombre}</span>
-            </label>
-          ))}
-        </div>
-      )}
+      {menu}
     </>
   )
 }
@@ -169,6 +207,16 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
     onKeyDown(e)
   }
 
+  // Footprint del usuario: [] = acceso a todas; [X] = una región; [X,XIV] = varias.
+  // Determina si aparece el manejo granular por región (solo multi o todas) y qué
+  // regiones son elegibles en el picker.
+  const footprint = user.region_cods
+  const singleRegion = footprint.length === 1
+  const allowWildcard = footprint.length === 0
+  const pickerRegions = footprint.length > 0
+    ? REGIONS.filter(r => footprint.includes(r.cod))
+    : REGIONS
+
   const [caps, setCaps]       = useState<Caps>(() => emptyCaps(user.region_cods))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
@@ -180,22 +228,30 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.capabilities) {
+          const cods = user.region_cods
           const byKey = new Map<string, string[]>()
           for (const c of data.capabilities) byKey.set(c.key, [...(byKey.get(c.key) ?? []), c.region])
-          const next = emptyCaps(user.region_cods)
+          const next = emptyCaps(cods)
           for (const k of ALL_CAPABILITY_KEYS) {
             const regions = byKey.get(k)
             if (!regions?.length) continue
-            next[k] = regions.includes('*')
-              ? { on: true, mode: 'all', cods: [] }
-              : { on: true, mode: 'scoped', cods: regions }
+            if (regions.includes('*')) {
+              // '*' cargado: global o usuario con acceso a todas lo conservan; un
+              // usuario con footprint lo normaliza a sus regiones (no re-guardar el
+              // over-grant a las 16 — espeja rowsForCap/mig 085).
+              next[k] = isGlobalCap(k) || cods.length === 0
+                ? { on: true, mode: 'all', cods: [] }
+                : { on: true, mode: 'scoped', cods: [...cods] }
+            } else {
+              next[k] = { on: true, mode: 'scoped', cods: regions }
+            }
           }
           setCaps(next)
         }
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [user.id])
+  }, [user.id, user.region_cods])
 
   function toggle(key: string) {
     setCaps(prev => ({ ...prev, [key]: { ...prev[key], on: !prev[key].on } }))
@@ -210,8 +266,7 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
     for (const k of ALL_CAPABILITY_KEYS) {
       const s = caps[k]
       if (!s.on) continue
-      if (s.mode === 'all') rows.push({ key: k, region: '*' })
-      else for (const c of s.cods) rows.push({ key: k, region: c })
+      rows.push(...rowsForCap(k, s, footprint))
     }
     const res = await fetch(`/api/admin/users/${user.id}/capabilities`, {
       method: 'PUT',
@@ -353,9 +408,20 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
                       </button>
                     </div>
                   </div>
+                  {singleRegion && (
+                    <p className="text-[11px] text-gray-400 mb-2">
+                      El acceso queda acotado a la región asignada del usuario
+                      {' ('}{REGIONS.find(r => r.cod === footprint[0])?.nombre ?? footprint[0]}{'). '}
+                      Cada permiso es solo sí/no.
+                    </p>
+                  )}
                   <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-50 overflow-hidden">
                     {currentFns.map(f => {
                       const st = caps[f.key] ?? { on: false, mode: 'all' as const, cods: [] }
+                      // El picker de región solo aparece para capacidades OPERATIVAS
+                      // de usuarios con más de una región (o todas). Una sola región
+                      // o cap global → sí/no (la región ya está fijada por su acceso).
+                      const showPicker = st.on && !isGlobalCap(f.key) && !singleRegion
                       return (
                         <div key={f.key} className="flex items-center gap-3 px-4 py-2.5">
                           <label className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
@@ -363,9 +429,13 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
                               className="rounded border-gray-300 text-violet-700 focus:ring-violet-400" />
                             <span className={`text-xs ${st.on ? 'text-gray-800' : 'text-gray-400'}`}>{f.label}</span>
                           </label>
-                          <div className={st.on ? '' : 'opacity-0 pointer-events-none'}>
-                            <RegionScope state={st} disabled={saving || !st.on} onChange={next => setScope(f.key, next)} />
-                          </div>
+                          {showPicker && (
+                            <RegionScope
+                              state={st} disabled={saving}
+                              regions={pickerRegions} allowWildcard={allowWildcard}
+                              onChange={next => setScope(f.key, next)}
+                            />
+                          )}
                         </div>
                       )
                     })}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   capabilitiesForProfile, can, ALL_CAPABILITY_KEYS,
-  operarCapForInstancia, cerrarCapForInstancia, defaultRegionScopeForCap,
+  operarCapForInstancia, cerrarCapForInstancia, defaultRegionScopeForCap, isGlobalCap,
 } from '@/lib/permissions'
 
 /**
@@ -33,6 +33,31 @@ describe('defaultRegionScopeForCap — región por defecto al conceder', () => {
   it('cap operativa no-preset (admin) concedida a usuario de región → fail-closed (scoped, nunca "*")', () => {
     expect(defaultRegionScopeForCap('desalojos.editar', ['VIII'])).toEqual({ mode: 'scoped', cods: ['VIII'] })
     expect(defaultRegionScopeForCap('iniciativa.eliminar', ['VIII'])).toEqual({ mode: 'scoped', cods: ['VIII'] })
+  })
+})
+
+/**
+ * `isGlobalCap` decide, en el editor de Permisos, qué caps van como sí/no (sin
+ * picker de región, guardadas en '*') vs cuáles muestran el manejo granular por
+ * región. Globales = secciones + las que el preset regional marca 'all'.
+ */
+describe('isGlobalCap — sí/no vs acotable por región', () => {
+  it('secciones y globales del preset regional son globales (sí/no)', () => {
+    expect(isGlobalCap('sec.dashboard')).toBe(true)
+    expect(isGlobalCap('sec.permisos')).toBe(true)
+    expect(isGlobalCap('dashboard.exportar')).toBe(true)
+    expect(isGlobalCap('iniciativa.marcar_foco')).toBe(true)
+    expect(isGlobalCap('iniciativa.seguimiento_crear')).toBe(true)
+    expect(isGlobalCap('iniciativa.documento_subir')).toBe(true)
+    expect(isGlobalCap('planificacion.exportar_pdf')).toBe(true)
+  })
+  it('las operativas NO son globales (acotables por región)', () => {
+    expect(isGlobalCap('metrica.definir')).toBe(false)
+    expect(isGlobalCap('region.gestionar_ejes')).toBe(false)
+    expect(isGlobalCap('desalojos.editar')).toBe(false)
+    expect(isGlobalCap('comite.policial.operar')).toBe(false)
+    expect(isGlobalCap('iniciativa.editar_operativo')).toBe(false)
+    expect(isGlobalCap('metrica.reportar_valor')).toBe(false)
   })
 })
 
