@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabaseColega } from '@/lib/supabaseColega'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, fromMetricsRegionName } from '@/lib/regions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +80,9 @@ export function useColegaSeguridadAll(id_semana?: number) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mapped = (data as any[]).map(r => ({
             ...r,
+            // Normaliza al nombre del panel (RM/Magallanes) para que los
+            // consumidores que filtran por nombre_region === region.nombre calcen.
+            nombre_region: fromMetricsRegionName(r.nombre_region),
             n_1: r.pct_1, n_2: r.pct_2, n_3: r.pct_3, n_4: r.pct_4, n_5: r.pct_5,
           })) as LeystopRow[]
           setRows(mapped)
@@ -124,6 +127,7 @@ export function useColegaSeguridadRegion(regionCod: string) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setHistory((data as any[]).map(r => ({
             ...r,
+            nombre_region: fromMetricsRegionName(r.nombre_region),
             n_1: r.pct_1, n_2: r.pct_2, n_3: r.pct_3, n_4: r.pct_4, n_5: r.pct_5,
           })) as LeystopRow[])
         }

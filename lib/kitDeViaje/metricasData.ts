@@ -14,7 +14,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Region } from '@/lib/regions'
-import { TOTAL_KM2 } from '@/lib/regions'
+import { TOTAL_KM2, toMetricsRegionName, fromMetricsRegionName } from '@/lib/regions'
 import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
 import type { CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 
@@ -128,7 +128,7 @@ async function fetchAllPibRows(
       .order('series_id', { ascending: true })
       .order('periodo', { ascending: true })
       .range(offset, offset + pageSize - 1)
-    if (filtro.nombreRegion) query = query.eq('nombre_region', filtro.nombreRegion)
+    if (filtro.nombreRegion) query = query.eq('nombre_region', toMetricsRegionName(filtro.nombreRegion))
     if (filtro.soloNoNull) query = query.not('nombre_region', 'is', null)
     const { data, error } = await query
     if (error || !data?.length) break
@@ -164,9 +164,10 @@ export async function fetchPibContexto(sb: SupabaseClient, regionNombre: string)
 
   const latestByRegion = new Map<string, { valor: number; periodo: string }>()
   for (const r of annual) {
-    const prev = latestByRegion.get(r.nombre_region)
+    const reg = fromMetricsRegionName(r.nombre_region)
+    const prev = latestByRegion.get(reg)
     if (!prev || r.periodo > prev.periodo) {
-      latestByRegion.set(r.nombre_region, { valor: r.valor_corregido as number, periodo: r.periodo })
+      latestByRegion.set(reg, { valor: r.valor_corregido as number, periodo: r.periodo })
     }
   }
 
@@ -307,9 +308,10 @@ export async function fetchEmpleoContexto(sb: SupabaseClient, regionNombre: stri
   const allRows = await fetchAllEmpleoRows(sb)
   const byRegion = new Map<string, EmpleoRow[]>()
   for (const r of allRows) {
-    const arr = byRegion.get(r.nombre_region) ?? []
+    const reg = fromMetricsRegionName(r.nombre_region)
+    const arr = byRegion.get(reg) ?? []
     arr.push(r)
-    byRegion.set(r.nombre_region, arr)
+    byRegion.set(reg, arr)
   }
 
   const latestByRegion = new Map<string, number>()
@@ -396,23 +398,12 @@ type CasenDatosJson = {
   auge_ges?: Record<string, number>
 }
 
-/**
- * `casen_regiones.region` no usa los mismos nombres que `lib/regions.ts`
- * para RM y XII (viene del JSON fuente CASEN, no de nuestro catálogo):
- * 'Metropolitana de Santiago' en vez de 'Metropolitana', y 'Magallanes' en
- * vez de 'Magallanes y Antártica'. `registros_bce`/`registros_bce_empleo`
- * sí calzan 1:1 con `region.nombre` — no necesitan este mapeo.
- */
-function casenRegionName(region: Region): string {
-  if (region.cod === 'RM') return 'Metropolitana de Santiago'
-  if (region.cod === 'XII') return 'Magallanes'
-  return region.nombre
-}
-
 export async function fetchCasenContexto(sb: SupabaseClient, region: Region): Promise<CasenContexto | null> {
+  // `casen_regiones.region` (como registros_bce/_empleo) guarda RM y XII con
+  // otro nombre — mapeo centralizado en toMetricsRegionName (lib/regions.ts).
   const { data } = await sb.from('casen_regiones')
     .select('datos')
-    .eq('region', casenRegionName(region))
+    .eq('region', toMetricsRegionName(region.nombre))
     .eq('anno', 2024)
     .maybeSingle()
 

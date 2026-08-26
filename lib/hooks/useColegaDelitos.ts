@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabaseColega } from '@/lib/supabaseColega'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, fromMetricsRegionName } from '@/lib/regions'
 
 export type DelitosRow = {
   id: number
@@ -87,8 +87,12 @@ export function useColegaDelitosAll(id_semana?: number) {
 
         if (cancelled) return
         if (data) {
-          setRows(data as unknown as DelitosRow[])
-          setSemana((data as unknown as DelitosRow[])[0]?.semana ?? '')
+          // Normaliza nombre_region al del panel (RM/Magallanes) para que los
+          // consumidores que filtran por r.nombre_region === region.nombre calcen.
+          const mapped = (data as unknown as DelitosRow[])
+            .map(r => ({ ...r, nombre_region: fromMetricsRegionName(r.nombre_region) }))
+          setRows(mapped)
+          setSemana(mapped[0]?.semana ?? '')
         }
         setLoading(false)
       } catch {
@@ -123,7 +127,8 @@ export function useColegaDelitosRegion(regionCod: string) {
           .limit(2000)
 
         if (cancelled) return
-        if (data) setRows(data as unknown as DelitosRow[])
+        if (data) setRows((data as unknown as DelitosRow[])
+          .map(r => ({ ...r, nombre_region: fromMetricsRegionName(r.nombre_region) })))
         setLoading(false)
       } catch {
         if (!cancelled) setLoading(false)
