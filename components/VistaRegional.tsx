@@ -237,6 +237,41 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
     [selectedCod, iniciativas, regionEjes],
   )
 
+  // Cuando el admin renombra o reordena un eje, el catálogo (`regionEjes`) se
+  // refresca pero el label denormalizado `p.eje` de las iniciativas en memoria
+  // queda viejo. El eje_id no cambió → recomponemos "Eje N: Nombre" desde el
+  // catálogo fresco y parcheamos las que difieran, así Kanban / Dashboard /
+  // Bandeja reflejan el nuevo número/nombre sin recargar (el trigger 083 ya hizo
+  // lo mismo en la BD). Converge en un render: al parchear, `p.eje` pasa a
+  // coincidir y el efecto deja de tocar filas.
+  useEffect(() => {
+    if (!selectedCod || regionEjes.length === 0) return
+    const byId = new Map(regionEjes.map(re => [re.id, re] as const))
+    for (const p of iniciativas) {
+      if (p.cod !== selectedCod || p.eje_id == null) continue
+      const re = byId.get(p.eje_id)
+      if (!re) continue
+      const label = composeEjeLabel(re.numero, re.nombre)
+      if (p.eje !== label) onUpdatePrioridad(p.n, { eje: label })
+    }
+  }, [regionEjes, selectedCod, iniciativas, onUpdatePrioridad])
+
+  // Reasignación de eje (mover iniciativas a otro eje antes de borrarlo): acá el
+  // eje_id SÍ cambia, así que sincronizamos eje_id + label en memoria para las
+  // iniciativas movidas. La RPC ya escribió la BD; esto refleja el cambio en las
+  // 4 vistas sin recargar.
+  const handleReasignado = useCallback(
+    (origenEjeId: number, destino: { id: number; numero: number; nombre: string }) => {
+      const label = composeEjeLabel(destino.numero, destino.nombre)
+      for (const p of iniciativas) {
+        if (p.cod === selectedCod && p.eje_id === origenEjeId) {
+          onUpdatePrioridad(p.n, { eje_id: destino.id, eje: label })
+        }
+      }
+    },
+    [iniciativas, selectedCod, onUpdatePrioridad],
+  )
+
   const invTotal = regionIniciativas.reduce((s, p) => s + (p.inversion_mm ?? 0), 0)
   // Solo iniciativas con monto asignado cuentan en el total mostrado en la tarjeta.
   const regionIniciativasConMonto = regionIniciativas.filter(p => p.inversion_mm != null && p.inversion_mm > 0)
@@ -432,6 +467,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             onClose={() => setManageEjesOpen(false)}
             region={region}
             onSaved={refreshRegionEjes}
+            onReasignado={handleReasignado}
           />
         )}
 
