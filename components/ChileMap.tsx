@@ -331,9 +331,15 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
       <ZoomControl position="bottomright" />
       <MapBackgroundClick onClick={onBackgroundClick} />
       <MapController drillActive={!!drill} focusBounds={focusBounds} />
+      {/* Esri "Light Gray Canvas" (base, sin rótulos): gris claro minimalista,
+          gratis y SIN API key. Reemplazó al basemap de CARTO, que pasó a exigir
+          key y devolvía tiles con marca de agua "API KEY REQUIRED" (2026-08).
+          maxNativeZoom=16 = zoom nativo de Esri Light Gray; más allá Leaflet
+          reescala el tile (drill comunal) en vez de mostrar blanco. */}
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+        attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+        maxNativeZoom={16}
       />
       <GeoJSON
         data={geoData}
