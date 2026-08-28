@@ -31,6 +31,25 @@ export const EJE_GOBIERNO: Record<string, EjeGobierno> = {
   'Eje 6: Familia, Educación y Equidad Territorial': 'Social',
 }
 
+// Color por etapa (`etapa_actual`) — progresión de madurez del proyecto, de
+// más temprana a más avanzada. Única fuente de verdad para ProjectTrackerModal
+// y NationalDashboard; evita que cada componente mantenga su propio switch y
+// se desincronice de `VALID_ETAPA` (lib/enums.ts) al agregar una etapa nueva.
+export function etapaColor(etapa: string | null): { bg: string; text: string } {
+  switch (etapa) {
+    case 'Idea':            return { bg: 'bg-slate-100',  text: 'text-slate-600'  }
+    case 'Perfil':          return { bg: 'bg-pink-100',   text: 'text-pink-700'   }
+    case 'Prefactibilidad': return { bg: 'bg-amber-100',  text: 'text-amber-700'  }
+    case 'Factibilidad':    return { bg: 'bg-yellow-100', text: 'text-yellow-700' }
+    case 'Preinversión':    return { bg: 'bg-orange-100', text: 'text-orange-700' }
+    case 'Diseño':          return { bg: 'bg-violet-100', text: 'text-violet-700' }
+    case 'Ejecución':       return { bg: 'bg-blue-100',   text: 'text-blue-700'   }
+    case 'Operación':       return { bg: 'bg-cyan-100',   text: 'text-cyan-700'   }
+    case 'Terminado':       return { bg: 'bg-green-100',  text: 'text-green-700'  }
+    default:                return { bg: 'bg-gray-100',   text: 'text-gray-600'   }
+  }
+}
+
 // `prioridadColor` eliminado (2026-08-11): el campo `prioridad` (Alta/Media/Baja)
 // se jubiló en favor de `capa` (I/II/III, único nivel de importancia). El color
 // de capa vive en components/CapaBadge.tsx.

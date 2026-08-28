@@ -5,7 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
 import ProjectTrackerModal from './ProjectTrackerModal'
-import { SEMAFORO_CONFIG as SEMAFORO_BASE } from '@/lib/config'
+import { SEMAFORO_CONFIG as SEMAFORO_BASE, etapaColor } from '@/lib/config'
 import { useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
 import BulkEditBar, { type BulkApplyArgs } from './BulkEditBar'
 import { applyBulkUpdate } from '@/lib/bulkUpdate'
@@ -1655,14 +1655,8 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
         <td className="px-3 py-3.5 whitespace-nowrap">
           {p.etapa_actual
             ? (() => {
-                const cls =
-                  p.etapa_actual === 'Terminado'       ? 'bg-green-100 text-green-700' :
-                  p.etapa_actual === 'Ejecución'       ? 'bg-blue-100 text-blue-700'   :
-                  p.etapa_actual === 'Diseño'          ? 'bg-violet-100 text-violet-700':
-                  p.etapa_actual === 'Prefactibilidad' ? 'bg-amber-100 text-amber-700' :
-                  p.etapa_actual === 'Preinversión'    ? 'bg-orange-100 text-orange-700':
-                                                         'bg-gray-100 text-gray-600'
-                return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{p.etapa_actual}</span>
+                const c = etapaColor(p.etapa_actual)
+                return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.bg} ${c.text}`}>{p.etapa_actual}</span>
               })()
             : <span className="text-gray-300 text-xs">—</span>}
         </td>

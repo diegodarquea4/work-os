@@ -7,7 +7,8 @@ import { REGIONS } from '@/lib/regions'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { logSemaforoChange } from '@/lib/db'
-import { SEMAFORO_CONFIG, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, type SemaforoKey } from '@/lib/config'
+import { SEMAFORO_CONFIG, MINISTERIOS_CANONICOS, splitMinisterios, joinMinisterios, etapaColor, type SemaforoKey } from '@/lib/config'
+import { VALID_ETAPA, VALID_PROXIMO_HITO } from '@/lib/enums'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { composeEjeLabel } from '@/lib/ejes'
@@ -1124,19 +1125,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
             <div className="flex items-center gap-2 py-1.5">
               <span className="text-gray-400 w-36 flex-shrink-0">Etapa actual</span>
               <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full ${canEdit ? 'cursor-pointer hover:brightness-95' : 'cursor-default'} transition-all group w-44 ${
-                etapaActual === 'Terminado'       ? 'bg-green-100' :
-                etapaActual === 'Ejecución'       ? 'bg-blue-100'  :
-                etapaActual === 'Diseño'          ? 'bg-violet-100':
-                etapaActual === 'Prefactibilidad' ? 'bg-amber-100' :
-                etapaActual === 'Preinversión'    ? 'bg-orange-100': 'bg-gray-100'
+                etapaColor(etapaActual || null).bg
               } ${savingField ? 'opacity-50 pointer-events-none' : ''}`}>
-                <span className={`text-xs font-medium truncate flex-1 ${
-                  etapaActual === 'Terminado'       ? 'text-green-700' :
-                  etapaActual === 'Ejecución'       ? 'text-blue-700'  :
-                  etapaActual === 'Diseño'          ? 'text-violet-700':
-                  etapaActual === 'Prefactibilidad' ? 'text-amber-700' :
-                  etapaActual === 'Preinversión'    ? 'text-orange-700': 'text-gray-500'
-                }`}>{etapaActual || '—'}</span>
+                <span className={`text-xs font-medium truncate flex-1 ${etapaColor(etapaActual || null).text}`}>{etapaActual || '—'}</span>
                 {canEdit && (
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40 group-hover:opacity-70 text-gray-500">
                     <path d="M1.5 3L4 5.5L6.5 3"/>
@@ -1152,11 +1143,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                   className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
                 >
                   <option value="">—</option>
-                  <option>Preinversión</option>
-                  <option>Prefactibilidad</option>
-                  <option>Diseño</option>
-                  <option>Ejecución</option>
-                  <option>Terminado</option>
+                  {VALID_ETAPA.map(et => <option key={et}>{et}</option>)}
                 </select>
               </label>
             </div>
@@ -1203,18 +1190,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     autoFocus
                   >
                     <option value="">—</option>
-                    <option>Obtención RS</option>
-                    <option>Obtención Financiamiento</option>
-                    <option>Presentación Core</option>
-                    <option>Publicación Bases Licitación</option>
-                    <option>Adjudicación Licitación</option>
-                    <option>Término Diseño/Preinversión</option>
-                    <option>Primera Piedra</option>
-                    <option>Inicio Obras/Programa</option>
-                    <option>Término Obras/Programa</option>
-                    <option>Inauguración</option>
-                    <option>Finalizado</option>
-                    <option>Otro</option>
+                    {VALID_PROXIMO_HITO.map(h => <option key={h}>{h}</option>)}
                   </select>
                   <div className="flex items-center gap-1.5">
                     <input
