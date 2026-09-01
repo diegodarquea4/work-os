@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   useCanEditAny,
-  useCanEditOperational,
+  useCan,
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
@@ -31,7 +31,9 @@ const NOMBRE_COMITE = 'Comité Económico'
 
 export default function ComiteInversionPanel({ region }: Props) {
   const canEditAny         = useCanEditAny()
-  const canEditOperational = useCanEditOperational()
+  // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
+  // El botón "Actualizar proyectos en SEIA" queda aparte (canEditAny = admin/editor).
+  const puedeOperar = useCan('comite.economico.operar', region.cod)
   const userEmail          = useCurrentUserEmail()
 
   const [sesionOpen, setSesionOpen]       = useState(false)
@@ -46,7 +48,7 @@ export default function ComiteInversionPanel({ region }: Props) {
   const [metaEmpleo, setMetaEmpleo] = useState<RegionMetaEmpleo | null>(null)
   const [subsidio, setSubsidio] = useState<RegionSubsidioEmpleo | null>(null)
 
-  const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, canEditOperational)
+  const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, puedeOperar)
 
   const cargarMetaEmpleo = useCallback(async () => {
     const [{ data: meta }, { data: sub }] = await Promise.all([
@@ -58,8 +60,8 @@ export default function ComiteInversionPanel({ region }: Props) {
   }, [region.cod])
 
   useEffect(() => {
-    if (canEditOperational && MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
-  }, [canEditOperational, cargarMetaEmpleo])
+    if (puedeOperar && MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
+  }, [puedeOperar, cargarMetaEmpleo])
 
   // Última actualización del catálogo SEIA = synced_at más reciente de sus
   // filas en v2_proyectos_inversion (lo que refresca el botón). Solo lo mira
@@ -137,7 +139,7 @@ export default function ComiteInversionPanel({ region }: Props) {
     <>
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-4 pt-3 pb-2 flex items-start gap-2">
-          {canEditOperational && (
+          {puedeOperar && (
             <button
               onClick={() => setSesionOpen(true)}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
@@ -192,7 +194,7 @@ export default function ComiteInversionPanel({ region }: Props) {
           </div>
         )}
 
-        {canEditOperational && (
+        {puedeOperar && (
           <div className="px-4 pb-2 space-y-1.5">
             <div className="flex items-center gap-1.5 text-[11px] text-violet-900 bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1.5">
               <span className="font-semibold">{resumen.compromisosAbiertos}</span>
@@ -226,13 +228,13 @@ export default function ComiteInversionPanel({ region }: Props) {
           </div>
         )}
 
-        {!canEditOperational && (
+        {!puedeOperar && (
           <div className="py-10 text-center text-sm text-gray-500 px-4">
             No tienes permiso para operar el módulo de sesiones de este comité.
           </div>
         )}
 
-        {canEditOperational && (
+        {puedeOperar && (
           <div className="border-t border-violet-100 bg-violet-50/50 px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
               Sesiones de {NOMBRE_COMITE}

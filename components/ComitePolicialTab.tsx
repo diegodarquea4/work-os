@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
-import { useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import { useCatalogoComite, useSeriesComite, useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
 import { deltaPulso } from '@/lib/sesiones/helpers'
@@ -27,9 +27,13 @@ type Props = {
 }
 
 export default function ComitePolicialTab({ region, eje }: Props) {
-  const canEditOperational = useCanEditOperational()
+  // Gate del módulo = capacidad PROPIA del comité por región (no
+  // iniciativa.editar_operativo, que es de la ficha). Un regional con
+  // comite.policial.operar concedido puntualmente puede operar aunque no tenga
+  // el operativo de iniciativas. Espeja la RLS (can_operar_instancia('eje', …)).
+  const puedeOperar = useCan('comite.policial.operar', region.cod)
   const userEmail          = useCurrentUserEmail()
-  const sesionesOn = eje.sesiones_habilitadas && canEditOperational
+  const sesionesOn = eje.sesiones_habilitadas && puedeOperar
   const nombreInstancia = eje.sesiones_nombre ?? 'Comité Policial'
 
   const [sesionOpen, setSesionOpen]       = useState(false)

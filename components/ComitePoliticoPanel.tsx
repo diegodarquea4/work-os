@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
-import { useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalPolitico, { type DestinoCompromiso } from './SesionModalPolitico'
@@ -15,7 +15,7 @@ import HistorialSesionesPoliticoModal from './HistorialSesionesPoliticoModal'
  * más liviana (mig 059): reuniones con parlamentarios / entes políticos, con
  * asistencia ad-hoc, temas conversados y compromisos. Sin eje, sin métricas y
  * SIN flag de habilitación — disponible en las 16 regiones (como el Comité
- * Económico). Único gate: canEditOperational (viewer excluido).
+ * Económico). Único gate: comite.politico.operar en la región (viewer excluido).
  */
 
 type Props = {
@@ -28,7 +28,8 @@ type Props = {
 const NOMBRE_COMITE = 'Comité Político'
 
 export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, onAbrirIniciativa }: Props) {
-  const canEditOperational = useCanEditOperational()
+  // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
+  const puedeOperar = useCan('comite.politico.operar', region.cod)
   const userEmail          = useCurrentUserEmail()
   const { config } = useRegionConfig(region.cod)
 
@@ -36,7 +37,7 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
   const [historialOpen, setHistorialOpen] = useState(false)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(
-    region.cod, { instancia: 'politico' }, canEditOperational,
+    region.cod, { instancia: 'politico' }, puedeOperar,
   )
 
   // Destinos de delegación de un compromiso (misma lógica que el mandato del
@@ -58,7 +59,7 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      {!canEditOperational ? (
+      {!puedeOperar ? (
         <div className="py-10 text-center text-sm text-gray-400 px-4">
           No tienes permiso para operar el módulo de sesiones de este comité.
         </div>
