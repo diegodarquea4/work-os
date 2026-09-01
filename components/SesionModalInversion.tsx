@@ -6,13 +6,15 @@ import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import type { Region } from '@/lib/regions'
 import { INE_CODE } from '@/lib/regions'
+import type { Iniciativa } from '@/lib/projects'
 import type {
-  EjeSesion, Oaeca, RegionMetaEmpleo, RegionSubsidioEmpleo, SeccionComiteEconomico, SesionAsistencia,
-  SesionCompromiso, SesionMetaEmpleoValor, SesionNomina, SesionOficioTratado, SesionProyecto,
+  ComiteEconomicoProyecto, EjeSesion, Oaeca, RegionMetaEmpleo, RegionSubsidioEmpleo, SeccionComiteEconomico,
+  SesionAsistencia, SesionCompromiso, SesionMetaEmpleoValor, SesionNomina, SesionOficioTratado, SesionProyecto,
   SesionSubsidioEmpleoValor,
 } from '@/lib/types'
 import { Alert } from '@/components/ui'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
+import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 
 /**
  * Formulario de sesión del Comité Económico — 5 zonas EN ESTE ORDEN (mismo
@@ -63,10 +65,19 @@ type Props = {
   region: Region
   borradorId: number | null
   currentUserEmail: string
+  // Cartera de la región (mismo dato que ComiteEconomicoProyectosPanel, sin
+  // query nueva) — alimenta el picker "Público" de la zona 4c y el
+  // onAbrirIniciativa que resuelve VistaRegional.
+  iniciativas: Iniciativa[]
+  onAbrirIniciativa: (p: Iniciativa) => void
   onClose: () => void
 }
 
 const NOMBRE_COMITE = 'Comité Económico'
+
+// Público = iniciativas con esta etiqueta fija (mismo criterio que
+// ComiteEconomicoProyectosPanel.tsx — no configurable por región).
+const TAG_ECONOMICO = 'CER'
 
 const ESTADO_COMPROMISO = {
   pendiente: { label: 'Pendiente', on: 'bg-gray-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
@@ -272,7 +283,57 @@ function ComboboxOaeca({
   )
 }
 
-export default function SesionModalInversion({ region, borradorId, currentUserEmail, onClose }: Props) {
+// Picker genérico de la zona 4c — mismo patrón que ComboboxProyecto/Oaeca
+// (precargado, sin ida y vuelta al servidor), reusado para privados
+// (ComiteEconomicoProyecto) y públicos (Iniciativa): ambos ya traen
+// `id`/`nombre`.
+function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
+  items, onSelect, placeholder,
+}: {
+  items: T[]
+  onSelect: (item: T) => void
+  placeholder: string
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen]   = useState(false)
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const base = q ? items.filter(i => i.nombre.toLowerCase().includes(q)) : items
+    return base.slice(0, 30)
+  }, [query, items])
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className={`${inputCls} w-full`}
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {matches.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onSelect(item); setQuery(''); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-800 hover:bg-violet-50 border-b border-gray-100 last:border-0 truncate"
+            >
+              {item.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onClose }: Props) {
   const [sesion, setSesion]         = useState<EjeSesion | null>(null)
   const [initError, setInitError]   = useState<string | null>(null)
 
@@ -290,8 +351,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   const [proyectosSesion, setProyectosSesion] = useState<SesionProyecto[]>([])
   const [proyectosInfo, setProyectosInfo]     = useState<Map<string, V2Proyecto>>(new Map())
-  const [proyectoNotaDraft, setProyectoNotaDraft] = useState<Record<string, string>>({})
-  const [proyectoNuevo, setProyectoNuevo]     = useState<V2Proyecto | null>(null)
+  const [proyectoNotaDraft, setProyectoNotaDraft] = useState<Record<number, string>>({})
+  // Zona 4c: cartera propia del comité (privados) — públicos se resuelven
+  // desde la prop `iniciativas` (misma fuente que ComiteEconomicoProyectosPanel).
+  const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
+  const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
+  const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
 
   // Alta de oficio nuevo (Seguimiento de la Inversión)
   const [oficioOaeca, setOficioOaeca]         = useState<Oaeca | null>(null)
@@ -390,7 +455,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const OFICIO_SELECT = '*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)'
     const [
       nominaRes, asisRes, compRes, nuevosRes, oficiosAntRes, oficiosTratRes,
-      oaecaRes, proyRegionRes, proyRes, metaRegionRes, metaSesionRes,
+      oaecaRes, proyRegionRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
       subRegionRes, subSesionRes,
     ] = await Promise.all([
       sb.from('sesion_nomina').select('*')
@@ -418,6 +483,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         .select('id, nombre, titular, inversion, moneda, etapa')
         .eq('region_id', INE_CODE[region.cod])
         .order('nombre'),
+      sb.from('comite_economico_proyecto').select('*').eq('region_cod', region.cod).order('nombre'),
       sb.from('sesion_proyectos').select('*').eq('sesion_id', s.id),
       sb.from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
       sb.from('sesion_meta_empleo_valor').select('*').eq('sesion_id', s.id).maybeSingle(),
@@ -433,6 +499,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     setOficiosTratadosSesion((oficiosTratRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOaecaList((oaecaRes.data ?? []) as Oaeca[])
     setProyectosRegion((proyRegionRes.data ?? []) as V2Proyecto[])
+    setProyectosPrivados((proyPrivadosRes.data ?? []) as ComiteEconomicoProyecto[])
     setMetaEmpleoRegion((metaRegionRes.data as RegionMetaEmpleo | null) ?? null)
     const metaSesion = (metaSesionRes.data as SesionMetaEmpleoValor | null) ?? null
     setMetaEmpleoSesion(metaSesion)
@@ -446,10 +513,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
     const proy = (proyRes.data ?? []) as SesionProyecto[]
     setProyectosSesion(proy)
-    if (proy.length) {
+    // Solo filas legadas (previas a mig 086) siguen apuntando a proyecto_id;
+    // las nuevas usan proyecto_privado_id/prioridad_id (resueltas contra
+    // proyectosPrivados/iniciativas, sin query aparte).
+    const idsLegado = proy.map(p => p.proyecto_id).filter((id): id is string => id != null)
+    if (idsLegado.length) {
       const { data: infoData } = await sb.from('v2_proyectos_inversion')
         .select('id, nombre, titular, inversion, moneda, etapa')
-        .in('id', proy.map(p => p.proyecto_id))
+        .in('id', idsLegado)
       setProyectosInfo(new Map(((infoData ?? []) as V2Proyecto[]).map(p => [p.id, p])))
     }
   }, [region.cod])
@@ -661,24 +732,45 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // ── Zona 4c: proyectos tratados en profundidad (Seguimiento de la Inversión) ──
 
-  async function agregarProyecto(p: V2Proyecto) {
+  async function agregarProyectoPrivado(p: ComiteEconomicoProyecto) {
     if (!sesion) return
-    if (proyectosSesion.some(sp => sp.proyecto_id === p.id)) return
+    if (proyectosSesion.some(sp => sp.proyecto_privado_id === p.id)) return
     try {
       const rows = await safeWrite(
-        getSupabase().from('sesion_proyectos').insert({ sesion_id: sesion.id, proyecto_id: p.id }),
-        `sesion_proyectos insert ${p.id}`,
+        getSupabase().from('sesion_proyectos').insert({ sesion_id: sesion.id, proyecto_privado_id: p.id }),
+        `sesion_proyectos insert privado=${p.id}`,
       )
       setProyectosSesion(prev => [...prev, rows[0] as SesionProyecto])
-      setProyectosInfo(prev => new Map(prev).set(p.id, p))
-      setProyectoNuevo(null)
     } catch (err) {
       window.alert((err as Error).message)
     }
   }
 
+  async function agregarProyectoPublico(ini: Iniciativa) {
+    if (!sesion) return
+    if (proyectosSesion.some(sp => sp.prioridad_id === ini.id)) return
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('sesion_proyectos').insert({ sesion_id: sesion.id, prioridad_id: ini.id }),
+        `sesion_proyectos insert prioridad=${ini.id}`,
+      )
+      setProyectosSesion(prev => [...prev, rows[0] as SesionProyecto])
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
+  function abrirFichaProyectoTratado(sp: SesionProyecto) {
+    if (sp.proyecto_privado_id != null) { setFichaPrivadoId(sp.proyecto_privado_id); return }
+    if (sp.prioridad_id != null) {
+      const ini = iniciativas.find(i => i.id === sp.prioridad_id)
+      if (ini) onAbrirIniciativa(ini)
+    }
+    // proyecto_id legado (v2_proyectos_inversion): sin ficha en este flujo.
+  }
+
   async function commitNotaProyecto(sp: SesionProyecto) {
-    const nota = (proyectoNotaDraft[sp.proyecto_id] ?? sp.nota ?? '').trim()
+    const nota = (proyectoNotaDraft[sp.id] ?? sp.nota ?? '').trim()
     if (nota === (sp.nota ?? '')) return
     try {
       await safeWrite(
@@ -819,6 +911,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   const invitados = useMemo(() => asistencia.filter(a => a.nomina_id === null), [asistencia])
   const presentes = useMemo(() => asistencia.filter(a => a.presente).length, [asistencia])
+  const iniciativasCER = useMemo(
+    () => iniciativas.filter(p => (p.tags ?? []).includes(TAG_ECONOMICO)),
+    [iniciativas],
+  )
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -865,6 +961,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => !cerrando && onClose()}>
       <div
         ref={panelRef}
@@ -1272,31 +1369,71 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       </div>
                     </div>
 
-                    {/* Zona 4c: proyectos tratados en profundidad */}
+                    {/* Zona 4c: proyectos tratados en profundidad — cartera del comité (privados + públicos con tag CER), no v2_proyectos_inversion */}
                     <div className="pt-3 border-t border-gray-100">
                       <div className="flex items-center gap-2 mb-2">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Proyectos tratados en profundidad</h4>
                         <span className="text-xs text-gray-400 ml-auto">{proyectosSesion.length}</span>
                       </div>
                       <div className="space-y-2">
-                        <ComboboxProyecto
-                          proyectos={proyectosRegion}
-                          value={proyectoNuevo}
-                          onSelect={p => { setProyectoNuevo(p); if (p) agregarProyecto(p) }}
-                          placeholder="Buscar proyecto por nombre…"
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-gray-500 font-medium">Agregar:</span>
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setPickerVista('privado')}
+                              className={`text-xs px-2.5 py-1 font-medium transition-colors ${pickerVista === 'privado' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                            >
+                              Privado
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPickerVista('publico')}
+                              className={`text-xs px-2.5 py-1 font-medium transition-colors border-l border-gray-200 ${pickerVista === 'publico' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                            >
+                              Público
+                            </button>
+                          </div>
+                        </div>
+                        {pickerVista === 'privado' ? (
+                          <ComboboxProyectoEconomico
+                            items={proyectosPrivados.filter(p => !proyectosSesion.some(sp => sp.proyecto_privado_id === p.id))}
+                            onSelect={agregarProyectoPrivado}
+                            placeholder="Buscar proyecto privado por nombre…"
+                          />
+                        ) : (
+                          <ComboboxProyectoEconomico
+                            items={iniciativasCER.filter(i => !proyectosSesion.some(sp => sp.prioridad_id === i.id))}
+                            onSelect={agregarProyectoPublico}
+                            placeholder={`Buscar iniciativa pública (${TAG_ECONOMICO}) por nombre…`}
+                          />
+                        )}
 
                         {proyectosSesion.length === 0 ? (
                           <p className="text-xs text-gray-500 text-center py-2">Sin proyectos tratados en esta sesión.</p>
                         ) : proyectosSesion.map(sp => {
-                          const info = proyectosInfo.get(sp.proyecto_id)
+                          const esPrivado = sp.proyecto_privado_id != null
+                          const esPublico = sp.prioridad_id != null
+                          const nombre = esPrivado
+                            ? (proyectosPrivados.find(p => p.id === sp.proyecto_privado_id)?.nombre ?? `#${sp.proyecto_privado_id}`)
+                            : esPublico
+                              ? (iniciativas.find(i => i.id === sp.prioridad_id)?.nombre ?? `#${sp.prioridad_id}`)
+                              : (proyectosInfo.get(sp.proyecto_id ?? '')?.nombre ?? sp.proyecto_id ?? '—')
                           return (
                             <div key={sp.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
                               <div className="flex items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-gray-700 truncate">{info?.nombre ?? sp.proyecto_id}</p>
-                                  <p className="text-[11px] text-gray-400 truncate">{info?.titular ?? '—'}{info?.etapa ? ` · ${info.etapa}` : ''}</p>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => abrirFichaProyectoTratado(sp)}
+                                  disabled={!esPrivado && !esPublico}
+                                  className="flex-1 min-w-0 text-left disabled:cursor-default"
+                                  title={esPrivado || esPublico ? 'Ver ficha y avances previos' : undefined}
+                                >
+                                  <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${esPrivado ? 'bg-violet-50 text-violet-700 border-violet-200' : esPublico ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                    {esPrivado ? 'Privado' : esPublico ? 'Público' : 'SEIA'}
+                                  </span>
+                                  <span className={`text-sm truncate ${esPrivado || esPublico ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
+                                </button>
                                 <button onClick={() => quitarProyecto(sp)} className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0" title="Quitar proyecto">
                                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
                                     <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
@@ -1305,7 +1442,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                               </div>
                               <textarea
                                 defaultValue={sp.nota ?? ''}
-                                onChange={e => setProyectoNotaDraft(prev => ({ ...prev, [sp.proyecto_id]: e.target.value }))}
+                                onChange={e => setProyectoNotaDraft(prev => ({ ...prev, [sp.id]: e.target.value }))}
                                 onBlur={() => commitNotaProyecto(sp)}
                                 rows={2}
                                 placeholder="Notas de la discusión en profundidad…"
@@ -1415,5 +1552,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         </footer>
       </div>
     </div>
+    {fichaPrivadoId != null && (
+      <ProyectoEconomicoFichaModal
+        proyectoId={fichaPrivadoId}
+        puedeOperar={true}
+        currentUserEmail={currentUserEmail}
+        onClose={() => setFichaPrivadoId(null)}
+      />
+    )}
+    </>
   )
 }

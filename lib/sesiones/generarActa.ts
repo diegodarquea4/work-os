@@ -215,8 +215,12 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
+    // Privado (proyecto_privado_id) tiene FK real → embed directo. Público
+    // (prioridad_id) es denormalizado sin FK (mismo criterio que
+    // seguimientos.prioridad_id) — se resuelve aparte, después del Promise.all.
+    // proyecto_id sigue siendo el catálogo SEIA legado, solo lectura.
     db.from('sesion_proyectos')
-      .select('nota, proyecto:v2_proyectos_inversion(nombre)')
+      .select('nota, proyecto_privado_id, prioridad_id, proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('sesion_id', sesionId),
     // Verificados: compromisos de sesiones anteriores — cumplidos en esta
     // sesión o aún abiertos (mismo criterio que el Comité Policial).
@@ -255,6 +259,20 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     ...((oficNuevosRes.data ?? []) as unknown as OficioConNombres[]),
   ]
 
+  type ProyectoTratadoRow = {
+    nota: string | null
+    proyecto_privado_id: number | null
+    prioridad_id: number | null
+    proyecto: { nombre: string } | null
+    proyecto_privado: { nombre: string } | null
+  }
+  const proyectosRows = (proyRes.data ?? []) as unknown as ProyectoTratadoRow[]
+  const prioridadIds = [...new Set(proyectosRows.map(p => p.prioridad_id).filter((id): id is number => id != null))]
+  const prioridadNombres = prioridadIds.length
+    ? new Map((((await db.from('prioridades_territoriales').select('id, nombre').in('id', prioridadIds)).data ?? []) as { id: number; nombre: string }[])
+        .map(p => [p.id, p.nombre]))
+    : new Map<number, string>()
+
   // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
   // sección no se muestra en el acta mientras esté escondida en la sesión.
   const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
@@ -292,8 +310,11 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     instituciones: [],
     metaEmpleo,
     subsidios,
-    proyectosTratados: ((proyRes.data ?? []) as unknown as { nota: string | null; proyecto: { nombre: string } | null }[])
-      .map(p => ({ nombre: p.proyecto?.nombre ?? '—', nota: p.nota })),
+    proyectosTratados: proyectosRows.map(p => {
+      if (p.proyecto_privado_id != null) return { nombre: p.proyecto_privado?.nombre ?? '—', nota: p.nota, tag: 'Privado' as const }
+      if (p.prioridad_id != null) return { nombre: prioridadNombres.get(p.prioridad_id) ?? '—', nota: p.nota, tag: 'Público' as const }
+      return { nombre: p.proyecto?.nombre ?? '—', nota: p.nota, tag: null }
+    }),
     oficiosTratados: oficios.map(o => ({
       nombreProyecto: o.proyecto?.nombre ?? '—',
       oaeca:          o.oaeca?.nombre ?? '—',

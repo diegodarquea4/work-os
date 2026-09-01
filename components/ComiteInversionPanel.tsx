@@ -7,6 +7,7 @@ import {
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
+import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetaEmpleo, RegionSubsidioEmpleo } from '@/lib/types'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import { getSupabase } from '@/lib/supabase'
@@ -15,6 +16,7 @@ import SesionModalInversion from './SesionModalInversion'
 import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
 import NominaInversionModal from './NominaInversionModal'
 import OaecaModal from './OaecaModal'
+import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
 
 /**
  * Panel del tab "Comité Económico" en ComitesRegionalesSection.
@@ -25,11 +27,16 @@ import OaecaModal from './OaecaModal'
 
 type Props = {
   region: Region
+  // Cartera de la región — alimenta la cartera de proyectos (mig 086,
+  // vista "Público" filtrada por tag CER) y la ficha completa que abre
+  // VistaRegional con su ProjectTrackerModal, sin queries nuevas.
+  iniciativas: Iniciativa[]
+  onAbrirIniciativa: (p: Iniciativa) => void
 }
 
 const NOMBRE_COMITE = 'Comité Económico'
 
-export default function ComiteInversionPanel({ region }: Props) {
+export default function ComiteInversionPanel({ region, iniciativas, onAbrirIniciativa }: Props) {
   const canEditAny         = useCanEditAny()
   // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
   // El botón "Actualizar proyectos en SEIA" queda aparte (canEditAny = admin/editor).
@@ -267,11 +274,21 @@ export default function ComiteInversionPanel({ region }: Props) {
         )}
       </div>
 
+      {puedeOperar && (
+        <ComiteEconomicoProyectosPanel
+          region={region}
+          iniciativas={iniciativas}
+          onAbrirIniciativa={onAbrirIniciativa}
+        />
+      )}
+
       {sesionOpen && (
         <SesionModalInversion
           region={region}
           borradorId={resumen.borradorId}
           currentUserEmail={userEmail}
+          iniciativas={iniciativas}
+          onAbrirIniciativa={onAbrirIniciativa}
           onClose={() => {
             setSesionOpen(false)
             refreshResumen()

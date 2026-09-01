@@ -916,13 +916,59 @@ export type Oaeca = {
   created_by_email: string | null
 }
 
-// Proyecto tratado en profundidad en una sesión — selección desde
-// v2_proyectos_inversion, no texto libre.
+// Proyecto tratado en profundidad en una sesión — selección desde la
+// cartera del Comité Económico (mig 086): privado (comite_economico_proyecto)
+// o público (iniciativa con tag 'CER'), exactamente uno de los tres no-NULL.
+// `proyecto_id` (TEXT → v2_proyectos_inversion) queda deprecado — ya no se
+// escribe, solo lectura para sesiones históricas previas a la 086.
 export type SesionProyecto = {
   id: number
   sesion_id: number
-  proyecto_id: string
+  proyecto_id: string | null
+  proyecto_privado_id: number | null
+  prioridad_id: number | null
   nota: string | null
+  created_at: string
+}
+
+// Cartera de proyectos privados del Comité Económico (mig 086) — cargados a
+// mano por el responsable (no sincronizados, a diferencia de
+// v2_proyectos_inversion). Los públicos NO tienen tabla propia: son
+// iniciativas (Prioridad) con la etiqueta 'CER' en `tags`.
+export type ComiteEconomicoProyecto = {
+  id: number
+  region_cod: string
+  plazo: 'CP' | 'MP' | 'LP' | null
+  priorizado: boolean
+  nombre: string
+  seremi_lider: string | null
+  inversion_monto: number | null
+  inversion_moneda: string | null
+  fuente_financiamiento: string | null
+  mano_obra_directa: number | null
+  mano_obra_indirecta: number | null
+  responsable_operativo: string | null
+  kpi: string | null
+  meta_2026_2027: string | null
+  estado_inicial: string | null
+  estado_actual: string | null
+  vida_util_anios: number | null
+  riesgo: boolean
+  created_at: string
+  created_by_email: string | null
+  updated_at: string
+}
+
+// Avance registrado por una SEREMI en un proyecto privado del Comité
+// Económico — mismo espíritu que Seguimiento (tipo 'avance') pero tabla
+// propia: Seguimiento tiene `prioridad_id` hardcodeado en columna/RLS.
+export type ComiteEconomicoProyectoSeguimiento = {
+  id: number
+  proyecto_id: number
+  fecha: string                      // date puro YYYY-MM-DD
+  descripcion: string
+  estado: 'pendiente' | 'en_curso' | 'completado' | 'bloqueado' | null
+  autor: string | null
   created_at: string
 }
 

@@ -129,7 +129,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
         <ComitePoliticoPanel region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : active === 'inversion' ? (
         economicoActivo ? (
-          <ComiteInversionPanel region={region} />
+          <ComiteInversionPanel region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
         ) : (
           <Placeholder
             titulo="Comité Económico — en desarrollo"
