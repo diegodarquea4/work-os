@@ -5,7 +5,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { agruparPorMegaproyecto } from '@/lib/sesiones/helpers'
-import { useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModal from './SesionModal'
@@ -28,7 +28,7 @@ import { EmptyState } from '@/components/ui'
  *
  * Gate: region_config.infraestructura_habilitado (mig 060 — habilitada para
  * las 16 regiones desde el día uno, a diferencia del piloto acotado del
- * gabinete) + canEditOperational. Viewer no ve nada del módulo ni dispara
+ * gabinete) + comite.infraestructura.operar en la región. Viewer no ve nada del módulo ni dispara
  * queries a sesion_* (RLS se lo negaría).
  *
  * Preview de la cartera con el tag configurado, SIEMPRE visible al abrir el
@@ -49,7 +49,8 @@ type Props = {
 }
 
 export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirIniciativa }: Props) {
-  const canEditOperational = useCanEditOperational()
+  // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
+  const puedeOperar = useCan('comite.infraestructura.operar', region.cod)
   const userEmail          = useCurrentUserEmail()
   const { config, loading: configLoading, refresh: refreshConfig } = useRegionConfig(region.cod)
 
@@ -57,7 +58,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   const nombreComite = config?.infraestructura_nombre ?? 'Comité de Infraestructura'
   const tag = config?.infraestructura_tag ?? 'CRI'
   // Gate único del módulo (patrón sesionesOn del drawer): sin él, ni queries.
-  const infraOn = habilitado && canEditOperational
+  const infraOn = habilitado && puedeOperar
 
   const [sesionOpen, setSesionOpen]             = useState(false)
   const [historialOpen, setHistorialOpen]       = useState(false)

@@ -57,6 +57,38 @@ export const INE_INVERSE: Record<number, string> = Object.fromEntries(
   Object.entries(INE_CODE).map(([cod, id]) => [id, cod])
 )
 
+/**
+ * Puente de nombres entre la UI (`Region.nombre`) y las tablas de métricas
+ * (registros_bce, registros_bce_empleo, registros_leystop,
+ * registros_leystop_delitos, casen_regiones). Esas tablas guardan DOS nombres
+ * distintos a los nuestros: la RM como "Metropolitana de Santiago" (no
+ * "Metropolitana") y Magallanes como "Magallanes" (no "Magallanes y
+ * Antártica"). Las otras 14 regiones calzan 1:1 — verificado contra Supabase.
+ *
+ * Única fuente de verdad: aplicar en el borde de cada hook/fetcher (al
+ * consultar por nombre → `toMetricsRegionName`; al leer `nombre_region` de la
+ * BD → `fromMetricsRegionName`) para que el resto de la UI siga comparando
+ * contra `Region.nombre` sin cambios. Ambas son idempotentes: cualquier nombre
+ * fuera del mapeo se devuelve tal cual.
+ */
+const UI_A_METRICAS: Record<string, string> = {
+  'Metropolitana':            'Metropolitana de Santiago',
+  'Magallanes y Antártica':   'Magallanes',
+}
+const METRICAS_A_UI: Record<string, string> = Object.fromEntries(
+  Object.entries(UI_A_METRICAS).map(([ui, bd]) => [bd, ui]),
+)
+
+/** `Region.nombre` (UI) → nombre como se guarda en las tablas de métricas. */
+export function toMetricsRegionName(nombre: string): string {
+  return UI_A_METRICAS[nombre] ?? nombre
+}
+
+/** Nombre de las tablas de métricas → `Region.nombre` (UI). */
+export function fromMetricsRegionName(nombre: string): string {
+  return METRICAS_A_UI[nombre] ?? nombre
+}
+
 /** Maps BCCh PIB regional codes (01-16) to our region string codes.
  *  Used in ine-sync to map F035 series to regionCod. */
 export const BCCh_PIB_CODE: Record<string, string> = {
@@ -74,24 +106,3 @@ export const ISO_CODE: Record<string, string> = {
   XIV: 'LR', X: 'LL',  XI: 'AI',  XII: 'MA',
 }
 
-/**
- * Nombre de región tal como aparece en las tablas externas de métricas
- * (`registros_bce`, `registros_bce_empleo`, `registros_leystop`,
- * `registros_leystop_delitos`, `casen_regiones`, `regiones`) — difiere de
- * `Region.nombre` solo para RM ('Metropolitana de Santiago') y XII
- * ('Magallanes'), que vienen de las fuentes fuente (BCCh/INE/CASEN/LeyStop)
- * con su nombre oficial/abreviado en vez del nombre corto de la UI. Las
- * otras 14 regiones calzan 1:1 — verificado contra las tablas en Supabase.
- */
-export function toMetricsRegionName(nombreUI: string): string {
-  if (nombreUI === 'Metropolitana') return 'Metropolitana de Santiago'
-  if (nombreUI === 'Magallanes y Antártica') return 'Magallanes'
-  return nombreUI
-}
-
-/** Inverso de {@link toMetricsRegionName}: nombre de una tabla de métricas → `Region.nombre` de la UI. */
-export function fromMetricsRegionName(nombreDb: string): string {
-  if (nombreDb === 'Metropolitana de Santiago') return 'Metropolitana'
-  if (nombreDb === 'Magallanes') return 'Magallanes y Antártica'
-  return nombreDb
-}

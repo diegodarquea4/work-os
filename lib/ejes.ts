@@ -33,3 +33,22 @@ export function parseEjeString(raw: string): { numero: number; nombre: string } 
   if (!numero || !nombre) return null
   return { numero, nombre }
 }
+
+/**
+ * Mueve el elemento en `index` una posición en la dirección `dir` (-1 = arriba,
+ * +1 = abajo), devolviendo una NUEVA lista (no muta la original). Si el
+ * movimiento sale de rango, devuelve la lista sin cambios.
+ *
+ * Se usa en `RegionEjesPanel` para reordenar el catálogo de ejes con flechas.
+ * El array resultante (ids en el nuevo orden) es exactamente lo que espera la
+ * RPC `reordenar_region_ejes`, que renumera 1..N por posición.
+ */
+export function moverEnLista<T>(items: T[], index: number, dir: -1 | 1): T[] {
+  const target = index + dir
+  if (index < 0 || index >= items.length || target < 0 || target >= items.length) {
+    return items
+  }
+  const next = items.slice()
+  ;[next[index], next[target]] = [next[target], next[index]]
+  return next
+}

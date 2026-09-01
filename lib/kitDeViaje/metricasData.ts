@@ -405,20 +405,12 @@ type CasenDatosJson = {
   auge_ges?: Record<string, number>
 }
 
-/**
- * `casen_regiones.region` usa el mismo nombre "de fuente" que
- * `registros_bce`/`registros_bce_empleo`/`registros_leystop*` para RM y XII
- * — ver `toMetricsRegionName` en `lib/regions.ts` (única fuente de verdad
- * para este mapeo; antes vivía duplicado acá).
- */
-function casenRegionName(region: Region): string {
-  return toMetricsRegionName(region.nombre)
-}
-
 export async function fetchCasenContexto(sb: SupabaseClient, region: Region): Promise<CasenContexto | null> {
+  // `casen_regiones.region` (como registros_bce/_empleo) guarda RM y XII con
+  // otro nombre — mapeo centralizado en toMetricsRegionName (lib/regions.ts).
   const { data } = await sb.from('casen_regiones')
     .select('datos')
-    .eq('region', casenRegionName(region))
+    .eq('region', toMetricsRegionName(region.nombre))
     .eq('anno', 2024)
     .maybeSingle()
 

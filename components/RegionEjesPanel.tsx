@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import { safeWrite, safeDelete, DbWriteError } from '@/lib/dbWrite'
+import { safeWrite, DbWriteError } from '@/lib/dbWrite'
 import {
   useCanEditAny,
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { RegionEje } from '@/lib/types'
-import { parseEjeString } from '@/lib/ejes'
+import { parseEjeString, moverEnLista } from '@/lib/ejes'
 import { Alert, EmptyState } from '@/components/ui'
+import ReasignarEjeModal from '@/components/ReasignarEjeModal'
 
 /**
  * Modal de gestión del catálogo de ejes de una región. Solo admin/editor DCI
@@ -27,9 +28,12 @@ type Props = {
   onClose:  () => void
   region:   Region
   onSaved:  () => void   // dispara reload arriba (VistaRegional.ejeData)
+  // Sincroniza en memoria las iniciativas movidas al reasignar un eje (el
+  // eje_id cambió). Ver VistaRegional.handleReasignado.
+  onReasignado?: (origenEjeId: number, destino: { id: number; numero: number; nombre: string }) => void
 }
 
-export default function RegionEjesPanel({ open, onClose, region, onSaved }: Props) {
+export default function RegionEjesPanel({ open, onClose, region, onSaved, onReasignado }: Props) {
   const canEditAny = useCanEditAny()
   const userEmail  = useCurrentUserEmail()
 
@@ -37,7 +41,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
   const [loading, setLoading]               = useState(true)
   const [editingId, setEditingId]           = useState<number | null>(null)
   const [editDraft, setEditDraft]           = useState('')
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [reasignarEje, setReasignarEje]     = useState<RegionEje | null>(null)
   const [showAddForm, setShowAddForm]       = useState(false)
   const [newNumero, setNewNumero]           = useState('')
   const [newNombre, setNewNombre]           = useState('')
@@ -63,7 +67,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
     setNewNumero('')
     setNewNombre('')
     setEditingId(null)
-    setConfirmDeleteId(null)
+    setReasignarEje(null)
   }, [open, loadEjes])
 
   if (!open) return null
@@ -169,40 +173,38 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
     onSaved()
   }
 
-  async function handleDelete(eje: RegionEje) {
+  // Reordenar con flechas. Renumera 1..N según la posición vía la RPC atómica
+  // `reordenar_region_ejes` (unicidad diferida). El trigger 083 re-escribe el
+  // label "Eje N: Nombre" en las iniciativas de cada eje cuyo número cambia.
+  async function handleMove(index: number, dir: -1 | 1) {
+    if (saving) return
+    const orderedIds = ejes.map(e => e.id)
+    const nextOrder = moverEnLista(orderedIds, index, dir)
+    if (nextOrder === orderedIds) return  // fuera de rango: no-op
+
+    // Optimista: reordenar + renumerar localmente para feedback inmediato.
+    const byId = new Map(ejes.map(e => [e.id, e]))
+    const optimistic = nextOrder.map((id, i) => ({ ...byId.get(id)!, numero: i + 1 }))
+    setEjes(optimistic)
+    setEditingId(null)
     setSaving(true)
     setError(null)
-    try {
-      await safeDelete(
-        getSupabase()
-          .from('region_ejes')
-          .delete()
-          .eq('id', eje.id),
-        `region_ejes delete id=${eje.id}`,
-      )
-    } catch (err) {
-      setSaving(false)
-      setConfirmDeleteId(null)
-      // 23503 = foreign_key_violation — el eje está siendo referenciado
-      // por iniciativas o métricas. Mensaje claro al admin.
-      const cause = (err as DbWriteError).cause as { code?: string; message?: string } | undefined
-      if (cause?.code === '23503') {
-        setError(
-          `No se puede eliminar el Eje ${eje.numero}: hay iniciativas o métricas que lo usan. ` +
-          `Reasigna o elimina esas referencias primero.`
-        )
-      } else {
-        setError((err as Error).message)
-      }
-      return
-    }
+
+    const { error: rpcError } = await getSupabase().rpc('reordenar_region_ejes', {
+      p_region_cod: region.cod,
+      p_ids:        nextOrder,
+    })
     setSaving(false)
-    setConfirmDeleteId(null)
+    if (rpcError) {
+      setError(`No se pudo reordenar: ${rpcError.message}`)
+    }
+    // En éxito o error, recargar desde la BD para quedar con el estado canónico.
     await loadEjes()
-    onSaved()
+    if (!rpcError) onSaved()
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={handleClose}
@@ -241,10 +243,18 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
               description={canEditAny ? 'Usá "Agregar eje" abajo para crear el primero.' : 'Aún no hay ejes definidos para esta región.'}
             />
           ) : (
+            <>
+            {canEditAny && ejes.length > 1 && (
+              <p className="text-[11px] text-slate-500 leading-snug mb-2 px-0.5">
+                Usa las flechas para reordenar. El orden define el número (Eje 1, 2, 3…) y las
+                iniciativas vinculadas se actualizan al nuevo número o nombre.
+              </p>
+            )}
             <ul className="space-y-1.5">
-              {ejes.map(eje => {
+              {ejes.map((eje, index) => {
                 const isEditing  = editingId === eje.id
-                const isDeleting = confirmDeleteId === eje.id
+                const isFirst    = index === 0
+                const isLast     = index === ejes.length - 1
                 return (
                   <li
                     key={eje.id}
@@ -274,8 +284,30 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
                       </span>
                     )}
 
-                    {!isEditing && !isDeleting && canEditAny && (
+                    {!isEditing && canEditAny && (
                       <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <div className="flex flex-col -my-1 mr-0.5">
+                          <button
+                            onClick={() => handleMove(index, -1)}
+                            disabled={saving || isFirst}
+                            className="p-0.5 text-gray-400 hover:text-slate-700 rounded hover:bg-gray-100 disabled:opacity-25 disabled:hover:bg-transparent disabled:cursor-default"
+                            title="Subir (Eje anterior)"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75">
+                              <path d="M3 7.5L6 4.5l3 3" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleMove(index, 1)}
+                            disabled={saving || isLast}
+                            className="p-0.5 text-gray-400 hover:text-slate-700 rounded hover:bg-gray-100 disabled:opacity-25 disabled:hover:bg-transparent disabled:cursor-default"
+                            title="Bajar (Eje siguiente)"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75">
+                              <path d="M3 4.5L6 7.5l3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </button>
+                        </div>
                         <button
                           onClick={() => {
                             setEditDraft(eje.nombre)
@@ -289,8 +321,9 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
                           </svg>
                         </button>
                         <button
-                          onClick={() => setConfirmDeleteId(eje.id)}
-                          className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50"
+                          onClick={() => setReasignarEje(eje)}
+                          disabled={saving}
+                          className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 disabled:opacity-40"
                           title="Eliminar eje"
                         >
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -299,26 +332,11 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
                         </button>
                       </div>
                     )}
-
-                    {isDeleting && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-xs text-red-600 font-medium">¿Eliminar?</span>
-                        <button
-                          onClick={() => handleDelete(eje)}
-                          disabled={saving}
-                          className="text-xs px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                        >Sí</button>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          disabled={saving}
-                          className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50"
-                        >No</button>
-                      </div>
-                    )}
                   </li>
                 )
               })}
             </ul>
+            </>
           )}
 
           {/* Form para agregar */}
@@ -406,5 +424,21 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved }: Prop
         )}
       </div>
     </div>
+
+    {reasignarEje && (
+      <ReasignarEjeModal
+        region={region}
+        origen={reasignarEje}
+        candidatos={ejes.filter(e => e.id !== reasignarEje.id)}
+        onCancel={() => setReasignarEje(null)}
+        onReasignado={onReasignado}
+        onDone={async () => {
+          setReasignarEje(null)
+          await loadEjes()
+          onSaved()
+        }}
+      />
+    )}
+    </>
   )
 }

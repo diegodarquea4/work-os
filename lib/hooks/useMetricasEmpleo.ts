@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
 import { toMetricsRegionName, fromMetricsRegionName } from '@/lib/regions'
+import { calcFuerzaTrabajo, calcDesocupados, calcTasaTrimestreMovil } from '@/lib/metricas/empleoFormulas'
 
 export type EmpleoRow = {
   nombre_region: string

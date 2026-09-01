@@ -129,7 +129,8 @@ export function useColegaDelitosRegion(regionCod: string) {
           .limit(2000)
 
         if (cancelled) return
-        if (data) setRows(data as unknown as DelitosRow[])
+        if (data) setRows((data as unknown as DelitosRow[])
+          .map(r => ({ ...r, nombre_region: fromMetricsRegionName(r.nombre_region) })))
         setLoading(false)
       } catch {
         if (!cancelled) setLoading(false)

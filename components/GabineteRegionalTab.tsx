@@ -5,7 +5,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
-import { useCanEditOperational } from '@/lib/context/UserContext'
+import { useCan } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import HistorialSesionesModal from './HistorialSesionesModal'
@@ -18,7 +18,7 @@ import ConsolaSesionGabinete from './gabinete/ConsolaSesionGabinete'
  * ubicación decidida por producto 2026-07-29: acá, patrón Comité Policial).
  *
  * Gate: region_config.gabinete_habilitado (mig 046 — habilitar el piloto es
- * un INSERT, no deploy) + canEditOperational. Viewer no ve nada del módulo
+ * un INSERT, no deploy) + comite.gabinete.operar en la región. Viewer no ve nada del módulo
  * ni dispara queries a sesion_* (RLS se lo negaría). Sin flag → placeholder
  * "no habilitado".
  *
@@ -43,13 +43,14 @@ type Props = {
 }
 
 export default function GabineteRegionalTab({ region, iniciativas, onAbrirIniciativa }: Props) {
-  const canEditOperational = useCanEditOperational()
+  // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
+  const puedeOperar = useCan('comite.gabinete.operar', region.cod)
   const { config, loading: configLoading } = useRegionConfig(region.cod)
 
   const habilitado = !!config?.gabinete_habilitado
   const gabineteNombre = config?.gabinete_nombre ?? 'Gabinete Regional'
   // Gate único del módulo (patrón sesionesOn del drawer): sin él, ni queries.
-  const gabineteOn = habilitado && canEditOperational
+  const gabineteOn = habilitado && puedeOperar
 
   const [consolaOpen, setConsolaOpen]     = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
@@ -192,7 +193,7 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
           fecha={borrador?.fecha ?? ''}
           numeroLabel="Sesión en curso"
           projects={iniciativas}
-          canEdit={canEditOperational}
+          canEdit={puedeOperar}
           onOpenIniciativa={onAbrirIniciativa}
           onClose={() => { setConsolaOpen(false); refreshResumen() }}
         />
