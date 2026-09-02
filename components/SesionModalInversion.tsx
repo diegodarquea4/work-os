@@ -15,6 +15,8 @@ import type {
 import { Alert } from '@/components/ui'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
+import FilterPopover, { type FilterOption } from './FilterPopover'
+import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 
 /**
  * Formulario de sesión del Comité Económico — 5 zonas EN ESTE ORDEN (mismo
@@ -357,6 +359,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
+  // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
+  // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
+  // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
+  const [pkFPlazo, setPkFPlazo]           = useState<Set<string>>(new Set())
+  const [pkFPriorizado, setPkFPriorizado] = useState<Set<string>>(new Set(['Si']))
+  const [pkFSeremi, setPkFSeremi]         = useState<Set<string>>(new Set())
+  const [pkFRiesgo, setPkFRiesgo]         = useState<Set<string>>(new Set())
+  const [pkFEstado, setPkFEstado]         = useState<Set<string>>(new Set())
+  // Oficios y Proyectos tratados, colapsables por separado dentro de zona 4.
+  const [proyectosSeccionOpen, setProyectosSeccionOpen] = useState(true)
+  const [oficiosSeccionOpen, setOficiosSeccionOpen]     = useState(true)
 
   // Alta de oficio nuevo (Seguimiento de la Inversión)
   const [oficioOaeca, setOficioOaeca]         = useState<Oaeca | null>(null)
@@ -396,7 +409,11 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [cNombre, setCNombre]               = useState('')
   const [cPlazo, setCPlazo]                 = useState('')
   const [cSeccion, setCSeccion]             = useState<SeccionComiteEconomico | ''>('')
-  const [cProyecto, setCProyecto]           = useState<V2Proyecto | null>(null)
+  // Proyecto asociado (opcional) — misma cartera que "proyectos a tratar en
+  // profundidad" (privados/públicos), no el catálogo SEIA legado.
+  const [cProyectoTipo, setCProyectoTipo]     = useState<'privado' | 'publico'>('privado')
+  const [cProyectoPrivado, setCProyectoPrivado] = useState<ComiteEconomicoProyecto | null>(null)
+  const [cProyectoPublico, setCProyectoPublico] = useState<Iniciativa | null>(null)
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
@@ -812,12 +829,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
           responsable_nombre: cNombre.trim() || null,
           plazo: cPlazo || null,
           seccion: cSeccion,
-          proyecto_id: cProyecto?.id ?? null,
+          proyecto_privado_id: cProyectoTipo === 'privado' ? (cProyectoPrivado?.id ?? null) : null,
+          prioridad_id: cProyectoTipo === 'publico' ? (cProyectoPublico?.id ?? null) : null,
         }),
         `sesion_compromisos insert sesion=${sesion.id}`,
       )
       setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
-      setCDescripcion(''); setCInstitucion(''); setCNombre(''); setCPlazo(''); setCSeccion(''); setCProyecto(null)
+      setCDescripcion(''); setCInstitucion(''); setCNombre(''); setCPlazo(''); setCSeccion('')
+      setCProyectoPrivado(null); setCProyectoPublico(null)
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -915,6 +934,43 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     () => iniciativas.filter(p => (p.tags ?? []).includes(TAG_ECONOMICO)),
     [iniciativas],
   )
+
+  // Picker privado (zona 4c) — mismos filtros y mismo criterio de opciones
+  // dinámicas que ComiteEconomicoProyectosPanel.tsx.
+  const proyectosPrivadosDisponibles = useMemo(
+    () => proyectosPrivados.filter(p => !proyectosSesion.some(sp => sp.proyecto_privado_id === p.id)),
+    [proyectosPrivados, proyectosSesion],
+  )
+  const pkOpcionesSeremi = useMemo((): FilterOption[] => {
+    const vistos = new Set<string>()
+    for (const p of proyectosPrivadosDisponibles) if (p.seremi_lider) vistos.add(p.seremi_lider)
+    return [...vistos].sort().map(v => ({ value: v, label: v }))
+  }, [proyectosPrivadosDisponibles])
+  const pkOpcionesEstado = useMemo((): FilterOption[] => {
+    const vistos = new Set<string>()
+    for (const p of proyectosPrivadosDisponibles) if (p.estado_actual) vistos.add(p.estado_actual)
+    return [...vistos].sort().map(v => ({ value: v, label: v }))
+  }, [proyectosPrivadosDisponibles])
+  const proyectosPrivadosFiltrados = useMemo(() => {
+    let list = proyectosPrivadosDisponibles
+    if (pkFPlazo.size)      list = list.filter(p => p.plazo && pkFPlazo.has(p.plazo))
+    if (pkFPriorizado.size) list = list.filter(p => pkFPriorizado.has(p.priorizado ? 'Si' : 'No'))
+    if (pkFSeremi.size)     list = list.filter(p => p.seremi_lider && pkFSeremi.has(p.seremi_lider))
+    if (pkFRiesgo.size)     list = list.filter(p => pkFRiesgo.has(p.riesgo ? 'Si' : 'No'))
+    if (pkFEstado.size)     list = list.filter(p => p.estado_actual && pkFEstado.has(p.estado_actual))
+    return list
+  }, [proyectosPrivadosDisponibles, pkFPlazo, pkFPriorizado, pkFSeremi, pkFRiesgo, pkFEstado])
+  const pkChips = [
+    setChip('Plazo', pkFPlazo, () => setPkFPlazo(new Set())),
+    setChip('Priorizado', pkFPriorizado, () => setPkFPriorizado(new Set())),
+    setChip('SEREMI líder', pkFSeremi, () => setPkFSeremi(new Set())),
+    setChip('Riesgo', pkFRiesgo, () => setPkFRiesgo(new Set())),
+    setChip('Estado actual', pkFEstado, () => setPkFEstado(new Set())),
+  ].filter((c): c is NonNullable<typeof c> => c !== null)
+  function clearPkFiltros() {
+    setPkFPlazo(new Set()); setPkFPriorizado(new Set()); setPkFSeremi(new Set())
+    setPkFRiesgo(new Set()); setPkFEstado(new Set())
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1268,113 +1324,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 </button>
                 {seguimientoOpen && (
                   <div className="p-3 space-y-4">
-                    {/* Zona 4a: oficios anteriores */}
+                    {/* Proyectos tratados en profundidad — antes que oficios (lo que se discute primero en la sesión) */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios anteriores</h4>
-                        <span className="text-xs text-gray-400 ml-auto">{oficiosAnteriores.length}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {oficiosAnteriores.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-2">Sin oficios pendientes de sesiones anteriores.</p>
-                        ) : oficiosAnteriores.map(o => (
-                          <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
-                            <div className="flex items-start gap-3">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-700 leading-snug truncate">{o.proyecto?.nombre ?? 'Sin proyecto'}</p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {(Object.keys(ESTADO_OFICIO) as (keyof typeof ESTADO_OFICIO)[]).map(est => (
-                                  <button
-                                    key={est}
-                                    onClick={() => setEstadoOficio(o, est)}
-                                    className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
-                                      o.estado === est ? ESTADO_OFICIO[est].on : ESTADO_OFICIO[est].off
-                                    }`}
-                                  >
-                                    {ESTADO_OFICIO[est].label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <input
-                              type="text"
-                              defaultValue={o.nota ?? ''}
-                              onChange={e => setOficioNotaDraft(prev => ({ ...prev, [o.id]: e.target.value }))}
-                              onBlur={() => commitNotaOficioAnterior(o)}
-                              placeholder="Nota (ej: por qué sigue pendiente)…"
-                              className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Zona 4b: alta de oficios nuevos */}
-                    <div className="pt-3 border-t border-gray-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios tratados nuevos</h4>
-                        <span className="text-xs text-gray-400 ml-auto">{oficiosTratadosSesion.length}</span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <ComboboxOaeca
-                            oaecaList={oaecaList}
-                            value={oficioOaeca}
-                            onSelect={setOficioOaeca}
-                            onCreate={crearOaeca}
-                            placeholder="OAECA…"
-                            label="OAECA"
-                          />
-                          <label className="flex flex-col gap-0.5">
-                            <span className="text-[10px] text-gray-500 font-medium">Fecha de vencimiento</span>
-                            <input
-                              type="date"
-                              value={oficioFechaLimite}
-                              onChange={e => setOficioFechaLimite(e.target.value)}
-                              className={`${inputCls} w-full`}
-                            />
-                          </label>
-                          <ComboboxProyecto
-                            proyectos={proyectosRegion}
-                            value={oficioProyecto}
-                            onSelect={setOficioProyecto}
-                            placeholder="Proyecto que considera…"
-                            label="Proyecto que considera"
-                          />
-                        </div>
-                        <button
-                          onClick={agregarOficioNuevo}
-                          disabled={oficioSaving || !oficioOaeca || !oficioProyecto}
-                          className="text-xs px-3.5 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
-                        >
-                          {oficioSaving ? 'Guardando…' : '+ Oficio pendiente'}
-                        </button>
-
-                        {oficiosTratadosSesion.length > 0 && (
-                          <div className="space-y-1.5 pt-1">
-                            {oficiosTratadosSesion.map(o => (
-                              <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg">
-                                <p className="text-sm text-gray-700 truncate">{o.proyecto?.nombre ?? '—'}</p>
-                                <p className="text-[11px] text-gray-400 truncate">
-                                  {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Zona 4c: proyectos tratados en profundidad — cartera del comité (privados + públicos con tag CER), no v2_proyectos_inversion */}
-                    <div className="pt-3 border-t border-gray-100">
-                      <div className="flex items-center gap-2 mb-2">
+                      <button type="button" onClick={() => setProyectosSeccionOpen(o => !o)} className="flex items-center gap-2 mb-2 w-full text-left">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Proyectos tratados en profundidad</h4>
-                        <span className="text-xs text-gray-400 ml-auto">{proyectosSesion.length}</span>
-                      </div>
+                        <span className="text-xs text-gray-400 ml-auto mr-1">{proyectosSesion.length}</span>
+                        <Chevron open={proyectosSeccionOpen} />
+                      </button>
+                      {proyectosSeccionOpen && (
                       <div className="space-y-2">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] text-gray-500 font-medium">Agregar:</span>
@@ -1396,11 +1353,38 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           </div>
                         </div>
                         {pickerVista === 'privado' ? (
-                          <ComboboxProyectoEconomico
-                            items={proyectosPrivados.filter(p => !proyectosSesion.some(sp => sp.proyecto_privado_id === p.id))}
-                            onSelect={agregarProyectoPrivado}
-                            placeholder="Buscar proyecto privado por nombre…"
-                          />
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <FilterPopover label="Plazo" options={[{ value: 'CP', label: 'Corto plazo' }, { value: 'MP', label: 'Mediano plazo' }, { value: 'LP', label: 'Largo plazo' }]} selected={pkFPlazo} onChange={setPkFPlazo} />
+                              <FilterPopover label="Priorizado" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFPriorizado} onChange={setPkFPriorizado} />
+                              <FilterPopover label="SEREMI líder" options={pkOpcionesSeremi} selected={pkFSeremi} onChange={setPkFSeremi} />
+                              <FilterPopover label="Riesgo" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFRiesgo} onChange={setPkFRiesgo} />
+                              <FilterPopover label="Estado actual" options={pkOpcionesEstado} selected={pkFEstado} onChange={setPkFEstado} />
+                            </div>
+                            {pkChips.length > 0 && <ActiveFiltersBar chips={pkChips} clearFilters={clearPkFiltros} />}
+                            {proyectosPrivadosFiltrados.length === 0 ? (
+                              <p className="text-xs text-gray-500 text-center py-2">Ningún proyecto privado calza con los filtros.</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {proyectosPrivadosFiltrados.slice(0, 5).map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => agregarProyectoPrivado(p)}
+                                    className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 border border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50/50"
+                                  >
+                                    <span className="flex-1 min-w-0 truncate text-sm text-slate-800">{p.nombre}</span>
+                                    {p.plazo && <span className="text-[10px] text-gray-400 flex-shrink-0">{p.plazo}</span>}
+                                    {p.seremi_lider && <span className="text-[10px] text-gray-400 truncate max-w-[120px] flex-shrink-0">{p.seremi_lider}</span>}
+                                    <span className="text-violet-600 text-sm font-semibold flex-shrink-0">+</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {proyectosPrivadosFiltrados.length > 5 && (
+                              <p className="text-[10px] text-gray-400">Mostrando 5 de {proyectosPrivadosFiltrados.length} — usa los filtros para acotar.</p>
+                            )}
+                          </div>
                         ) : (
                           <ComboboxProyectoEconomico
                             items={iniciativasCER.filter(i => !proyectosSesion.some(sp => sp.prioridad_id === i.id))}
@@ -1452,6 +1436,120 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           )
                         })}
                       </div>
+                      )}
+                    </div>
+
+                    {/* Oficios — anteriores (verificación) + nuevos (alta), colapsable como un solo bloque */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <button type="button" onClick={() => setOficiosSeccionOpen(o => !o)} className="flex items-center gap-2 mb-2 w-full text-left">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios</h4>
+                        <span className="text-xs text-gray-400 ml-auto mr-1">{oficiosAnteriores.length + oficiosTratadosSesion.length}</span>
+                        <Chevron open={oficiosSeccionOpen} />
+                      </button>
+                      {oficiosSeccionOpen && (
+                      <div className="space-y-4">
+                        {/* Oficios anteriores */}
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h5 className="text-[10px] font-semibold text-gray-500">Oficios anteriores</h5>
+                            <span className="text-xs text-gray-400 ml-auto">{oficiosAnteriores.length}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {oficiosAnteriores.length === 0 ? (
+                              <p className="text-xs text-gray-400 text-center py-2">Sin oficios pendientes de sesiones anteriores.</p>
+                            ) : oficiosAnteriores.map(o => (
+                              <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-700 leading-snug truncate">{o.proyecto?.nombre ?? 'Sin proyecto'}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {(Object.keys(ESTADO_OFICIO) as (keyof typeof ESTADO_OFICIO)[]).map(est => (
+                                      <button
+                                        key={est}
+                                        onClick={() => setEstadoOficio(o, est)}
+                                        className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
+                                          o.estado === est ? ESTADO_OFICIO[est].on : ESTADO_OFICIO[est].off
+                                        }`}
+                                      >
+                                        {ESTADO_OFICIO[est].label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <input
+                                  type="text"
+                                  defaultValue={o.nota ?? ''}
+                                  onChange={e => setOficioNotaDraft(prev => ({ ...prev, [o.id]: e.target.value }))}
+                                  onBlur={() => commitNotaOficioAnterior(o)}
+                                  placeholder="Nota (ej: por qué sigue pendiente)…"
+                                  className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Oficios tratados nuevos */}
+                        <div className="pt-3 border-t border-gray-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h5 className="text-[10px] font-semibold text-gray-500">Oficios tratados nuevos</h5>
+                            <span className="text-xs text-gray-400 ml-auto">{oficiosTratadosSesion.length}</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <ComboboxOaeca
+                                oaecaList={oaecaList}
+                                value={oficioOaeca}
+                                onSelect={setOficioOaeca}
+                                onCreate={crearOaeca}
+                                placeholder="OAECA…"
+                                label="OAECA"
+                              />
+                              <label className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-gray-500 font-medium">Fecha de vencimiento</span>
+                                <input
+                                  type="date"
+                                  value={oficioFechaLimite}
+                                  onChange={e => setOficioFechaLimite(e.target.value)}
+                                  className={`${inputCls} w-full`}
+                                />
+                              </label>
+                              <ComboboxProyecto
+                                proyectos={proyectosRegion}
+                                value={oficioProyecto}
+                                onSelect={setOficioProyecto}
+                                placeholder="Proyecto que considera…"
+                                label="Proyecto que considera"
+                              />
+                            </div>
+                            <button
+                              onClick={agregarOficioNuevo}
+                              disabled={oficioSaving || !oficioOaeca || !oficioProyecto}
+                              className="text-xs px-3.5 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
+                            >
+                              {oficioSaving ? 'Guardando…' : '+ Oficio pendiente'}
+                            </button>
+
+                            {oficiosTratadosSesion.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                {oficiosTratadosSesion.map(o => (
+                                  <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg">
+                                    <p className="text-sm text-gray-700 truncate">{o.proyecto?.nombre ?? '—'}</p>
+                                    <p className="text-[11px] text-gray-400 truncate">
+                                      {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1501,14 +1599,47 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           <option value="general">General{MESA_EMPLEO_HABILITADA ? ' (fuera de ambas)' : ''}</option>
                         </select>
                       </label>
-                      <div className="flex-1 min-w-[170px]">
-                        <ComboboxProyecto
-                          proyectos={proyectosRegion}
-                          value={cProyecto}
-                          onSelect={setCProyecto}
-                          placeholder="Proyecto asociado (opcional)…"
-                          label="Proyecto asociado (opcional)"
-                        />
+                      <div className="flex-1 min-w-[220px]">
+                        <span className="text-[10px] text-gray-500 font-medium block mb-0.5">Proyecto asociado (opcional)</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setCProyectoTipo('privado')}
+                              className={`text-[11px] px-2 py-1.5 font-medium transition-colors ${cProyectoTipo === 'privado' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                            >
+                              Privado
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCProyectoTipo('publico')}
+                              className={`text-[11px] px-2 py-1.5 font-medium transition-colors border-l border-gray-200 ${cProyectoTipo === 'publico' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                            >
+                              Público
+                            </button>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            {cProyectoTipo === 'privado' ? (
+                              cProyectoPrivado ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-violet-50 text-violet-800 border border-violet-200 rounded-lg px-2 py-1.5 max-w-full">
+                                  <span className="truncate">{cProyectoPrivado.nombre}</span>
+                                  <button type="button" onClick={() => setCProyectoPrivado(null)} className="text-violet-400 hover:text-violet-700 flex-shrink-0">✕</button>
+                                </span>
+                              ) : (
+                                <ComboboxProyectoEconomico items={proyectosPrivados} onSelect={setCProyectoPrivado} placeholder="Buscar proyecto privado…" />
+                              )
+                            ) : (
+                              cProyectoPublico ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-sky-50 text-sky-800 border border-sky-200 rounded-lg px-2 py-1.5 max-w-full">
+                                  <span className="truncate">{cProyectoPublico.nombre}</span>
+                                  <button type="button" onClick={() => setCProyectoPublico(null)} className="text-sky-400 hover:text-sky-700 flex-shrink-0">✕</button>
+                                </span>
+                              ) : (
+                                <ComboboxProyectoEconomico items={iniciativasCER} onSelect={setCProyectoPublico} placeholder="Buscar iniciativa pública (CER)…" />
+                              )
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="submit"

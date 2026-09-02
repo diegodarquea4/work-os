@@ -757,8 +757,11 @@ export type SesionCompromiso = {
   // NULL para compromisos de Comité Policial/Gabinete. Genera el tag al listar.
   seccion: SeccionComiteEconomico | null
   // Proyecto asociado (v2_proyectos_inversion), opcional — solo trazabilidad,
-  // no determina el tag.
+  // no determina el tag. Legado: los compromisos nuevos usan
+  // proyecto_privado_id (privado) o prioridad_id (público, ya genérico
+  // arriba) — mig 087.
   proyecto_id: string | null
+  proyecto_privado_id: number | null
   // Comité de Infraestructura (instancia='infraestructura') únicamente — mig
   // 059. Uno de los tags curados en region_config.infraestructura_megaproyectos
   // al momento de crear el compromiso; independiente de prioridad_id (un
@@ -952,6 +955,10 @@ export type ComiteEconomicoProyecto = {
   meta_2026_2027: string | null
   estado_inicial: string | null
   estado_actual: string | null
+  // Detalle libre (N° de RCA, fechas, contexto) — mig 087. `estado_actual`
+  // se estandarizó a un puñado de categorías (ver lib/comiteEconomico.ts);
+  // el resto de lo que antes vivía mezclado en ese campo va aquí.
+  notas: string | null
   vida_util_anios: number | null
   riesgo: boolean
   created_at: string

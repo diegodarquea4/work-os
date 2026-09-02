@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import type { Region } from '@/lib/regions'
 import { LISTA_CANONICA } from '@/lib/ministerios'
+import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 
 /**
  * Alta de un proyecto privado de la cartera del Comité Económico (mig 086)
@@ -37,6 +38,7 @@ export default function NuevoProyectoEconomicoModal({ region, currentUserEmail, 
   const [meta, setMeta]                         = useState('')
   const [estadoInicial, setEstadoInicial]       = useState('')
   const [estadoActual, setEstadoActual]         = useState('')
+  const [notas, setNotas]                       = useState('')
   const [vidaUtil, setVidaUtil]                 = useState('')
   const [riesgo, setRiesgo]                     = useState(false)
   const [saving, setSaving]                     = useState(false)
@@ -62,7 +64,8 @@ export default function NuevoProyectoEconomicoModal({ region, currentUserEmail, 
           kpi: kpi.trim() || null,
           meta_2026_2027: meta.trim() || null,
           estado_inicial: estadoInicial.trim() || null,
-          estado_actual: estadoActual.trim() || null,
+          estado_actual: estadoActual || null,
+          notas: notas.trim() || null,
           vida_util_anios: vidaUtil ? Number(vidaUtil) : null,
           riesgo,
           created_by_email: currentUserEmail || null,
@@ -177,9 +180,17 @@ export default function NuevoProyectoEconomicoModal({ region, currentUserEmail, 
             </label>
             <label className="flex flex-col gap-0.5">
               <span className={labelCls}>Estado actual</span>
-              <textarea value={estadoActual} onChange={e => setEstadoActual(e.target.value)} rows={2} className={`${inputCls} resize-y`} />
+              <select value={estadoActual} onChange={e => setEstadoActual(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                {ESTADO_ACTUAL_ECONOMICO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
             </label>
           </div>
+
+          <label className="flex flex-col gap-0.5">
+            <span className={labelCls}>Notas</span>
+            <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} placeholder="N° de RCA, fechas, contexto…" className={`${inputCls} resize-y`} />
+          </label>
         </form>
 
         <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">

@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoSeguimiento } from '@/lib/types'
 import { LISTA_CANONICA } from '@/lib/ministerios'
+import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 
 /**
  * Ficha de un proyecto privado del Comité Económico — ver/editar los 16
@@ -218,9 +219,18 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   {editable ? <textarea defaultValue={proyecto.estado_inicial ?? ''} onBlur={e => commitCampo('estado_inicial', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.estado_inicial ?? '—'}</p>}
                 </Campo>
                 <Campo label="Estado actual">
-                  {editable ? <textarea defaultValue={proyecto.estado_actual ?? ''} onBlur={e => commitCampo('estado_actual', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.estado_actual ?? '—'}</p>}
+                  {editable ? (
+                    <select defaultValue={proyecto.estado_actual ?? ''} onBlur={e => commitCampo('estado_actual', e.target.value || null)} className={inputCls}>
+                      <option value="">—</option>
+                      {ESTADO_ACTUAL_ECONOMICO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : <span className="text-sm text-gray-800">{proyecto.estado_actual ?? '—'}</span>}
                 </Campo>
               </div>
+
+              <Campo label="Notas">
+                {editable ? <textarea defaultValue={proyecto.notas ?? ''} onBlur={e => commitCampo('notas', e.target.value || null)} rows={2} placeholder="N° de RCA, fechas, contexto…" className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.notas ?? '—'}</p>}
+              </Campo>
 
               {/* Avances */}
               <div className="pt-2 border-t border-gray-100">
