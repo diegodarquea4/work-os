@@ -114,18 +114,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       : []
 
   const [view, setView]                       = useState<View>('mapa')
-  // Pane inicial de Gabinete — SIEMPRE Preparación (decisión Diego 2026-08-05:
-  // al entrar a Gabinete se aterriza primero en la preparación de la sesión).
-  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('preparacion')
+  // Pane inicial del Tablero (ex Gabinete). Se aterriza en el Tablero (kanban);
+  // la Preparación es una sub-vista gateada por `comite.gabinete.preparar` y se
+  // llega vía el toggle o el CTA "preparar sesión" cuando no hay una preparada.
+  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('tablero')
   // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.
   const [metricasInitialRegion, setMetricasInitialRegion] = useState<string | undefined>(undefined)
-  const [viewDropOpen, setViewDropOpen]        = useState(false)
-  const [dropPos, setDropPos]                  = useState({ top: 0, left: 0 })
-  const viewDropRef                            = useRef<HTMLDivElement>(null)
-  const viewDropBtnRef                         = useRef<HTMLButtonElement>(null)
-  // Menú de configuración (tuerca): PREGO / Permisos / Cambiar clave / Cerrar
+  // Menú de configuración (tuerca): Desalojos / PREGO / Permisos / Cambiar clave / Cerrar
   // sesión. Saca del header los accesos de baja frecuencia. Anclado a la
   // derecha (right, no left — el botón vive en el borde derecho del header).
   const [gearOpen, setGearOpen]                = useState(false)
@@ -230,22 +227,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const canSeeDesalojos =
     profile?.role === 'admin' || profile?.role === 'regional' || profile?.role === 'viewer'
   const desalojosReadOnly = profile?.role !== 'admin'
-  const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
-    { key: 'dashboard',      label: 'Dashboard' },
-    { key: 'kanban',         label: 'Gabinete'  },
-    { key: 'desalojos',      label: 'Desalojos', visible: canSeeDesalojos },
-  ]
-  const visibleGroupedViews = GROUPED_VIEWS.filter(v => v.visible !== false)
-  const isGroupedActive  = visibleGroupedViews.some(v => v.key === view)
-  const activeGroupLabel = visibleGroupedViews.find(v => v.key === view)?.label ?? 'Seguimiento'
-
-  function handleViewDropToggle() {
-    if (!viewDropOpen && viewDropBtnRef.current) {
-      const rect = viewDropBtnRef.current.getBoundingClientRect()
-      setDropPos({ top: rect.bottom + 4, left: rect.left })
-    }
-    setViewDropOpen(prev => !prev)
-  }
 
   function handleGearToggle() {
     if (!gearOpen && gearBtnRef.current) {
@@ -372,21 +353,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     : localIniciativas,
   [localIniciativas, needsRegionFilter, profile])
 
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      const target = e.target as Node
-      if (
-        viewDropRef.current && !viewDropRef.current.contains(target) &&
-        viewDropBtnRef.current && !viewDropBtnRef.current.contains(target)
-      ) {
-        setViewDropOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
-
-  // Cerrar el menú tuerca al clickear fuera (mismo patrón del dropdown de vistas).
+  // Cerrar el menú tuerca al clickear fuera.
   useEffect(() => {
     if (!gearOpen) return
     function onClickOutside(e: MouseEvent) {
@@ -636,24 +603,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mapa
             </button>
-            {/* Grouped views dropdown trigger */}
-            <div ref={viewDropRef}>
-              <button
-                ref={viewDropBtnRef}
-                onClick={handleViewDropToggle}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isGroupedActive ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
-                </svg>
-                {activeGroupLabel}
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ transform: viewDropOpen ? 'rotate(180deg)' : 'none' }}>
-                  <path d="M2 4l3 3 3-3"/>
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={() => setView('dashboard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'dashboard' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1.5 2.5h9M1.5 6h9M1.5 9.5h6"/>
+              </svg>
+              Iniciativas
+            </button>
+            <button
+              onClick={() => { setKanbanInitialPane('tablero'); setView('kanban') }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'kanban' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
+              </svg>
+              Tablero
+            </button>
             <button
               onClick={() => setView('vista-regional')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -666,7 +637,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mi Región
             </button>
-            {/* PREGO y Permisos viven en el menú tuerca (configuración) —
+            {/* Desalojos, PREGO y Permisos viven en el menú tuerca (configuración) —
                 accesos de baja frecuencia fuera de la barra principal. */}
           </div>
 
@@ -983,36 +954,30 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       )}
 
       {/* View dropdown — rendered at root level to escape header stacking context */}
-      {viewDropOpen && (
-        <div
-          ref={viewDropRef}
-          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999, minWidth: 140 }}
-          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
-        >
-          {visibleGroupedViews.map(v => (
-            <button
-              key={v.key}
-              onClick={() => { setView(v.key); setViewDropOpen(false) }}
-              className={`block w-full px-3.5 py-2 text-xs text-left transition-colors ${
-                view === v.key
-                  ? 'font-semibold text-violet-700 bg-violet-50'
-                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Menú tuerca — a nivel raíz por la misma razón que el dropdown de
-          vistas (escapar el stacking context del header). Anclado a la derecha. */}
+      {/* Menú tuerca — a nivel raíz para escapar el stacking context del header.
+          Anclado a la derecha. */}
       {gearOpen && (
         <div
           ref={gearMenuRef}
           style={{ position: 'fixed', top: gearPos.top, right: gearPos.right, zIndex: 9999, minWidth: 176 }}
           className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
         >
+          {canSeeDesalojos && (
+            <button
+              onClick={() => { setView('desalojos'); setGearOpen(false) }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === 'desalojos'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0">
+                <path d="M2 6.8L8 2l6 4.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M3.6 7.6V13a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1V7.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Desalojos
+            </button>
+          )}
           {(profile?.role === 'admin' || profile?.role === 'editor') && (
             <button
               onClick={() => { setView('prego'); setGearOpen(false) }}

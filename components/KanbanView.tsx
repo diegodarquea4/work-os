@@ -13,6 +13,7 @@ import DesalojoBadge from './DesalojoBadge'
 import { CapaBadge } from './CapaBadge'
 import { useCanEditOperational, useIsAdmin, useCan } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
+import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import PreparacionGabinete from './gabinete/PreparacionGabinete'
 import { normalizeMinisterio } from '@/lib/ministerios'
 import { compareCarteras } from '@/lib/cartera'
@@ -267,6 +268,13 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   useEffect(() => {
     if (pane === 'preparacion' && !puedeVerPreparacion) setPane('tablero')
   }, [pane, puedeVerPreparacion])
+  // ¿Hay una sesión de Gabinete iniciada (borrador) para la región activa? Si no,
+  // y el usuario puede preparar, se ofrece un CTA en el Tablero para saltar directo
+  // a Preparación (solo v2/gabinete_habilitado). Espeja el resumen del comité.
+  const { resumen: gabineteResumen } = useSesionesResumen(
+    regionActiva?.cod ?? '', { instancia: 'gabinete' }, mostrarStepperV2 && puedeVerPreparacion,
+  )
+  const sinSesionGabinete = mostrarStepperV2 && puedeVerPreparacion && !gabineteResumen.borradorId
   // Filtros del panel "Filtros" — solo los que tienen uso real en la mesa
   // de Gabinete: estado del compromiso (semáforo), prioridad, capa de
   // importancia, etapa actual, etiquetas y "en foco". Eliminados respecto
@@ -732,6 +740,26 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           <span className="text-xs text-gray-400 ml-auto">{filtered.length} iniciativas</span>
         )}
       </div>
+
+      {/* CTA: sin sesión de Gabinete preparada → saltar directo a Preparación.
+          Solo en el Tablero, para quien puede preparar y en regiones v2. */}
+      {pane === 'tablero' && sinSesionGabinete && regionActiva && (
+        <button
+          onClick={() => setPane('preparacion')}
+          className="flex-shrink-0 mx-6 mt-3 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-violet-200 bg-violet-50 text-left hover:bg-violet-100 hover:border-violet-300 transition-colors group"
+        >
+          <span className="flex items-center gap-2 text-xs text-violet-900">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <rect x="2" y="3" width="10" height="9" rx="1.5"/><path d="M2 6h10M5 1.5V4M9 1.5V4"/>
+            </svg>
+            <span>Aún no hay una sesión de Gabinete preparada para <span className="font-semibold">{regionActiva.nombre}</span>.</span>
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-violet-700 shrink-0">
+            Prepararla
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2l4 4-4 4"/></svg>
+          </span>
+        </button>
+      )}
 
       {/* ── Pane Preparación — la ex Bandeja de Atención embebida (fusión
           spec gabinete §7.1). La región la maneja el select de esta toolbar
