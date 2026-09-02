@@ -49,12 +49,14 @@ type Props = {
   // para que la sección "En foco" abra la ficha y propague cambios global.
   onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   onDeletePrioridad?: (n: number) => void
+  // Ir al Tablero → Preparación (armar la pauta del gabinete) — la resuelve WorkOSApp.
+  onIrAPreparacion: (regionNombre: string) => void
 }
 
 // Ver comentario junto a su uso en la Sección 4 (Métricas clave).
 const SHOW_INVERSION_CARD = false
 
-export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad }: Props) {
+export default function VistaRegional({ iniciativas, profile, activeRegionName, onActiveRegionChange, onUpdatePrioridad, onDeletePrioridad, onIrAPreparacion }: Props) {
   // Determine accessible region codes for this user
   const allowedCods: string[] = useMemo(() => {
     if (!profile) return []
@@ -828,6 +830,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             ejesLoading={regionEjesLoading}
             iniciativas={regionIniciativas}
             onAbrirIniciativa={setSelectedIniciativa}
+            onIrAPreparacion={onIrAPreparacion}
           />
         )}
 

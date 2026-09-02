@@ -767,6 +767,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             onActiveRegionChange={setActiveRegionName}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            onIrAPreparacion={regionNombre => { setActiveRegionName(regionNombre); setKanbanInitialPane('preparacion'); setView('kanban') }}
           />
         </div>
       )}

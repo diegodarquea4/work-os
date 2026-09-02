@@ -24,7 +24,7 @@ import ConsolaSesionGabinete from './gabinete/ConsolaSesionGabinete'
  *
  * El gabinete NO digita métricas: este tab no tiene lista de métricas — solo
  * strip de estado + Abrir sesión (Consola v2) / Nómina / Historial. La sesión
- * se ARMA en Gabinete → Preparación (stepper) y se CORRE acá en la Consola; el
+ * se ARMA en Tablero → Preparación (stepper) y se CORRE acá en la Consola; el
  * SesionModal v1 quedó retirado del gabinete (cutover v2).
  */
 
@@ -40,9 +40,12 @@ type Props = {
   // Abrir la ficha completa de una iniciativa (VistaRegional la monta con su
   // ProjectTrackerModal, por encima de la Consola).
   onAbrirIniciativa: (p: Iniciativa) => void
+  // Navegar al Tablero → pane Preparación (donde se arma la pauta). Lo provee
+  // WorkOSApp: setea la región activa + kanbanInitialPane='preparacion' + la vista.
+  onIrAPreparacion: (regionNombre: string) => void
 }
 
-export default function GabineteRegionalTab({ region, iniciativas, onAbrirIniciativa }: Props) {
+export default function GabineteRegionalTab({ region, iniciativas, onAbrirIniciativa, onIrAPreparacion }: Props) {
   // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
   const puedeOperar = useCan('comite.gabinete.operar', region.cod)
   const { config, loading: configLoading } = useRegionConfig(region.cod)
@@ -128,7 +131,17 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
         ) : (
           <div className="w-full flex items-start gap-2.5 py-2.5 px-3 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-slate-500 text-[13px] leading-snug">
             <svg className="flex-none mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <span>No hay sesión preparada. Arma la pauta en <b className="font-semibold text-slate-600">Gabinete → Preparación</b> y vuelve para abrirla.</span>
+            <span>
+              No hay sesión preparada. Arma la pauta en{' '}
+              <button
+                type="button"
+                onClick={() => onIrAPreparacion(region.nombre)}
+                className="font-semibold text-violet-700 hover:text-violet-900 hover:underline underline-offset-2"
+              >
+                Tablero → Preparación
+              </button>
+              {' '}y vuelve para abrirla.
+            </span>
           </div>
         )}
       </div>
@@ -153,7 +166,14 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
       {/* Recordatorio del ciclo (preparación vive en Gabinete → Preparación) */}
       <div className="px-4 pb-3">
         <p className="text-xs text-gray-400 leading-relaxed">
-          El foco de la sesión se prepara en <span className="font-medium text-gray-500">Gabinete → Preparación</span> (banderas
+          El foco de la sesión se prepara en{' '}
+          <button
+            type="button"
+            onClick={() => onIrAPreparacion(region.nombre)}
+            className="font-medium text-violet-600 hover:text-violet-800 hover:underline underline-offset-2"
+          >
+            Tablero → Preparación
+          </button>{' '}(banderas
           + compromisos levantados desde comités); desde ahí se descarga el <span className="font-medium text-gray-500">cronograma</span> de la sesión.
           Al abrir la sesión, las iniciativas en foco entran solas a la agenda.
         </p>
