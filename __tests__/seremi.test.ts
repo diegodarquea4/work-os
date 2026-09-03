@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ministerioCalza } from '@/lib/ministerios'
 import { capabilitiesForProfile, can } from '@/lib/permissions'
+import { isRegionRestricted, type UserProfile } from '@/lib/apiAuth'
 
 /**
  * Rol SEREMI (mig 087): ve SOLO su región × su ministerio y solo puede aportar
@@ -110,5 +111,30 @@ describe('preset del rol seremi — no debe ensancharse por accidente', () => {
     const sinRegion = capabilitiesForProfile({ role: 'seremi', region_cods: [] })
     expect(can(sinRegion, 'iniciativa.editar_avance', 'VII')).toBe(false)
     expect(can(sinRegion, 'sec.mi_region')).toBe(true)
+  })
+})
+
+/**
+ * `isRegionRestricted` es el chequeo de alcance de las rutas que generan
+ * artefactos con service-role (cartera PDF, minuta, cronograma) — bypassan la
+ * RLS, así que si un rol se queda fuera de acá se lleva la data de otra región.
+ * El seremi quedó fuera al crearse el rol; este caso lo fija.
+ */
+describe('isRegionRestricted — alcance de las rutas con service-role', () => {
+  const perfil = (role: UserProfile['role'], region_cods: string[]): UserProfile => ({
+    id: 'u', email: 'u@x.cl', full_name: null, role, region_cods,
+    ministerio: null, debe_cambiar_clave: false,
+  })
+
+  it('acota a regional, seremi y viewer con regiones', () => {
+    expect(isRegionRestricted(perfil('regional', ['VII']))).toBe(true)
+    expect(isRegionRestricted(perfil('seremi',   ['VII']))).toBe(true)
+    expect(isRegionRestricted(perfil('viewer',   ['VII']))).toBe(true)
+  })
+
+  it('no acota a admin, editor ni viewer nacional', () => {
+    expect(isRegionRestricted(perfil('admin',  []))).toBe(false)
+    expect(isRegionRestricted(perfil('editor', []))).toBe(false)
+    expect(isRegionRestricted(perfil('viewer', []))).toBe(false)
   })
 })

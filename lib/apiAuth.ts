@@ -52,6 +52,22 @@ export async function requireAuth(): Promise<UserProfile | null> {
 }
 
 /**
+ * ¿El perfil está acotado a un subconjunto de regiones? Fuente ÚNICA para el
+ * chequeo de alcance regional de las rutas que generan artefactos con
+ * service-role (cartera PDF, minuta, cronograma) — que bypassan la RLS y por lo
+ * tanto tienen que filtrar a mano.
+ *
+ * OJO: al agregar un rol nuevo hay que revisar acá. El rol `seremi` (mig 087)
+ * quedó fuera de los chequeos `role === 'regional' || (viewer && ...)` que
+ * estaban duplicados en cada ruta — de ahí este helper.
+ */
+export function isRegionRestricted(profile: UserProfile): boolean {
+  return profile.role === 'regional'
+    || profile.role === 'seremi'
+    || (profile.role === 'viewer' && profile.region_cods.length > 0)
+}
+
+/**
  * Returns true if the profile has write access to the given region.
  * Solo admin/editor pueden mutar datos in-app. Regional y viewer son solo
  * lectura — los regionales canalizan cualquier cambio vía propuesta

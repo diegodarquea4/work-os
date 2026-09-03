@@ -17,7 +17,7 @@ import React from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { SesionCompromiso } from '@/lib/types'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, isRegionRestricted } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { registerPdfFonts } from '@/lib/pdfFonts'
 import { getLogoDataUrl, getFooterBannerDataUrl } from '@/lib/pdfBranding'
@@ -47,9 +47,13 @@ export async function POST(request: Request) {
   }
   const region = parse.data.region as Region
 
+  // El gabinete es de la delegación: un SEREMI no genera su cronograma.
+  if (authProfile.role === 'seremi') {
+    return new Response(JSON.stringify({ error: 'Sin permiso' }), { status: 403 })
+  }
+
   // Scope regional (idéntico a /api/cartera-pdf): regional/viewer solo su región.
-  const isRestricted = authProfile.role === 'regional' ||
-    (authProfile.role === 'viewer' && authProfile.region_cods.length > 0)
+  const isRestricted = isRegionRestricted(authProfile)
   if (isRestricted && !authProfile.region_cods.includes(region.cod)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   }
