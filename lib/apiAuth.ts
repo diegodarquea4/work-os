@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { can as canCap, capabilitiesForProfile, type CapabilityKey, type UserCapability } from '@/lib/permissions'
 
-export type UserRole = 'admin' | 'editor' | 'regional' | 'viewer'
+export type UserRole = 'admin' | 'editor' | 'regional' | 'viewer' | 'seremi'
 
 export type UserProfile = {
   id: string
@@ -11,6 +11,9 @@ export type UserProfile = {
   full_name: string | null
   role: UserRole
   region_cods: string[]  // cods assigned when role === 'regional' (can be multiple)
+  /** Solo rol `seremi`: nombre canónico del ministerio que representa (mig 087).
+   *  Acota su cartera a región + ministerio. NULL para el resto de los roles. */
+  ministerio: string | null
   /** true → el usuario debe crear una clave nueva antes de usar el panel (mig 042). */
   debe_cambiar_clave: boolean
 }
@@ -37,15 +40,15 @@ export async function requireAuth(): Promise<UserProfile | null> {
   const db = getSupabaseAdmin()
   const { data: row } = await db
     .from('user_profiles')
-    .select('id, email, full_name, role, region_cods, debe_cambiar_clave')
+    .select('id, email, full_name, role, region_cods, ministerio, debe_cambiar_clave')
     .eq('id', user.id)
     .single()
 
   if (!row) {
-    return { id: user.id, email: user.email ?? '', full_name: null, role: 'viewer', region_cods: [], debe_cambiar_clave: false }
+    return { id: user.id, email: user.email ?? '', full_name: null, role: 'viewer', region_cods: [], ministerio: null, debe_cambiar_clave: false }
   }
 
-  return { ...row, region_cods: row.region_cods ?? [], debe_cambiar_clave: row.debe_cambiar_clave ?? false } as UserProfile
+  return { ...row, region_cods: row.region_cods ?? [], ministerio: row.ministerio ?? null, debe_cambiar_clave: row.debe_cambiar_clave ?? false } as UserProfile
 }
 
 /**

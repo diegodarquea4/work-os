@@ -123,8 +123,10 @@ export type MinutaTipoZod  = z.infer<typeof minutaPostSchema>['tipo']
 export const adminUsersPostSchema = z.object({
   email:       emailSchema,
   full_name:   z.string().min(1).optional(),
-  role:        z.enum(['admin', 'editor', 'regional', 'viewer']),
+  role:        z.enum(['admin', 'editor', 'regional', 'viewer', 'seremi']),
   region_cods: z.array(z.string().min(1)).optional(),
+  // Solo rol seremi: ministerio canónico que acota su cartera (mig 087).
+  ministerio:  z.string().min(1).nullable().optional(),
 })
 
 export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
@@ -132,8 +134,9 @@ export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
 // ── /api/admin/users/[id] PATCH ──────────────────────────────────────────────
 
 export const adminUsersPatchSchema = z.object({
-  role:          z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
+  role:          z.enum(['admin', 'editor', 'regional', 'viewer', 'seremi']).optional(),
   region_cods:   z.array(z.string().min(1)).optional(),
+  ministerio:    z.string().min(1).nullable().optional(),
   full_name:     z.string().min(1).optional(),
   // Reemplazan al viejo reset_password (que ponía DCI2026):
   recuperar:     z.boolean().optional(),  // emite código nuevo + bloquea la clave anterior + cierra sesiones

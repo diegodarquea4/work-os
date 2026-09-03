@@ -822,8 +822,12 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
         {/* ── Sección 2b: Comités y Gabinete Regional ──────────────────────────
             Instancias de coordinación regional en pestañas. El Comité Policial
             (sesiones + acta) migró acá desde el drawer de «Ejes estratégicos»;
-            los otros tres comités son placeholders anunciados. */}
-        {region && (
+            los otros tres comités son placeholders anunciados.
+
+            El rol SEREMI NO ve esta sección: los comités y el gabinete son de la
+            delegación. (Fase 2: abrir por ministerio el comité que corresponda —
+            Seguridad→Policial, MOP→Infraestructura+Económico, resto→Económico.) */}
+        {region && profile?.role !== 'seremi' && (
           <ComitesRegionalesSection
             region={region}
             regionEjes={regionEjes}

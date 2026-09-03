@@ -34,6 +34,10 @@ export const SECTIONS = [
 export const FUNCTIONS = [
   // Ficha de iniciativa
   { key: 'iniciativa.editar_operativo',    label: 'Editar operativo (semáforo/avance/responsable)', group: 'Ficha de iniciativa' },
+  // Subconjunto ESTRICTO de editar_operativo: solo semáforo y % de avance. Es lo
+  // que mueve un SEREMI en su cartera (mig 087). Quien tiene editar_operativo no
+  // la necesita — el trigger acepta cualquiera de las dos para esos dos campos.
+  { key: 'iniciativa.editar_avance',       label: 'Mover semáforo y % de avance',                   group: 'Ficha de iniciativa' },
   { key: 'iniciativa.editar_definicional', label: 'Editar definicional (nombre/ministerio/etapa/…)', group: 'Ficha de iniciativa' },
   { key: 'iniciativa.editar_capa',         label: 'Editar capa',                                     group: 'Ficha de iniciativa' },
   { key: 'iniciativa.marcar_foco',         label: 'Marcar en foco',                                  group: 'Ficha de iniciativa' },
@@ -193,6 +197,20 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
     ...SEC_REGIONAL_VIEWER,
     ['iniciativa.seguimiento_crear', 'all'], ['iniciativa.documento_subir', 'all'],
     ['dashboard.exportar', 'all'],
+    ['planificacion.ver', 'scoped'], ['planificacion.editar', 'scoped'],
+  ],
+  // seremi (mig 087): SEREMI regional de un ministerio. Ve SOLO su región Y su
+  // ministerio — el corte por ministerio NO vive acá sino en la RLS
+  // (`user_profiles.ministerio` + `current_user_sees_ministerio`), porque las
+  // capacidades solo tienen eje (clave, región). Puede aportar avance en su
+  // cartera: seguimientos, tareas de planificación y mover semáforo/% avance.
+  // SIN comités ni gabinete (son de la delegación), sin desalojos, sin PREGO,
+  // sin nada definicional ni foco.
+  seremi: [
+    ['sec.mapa', 'all'], ['sec.dashboard', 'all'], ['sec.gabinete', 'all'],
+    ['sec.mi_region', 'all'], ['sec.metricas', 'all'],
+    ['iniciativa.editar_avance', 'scoped'],
+    ['iniciativa.seguimiento_crear', 'all'],
     ['planificacion.ver', 'scoped'], ['planificacion.editar', 'scoped'],
   ],
 }

@@ -37,7 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     )
   }
-  const { role, region_cods, full_name, recuperar, forzar_cambio } = parse.data
+  const { role, region_cods, ministerio, full_name, recuperar, forzar_cambio } = parse.data
 
   const db = getSupabaseAdmin()
 
@@ -92,9 +92,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (role !== undefined) {
     patch.role = role
     // Clear regions when switching to a role that doesn't use region filtering
-    if (role !== 'regional' && role !== 'viewer') patch.region_cods = []
+    if (role !== 'regional' && role !== 'viewer' && role !== 'seremi') patch.region_cods = []
+    // El ministerio solo aplica al seremi: al salir de ese rol se limpia.
+    if (role !== 'seremi') patch.ministerio = null
   }
   if (region_cods !== undefined) patch.region_cods = region_cods
+  if (ministerio !== undefined) patch.ministerio = ministerio
   if (full_name !== undefined) patch.full_name = full_name
 
   const { error } = await db.from('user_profiles').update(patch).eq('id', id)

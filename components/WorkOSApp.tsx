@@ -6,6 +6,7 @@ import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS, INE_CODE } from '@/lib/regions'
+import { ministerioCalza } from '@/lib/ministerios'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
@@ -107,9 +108,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return can(capabilities, 'prego.editar', codeForRegionArg(regionNombreOrCod))
   }, [capabilities, codeForRegionArg])
 
-  // Cods that regional/filtered-viewer users cannot open
+  // Cods that regional/seremi/filtered-viewer users cannot open
   const lockedRegions: string[] =
-    (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0))
+    (profile?.role === 'regional' || profile?.role === 'seremi' || (profile?.role === 'viewer' && profile.region_cods.length > 0))
       ? REGIONS.filter(r => !profile!.region_cods.includes(r.cod)).map(r => r.cod)
       : []
 
@@ -214,7 +215,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // selectores de Kanban/Atención para que muestren TODAS las regiones aunque
   // estén vacías, respetando la restricción de visibilidad.
   const allowedRegionNames: string[] | null = useMemo(() => {
-    if (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0)) {
+    if (profile?.role === 'regional' || profile?.role === 'seremi' || (profile?.role === 'viewer' && profile.region_cods.length > 0)) {
       return REGIONS.filter(r => profile!.region_cods.includes(r.cod)).map(r => r.nombre)
     }
     return null
@@ -338,20 +339,33 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .catch(() => setActividadLoading(false))
   }, [])
 
-  // Initiatives visible to this user (regional + filtered-viewer only see assigned regions)
+  // Initiatives visible to this user (regional + filtered-viewer + seremi only
+  // see assigned regions; el seremi además se acota por ministerio)
   const needsRegionFilter =
     profile?.role === 'regional' ||
+    profile?.role === 'seremi' ||
     (profile?.role === 'viewer' && profile.region_cods.length > 0)
+
+  // Ministerio del SEREMI, normalizado una vez. NULL para el resto de los roles
+  // → sin corte por ministerio. La barrera dura es la RLS (mig 087): esto es
+  // defensa en profundidad y mantiene coherentes los agregados del Mapa.
+  const ministerioSeremi = profile?.role === 'seremi' ? (profile.ministerio ?? null) : null
 
   // Memoizado: además de estabilizar props, es la fuente de los agregados del
   // Mapa (abajo), que deben reflejar SOLO lo que el usuario puede ver (Fase 3).
-  const visibleIniciativas: Iniciativa[] = useMemo(() => needsRegionFilter
-    ? localIniciativas.filter(p => {
+  const visibleIniciativas: Iniciativa[] = useMemo(() => {
+    if (!needsRegionFilter && !ministerioSeremi) return localIniciativas
+    return localIniciativas.filter(p => {
+      if (needsRegionFilter) {
         const r = REGIONS.find(r => r.nombre === p.region)
-        return r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
-      })
-    : localIniciativas,
-  [localIniciativas, needsRegionFilter, profile])
+        const enRegion = r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
+        if (!enRegion) return false
+      }
+      // Multi-ministerio ("Min A;Min B"): basta que el suyo esté entre ellos.
+      if (ministerioSeremi && !ministerioCalza(ministerioSeremi, p.ministerio)) return false
+      return true
+    })
+  }, [localIniciativas, needsRegionFilter, ministerioSeremi, profile])
 
   // Cerrar el menú tuerca al clickear fuera.
   useEffect(() => {

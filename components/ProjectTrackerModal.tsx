@@ -20,7 +20,7 @@ import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
 import TareasTab      from './modal/TareasTab'
 import HistorialSesionesModal from './HistorialSesionesModal'
-import { useCanEdit, useCanEditAny, useCanEditOperational, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
+import { useCanEdit, useCanEditAny, useCanEditOperational, useCanEditAvance, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 import { HomeIcon } from './icons/HomeIcon'
 import { CapaBadge } from './CapaBadge'
@@ -39,6 +39,9 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   const canEditAny = useCanEditAny()
   const isAdmin    = useIsAdmin()
   const canEditOperational = useCanEditOperational()
+  // Semáforo y % de avance: gate más ancho — lo cumple el SEREMI, que solo puede
+  // mover esos dos campos (el resto de lo operativo sigue en canEditOperational).
+  const canEditAvance      = useCanEditAvance()
   const currentUserEmail   = useCurrentUserEmail()
   // canEdit = estructural (admin/editor). Operativo (semáforo, %avance,
   // responsable, seguimientos, docs) usa canEditOperational en su lugar.
@@ -1008,7 +1011,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 <button
                   key={s}
                   onClick={() => handleSaveSemaforo(s)}
-                  disabled={savingSem || !canEditOperational}
+                  disabled={savingSem || !canEditAvance}
                   title={SEMAFORO_CONFIG[s].label}
                   className={`w-5 h-5 rounded-full transition-all disabled:opacity-50 ${SEMAFORO_CONFIG[s].dot} ${
                     semaforo === s
@@ -1031,12 +1034,12 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 max={100}
                 step={5}
                 value={pctAvance}
-                disabled={savingPct || !canEditOperational}
+                disabled={savingPct || !canEditAvance}
                 onChange={e => setPctAvance(Number(e.target.value))}
                 onMouseUp={e => commitPctAvance(Number((e.target as HTMLInputElement).value))}
                 onTouchEnd={e => commitPctAvance(Number((e.target as HTMLInputElement).value))}
                 onKeyUp={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') commitPctAvance(Number((e.target as HTMLInputElement).value)) }}
-                title={canEditOperational ? 'Arrastra para ajustar' : 'No tienes permiso para editar'}
+                title={canEditAvance ? 'Arrastra para ajustar' : 'No tienes permiso para editar'}
                 className="flex-1 h-1.5 rounded-full accent-slate-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               />
               <input
@@ -1044,7 +1047,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 min={0}
                 max={100}
                 value={pctAvance}
-                disabled={savingPct || !canEditOperational}
+                disabled={savingPct || !canEditAvance}
                 onChange={e => setPctAvance(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                 onBlur={e => commitPctAvance(Number(e.target.value))}
                 className="w-12 text-xs text-right text-slate-800 border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-gray-50 disabled:text-gray-400"
