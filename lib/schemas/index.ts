@@ -39,11 +39,6 @@ const regionCodSchema = z
   .max(10)
   .regex(/^[A-Z]+$/, 'cod de región debe ser solo letras mayúsculas')
 
-/** Fecha ISO YYYY-MM-DD — no valida calendario, solo forma. */
-const fechaISOSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'fecha en formato YYYY-MM-DD')
-
 /**
  * Fecha en formato display para el header del PDF (ej: "Julio 2026").
  * NO se parsea como Date — se pinta tal cual en el documento.
@@ -74,10 +69,14 @@ const regionFullSchema = z
 
 // ── /api/cartera-pdf POST ────────────────────────────────────────────────────
 
+// `fecha` es SOLO texto de portada ("Generado: 03-09-2026") — el PDF la pinta
+// tal cual, no la parsea. Por eso va con fechaDisplaySchema y no con ISO: el
+// cliente manda `toLocaleDateString('es-CL')` (dd-mm-yyyy) desde siempre, y
+// exigir YYYY-MM-DD acá dejó la descarga en 400 «Solicitud inválida».
 export const carteraPdfSchema = z.object({
   region:     regionMinSchema,
   soloEnFoco: z.boolean(),
-  fecha:      fechaISOSchema,
+  fecha:      fechaDisplaySchema,
 })
 
 export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
