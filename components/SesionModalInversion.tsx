@@ -789,7 +789,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     if (!sesion) return
     const res = await fetch(`/api/sesiones/${sesion.id}/acta`)
     const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank')
+    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
     else window.alert(body.error ?? 'No se pudo obtener el acta')
   }
 
@@ -806,7 +806,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      window.open(url, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
       window.alert('Error de red generando la vista previa del acta.')

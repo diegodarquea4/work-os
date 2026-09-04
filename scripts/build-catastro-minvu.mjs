@@ -7,7 +7,7 @@
  *   node scripts/build-catastro-minvu.mjs <input.csv> [output.json]
  *
  * Defaults:
- *   output = public/data/catastro-minvu-2026.json
+ *   output = private-data/catastro-minvu-2026.json
  *
  * El CSV original viene en ISO-8859-1 (acentos como bytes 0xE1/0xED/0xF3). Este
  * script lo decodifica correctamente. Si el archivo ya está en UTF-8 pero con
@@ -52,7 +52,7 @@ if (!inputArg) {
 }
 
 const input  = resolve(inputArg)
-const output = resolve(outputArg ?? 'public/data/catastro-minvu-2026.json')
+const output = resolve(outputArg ?? 'private-data/catastro-minvu-2026.json')
 
 // ── 1. Leer y decodificar el archivo ────────────────────────────────────────
 

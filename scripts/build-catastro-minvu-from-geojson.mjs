@@ -12,7 +12,7 @@
  * Uso:
  *   node scripts/build-catastro-minvu-from-geojson.mjs <input.geojson> [output.json]
  *
- * Default output: public/data/catastro-minvu-2026.json
+ * Default output: private-data/catastro-minvu-2026.json
  *
  * Mapping de propiedades GeoJSON → schema CatastroEntry:
  *   FOLIO       → folio (string sin sufijo numérico)
@@ -43,7 +43,7 @@ if (!inputArg) {
 }
 
 const input  = resolve(inputArg)
-const output = resolve(outputArg ?? 'public/data/catastro-minvu-2026.json')
+const output = resolve(outputArg ?? 'private-data/catastro-minvu-2026.json')
 
 const raw  = await readFile(input, 'utf-8')
 const data = JSON.parse(raw)

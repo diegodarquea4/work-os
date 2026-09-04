@@ -1,10 +1,13 @@
 /**
  * Loader del catastro nacional de campamentos MINVU (CNC 2026).
  *
- * El catastro vive como JSON estático en `public/data/catastro-minvu-2026.json`
- * (ver scripts/build-catastro-minvu.mjs). El cliente puede pedirlo via
- * `/api/catastro-minvu` (search server-side) o vía fetch directo al archivo
- * estático si necesita el listado completo (no recomendado por peso).
+ * El catastro vive en `private-data/catastro-minvu-2026.json`, FUERA de
+ * `public/` (ver scripts/build-catastro-minvu.mjs). Trae propietario, número
+ * de hogares y NNA por campamento, así que la ruta `/api/catastro-minvu` lo
+ * gatea a admin. Mientras estuvo en `public/` ese gate era decorativo:
+ * cualquier autenticado bajaba el JSON completo desde
+ * /data/catastro-minvu-2026.json. Se incluye en el bundle serverless vía
+ * outputFileTracingIncludes (mismo patrón que territorial-data/).
  *
  * Server-side: este módulo carga el JSON una vez en memoria y lo cachea.
  */
@@ -19,7 +22,7 @@ let _cache: CatastroEntry[] | null = null
 
 /** Path al JSON bundled. Resuelve desde process.cwd() (Next.js corre desde la raíz). */
 function bundlePath(): string {
-  return join(process.cwd(), 'public', 'data', 'catastro-minvu-2026.json')
+  return join(process.cwd(), 'private-data', 'catastro-minvu-2026.json')
 }
 
 /** Carga el catastro completo. Cachea en memoria. Lanza si el archivo no existe. */

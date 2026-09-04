@@ -213,7 +213,7 @@ export type DesalojoCapa = {
 
 // ── Catastro MINVU (CNC 2026) ────────────────────────────────────────────────
 // Una entrada del catastro nacional de campamentos publicado por MINVU. Vive
-// en public/data/catastro-minvu-2026.json (bundled estático generado por
+// en private-data/catastro-minvu-2026.json (bundled estático generado por
 // scripts/build-catastro-minvu.mjs). Se vincula a una `DesalojoCapa` vía
 // `folio_minvu`; el mapa hereda lat/lng de aquí si la capa no tiene override.
 export type CatastroEntry = {
