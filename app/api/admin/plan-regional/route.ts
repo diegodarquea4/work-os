@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, isRegionRestricted } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS } from '@/lib/regions'
 import { planPath } from '@/lib/storagePath'
@@ -26,7 +26,13 @@ export async function GET() {
 
   const loaded = new Map((data ?? []).map((r: Row) => [r.region_cod, r]))
 
-  const result = await Promise.all(REGIONS.map(async r => {
+  // Scope por región: la ruta lee con service-role y FIRMA los PDF, así que sin
+  // este corte un perfil regional se llevaba un link descargable de las 16.
+  const visibles = isRegionRestricted(profile)
+    ? REGIONS.filter(r => profile.region_cods.includes(r.cod))
+    : REGIONS
+
+  const result = await Promise.all(visibles.map(async r => {
     const row = loaded.get(r.cod)
     let signedUrl: string | null = null
     if (row?.archivo_url) {
