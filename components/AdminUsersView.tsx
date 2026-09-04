@@ -21,6 +21,8 @@ type UserRow = {
   // ISO timestamp del último login (auth.users.last_sign_in_at). null si el
   // usuario nunca inició sesión (recién creado y no entró todavía).
   last_sign_in_at: string | null
+  /** true si tiene un factor TOTP verificado (verificación en dos pasos activa). */
+  mfa_activo: boolean
 }
 
 /** Etiqueta y color para "Último acceso" según antigüedad. */
@@ -272,6 +274,30 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
+  // Reinicia el 2FA de alguien que perdió el teléfono Y los códigos de respaldo.
+  // Es la última salida: primero debería usar un código de respaldo él mismo.
+  async function handleResetear2fa(id: string, email: string) {
+    if (!confirm(
+      `¿Reiniciar la verificación en dos pasos de ${email}?\n\n` +
+      `Se borran su configuración y sus códigos de respaldo, y se cierran sus sesiones. ` +
+      `Entrará solo con su clave y deberá configurarla de nuevo.\n\n` +
+      `Úsalo solo si perdió el teléfono Y los códigos de respaldo.`
+    )) return
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetear_2fa: true }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setError(body.error ?? 'Error al reiniciar la verificación en dos pasos')
+    } else {
+      await loadUsers()
+    }
+    setSaving(null)
+  }
+
   // Siembra los permisos base (espejo del rol) de los usuarios que aún no tienen
   // ninguno — para usuarios nuevos o para el primer poblado. No pisa lo ya
   // personalizado desde el editor.
@@ -507,9 +533,19 @@ export default function AdminUsersView() {
                             {(() => {
                               const { label, color, sub } = formatUltimoAcceso(u.last_sign_in_at)
                               return (
-                                <div className="flex flex-col" title={u.last_sign_in_at ?? 'Nunca'}>
+                                <div className="flex flex-col gap-1" title={u.last_sign_in_at ?? 'Nunca'}>
                                   <span className={`text-xs font-medium ${color}`}>{label}</span>
                                   {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+                                  <span
+                                    className={`inline-flex w-fit items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                      u.mfa_activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                    }`}
+                                    title={u.mfa_activo
+                                      ? 'Verificación en dos pasos configurada'
+                                      : 'Todavía sin verificación en dos pasos'}
+                                  >
+                                    {u.mfa_activo ? '2FA activa' : '2FA pendiente'}
+                                  </span>
                                 </div>
                               )
                             })()}
@@ -547,6 +583,18 @@ export default function AdminUsersView() {
                                   <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
                                 </svg>
                               </button>
+                              {u.mfa_activo && (
+                                <button
+                                  onClick={() => handleResetear2fa(u.id, u.email)}
+                                  disabled={saving === u.id}
+                                  className="p-1.5 text-gray-300 hover:text-violet-600 transition-colors rounded hover:bg-violet-50 disabled:opacity-40"
+                                  title="Reiniciar verificación en dos pasos (perdió teléfono y códigos)"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="2.5" y="6" width="9" height="6" rx="1.5"/><path d="M4.5 6V4a2.5 2.5 0 0 1 5 0"/><path d="M6 9h2"/>
+                                  </svg>
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDelete(u.id, u.email)}
                                 disabled={saving === u.id}

@@ -19,13 +19,16 @@ import AutoridadesStatBar from './territorial/AutoridadesStatBar'
 import AutoridadesLeyenda from './territorial/AutoridadesLeyenda'
 import { regionKey } from '@/lib/territorial/politica'
 import { computeComunaStats } from '@/lib/comunaStats'
-import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
+import { useInactivityLogout, IDLE_CON_2FA_MS, IDLE_DEFECTO_MS } from '@/lib/hooks/useInactivityLogout'
 import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
 import { can, type UserCapability } from '@/lib/permissions'
 import CambiarClaveModal from './CambiarClaveModal'
+import MfaSetupModal from './MfaSetupModal'
+import MfaBanner from './MfaBanner'
+import { mfaRequirement, fechaLimiteLegible, type MfaRequirement } from '@/lib/mfaPolicy'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -51,12 +54,44 @@ const AyudaModal      = dynamic(() => import('./AyudaModal'))
 const CatalogoComiteNacional = dynamic(() => import('./CatalogoComiteNacional'))
 
 export default function WorkOSApp({ projects, geoData }: Props) {
-  const { warning, secondsLeft, extend } = useInactivityLogout()
-
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [capabilities, setCapabilities] = useState<UserCapability[]>([])
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [cambiarClaveOpen, setCambiarClaveOpen] = useState(false)
+
+  // ── Verificación en dos pasos ───────────────────────────────────────────────
+  // `tieneFactor` = la cuenta ya lo configuró; null mientras se averigua (así no
+  // parpadea el aviso en la primera pintada). La sesión con el código pendiente
+  // ni siquiera llega acá: la ataja el proxy.
+  const [tieneFactor, setTieneFactor] = useState<boolean | null>(null)
+  const [mfaSetupOpen, setMfaSetupOpen] = useState(false)
+  const [avisoMfaPospuesto, setAvisoMfaPospuesto] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+    getSupabase().auth.mfa.getAuthenticatorAssuranceLevel()
+      .then(({ data }) => {
+        if (cancelado) return
+        // nextLevel 'aal2' significa que hay un factor verificado.
+        setTieneFactor(data?.nextLevel === 'aal2')
+      })
+      // Si no se puede averiguar, se asume que lo tiene: es preferible no
+      // molestar con un aviso equivocado. El bloqueo real vive en el proxy.
+      .catch(() => { if (!cancelado) setTieneFactor(true) })
+    return () => { cancelado = true }
+  }, [])
+
+  const requerimientoMfa: MfaRequirement =
+    profile && tieneFactor !== null
+      ? mfaRequirement(profile.role, tieneFactor, new Date())
+      : 'none'
+
+  // Una sesión que ya pasó el segundo factor dura más sin actividad: repetir
+  // clave + código varias veces al día fue parte de lo que hundió el intento de
+  // agosto.
+  const { warning, secondsLeft, extend } = useInactivityLogout(
+    tieneFactor ? IDLE_CON_2FA_MS : IDLE_DEFECTO_MS,
+  )
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
@@ -578,8 +613,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // Cambio de clave obligatorio: el overlay bloquea el panel ANTES de mostrarlo.
   // El panel no se rinde hasta que el usuario crea la clave (recarga → flag en false).
+  // Va PRIMERO: si además le toca configurar el 2FA, eso viene después.
   if (profile?.debe_cambiar_clave) {
     return <CambiarClaveModal mode="forzado" />
+  }
+
+  // Verificación en dos pasos vencida para su rol: overlay sin salida.
+  if (requerimientoMfa === 'block') {
+    return <MfaSetupModal bloqueante onListo={() => window.location.reload()} />
   }
 
   return (
@@ -592,6 +633,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       capabilities={capabilities}
     >
     <div className="flex flex-col h-screen bg-gray-50">
+      {/* Aviso previo del 2FA: los días anteriores a que sea obligatorio para
+          este rol. No bloquea; se puede posponer hasta la próxima carga. */}
+      {requerimientoMfa === 'warn' && !avisoMfaPospuesto && profile && (
+        <MfaBanner
+          fechaLimite={fechaLimiteLegible(profile.role) ?? ''}
+          onConfigurar={() => setMfaSetupOpen(true)}
+          onPosponer={() => setAvisoMfaPospuesto(true)}
+        />
+      )}
       {/* Header */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">
         <div className="flex items-center gap-4">
@@ -1056,6 +1106,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             Cambiar clave
           </button>
           <button
+            onClick={() => { setMfaSetupOpen(true); setGearOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <rect x="3" y="7" width="10" height="7" rx="1.5"/>
+              <path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"/>
+            </svg>
+            <span className="flex-1">Verificación en dos pasos</span>
+            {tieneFactor === true && (
+              <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">Activa</span>
+            )}
+          </button>
+          <button
             onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
             className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
           >
@@ -1071,6 +1134,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     </div>
     <AyudaModal open={ayudaOpen} onClose={() => setAyudaOpen(false)} />
     {cambiarClaveOpen && <CambiarClaveModal mode="voluntario" onClose={() => setCambiarClaveOpen(false)} />}
+    {mfaSetupOpen && (
+      <MfaSetupModal
+        bloqueante={false}
+        yaConfigurada={tieneFactor === true}
+        onClose={() => setMfaSetupOpen(false)}
+        onListo={() => window.location.reload()}
+      />
+    )}
     </UserProvider>
   )
 }

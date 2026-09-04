@@ -37,9 +37,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     )
   }
-  const { role, region_cods, ministerio, full_name, recuperar, forzar_cambio } = parse.data
+  const { role, region_cods, ministerio, full_name, recuperar, forzar_cambio, resetear_2fa } = parse.data
 
   const db = getSupabaseAdmin()
+
+  // ── Reiniciar la verificación en dos pasos ────────────────────────────────
+  // Para quien perdió el teléfono Y los códigos de respaldo. Borra los factores
+  // y los códigos que quedaran, y cierra sesiones: en su próximo ingreso entra
+  // solo con la clave y vuelve a configurarla.
+  if (resetear_2fa) {
+    const { data: factors, error: listErr } = await db.auth.admin.mfa.listFactors({ userId: id })
+    if (listErr) return Response.json({ error: listErr.message }, { status: 500 })
+    for (const f of factors?.factors ?? []) {
+      const { error: delErr } = await db.auth.admin.mfa.deleteFactor({ id: f.id, userId: id })
+      if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
+    }
+    // Los códigos de respaldo pertenecían al factor borrado: dejarlos vivos
+    // sería una llave que abre una puerta que ya no existe.
+    await db.from('mfa_backup_codes').delete().eq('user_id', id)
+    await revokeSessionsBestEffort(id)
+    return Response.json({ ok: true })
+  }
 
   // ── Recuperación: emite código nuevo, BLOQUEA la clave anterior (fija una
   //    aleatoria imposible) y cierra sesiones. El usuario solo entra con el código. ──

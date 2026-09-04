@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import { complexityOk } from '@/lib/passwordRules'
 import NewPasswordFields from '@/components/NewPasswordFields'
+
+/** ID del factor TOTP verificado de la sesión actual (para pedir el código). */
+async function factorTotpVerificado(): Promise<string | null> {
+  const { data } = await getSupabase().auth.mfa.listFactors()
+  return (data?.all ?? []).find(f => f.factor_type === 'totp' && f.status === 'verified')?.id ?? null
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +18,76 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  // ── Segundo paso: código del autenticador ────────────────────────────────────
+  // 'codigo' cuando la contraseña fue correcta pero falta el segundo factor —
+  // sea por un login recién hecho o porque el proxy mandó acá una sesión a la
+  // que le falta completarlo.
+  const [paso, setPaso]             = useState<'clave' | 'codigo' | 'respaldo'>('clave')
+  const [factorId, setFactorId]     = useState<string | null>(null)
+  const [codigo, setCodigo]         = useState('')
+  const [codigoLoading, setCodigoLoading] = useState(false)
+  const [codigoError, setCodigoError]     = useState<string | null>(null)
+  const [respaldo, setRespaldo]     = useState('')
+
+  useEffect(() => {
+    let cancelado = false
+    getSupabase().auth.mfa.getAuthenticatorAssuranceLevel().then(async ({ data }) => {
+      if (cancelado || !data) return
+      if (data.currentLevel === 'aal1' && data.nextLevel === 'aal2') {
+        const fid = await factorTotpVerificado()
+        if (!cancelado && fid) { setFactorId(fid); setPaso('codigo') }
+      }
+    }).catch(() => { /* sin sesión: se queda en el paso de la clave */ })
+    return () => { cancelado = true }
+  }, [])
+
+  async function verificarCodigo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!factorId) return
+    const limpio = codigo.replace(/\D/g, '')
+    if (limpio.length !== 6) { setCodigoError('Ingresa los 6 dígitos de tu app.'); return }
+    setCodigoLoading(true)
+    setCodigoError(null)
+    const { error } = await getSupabase().auth.mfa.challengeAndVerify({ factorId, code: limpio })
+    if (error) {
+      setCodigoError('Código incorrecto o vencido. Cambian cada 30 segundos: prueba con el siguiente.')
+      setCodigoLoading(false)
+      setCodigo('')
+      return
+    }
+    router.push('/')
+    router.refresh()
+  }
+
+  async function usarCodigoDeRespaldo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!respaldo.trim()) return
+    setCodigoLoading(true)
+    setCodigoError(null)
+    const res = await fetch('/api/account/mfa/recover', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ codigo: respaldo.trim() }),
+    })
+    setCodigoLoading(false)
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({})) as { error?: string }
+      setCodigoError(b.error ?? 'No se pudo validar el código de respaldo.')
+      return
+    }
+    // El canje cierra todas las sesiones, incluida esta: hay que volver a
+    // entrar, ahora solo con la clave.
+    await getSupabase().auth.signOut().catch(() => {})
+    setPaso('clave'); setPassword(''); setRespaldo(''); setFactorId(null)
+    setError('Listo: tu verificación en dos pasos se desactivó. Entra con tu clave y vuelve a configurarla.')
+  }
+
+  function volverAlLogin() {
+    getSupabase().auth.signOut().catch(() => {})
+    setPaso('clave'); setCodigo(''); setRespaldo(''); setCodigoError(null)
+    setFactorId(null); setPassword('')
+  }
 
   // ── Activar cuenta / crear clave con código ──────────────────────────────────
   const [showActivate, setShowActivate] = useState(false)
@@ -33,10 +109,33 @@ export default function LoginPage() {
     if (error) {
       setError('Correo o contraseña incorrectos.')
       setLoading(false)
-    } else {
-      router.push('/')
-      router.refresh()
+      return
     }
+
+    // Clave correcta. Si la cuenta tiene un factor verificado, la sesión quedó
+    // en aal1 y falta el código. Si no tiene, entra directo: el panel se encarga
+    // de invitarla (o exigirle) configurar el 2FA según la política.
+    //
+    // Envuelto en try/catch a propósito: este es el camino de ingreso de todo el
+    // ministerio. Si la consulta del nivel de garantía falla (red, servicio de
+    // Auth con problemas), NO se puede dejar al usuario con el botón girando —
+    // se sigue al panel. Nadie se cuela por esto: quien tenga un factor
+    // pendiente lo ataja el gate de proxy.ts, que es el control duro.
+    try {
+      const { data: aal } = await getSupabase().auth.mfa.getAuthenticatorAssuranceLevel()
+      if (aal && aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2') {
+        const fid = await factorTotpVerificado()
+        if (fid) {
+          setFactorId(fid)
+          setPaso('codigo')
+          setLoading(false)
+          return
+        }
+      }
+    } catch { /* se continúa al panel; el gate del proxy decide */ }
+
+    router.push('/')
+    router.refresh()
   }
 
   function closeActivate() {
@@ -75,6 +174,7 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Regiones · PSG</p>
         </div>
 
+        {paso === 'clave' && (
         <form
           onSubmit={handleLogin}
           className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-8 space-y-5"
@@ -128,6 +228,102 @@ export default function LoginPage() {
             ¿Tienes un código? Activa tu cuenta o crea tu clave
           </button>
         </form>
+        )}
+
+        {/* Paso 2 — código del autenticador */}
+        {paso === 'codigo' && (
+        <form onSubmit={verificarCodigo} className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-8 space-y-5">
+          <div>
+            <label htmlFor="mfa-login-codigo" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Verificación en dos pasos
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Abre tu app autenticadora y escribe los 6 dígitos que muestra.
+            </p>
+            <input
+              id="mfa-login-codigo"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              value={codigo}
+              onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              maxLength={6}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-center text-lg tracking-[0.4em] font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+            />
+          </div>
+
+          {codigoError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{codigoError}</p>}
+
+          <button
+            type="submit"
+            disabled={codigoLoading || codigo.length !== 6}
+            className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {codigoLoading ? 'Verificando...' : 'Verificar e ingresar'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setPaso('respaldo'); setCodigoError(null) }}
+            className="w-full text-center text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            No tengo mi teléfono a mano
+          </button>
+          <button type="button" onClick={volverAlLogin} className="w-full text-center text-xs text-slate-400 hover:text-slate-700 transition-colors">
+            Volver
+          </button>
+        </form>
+        )}
+
+        {/* Paso 2b — código de respaldo */}
+        {paso === 'respaldo' && (
+        <form onSubmit={usarCodigoDeRespaldo} className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-8 space-y-5">
+          <div>
+            <label htmlFor="mfa-respaldo" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Código de respaldo
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Usa uno de los códigos que guardaste al configurar la verificación.
+              Sirve una sola vez y desactivará el segundo factor: vas a tener que
+              volver a configurarlo al entrar.
+            </p>
+            <input
+              id="mfa-respaldo"
+              type="text"
+              autoFocus
+              value={respaldo}
+              onChange={e => setRespaldo(e.target.value.toUpperCase())}
+              placeholder="XXXXXXXXXX"
+              maxLength={20}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-center tracking-[0.2em] font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+            />
+          </div>
+
+          {codigoError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{codigoError}</p>}
+
+          <button
+            type="submit"
+            disabled={codigoLoading || !respaldo.trim()}
+            className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {codigoLoading ? 'Validando...' : 'Usar código de respaldo'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setPaso('codigo'); setCodigoError(null) }}
+            className="w-full text-center text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            Volver al código de la app
+          </button>
+          <p className="text-center text-[11px] text-gray-400 leading-relaxed">
+            ¿Tampoco tienes los códigos de respaldo? Pídele a un administrador
+            del panel que reinicie tu verificación en dos pasos.
+          </p>
+        </form>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-6">
           Ministerio del Interior

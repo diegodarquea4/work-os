@@ -27,13 +27,21 @@ export async function GET() {
   }
 
   const signInById = new Map<string, string | null>()
+  const mfaById    = new Map<string, boolean>()
   if (!authError && authData?.users) {
-    for (const u of authData.users) signInById.set(u.id, u.last_sign_in_at ?? null)
+    for (const u of authData.users) {
+      signInById.set(u.id, u.last_sign_in_at ?? null)
+      // Estado del 2FA: al menos un factor verificado. Los factores vienen en la
+      // respuesta de listUsers, así que no cuesta una llamada extra. Es solo
+      // informativo — quién puede entrar lo decide el proxy.
+      mfaById.set(u.id, (u.factors ?? []).some(f => f.status === 'verified'))
+    }
   }
 
   const enriched = (profiles ?? []).map(p => ({
     ...p,
     last_sign_in_at: signInById.get(p.id) ?? null,
+    mfa_activo:      mfaById.get(p.id) ?? false,
   }))
 
   return Response.json(enriched)
