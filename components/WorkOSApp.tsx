@@ -28,7 +28,7 @@ import { can, type UserCapability } from '@/lib/permissions'
 import CambiarClaveModal from './CambiarClaveModal'
 import MfaSetupModal from './MfaSetupModal'
 import MfaBanner from './MfaBanner'
-import { mfaRequirement, fechaLimiteLegible, type MfaRequirement } from '@/lib/mfaPolicy'
+import { mfaRequirement, mfaRazon, fechaLimiteLegible, type MfaRequirement } from '@/lib/mfaPolicy'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -83,7 +83,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   const requerimientoMfa: MfaRequirement =
     profile && tieneFactor !== null
-      ? mfaRequirement(profile.role, tieneFactor, new Date())
+      ? mfaRequirement({
+          role:           profile.role,
+          tieneFactor,
+          cuentaCreadaEl: profile.created_at ?? null,
+          hoy:            new Date(),
+        })
       : 'none'
 
   // Una sesión que ya pasó el segundo factor dura más sin actividad: repetir
@@ -618,9 +623,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return <CambiarClaveModal mode="forzado" />
   }
 
-  // Verificación en dos pasos vencida para su rol: overlay sin salida.
+  // Le toca configurar la verificación en dos pasos: overlay sin salida. La
+  // razón solo cambia el texto — a una cuenta nueva se le da la bienvenida, no
+  // se le notifica un plazo que nunca vio.
   if (requerimientoMfa === 'block') {
-    return <MfaSetupModal bloqueante onListo={() => window.location.reload()} />
+    return (
+      <MfaSetupModal
+        bloqueante
+        razon={mfaRazon(profile?.created_at ?? null)}
+        onListo={() => window.location.reload()}
+      />
+    )
   }
 
   return (

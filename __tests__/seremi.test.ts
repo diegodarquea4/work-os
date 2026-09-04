@@ -123,7 +123,7 @@ describe('preset del rol seremi — no debe ensancharse por accidente', () => {
 describe('isRegionRestricted — alcance de las rutas con service-role', () => {
   const perfil = (role: UserProfile['role'], region_cods: string[]): UserProfile => ({
     id: 'u', email: 'u@x.cl', full_name: null, role, region_cods,
-    ministerio: null, debe_cambiar_clave: false,
+    ministerio: null, debe_cambiar_clave: false, created_at: null,
   })
 
   it('acota a regional, seremi y viewer con regiones', () => {

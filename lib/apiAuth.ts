@@ -16,6 +16,9 @@ export type UserProfile = {
   ministerio: string | null
   /** true → el usuario debe crear una clave nueva antes de usar el panel (mig 042). */
   debe_cambiar_clave: boolean
+  /** Cuándo se creó el perfil (ISO). Lo usa la política de adopción del 2FA para
+   *  exigirlo de entrada a las cuentas nuevas (lib/mfaPolicy.ts). */
+  created_at: string | null
 }
 
 /**
@@ -40,7 +43,7 @@ export async function requireAuth(): Promise<UserProfile | null> {
   const db = getSupabaseAdmin()
   const { data: row } = await db
     .from('user_profiles')
-    .select('id, email, full_name, role, region_cods, ministerio, debe_cambiar_clave')
+    .select('id, email, full_name, role, region_cods, ministerio, debe_cambiar_clave, created_at')
     .eq('id', user.id)
     .single()
 
@@ -53,7 +56,7 @@ export async function requireAuth(): Promise<UserProfile | null> {
   // crean solo desde el panel de Usuarios.
   if (!row) return null
 
-  return { ...row, region_cods: row.region_cods ?? [], ministerio: row.ministerio ?? null, debe_cambiar_clave: row.debe_cambiar_clave ?? false } as UserProfile
+  return { ...row, region_cods: row.region_cods ?? [], ministerio: row.ministerio ?? null, debe_cambiar_clave: row.debe_cambiar_clave ?? false, created_at: row.created_at ?? null } as UserProfile
 }
 
 /**

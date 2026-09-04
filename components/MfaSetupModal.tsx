@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import type { MfaRazon } from '@/lib/mfaPolicy'
 
 /**
  * Lo que la app autenticadora muestra como título de la cuenta (debajo pone el
@@ -34,9 +35,15 @@ const FRIENDLY_NAME_BASE = 'Panel PSG'
 
 type Paso = 'instalar' | 'escanear' | 'respaldo'
 
-export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClose, onListo }: {
-  /** true → no se puede cerrar (venció el plazo de la política). */
+export default function MfaSetupModal({ bloqueante, razon = 'plazo', yaConfigurada = false, onClose, onListo }: {
+  /** true → no se puede cerrar (la política ya lo exige para esta cuenta). */
   bloqueante: boolean
+  /**
+   * Por qué se está exigiendo. Solo cambia el texto: a una cuenta recién creada
+   * se le da la bienvenida y se le explica el paso, en vez de anunciarle un
+   * plazo que nunca vio pasar. Se ignora si `bloqueante` es false.
+   */
+  razon?: MfaRazon
   /**
    * true → la cuenta YA tiene un factor verificado. Se muestra la vista de
    * administración en vez de volver a enrolar: sin esto, abrir la pantalla
@@ -168,11 +175,17 @@ export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClo
 
         <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-gray-900">Verificación en dos pasos</p>
+            <p className="text-base font-semibold text-gray-900">
+              {bloqueante && razon === 'cuenta-nueva'
+                ? 'Un último paso para entrar'
+                : 'Verificación en dos pasos'}
+            </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {bloqueante
-                ? 'Tu perfil ya requiere un segundo factor para entrar.'
-                : 'Un código que cambia cada 30 segundos, además de tu clave.'}
+              {!bloqueante
+                ? 'Un código que cambia cada 30 segundos, además de tu clave.'
+                : razon === 'cuenta-nueva'
+                  ? 'Las cuentas nuevas del panel se configuran así. Toma dos minutos.'
+                  : 'Tu perfil ya requiere un segundo factor para entrar.'}
             </p>
           </div>
           {puedeCerrar && (
@@ -232,6 +245,14 @@ export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClo
         {/* Paso 1 — instalar */}
         {!gestionando && paso === 'instalar' && (
           <div className="px-6 py-5 space-y-4">
+            {/* El "por qué", solo cuando no se puede saltar: si a alguien se le
+                cierra el paso sin explicación, lo vive como un trámite. */}
+            {bloqueante && (
+              <p className="text-xs text-gray-700 leading-relaxed bg-violet-50 border border-violet-100 rounded-lg px-3 py-2.5">
+                El panel tiene la cartera de las 16 regiones. Con esto activado, aunque
+                alguien consiga tu clave no puede entrar sin tu teléfono.
+              </p>
+            )}
             <p className="text-sm font-semibold text-gray-900">1. Ten a mano una app autenticadora</p>
             <div className="rounded-xl border border-gray-200 p-3 space-y-2">
               <p className="text-xs font-semibold text-gray-800">Microsoft Authenticator</p>
@@ -330,10 +351,24 @@ export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClo
               no vuelven a mostrarse.
             </p>
 
+            {/* Salida de emergencia. Llegado acá el segundo factor YA quedó
+                verificado: la cuenta está protegida y lo único que falta son los
+                códigos, que se pueden generar después desde la tuerca. Sin este
+                botón, alguien con la pantalla bloqueante y esta llamada fallando
+                se quedaba encerrado con un solo botón de «Reintentar». */}
             {errorRespaldo && (
               <div className="space-y-2">
                 <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg leading-relaxed">{errorRespaldo}</p>
-                <button onClick={pedirRespaldo} className="text-xs text-violet-700 hover:text-violet-900 font-medium">Reintentar</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={pedirRespaldo} className="text-xs text-violet-700 hover:text-violet-900 font-medium">Reintentar</button>
+                  <button onClick={terminar} className="text-xs text-gray-500 hover:text-gray-800">
+                    Entrar sin ellos
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Tu verificación en dos pasos ya quedó activa. Los códigos de respaldo
+                  los puedes generar más tarde desde la tuerca, en «Verificación en dos pasos».
+                </p>
               </div>
             )}
 
