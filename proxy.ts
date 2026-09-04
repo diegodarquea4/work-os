@@ -57,7 +57,13 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/subtel-sync')  ||
     pathname.startsWith('/api/mercadopublico-sync') ||
     pathname.startsWith('/api/seed-fase3')   ||
-    pathname.startsWith('/api/v2/')
+    pathname.startsWith('/api/v2/')          ||
+    // /api/health lo llama el cron diario (GitHub Actions) con Bearer y SIN
+    // cookie de sesión. Faltaba en esta lista, así que el proxy lo redirigía a
+    // /login: devolvía 307, el workflow solo trata como error el >= 400, y el
+    // chequeo que debía avisar de syncs caídos pasaba en verde sin ejecutarse.
+    // Se auto-protege con isCronAuthorized, igual que los syncs.
+    pathname.startsWith('/api/health')
 
   if (!user && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount) {
     return NextResponse.redirect(new URL('/login', request.url))

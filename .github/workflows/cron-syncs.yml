@@ -122,7 +122,10 @@ jobs:
             echo "HTTP $HTTP_CODE"
             head -c 4096 /tmp/body.json
             echo
-            if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" = "000" ]; then
+            # Un 3xx también es falla: para una llamada de API significa que el
+            # proxy la mandó a /login, o sea que NO se ejecutó. Con el umbral en
+            # 400, el chequeo de salud pasó en verde durante meses sin correr.
+            if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
               echo "::error::$ep falló con HTTP $HTTP_CODE"
               fail=1
             fi
