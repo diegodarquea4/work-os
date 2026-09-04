@@ -17,6 +17,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
+/**
+ * Lo que la app autenticadora muestra como título de la cuenta (debajo pone el
+ * correo). Va explícito porque, sin `issuer`, Supabase usa el host desde el que
+ * se enroló: en desarrollo la gente veía «localhost» y en producción vería
+ * «work-os-theta.vercel.app» — ninguno de los dos le dice nada a quien abre la
+ * app entre veinte cuentas del trabajo.
+ *
+ * OJO: solo aplica a enrolamientos NUEVOS. El nombre queda grabado en el QR, así
+ * que quien ya haya configurado el 2FA seguirá viendo el nombre viejo hasta que
+ * borre la cuenta de su app y la vuelva a agregar.
+ */
+const ISSUER = 'PSG · Ministerio del Interior'
+
 const FRIENDLY_NAME_BASE = 'Panel PSG'
 
 type Paso = 'instalar' | 'escanear' | 'respaldo'
@@ -64,6 +77,7 @@ export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClo
     }
     const { data, error: enrollErr } = await mfa.enroll({
       factorType: 'totp',
+      issuer:       ISSUER,
       friendlyName: `${FRIENDLY_NAME_BASE} ${Date.now()}`,
     })
     if (enrollErr || !data) {
@@ -270,6 +284,10 @@ export default function MfaSetupModal({ bloqueante, yaConfigurada = false, onClo
                     </button>
                   </div>
                 )}
+                <p className="text-center text-[11px] text-gray-400 leading-relaxed">
+                  En tu app va a quedar como <span className="text-gray-600 font-medium">{ISSUER}</span>,
+                  con tu correo debajo.
+                </p>
                 <div>
                   <label htmlFor="mfa-codigo" className="block text-xs text-gray-600 mb-1.5">
                     Escribe los 6 dígitos que aparecen en la app
