@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import type { Documento } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { esUrlAbsoluta } from '@/lib/storagePath'
 import { EmptyState } from '@/components/ui'
 
 type Props = {
@@ -28,6 +29,21 @@ function fmtBytes(b: number | null) {
   if (b < 1024) return `${b} B`
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const BUCKET = 'project-docs'
+/** TTL del link firmado: alcanza para abrir/descargar, no para compartir. */
+const SIGNED_URL_TTL_SEC = 600
+
+/**
+ * Nombre seguro para el path del bucket: sin acentos, espacios ni separadores
+ * de ruta. El nombre real se conserva aparte, en `documentos_prioridad.nombre`.
+ */
+function safeFileName(nombre: string): string {
+  return nombre
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(-80)
 }
 
 function fileIcon(tipo: string | null) {
@@ -62,21 +78,23 @@ export default function DocumentosTab({
     setUploading(true)
     setUploadError(null)
     const sb   = getSupabase()
-    const path = `${prioridadId}/${Date.now()}_${file.name}`
-    const { error: storageErr } = await sb.storage.from('project-docs').upload(path, file)
+    const path = `${prioridadId}/${Date.now()}_${safeFileName(file.name)}`
+    const { error: storageErr } = await sb.storage.from(BUCKET).upload(path, file)
     if (storageErr) {
       setUploadError(`Error subiendo archivo: ${storageErr.message}`)
       setUploading(false)
       return
     }
-    const { data: { publicUrl } } = sb.storage.from('project-docs').getPublicUrl(path)
     // subido_por se auto-pobla con el email del usuario (no editable).
     try {
       await safeWrite(
         sb.from('documentos_prioridad').insert({
           prioridad_id: prioridadId,
           nombre:       file.name,
-          url:          publicUrl,
+          // Se guarda el PATH: el bucket es privado y el link se firma al
+          // abrirlo. Guardar la URL pública dejaba cada adjunto descargable
+          // desde Internet sin sesión.
+          url:          path,
           tipo_archivo: file.type || null,
           tamano_bytes: file.size,
           subido_por:   currentUserEmail || null,
@@ -93,6 +111,29 @@ export default function DocumentosTab({
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  /**
+   * Abre el documento con un link firmado. La pestaña se abre ANTES del await
+   * (si no, el bloqueador de pop-ups la mata por no venir de un clic directo)
+   * y después se le apunta la URL.
+   */
+  async function handleAbrir(doc: Documento) {
+    if (esUrlAbsoluta(doc.url)) {
+      window.open(doc.url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    const win = window.open('', '_blank', 'noopener,noreferrer')
+    const { data, error } = await getSupabase().storage
+      .from(BUCKET)
+      .createSignedUrl(doc.url, SIGNED_URL_TTL_SEC)
+    if (error || !data?.signedUrl) {
+      win?.close()
+      window.alert('No se pudo abrir el documento. Inténtalo de nuevo.')
+      return
+    }
+    if (win) win.location.href = data.signedUrl
+    else window.location.href = data.signedUrl  // pop-up bloqueado: misma pestaña
   }
 
   async function handleDelete(doc: Documento) {
@@ -165,10 +206,8 @@ export default function DocumentosTab({
                 </p>
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => handleAbrir(doc)}
                   className="p-1.5 text-gray-400 hover:text-slate-700 transition-colors rounded-lg hover:bg-gray-50"
                   title="Abrir"
                 >
@@ -176,7 +215,7 @@ export default function DocumentosTab({
                     <path d="M11 9v3a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1h3"/>
                     <path d="M8 1h5v5M5.5 8.5L13 1"/>
                   </svg>
-                </a>
+                </button>
                 {canManage(doc) && (
                 <button
                   onClick={() => handleDelete(doc)}

@@ -1,5 +1,17 @@
+/**
+ * Plan Regional de Gobierno por región (PDF).
+ *
+ * El bucket 'plan-regional' es PRIVADO: `archivo_url` guarda el PATH
+ * (`<COD>.pdf`) y se firma al servir, igual que 'conflictos-regionales'.
+ * Antes se guardaba la URL pública, lo que dejaba los 13 planes descargables
+ * por cualquiera desde Internet con solo adivinar el cod de la región.
+ */
+
 import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { planPath } from '@/lib/storagePath'
+
+const SIGNED_URL_TTL_SEC = 3600
 
 export async function GET(_request: Request, { params }: { params: Promise<{ cod: string }> }) {
   const profile = await requireAuth()
@@ -13,7 +25,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     .eq('region_cod', cod)
     .single()
 
-  return Response.json(data ?? { region_cod: cod, cargado: false })
+  if (!data?.archivo_url) return Response.json({ region_cod: cod, cargado: false })
+
+  // archivo_url es el PATH en el bucket privado → se entrega firmado.
+  const { data: signed } = await db.storage
+    .from('plan-regional')
+    .createSignedUrl(planPath(data.archivo_url), SIGNED_URL_TTL_SEC)
+
+  return Response.json({ ...data, archivo_url: signed?.signedUrl ?? null })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ cod: string }> }) {
@@ -42,16 +61,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
 
   if (uploadError) return Response.json({ error: uploadError.message }, { status: 500 })
 
-  const { data: { publicUrl } } = db.storage.from('plan-regional').getPublicUrl(path)
-
+  // Se guarda el PATH, no una URL: el bucket es privado y el link se firma al
+  // servirlo (una URL pública guardada en BD sería un link permanente y sin
+  // sesión al PDF).
   await db.from('planes_regionales').upsert({
     region_cod:  cod,
-    archivo_url: publicUrl,
+    archivo_url: path,
     uploaded_at: new Date().toISOString(),
     uploaded_by: profile.email,
   })
 
-  return Response.json({ ok: true, url: publicUrl })
+  return Response.json({ ok: true })
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ cod: string }> }) {
