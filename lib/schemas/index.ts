@@ -156,8 +156,14 @@ export type AccountActivateBody = z.infer<typeof accountActivateSchema>
 
 // ── /api/account/change-password (autenticada) ───────────────────────────────
 
+// `claveActual` es obligatoria: sin ella, quien se apodere de una sesión abierta
+// puede cambiar la contraseña y quedarse con la cuenta para siempre. Es el
+// mismo campo para el cambio voluntario y para el forzado (en el forzado el
+// usuario SÍ recuerda su clave — el flujo para quien la olvidó es Recuperación,
+// con código de un solo uso).
 export const accountChangePasswordSchema = z.object({
-  password: z.string().min(1),
+  claveActual: z.string().min(1),
+  password:    z.string().min(1),
 })
 
 export type AccountChangePasswordBody = z.infer<typeof accountChangePasswordSchema>

@@ -8,14 +8,36 @@
  *
  * Debe estar exceptuada en proxy.ts (usuario sin sesión) — ver la lista de rutas
  * públicas allí.
+ *
+ * Endurecida el 2026-09-04 (es la única superficie pública que escribe):
+ *   - Límite de intentos por IP, además del contador por código.
+ *   - Un solo mensaje para "no hay código" y "código incorrecto": los mensajes
+ *     distintos permitían averiguar desde fuera qué correos tienen una cuenta en
+ *     proceso de alta.
  */
 
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { accountActivateSchema } from '@/lib/schemas'
 import { hashCode, CODE_MAX_INTENTOS } from '@/lib/accessCode'
 import { assertStrongPassword } from '@/lib/passwordPolicy'
+import { registrarIntento, ipDeLaPeticion } from '@/lib/rateLimit'
+
+/** Mismo texto para todo fallo de credencial: no revela si el correo existe. */
+const ERROR_CREDENCIAL =
+  'Correo o código incorrectos. Si no tienes un código vigente, pídele uno a un administrador.'
+
+const MAX_POR_IP = 20
+const VENTANA_SEG = 15 * 60
 
 export async function POST(request: Request) {
+  const limite = registrarIntento(`activate:${ipDeLaPeticion(request)}`, MAX_POR_IP, VENTANA_SEG)
+  if (!limite.permitido) {
+    return Response.json(
+      { error: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.' },
+      { status: 429, headers: { 'Retry-After': String(limite.reintentarEn) } },
+    )
+  }
+
   let raw: unknown
   try { raw = await request.json() }
   catch { return Response.json({ error: 'Solicitud inválida' }, { status: 400 }) }
@@ -37,24 +59,24 @@ export async function POST(request: Request) {
     .maybeSingle()
   const code = row as { codigo_hash: string; expira: string; intentos: number } | null
   if (!code) {
-    return Response.json({ error: 'No hay un código activo para ese correo. Pídele uno a un administrador.' }, { status: 400 })
+    return Response.json({ error: ERROR_CREDENCIAL }, { status: 400 })
   }
 
-  // 2. Vigencia e intentos.
+  // 2. Vigencia e intentos. Mismo mensaje genérico: que el código haya expirado
+  //    o que se hayan agotado los intentos también delata que la cuenta existe.
   if (new Date(code.expira).getTime() < Date.now()) {
-    return Response.json({ error: 'El código expiró. Pídele uno nuevo a un administrador.' }, { status: 400 })
+    return Response.json({ error: ERROR_CREDENCIAL }, { status: 400 })
   }
   if (code.intentos >= CODE_MAX_INTENTOS) {
-    return Response.json({ error: 'Demasiados intentos fallidos con este código. Pídele uno nuevo a un administrador.' }, { status: 400 })
+    return Response.json({ error: ERROR_CREDENCIAL }, { status: 400 })
   }
 
-  // 3. Comparar el código. Si no calza, cuenta el intento y rechaza.
+  // 3. Comparar el código. Si no calza, cuenta el intento y rechaza. No se
+  //    informa cuántos intentos quedan (era otra confirmación de que el correo
+  //    tiene un código vigente).
   if (hashCode(codigo) !== code.codigo_hash) {
     await db.from('codigos_acceso').update({ intentos: code.intentos + 1 }).eq('email', email)
-    const restantes = CODE_MAX_INTENTOS - (code.intentos + 1)
-    return Response.json({
-      error: `Código incorrecto.${restantes > 0 ? ` Te quedan ${restantes} intento(s).` : ' Se agotaron los intentos; pide un código nuevo.'}`,
-    }, { status: 400 })
+    return Response.json({ error: ERROR_CREDENCIAL }, { status: 400 })
   }
 
   // 4. Robustez de la clave. El código sigue vivo si la clave no cumple (el usuario

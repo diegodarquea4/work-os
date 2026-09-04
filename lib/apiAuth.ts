@@ -44,9 +44,14 @@ export async function requireAuth(): Promise<UserProfile | null> {
     .eq('id', user.id)
     .single()
 
-  if (!row) {
-    return { id: user.id, email: user.email ?? '', full_name: null, role: 'viewer', region_cods: [], ministerio: null, debe_cambiar_clave: false }
-  }
+  // Sin fila en `user_profiles` NO hay acceso. Antes se devolvía un perfil
+  // sintético `viewer` con `region_cods: []`, y eso significa "nacional" en todo
+  // el modelo: `isRegionRestricted` lo daba por no acotado y
+  // `current_user_sees_region` deja pasar a quien no tiene regiones. O sea, una
+  // cuenta de Supabase Auth sin perfil obtenía LECTURA DE LAS 16 REGIONES por
+  // las rutas que generan PDF con service-role. Fail-closed: los perfiles se
+  // crean solo desde el panel de Usuarios.
+  if (!row) return null
 
   return { ...row, region_cods: row.region_cods ?? [], ministerio: row.ministerio ?? null, debe_cambiar_clave: row.debe_cambiar_clave ?? false } as UserProfile
 }
