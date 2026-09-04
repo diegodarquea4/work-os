@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { parseImportWorkbook, rowErrorLabel } from '@/lib/importParser'
 import type { Iniciativa } from '@/lib/projects'
@@ -8,7 +8,14 @@ import type { RegionEje } from '@/lib/types'
  * POST /api/proposals
  *   Multipart upload del archivo .xlsx + metadata (regions_claim, proposer_note).
  *   Sube el archivo al bucket `import-proposals` y crea la fila pending en BD.
- *   Acceso: cualquier usuario autenticado (regional / admin / editor / viewer).
+ *   Acceso: capacidad `region.proponer` sobre CADA región reclamada
+ *   (admin/editor en todas, regional en las suyas; viewer y seremi no).
+ *
+ *   Antes bastaba con estar autenticado. Importa porque el .xlsx lo parsea
+ *   `xlsx` (SheetJS), que arrastra un aviso de contaminación de prototipo SIN
+ *   PARCHE DISPONIBLE: como no se puede blindar la librería, se acota quién
+ *   puede alimentarla. Por eso además se revisan los bytes de cabecera y no
+ *   solo la extensión.
  *
  * GET  /api/proposals
  *   Lista las propuestas visibles para el caller:
@@ -19,6 +26,18 @@ import type { RegionEje } from '@/lib/types'
  */
 
 const BUCKET = 'import-proposals'
+
+/** Firmas de archivo: ZIP (.xlsx) y documento compuesto OLE (.xls legacy). */
+const FIRMA_XLSX = [0x50, 0x4b, 0x03, 0x04]
+const FIRMA_XLS  = [0xd0, 0xcf, 0x11, 0xe0]
+
+function pareceLibroExcel(buf: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buf.slice(0, 4))
+  if (bytes.length < 4) return false
+  const calza = (firma: number[]) => firma.every((b, i) => bytes[i] === b)
+  return calza(FIRMA_XLSX) || calza(FIRMA_XLS)
+}
+
 const ACCEPTED_MIME = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
   'application/vnd.ms-excel',                                          // .xls (legacy)
@@ -51,6 +70,14 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Falta indicar la región de la propuesta.' }, { status: 400 })
   }
 
+  // Capacidad sobre CADA región reclamada — si no, un regional de Maule podría
+  // mandar una propuesta que toca Biobío.
+  for (const cod of regionsClaim) {
+    if (!(await requireCan(profile, 'region.proponer', cod))) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const db = getSupabaseAdmin()
 
   // ── Validación temprana de ejes ─────────────────────────────────────────
@@ -59,6 +86,13 @@ export async function POST(request: Request) {
   // válidas en ejes, sube; si no, devolvemos 400 con detalle estructurado
   // y la propuesta nunca entra al sistema. Decisión confirmada con Diego.
   const arrayBuffer = await file.arrayBuffer()
+
+  // Los bytes de cabecera tienen que corresponder a un libro de Excel real: un
+  // .xlsx es un ZIP ("PK\x03\x04") y un .xls legacy es un documento compuesto
+  // OLE ("\xD0\xCF\x11\xE0"). La extensión y el mime los elige quien sube.
+  if (!pareceLibroExcel(arrayBuffer)) {
+    return Response.json({ error: 'El archivo no es un Excel válido.' }, { status: 400 })
+  }
 
   const { data: ejesData, error: ejesErr } = await db
     .from('region_ejes')
