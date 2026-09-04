@@ -72,6 +72,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon;
 
 -- ── 3. Higiene de funciones ─────────────────────────────────────────────────
+-- 3.0 OJO (esto costó un segundo intento en prod): `REVOKE ... FROM anon` NO
+-- quita un permiso concedido a PUBLIC — anon es miembro de PUBLIC y lo hereda
+-- igual. Las funciones que las migs 072/087 crearon sin el REVOKE explícito que
+-- sí hacen las migs 023/065/070 quedaron con la entrada `=X/postgres` (grantee
+-- vacío = PUBLIC) y seguían llamables sin sesión por /rest/v1/rpc/*. Hay que
+-- nombrar PUBLIC explícitamente.
+REVOKE EXECUTE ON FUNCTION public.current_user_sees_region(text)     FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_user_ministerio()          FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_user_sees_ministerio(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.norm_ministerio(text)              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.desalojo_planificacion_set_updated_at() FROM PUBLIC, authenticated;
+REVOKE EXECUTE ON FUNCTION public.desalojo_poligonos_set_updated_at()     FROM PUBLIC, authenticated;
+
 -- 3a. Los helpers que las policies RLS invocan necesitan EXECUTE del rol
 -- `authenticated` (la policy se evalúa como el invocador). El REVOKE de arriba
 -- solo tocó a anon, pero lo re-afirmamos explícito para que quede legible qué
@@ -129,9 +142,26 @@ CREATE POLICY seguimiento_compromisos_read ON public.seguimiento_compromisos
     )
   );
 
--- ── Verificación (correr después; debe devolver 0 filas) ────────────────────
--- SELECT table_name FROM information_schema.role_table_grants
---  WHERE grantee = 'anon' AND table_schema = 'public';
+-- ── Verificación ────────────────────────────────────────────────────────────
+-- Debe devolver 0 filas:
+--   SELECT table_name FROM information_schema.role_table_grants
+--    WHERE grantee = 'anon' AND table_schema = 'public';
 --
--- Y con impersonación real, cada una debe dar «permission denied»:
---   SET LOCAL ROLE anon; SELECT count(*) FROM semaforo_log;
+-- Y ninguna función debe conservar la entrada de PUBLIC (`=X/`):
+--   SELECT proname, proacl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+--    WHERE n.nspname='public' AND array_to_string(proacl,',') LIKE '=X/%';
+--
+-- Desde fuera, con la anon key del bundle, todo debe dar 401:
+--   curl -o /dev/null -w '%{http_code}' "$URL/rest/v1/semaforo_log?select=*&limit=1" \
+--        -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+--
+-- APLICADA A PROD el 2026-09-04 (en dos pasos: 088 + 088b por el detalle de
+-- PUBLIC del punto 3.0). Verificado: 0 grants a anon, 11/11 tablas en 401,
+-- 7/7 RPC en 401/404, y el linter sin hallazgos ERROR ni 0028.
+--
+-- Queda como aviso conocido y aceptado del linter: `v2_indicadores_ultimo`
+-- (vista materializada legible por `authenticated` — la lee el hook
+-- useV2Indicadores desde el navegador; anon nunca tuvo acceso porque las
+-- matviews no reciben los grants por defecto) y los seis
+-- `authenticated_security_definer_function_executable`, que son justamente los
+-- helpers que las policies RLS necesitan poder invocar.
