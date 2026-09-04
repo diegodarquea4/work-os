@@ -12,6 +12,7 @@
  */
 
 import { NextRequest } from 'next/server'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -19,10 +20,7 @@ export const runtime = 'nodejs'
 const BCCH_API = 'https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx'
 
 export async function GET(request: NextRequest) {
-  // Protect with CRON_SECRET
-  const auth = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized — add Authorization: Bearer <CRON_SECRET> header' }, { status: 401 })
   }
 

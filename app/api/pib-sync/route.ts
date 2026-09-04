@@ -11,7 +11,7 @@
  *   1. Run GET /api/pib-discover to get series IDs
  *   2. Add them to SERIES_CONFIG below
  *   3. Trigger: POST /api/pib-sync (Authorization: Bearer <CRON_SECRET>)
- *              GET  /api/pib-sync (x-vercel-cron: 1)
+ *              GET  /api/pib-sync (Authorization: Bearer <CRON_SECRET>)
  */
 
 import { NextRequest } from 'next/server'
@@ -19,6 +19,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
 import { updateV2Pipeline } from '@/lib/syncHelper'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic    = 'force-dynamic'
 export const runtime    = 'nodejs'
@@ -274,16 +275,14 @@ const SERIES_CONFIG: { seriesId: string; metric: string; regionCod: string }[] =
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get('x-vercel-cron') !== '1') {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('pib', runSync)
 }
 
 export async function POST(request: NextRequest) {
-  const auth   = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('pib', runSync)

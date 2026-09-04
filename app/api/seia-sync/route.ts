@@ -5,7 +5,7 @@
  * Iterates all 16 regions, paginating at 100 records per page.
  *
  * Auth:
- *   GET  — Vercel Cron (header: x-vercel-cron: 1)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual / CI (header: Authorization: Bearer <CRON_SECRET>)
  *
  * SEIA API (undocumented but stable):
@@ -21,6 +21,7 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -46,16 +47,14 @@ function parseSeiaDate(raw: string | undefined | null): string | null {
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get('x-vercel-cron') !== '1') {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('seia', runSync)
 }
 
 export async function POST(request: NextRequest) {
-  const auth   = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('seia', runSync)

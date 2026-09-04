@@ -7,6 +7,7 @@
 
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from './supabaseServer'
+import { isCronAuthorized } from './cronAuth'
 
 type V2Row = {
   codigo_indicador: string
@@ -25,14 +26,12 @@ type SyncResult = {
 }
 
 /**
- * Check auth for sync routes (Vercel Cron or Bearer token).
- * Returns true if authorized.
+ * Auth de las rutas de sync. Delega en la fuente única `lib/cronAuth.ts`:
+ * solo `Authorization: Bearer <CRON_SECRET>`. Se mantiene el nombre para no
+ * tocar los 8 call-sites que ya lo usan.
  */
 export function isAuthorizedSync(request: NextRequest): boolean {
-  if (request.headers.get('x-vercel-cron') === '1') return true
-  const auth = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  return !!secret && auth === `Bearer ${secret}`
+  return isCronAuthorized(request)
 }
 
 /**

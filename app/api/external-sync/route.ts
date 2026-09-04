@@ -7,7 +7,7 @@
  *      - tasa_delictual time series → regional_metrics
  *
  * Auth: same pattern as ine-sync
- *   GET  — Vercel Cron (x-vercel-cron: 1 header)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual (Authorization: Bearer <CRON_SECRET>)
  *
  * SQL migration required before first run — see plan file.
@@ -20,6 +20,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_INVERSE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
 import { updateV2Pipeline } from '@/lib/syncHelper'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 // ── v2 mapping: Census fields → v2 indicator codes ──────────────────────────
 // Only maps computed census fields that the external-sync calculates (pct_*, etc.)
@@ -56,11 +57,7 @@ const REPO_RAW = 'https://raw.githubusercontent.com/manuelcarvallo97-tech/dashbo
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 function isAuthorized(req: NextRequest): boolean {
-  const isCron = req.headers.get('x-vercel-cron') === '1'
-  if (isCron) return true
-  const auth = req.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  return !!secret && auth === `Bearer ${secret}`
+  return isCronAuthorized(req)
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────

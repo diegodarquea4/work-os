@@ -33,6 +33,7 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { recordSyncStatus } from '@/lib/syncStatus'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
@@ -79,16 +80,14 @@ function parseSeiaDate(raw: string | undefined | null): string | null {
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get('x-vercel-cron') !== '1') {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return runSync()
 }
 
 export async function POST(request: NextRequest) {
-  const auth   = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return runSync()

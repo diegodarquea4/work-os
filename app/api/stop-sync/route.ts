@@ -8,7 +8,7 @@
  * Session is renewed every 48 requests to avoid WAF blocking.
  *
  * Auth:
- *   GET  — Vercel Cron (x-vercel-cron: 1)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual (Authorization: Bearer <CRON_SECRET>)
  *
  * Table: stop_stats (region_id, semana_id) PRIMARY KEY
@@ -42,6 +42,7 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
@@ -59,16 +60,14 @@ const REGION_CODS = ['XV','I','II','III','IV','V','RM','VI','VII','XVI','VIII','
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get('x-vercel-cron') !== '1') {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('stop', runSync)
 }
 
 export async function POST(request: NextRequest) {
-  const auth   = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('stop', runSync)

@@ -9,16 +9,12 @@
 
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  // Auth: same pattern as ine-sync
-  const isCron = request.headers.get('x-vercel-cron') === '1'
-  const auth = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-
-  if (!isCron && (!secret || auth !== `Bearer ${secret}`)) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
