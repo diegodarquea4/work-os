@@ -49,6 +49,10 @@ type PermisoConCatalogo = ComiteEconomicoProyectoPermiso & { pas: PasCatalogo }
 type Usuario = { email: string; ministerio: string | null }
 
 const inputCls = 'px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 w-full'
+// Sin `w-full` — para campos de ancho fijo en una fila junto a otro que sí
+// debe expandirse (ej. fecha compacta al lado del selector de permiso).
+// `${inputCls} w-32` no sirve: w-full siempre gana en el CSS generado.
+const inputFixedCls = 'px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-300'
 const DETAIL_COLLAPSED_KEY = 'workos:proyectoEconomicoDetailCollapsed'
 
 function hoyISO(): string {
@@ -765,7 +769,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         <option value="">Avance general (sin permiso asociado)</option>
                         {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
                       </select>
-                      <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputCls} w-40 flex-shrink-0`} />
+                      <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputFixedCls} w-36 flex-shrink-0`} />
                     </div>
                     {avancePermisoId !== '' && (
                       <select
