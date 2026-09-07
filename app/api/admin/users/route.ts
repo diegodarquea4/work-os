@@ -12,7 +12,7 @@ export async function GET() {
   const db = getSupabaseAdmin()
   const { data: profiles, error: profileError } = await db
     .from('user_profiles')
-    .select('id, email, full_name, role, region_cods, created_at')
+    .select('id, email, full_name, role, region_cods, ministerio, created_at')
     .order('created_at', { ascending: true })
 
   if (profileError) return Response.json({ error: profileError.message }, { status: 500 })
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
-  const { email, full_name, role, region_cods } = parse.data
+  const { email, full_name, role, region_cods, ministerio } = parse.data
 
   const db = getSupabaseAdmin()
 
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     full_name: full_name ?? null,
     role,
     region_cods: effectiveRegions,
+    ministerio: ministerio ?? null,
   })
 
   if (profileError) {

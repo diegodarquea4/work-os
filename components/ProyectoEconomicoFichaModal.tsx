@@ -1,19 +1,26 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
-import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoSeguimiento } from '@/lib/types'
+import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEconomicoProyectoSeguimiento, PasCatalogo } from '@/lib/types'
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
+import { EmptyState } from '@/components/ui'
 
 /**
- * Ficha de un proyecto privado del Comité Económico — ver/editar los 16
- * campos (edición inline, onBlur commit — mismo patrón liviano que las
- * notas de SesionModalInversion.tsx) + historial de avances registrados
- * por SEREMI + form para agregar uno nuevo. Misma lógica que
- * SeguimientoTab.tsx (fecha/descripción/estado/autor) pero tabla propia
- * (comite_economico_proyecto_seguimiento) y sin reunión/hito.
+ * Ficha de un proyecto privado del Comité Económico — mismo lenguaje visual
+ * que ProjectTrackerModal.tsx (ficha de iniciativa):
+ *   · Encabezado = Nombre + Descripción (acá, el campo `notas`) editables
+ *     inline con click-to-edit, la descripción con line-clamp + "Ver más".
+ *   · El resto de los 14 campos restantes vive en UNA tarjeta desplegable
+ *     (grid label/valor, mismo estilo que la metadata de la iniciativa),
+ *     colapsable con preferencia persistida en localStorage.
+ *   · Avances = mismo timeline con punto de color + chip de estado editable
+ *     inline + fecha editable inline que SeguimientoTab.tsx, pero con los
+ *     campos propios de esta tabla (fecha/descripción/estado/autor, sin
+ *     tipo/reunión/hito — comite_economico_proyecto_seguimiento es más chica
+ *     que seguimientos).
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
@@ -29,43 +36,137 @@ type Props = {
 }
 
 const ESTADO_AVANCE = {
-  pendiente:  { label: 'Pendiente',  cls: 'bg-gray-100 text-gray-600' },
-  en_curso:   { label: 'En curso',   cls: 'bg-blue-100 text-blue-700' },
-  completado: { label: 'Completado', cls: 'bg-green-100 text-green-700' },
-  bloqueado:  { label: 'Bloqueado',  cls: 'bg-red-100 text-red-700' },
+  pendiente:  { label: 'Pendiente',  cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'   },
+  en_curso:   { label: 'En curso',   cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'   },
+  completado: { label: 'Completado', cls: 'bg-green-100 text-green-700', dot: 'bg-green-500'  },
+  bloqueado:  { label: 'Bloqueado',  cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'    },
 } as const
 
+const ESTADO_PERMISO = {
+  pendiente: { label: 'Pendiente', cls: 'bg-amber-100 text-amber-700' },
+  otorgado:  { label: 'Otorgado',  cls: 'bg-green-100 text-green-700' },
+  frenado:   { label: 'Frenado',   cls: 'bg-red-100 text-red-700'     },
+} as const
+
+type PermisoConCatalogo = ComiteEconomicoProyectoPermiso & { pas: PasCatalogo }
+type Usuario = { email: string; ministerio: string | null }
+
 const inputCls = 'px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 w-full'
-const labelCls = 'text-[10px] text-gray-500 font-medium'
+const DETAIL_COLLAPSED_KEY = 'workos:proyectoEconomicoDetailCollapsed'
 
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
 
+  const [tab, setTab] = useState<'avances' | 'permisos'>('avances')
+
+  // Permisos del proyecto (join con el catálogo global) + catálogo completo
+  // (para el picker "+ Agregar permiso") + padrón de usuarios con su
+  // ministerio (mig 088) — para el filtro de avances por ministerio.
+  const [permisos, setPermisos]       = useState<PermisoConCatalogo[]>([])
+  const [pasCatalogo, setPasCatalogo] = useState<PasCatalogo[]>([])
+  const [usuarios, setUsuarios]       = useState<Usuario[]>([])
+
+  // Alta de permiso: buscar en el catálogo, o crear uno nuevo si no existe.
+  const [permisoQuery, setPermisoQuery]   = useState('')
+  const [permisoOpen, setPermisoOpen]     = useState(false)
+  const [nuevoPasOpen, setNuevoPasOpen]   = useState(false)
+  const [nuevoPasNumero, setNuevoPasNumero]   = useState('')
+  const [nuevoPasSector, setNuevoPasSector]   = useState('')
+  const [nuevoPasNombre, setNuevoPasNombre]   = useState('')
+  const [nuevoPasOrgano, setNuevoPasOrgano]   = useState('')
+  const [permisoSaving, setPermisoSaving]     = useState(false)
+
+  // Filtros de avances — por permiso, por institución (órgano otorgante del
+  // permiso asociado) y por ministerio (del autor del avance).
+  const [filtroPermisoId, setFiltroPermisoId]     = useState<number | ''>('')
+  const [filtroInstitucion, setFiltroInstitucion] = useState('')
+  const [filtroMinisterio, setFiltroMinisterio]   = useState('')
+
+  const [showForm, setShowForm]                   = useState(false)
+  const [avanceFecha, setAvanceFecha]             = useState('')
   const [avanceDescripcion, setAvanceDescripcion] = useState('')
   const [avanceEstado, setAvanceEstado]           = useState<'' | keyof typeof ESTADO_AVANCE>('')
+  // Permiso asociado (opcional) — al elegir uno se puede además actualizar
+  // su estado tri-color como parte de este mismo avance.
+  const [avancePermisoId, setAvancePermisoId]         = useState<number | ''>('')
+  const [avancePermisoEstado, setAvancePermisoEstado] = useState<'' | keyof typeof ESTADO_PERMISO>('')
   const [avanceSaving, setAvanceSaving]           = useState(false)
+
+  // Encabezado — nombre y descripción (campo `notas`) editables inline,
+  // mismo patrón click-to-edit que ProjectTrackerModal.tsx.
+  const [nombreLocal, setNombreLocal]         = useState('')
+  const [editingNombre, setEditingNombre]     = useState(false)
+  const [savingNombre, setSavingNombre]       = useState(false)
+  const [descLocal, setDescLocal]             = useState('')
+  const [editingDesc, setEditingDesc]         = useState(false)
+  const [savingDesc, setSavingDesc]           = useState(false)
+  const [descExpanded, setDescExpanded]       = useState(false)
+  const [descOverflow, setDescOverflow]       = useState(false)
+  const descRef = useRef<HTMLParagraphElement>(null)
+
+  // Tarjeta de detalle (los otros 14 campos) — colapsable, preferencia
+  // persistida igual que el detalle de la ficha de iniciativa.
+  const [detailCollapsed, setDetailCollapsed] = useState<boolean>(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem(DETAIL_COLLAPSED_KEY) === '1' } catch { return false }
+  })
+  function toggleDetail() {
+    setDetailCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(DETAIL_COLLAPSED_KEY, next ? '1' : '0') } catch { /* noop */ }
+      return next
+    })
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true)
     const sb = getSupabase()
-    const [{ data: p }, { data: segs }] = await Promise.all([
+    const [{ data: p }, { data: segs }, { data: perms }, { data: catalogo }] = await Promise.all([
       sb.from('comite_economico_proyecto').select('*').eq('id', proyectoId).single(),
       sb.from('comite_economico_proyecto_seguimiento').select('*').eq('proyecto_id', proyectoId).order('fecha', { ascending: false }).order('created_at', { ascending: false }),
+      sb.from('comite_economico_proyecto_permiso').select('*, pas:pas_catalogo(*)').eq('proyecto_id', proyectoId).order('created_at'),
+      sb.from('pas_catalogo').select('*').order('n_pas'),
     ])
-    setProyecto((p as ComiteEconomicoProyecto | null) ?? null)
+    const proy = (p as ComiteEconomicoProyecto | null) ?? null
+    setProyecto(proy)
+    setNombreLocal(proy?.nombre ?? '')
+    setDescLocal(proy?.notas ?? '')
     setAvances((segs ?? []) as ComiteEconomicoProyectoSeguimiento[])
+    setPermisos((perms ?? []) as unknown as PermisoConCatalogo[])
+    setPasCatalogo((catalogo ?? []) as PasCatalogo[])
     setLoading(false)
   }, [proyectoId])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Padrón con ministerio (mig 088) — una sola vez, no depende del proyecto.
+  // Alimenta el filtro de avances por ministerio del autor.
+  useEffect(() => {
+    fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios).catch(() => {})
+  }, [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Mide overflow de la descripción para saber si hace falta "Ver más" —
+  // mismo mecanismo que ProjectTrackerModal.tsx (scrollHeight > clientHeight
+  // mientras está clampeada con line-clamp-2).
+  useEffect(() => {
+    if (descExpanded) return
+    function medir() {
+      const el = descRef.current
+      setDescOverflow(!!el && el.scrollHeight > el.clientHeight + 1)
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [descLocal, descExpanded])
+
+  const editable = puedeOperar
 
   async function commitCampo<K extends keyof ComiteEconomicoProyecto>(campo: K, valor: ComiteEconomicoProyecto[K]) {
     if (!proyecto || valor === proyecto[campo]) return
@@ -82,22 +183,74 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     }
   }
 
-  async function agregarAvance(e: React.FormEvent) {
-    e.preventDefault()
+  async function commitNombre() {
+    const val = nombreLocal.trim()
+    setEditingNombre(false)
+    if (!proyecto || !val || val === proyecto.nombre) { setNombreLocal(proyecto?.nombre ?? ''); return }
+    setSavingNombre(true)
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto').update({ nombre: val, updated_at: new Date().toISOString() }).eq('id', proyectoId),
+        `comite_economico_proyecto nombre id=${proyectoId}`,
+      )
+      setProyecto(prev => prev ? { ...prev, nombre: val } : prev)
+      onChanged?.()
+    } catch (err) {
+      setNombreLocal(proyecto.nombre)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingNombre(false)
+    }
+  }
+
+  async function commitDescripcion() {
+    const val = descLocal.trim()
+    setEditingDesc(false)
+    if (!proyecto || val === (proyecto.notas ?? '')) return
+    setSavingDesc(true)
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto').update({ notas: val || null, updated_at: new Date().toISOString() }).eq('id', proyectoId),
+        `comite_economico_proyecto notas id=${proyectoId}`,
+      )
+      setProyecto(prev => prev ? { ...prev, notas: val || null } : prev)
+      onChanged?.()
+    } catch (err) {
+      setDescLocal(proyecto.notas ?? '')
+      window.alert((err as Error).message)
+    } finally {
+      setSavingDesc(false)
+    }
+  }
+
+  function resetAvanceForm() {
+    setAvanceFecha(''); setAvanceDescripcion(''); setAvanceEstado('')
+    setAvancePermisoId(''); setAvancePermisoEstado(''); setShowForm(false)
+  }
+
+  async function agregarAvance() {
     if (!avanceDescripcion.trim()) return
     setAvanceSaving(true)
     try {
       const rows = await safeWrite(
         getSupabase().from('comite_economico_proyecto_seguimiento').insert({
           proyecto_id: proyectoId,
+          fecha: avanceFecha || undefined,
           descripcion: avanceDescripcion.trim(),
           estado: avanceEstado || null,
+          permiso_id: avancePermisoId || null,
           autor: currentUserEmail || null,
         }),
         `comite_economico_proyecto_seguimiento insert proyecto=${proyectoId}`,
       )
       setAvances(prev => [rows[0] as ComiteEconomicoProyectoSeguimiento, ...prev])
-      setAvanceDescripcion(''); setAvanceEstado('')
+      // El avance puede además dejar registrado el nuevo estado del permiso
+      // al que se refiere — dos escrituras, mismo criterio que el resto de
+      // la app (sin triggers cruzados entre tablas).
+      if (avancePermisoId && avancePermisoEstado) {
+        await cambiarEstadoPermiso(avancePermisoId, avancePermisoEstado)
+      }
+      resetAvanceForm()
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -118,192 +271,849 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     }
   }
 
+  async function handleInlineFecha(a: ComiteEconomicoProyectoSeguimiento, fecha: string) {
+    setAvances(prev => prev.map(x => x.id === a.id ? { ...x, fecha } : x))
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto_seguimiento').update({ fecha }).eq('id', a.id),
+        `comite_economico_proyecto_seguimiento fecha id=${a.id}`,
+      )
+    } catch (err) {
+      window.alert((err as Error).message)
+      cargar()
+    }
+  }
+
+  async function handleInlineEstado(a: ComiteEconomicoProyectoSeguimiento, estado: string) {
+    const val = (estado || null) as ComiteEconomicoProyectoSeguimiento['estado']
+    setAvances(prev => prev.map(x => x.id === a.id ? { ...x, estado: val } : x))
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto_seguimiento').update({ estado: val }).eq('id', a.id),
+        `comite_economico_proyecto_seguimiento estado id=${a.id}`,
+      )
+    } catch (err) {
+      window.alert((err as Error).message)
+      cargar()
+    }
+  }
+
+  // ── Permisos (PAS) del proyecto ─────────────────────────────────────────
+
+  async function agregarPermiso(pas: PasCatalogo) {
+    if (permisos.some(p => p.pas_id === pas.id)) { setPermisoQuery(''); setPermisoOpen(false); return }
+    setPermisoSaving(true)
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('comite_economico_proyecto_permiso').insert({
+          proyecto_id: proyectoId,
+          pas_id: pas.id,
+          created_by_email: currentUserEmail || null,
+        }),
+        `comite_economico_proyecto_permiso insert proyecto=${proyectoId} pas=${pas.id}`,
+      )
+      setPermisos(prev => [...prev, { ...(rows[0] as ComiteEconomicoProyectoPermiso), pas }])
+      setPermisoQuery(''); setPermisoOpen(false)
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setPermisoSaving(false)
+    }
+  }
+
+  async function crearYAgregarPas() {
+    if (!nuevoPasNombre.trim()) return
+    setPermisoSaving(true)
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('pas_catalogo').insert({
+          n_pas: nuevoPasNumero.trim() || `PAS ${Date.now()}`,
+          sector_materia: nuevoPasSector.trim() || null,
+          nombre: nuevoPasNombre.trim(),
+          organo_otorgante: nuevoPasOrgano.trim() || null,
+          created_by_email: currentUserEmail || null,
+        }),
+        'pas_catalogo insert',
+      )
+      const nuevoPas = rows[0] as PasCatalogo
+      setPasCatalogo(prev => [...prev, nuevoPas].sort((a, b) => a.n_pas.localeCompare(b.n_pas)))
+      await agregarPermiso(nuevoPas)
+      setNuevoPasNumero(''); setNuevoPasSector(''); setNuevoPasNombre(''); setNuevoPasOrgano(''); setNuevoPasOpen(false)
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setPermisoSaving(false)
+    }
+  }
+
+  async function cambiarEstadoPermiso(permisoId: number, estado: string) {
+    const val = (estado || null) as ComiteEconomicoProyectoPermiso['estado']
+    setPermisos(prev => prev.map(p => p.id === permisoId ? { ...p, estado: val } : p))
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto_permiso').update({ estado: val }).eq('id', permisoId),
+        `comite_economico_proyecto_permiso estado id=${permisoId}`,
+      )
+    } catch (err) {
+      window.alert((err as Error).message)
+      cargar()
+    }
+  }
+
+  async function quitarPermiso(permiso: PermisoConCatalogo) {
+    if (!confirm(`¿Quitar "${permiso.pas.n_pas}" de este proyecto?`)) return
+    try {
+      await safeDelete(
+        getSupabase().from('comite_economico_proyecto_permiso').delete().eq('id', permiso.id),
+        `comite_economico_proyecto_permiso delete id=${permiso.id}`,
+      )
+      setPermisos(prev => prev.filter(p => p.id !== permiso.id))
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
   function fmtFecha(fecha: string): string {
     return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
-  const editable = puedeOperar
+  // ── Derivados: filtros de avances (permiso / institución / ministerio) ──
+
+  const ministerioPorEmail = useMemo(() => new Map(usuarios.map(u => [u.email, u.ministerio])), [usuarios])
+
+  const permisoById = useMemo(() => new Map(permisos.map(p => [p.id, p])), [permisos])
+
+  const opcionesInstitucion = useMemo(() => {
+    const vistos = new Set<string>()
+    for (const p of permisos) if (p.pas.organo_otorgante) vistos.add(p.pas.organo_otorgante)
+    return [...vistos].sort()
+  }, [permisos])
+
+  const opcionesMinisterio = useMemo(() => {
+    const vistos = new Set<string>()
+    for (const a of avances) {
+      const m = a.autor ? ministerioPorEmail.get(a.autor) : null
+      if (m) vistos.add(m)
+    }
+    return [...vistos].sort()
+  }, [avances, ministerioPorEmail])
+
+  const avancesFiltrados = useMemo(() => {
+    return avances.filter(a => {
+      if (filtroPermisoId !== '' && a.permiso_id !== filtroPermisoId) return false
+      if (filtroInstitucion) {
+        const permiso = a.permiso_id != null ? permisoById.get(a.permiso_id) : null
+        if (permiso?.pas.organo_otorgante !== filtroInstitucion) return false
+      }
+      if (filtroMinisterio) {
+        const m = a.autor ? ministerioPorEmail.get(a.autor) : null
+        if (m !== filtroMinisterio) return false
+      }
+      return true
+    })
+  }, [avances, filtroPermisoId, filtroInstitucion, filtroMinisterio, permisoById, ministerioPorEmail])
+
+  const hayFiltrosAvances = filtroPermisoId !== '' || !!filtroInstitucion || !!filtroMinisterio
+
+  // ── Derivados: picker de permisos (catálogo global, excluye ya agregados) ──
+
+  const permisoQ = permisoQuery.trim().toLowerCase()
+  const pasDisponibles = useMemo(
+    () => pasCatalogo.filter(p => !permisos.some(link => link.pas_id === p.id)),
+    [pasCatalogo, permisos],
+  )
+  const pasMatches = useMemo(() => {
+    if (!permisoQ) return pasDisponibles.slice(0, 20)
+    return pasDisponibles
+      .filter(p => p.n_pas.toLowerCase().includes(permisoQ) || p.nombre.toLowerCase().includes(permisoQ))
+      .slice(0, 20)
+  }, [pasDisponibles, permisoQ])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 bg-violet-50/40 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-gray-900 truncate">{proyecto?.nombre ?? (loading ? 'Cargando…' : 'Proyecto')}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Proyecto privado — Comité Económico</p>
+        {loading || !proyecto ? (
+          <div className="px-5 py-10">
+            <p className="text-center text-sm text-gray-400">Cargando…</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0" title="Cerrar">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l12 12M16 4L4 16"/>
-            </svg>
-          </button>
-        </header>
+        ) : (
+          <>
+            {/* Encabezado — Nombre + Descripción (campo notas), click-to-edit */}
+            <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 bg-violet-50/40 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide mb-0.5">Proyecto privado — Comité Económico</p>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {loading || !proyecto ? (
-            <p className="text-center text-sm text-gray-400 py-8">Cargando…</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <Campo label="Plazo">
-                  {editable ? (
-                    <select defaultValue={proyecto.plazo ?? ''} onBlur={e => commitCampo('plazo', (e.target.value || null) as ComiteEconomicoProyecto['plazo'])} className={inputCls}>
-                      <option value="">—</option>
-                      <option value="CP">Corto plazo</option>
-                      <option value="MP">Mediano plazo</option>
-                      <option value="LP">Largo plazo</option>
-                    </select>
-                  ) : <span className="text-sm text-gray-800">{proyecto.plazo ?? '—'}</span>}
-                </Campo>
-                <Campo label="Priorizado">
-                  <input type="checkbox" defaultChecked={proyecto.priorizado} disabled={!editable} onChange={e => commitCampo('priorizado', e.target.checked)} className="rounded border-gray-300 text-violet-700 focus:ring-violet-400" />
-                </Campo>
-                <Campo label="Riesgo">
-                  <input type="checkbox" defaultChecked={proyecto.riesgo} disabled={!editable} onChange={e => commitCampo('riesgo', e.target.checked)} className="rounded border-gray-300 text-red-600 focus:ring-red-400" />
-                </Campo>
-              </div>
-
-              <Campo label="SEREMI líder">
-                {editable ? (
-                  <select defaultValue={proyecto.seremi_lider ?? ''} onBlur={e => commitCampo('seremi_lider', e.target.value || null)} className={inputCls}>
-                    <option value="">—</option>
-                    {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                ) : <span className="text-sm text-gray-800">{proyecto.seremi_lider ?? '—'}</span>}
-              </Campo>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Campo label="Inversión (MM$)">
-                  {editable ? <input type="number" defaultValue={proyecto.inversion_monto ?? ''} onBlur={e => commitCampo('inversion_monto', e.target.value ? Number(e.target.value) : null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.inversion_monto ?? '—'}</span>}
-                </Campo>
-                <Campo label="Moneda">
-                  {editable ? <input type="text" defaultValue={proyecto.inversion_moneda ?? ''} onBlur={e => commitCampo('inversion_moneda', e.target.value || null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.inversion_moneda ?? '—'}</span>}
-                </Campo>
-              </div>
-
-              <Campo label="Fuente de financiamiento">
-                {editable ? <input type="text" defaultValue={proyecto.fuente_financiamiento ?? ''} onBlur={e => commitCampo('fuente_financiamiento', e.target.value || null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.fuente_financiamiento ?? '—'}</span>}
-              </Campo>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Campo label="Mano de obra directa (construcción)">
-                  {editable ? <input type="number" defaultValue={proyecto.mano_obra_directa ?? ''} onBlur={e => commitCampo('mano_obra_directa', e.target.value ? Number(e.target.value) : null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.mano_obra_directa ?? '—'}</span>}
-                </Campo>
-                <Campo label="Mano de obra indirecta (construcción)">
-                  {editable ? <input type="number" defaultValue={proyecto.mano_obra_indirecta ?? ''} onBlur={e => commitCampo('mano_obra_indirecta', e.target.value ? Number(e.target.value) : null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.mano_obra_indirecta ?? '—'}</span>}
-                </Campo>
-              </div>
-
-              <Campo label="Responsable operativo">
-                {editable ? <input type="text" defaultValue={proyecto.responsable_operativo ?? ''} onBlur={e => commitCampo('responsable_operativo', e.target.value || null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.responsable_operativo ?? '—'}</span>}
-              </Campo>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Campo label="KPI">
-                  {editable ? <input type="text" defaultValue={proyecto.kpi ?? ''} onBlur={e => commitCampo('kpi', e.target.value || null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.kpi ?? '—'}</span>}
-                </Campo>
-                <Campo label="Vida útil (años)">
-                  {editable ? <input type="number" defaultValue={proyecto.vida_util_anios ?? ''} onBlur={e => commitCampo('vida_util_anios', e.target.value ? Number(e.target.value) : null)} className={inputCls} /> : <span className="text-sm text-gray-800">{proyecto.vida_util_anios ?? '—'}</span>}
-                </Campo>
-              </div>
-
-              <Campo label="Meta 2026 - 2027">
-                {editable ? <textarea defaultValue={proyecto.meta_2026_2027 ?? ''} onBlur={e => commitCampo('meta_2026_2027', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.meta_2026_2027 ?? '—'}</p>}
-              </Campo>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Campo label="Estado inicial">
-                  {editable ? <textarea defaultValue={proyecto.estado_inicial ?? ''} onBlur={e => commitCampo('estado_inicial', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.estado_inicial ?? '—'}</p>}
-                </Campo>
-                <Campo label="Estado actual">
-                  {editable ? (
-                    <select defaultValue={proyecto.estado_actual ?? ''} onBlur={e => commitCampo('estado_actual', e.target.value || null)} className={inputCls}>
-                      <option value="">—</option>
-                      {ESTADO_ACTUAL_ECONOMICO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  ) : <span className="text-sm text-gray-800">{proyecto.estado_actual ?? '—'}</span>}
-                </Campo>
-              </div>
-
-              <Campo label="Notas">
-                {editable ? <textarea defaultValue={proyecto.notas ?? ''} onBlur={e => commitCampo('notas', e.target.value || null)} rows={2} placeholder="N° de RCA, fechas, contexto…" className={`${inputCls} resize-y`} /> : <p className="text-sm text-gray-800 whitespace-pre-wrap">{proyecto.notas ?? '—'}</p>}
-              </Campo>
-
-              {/* Avances */}
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-2">Avances registrados</p>
-                {avances.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-3">Sin avances registrados todavía.</p>
+                {editingNombre && editable ? (
+                  <input
+                    autoFocus
+                    value={nombreLocal}
+                    disabled={savingNombre}
+                    onChange={e => setNombreLocal(e.target.value)}
+                    onBlur={commitNombre}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur() }
+                      if (e.key === 'Escape') { setNombreLocal(proyecto.nombre); setEditingNombre(false) }
+                    }}
+                    className="text-base font-semibold text-gray-900 leading-snug w-full rounded px-1 -mx-1 bg-white ring-1 ring-violet-300 focus:ring-violet-500 focus:outline-none"
+                  />
                 ) : (
-                  <div className="space-y-1.5 mb-3">
-                    {avances.map(a => {
-                      const puedeEditar = puedeOperar || a.autor === currentUserEmail
-                      return (
-                        <div key={a.id} className="px-3 py-2 bg-gray-50 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            {a.estado && (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-px ${ESTADO_AVANCE[a.estado].cls}`}>
-                                {ESTADO_AVANCE[a.estado].label}
-                              </span>
-                            )}
-                            <p className="text-sm text-gray-700 leading-snug flex-1">{a.descripcion}</p>
-                            {puedeEditar && (
-                              <button onClick={() => borrarAvance(a)} className="text-gray-300 hover:text-red-500 flex-shrink-0" title="Borrar avance">
-                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-gray-400 mt-0.5">
-                            {fmtFecha(a.fecha)}{a.autor ? ` · ${a.autor}` : ''}
-                          </p>
-                        </div>
-                      )
-                    })}
+                  <p
+                    onClick={() => editable && setEditingNombre(true)}
+                    title={editable ? 'Click para editar el nombre' : undefined}
+                    className={`text-base font-semibold text-gray-900 leading-snug ${editable ? 'cursor-text hover:bg-white/60 rounded px-1 -mx-1' : ''}`}
+                  >
+                    {nombreLocal}
+                  </p>
+                )}
+
+                {editingDesc && editable ? (
+                  <textarea
+                    autoFocus
+                    rows={2}
+                    value={descLocal}
+                    disabled={savingDesc}
+                    onChange={e => setDescLocal(e.target.value)}
+                    onBlur={commitDescripcion}
+                    onKeyDown={e => { if (e.key === 'Escape') { setDescLocal(proyecto.notas ?? ''); setEditingDesc(false) } }}
+                    placeholder="N° de RCA, fechas, contexto…"
+                    className="text-xs text-gray-700 leading-relaxed mt-1 w-full rounded px-1 -mx-1 bg-white ring-1 ring-violet-300 focus:ring-violet-500 focus:outline-none resize-none"
+                  />
+                ) : (
+                  <div>
+                    <p
+                      ref={descRef}
+                      onClick={() => editable && setEditingDesc(true)}
+                      title={editable ? 'Click para editar la descripción' : undefined}
+                      className={`text-xs leading-relaxed mt-1 ${descExpanded ? '' : 'line-clamp-2'} ${editable ? 'cursor-text hover:bg-white/60 rounded px-1 -mx-1' : ''} ${descLocal ? 'text-gray-600' : 'text-gray-300 italic'}`}
+                    >
+                      {descLocal || (editable ? 'Sin descripción — click para agregar' : 'Sin descripción')}
+                    </p>
+                    {descOverflow && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setDescExpanded(v => !v) }}
+                        className="text-[10px] text-violet-600 hover:text-violet-800 font-medium px-1"
+                      >
+                        {descExpanded ? 'Ver menos' : 'Ver más...'}
+                      </button>
+                    )}
                   </div>
                 )}
-                <form onSubmit={agregarAvance} className="space-y-2">
-                  <textarea
-                    value={avanceDescripcion}
-                    onChange={e => setAvanceDescripcion(e.target.value)}
-                    rows={2}
-                    placeholder="Registrar un avance…"
-                    className={`${inputCls} resize-none`}
-                  />
-                  <div className="flex gap-2">
-                    <select value={avanceEstado} onChange={e => setAvanceEstado(e.target.value as typeof avanceEstado)} className={`${inputCls} flex-1`}>
-                      <option value="">Sin estado</option>
-                      {(Object.keys(ESTADO_AVANCE) as (keyof typeof ESTADO_AVANCE)[]).map(k => (
-                        <option key={k} value={k}>{ESTADO_AVANCE[k].label}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="submit"
-                      disabled={avanceSaving || !avanceDescripcion.trim()}
-                      className="text-xs px-3.5 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40 flex-shrink-0"
-                    >
-                      {avanceSaving ? 'Guardando…' : '+ Avance'}
-                    </button>
-                  </div>
-                </form>
               </div>
-            </>
-          )}
-        </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0" title="Cerrar">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4l12 12M16 4L4 16"/>
+                </svg>
+              </button>
+            </header>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {/* Toggle de la tarjeta de detalle */}
+              <button
+                type="button"
+                onClick={toggleDetail}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800"
+                aria-expanded={!detailCollapsed}
+              >
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${detailCollapsed ? '' : 'rotate-90'}`}>
+                  <path d="M7 4l6 6-6 6"/>
+                </svg>
+                {detailCollapsed ? 'Mostrar detalle' : 'Ocultar detalle'}
+              </button>
+
+              {!detailCollapsed && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-x-3 px-3 py-1 bg-gray-50 rounded-xl">
+                    <div className="flex flex-col divide-y divide-gray-200/60">
+                      <PillField
+                        label="Plazo" value={proyecto.plazo ?? ''} editable={editable}
+                        options={[{ value: 'CP', label: 'Corto plazo' }, { value: 'MP', label: 'Mediano plazo' }, { value: 'LP', label: 'Largo plazo' }]}
+                        display={proyecto.plazo ?? undefined}
+                        colorClass={{ bg: 'bg-slate-100', text: 'text-slate-700' }}
+                        onChange={v => commitCampo('plazo', (v || null) as ComiteEconomicoProyecto['plazo'])}
+                      />
+                      <TogglePillField label="Priorizado" value={proyecto.priorizado} editable={editable} activeBg="bg-violet-100" activeText="text-violet-700" onToggle={v => commitCampo('priorizado', v)} />
+                      <TogglePillField label="Riesgo" value={proyecto.riesgo} editable={editable} activeBg="bg-red-100" activeText="text-red-700" onToggle={v => commitCampo('riesgo', v)} />
+                      <PillField
+                        label="SEREMI líder" value={proyecto.seremi_lider ?? ''} editable={editable}
+                        options={LISTA_CANONICA.map(m => ({ value: m, label: m }))}
+                        colorClass={{ bg: 'bg-slate-100', text: 'text-slate-700' }}
+                        onChange={v => commitCampo('seremi_lider', v || null)}
+                      />
+                      <TextPillField label="Fuente de financiamiento" value={proyecto.fuente_financiamiento ?? ''} editable={editable} onCommit={v => commitCampo('fuente_financiamiento', v.trim() || null)} />
+                      <TextPillField label="Responsable operativo" value={proyecto.responsable_operativo ?? ''} editable={editable} onCommit={v => commitCampo('responsable_operativo', v.trim() || null)} />
+                    </div>
+                    <div className="flex flex-col divide-y divide-gray-200/60 border-l border-gray-200/60 pl-3">
+                      <PillField
+                        label="Estado actual" value={proyecto.estado_actual ?? ''} editable={editable}
+                        options={ESTADO_ACTUAL_ECONOMICO_OPCIONES.map(o => ({ value: o, label: o }))}
+                        colorClass={ESTADO_ACTUAL_COLOR[proyecto.estado_actual ?? ''] ?? { bg: 'bg-gray-100', text: 'text-gray-400' }}
+                        onChange={v => commitCampo('estado_actual', v || null)}
+                      />
+                      <InversionPillField
+                        monto={proyecto.inversion_monto} moneda={proyecto.inversion_moneda} editable={editable}
+                        onCommit={(monto, moneda) => { commitCampo('inversion_monto', monto); commitCampo('inversion_moneda', moneda) }}
+                      />
+                      <TextPillField label="M.O. directa" value={proyecto.mano_obra_directa != null ? String(proyecto.mano_obra_directa) : ''} editable={editable} type="number" onCommit={v => commitCampo('mano_obra_directa', v.trim() ? Number(v.trim()) : null)} />
+                      <TextPillField label="M.O. indirecta" value={proyecto.mano_obra_indirecta != null ? String(proyecto.mano_obra_indirecta) : ''} editable={editable} type="number" onCommit={v => commitCampo('mano_obra_indirecta', v.trim() ? Number(v.trim()) : null)} />
+                      <TextPillField label="KPI" value={proyecto.kpi ?? ''} editable={editable} onCommit={v => commitCampo('kpi', v.trim() || null)} />
+                      <TextPillField
+                        label="Vida útil" value={proyecto.vida_util_anios != null ? String(proyecto.vida_util_anios) : ''} editable={editable} type="number"
+                        formatDisplay={v => `${v} años`}
+                        onCommit={v => commitCampo('vida_util_anios', v.trim() ? Number(v.trim()) : null)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Texto libre — no cabe en pill, mismo tratamiento que Descripción arriba */}
+                  <div className="bg-gray-50 rounded-xl divide-y divide-gray-200/70 text-sm overflow-hidden">
+                    <DetailRow label="Estado inicial" stacked>
+                      {editable ? <textarea defaultValue={proyecto.estado_inicial ?? ''} onBlur={e => commitCampo('estado_inicial', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-gray-800 whitespace-pre-wrap">{proyecto.estado_inicial ?? '—'}</p>}
+                    </DetailRow>
+                    <DetailRow label="Meta 2026 - 2027" stacked>
+                      {editable ? <textarea defaultValue={proyecto.meta_2026_2027 ?? ''} onBlur={e => commitCampo('meta_2026_2027', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-gray-800 whitespace-pre-wrap">{proyecto.meta_2026_2027 ?? '—'}</p>}
+                    </DetailRow>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabs — Avances | Permisos */}
+              <div className="flex items-center gap-1 border-b border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setTab('avances')}
+                  className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${tab === 'avances' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                  Avances
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab('permisos')}
+                  className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${tab === 'permisos' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                  Permisos {permisos.length > 0 && <span className="text-gray-400 font-normal">({permisos.length})</span>}
+                </button>
+              </div>
+
+              {tab === 'permisos' ? (
+                <div className="pt-1 space-y-3">
+                  {editable && (
+                    <div className="relative">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={permisoQuery}
+                          onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true) }}
+                          onFocus={() => setPermisoOpen(true)}
+                          onBlur={() => setTimeout(() => setPermisoOpen(false), 150)}
+                          placeholder="Buscar permiso por N° PAS o nombre…"
+                          className={inputCls}
+                        />
+                      </div>
+                      {permisoOpen && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                          {pasMatches.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => agregarPermiso(p)}
+                              className="w-full text-left px-3 py-2 hover:bg-violet-50 border-b border-gray-100 last:border-0"
+                            >
+                              <p className="text-sm text-gray-800 truncate"><span className="font-semibold">{p.n_pas}</span> — {p.nombre}</p>
+                              <p className="text-[11px] text-gray-400 truncate">{p.organo_otorgante ?? '—'}</p>
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { setNuevoPasOpen(true); setNuevoPasNombre(permisoQuery); setPermisoOpen(false) }}
+                            className="w-full text-left px-3 py-2 text-sm text-violet-700 font-medium hover:bg-violet-50"
+                          >
+                            + Crear nuevo permiso en el catálogo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {nuevoPasOpen && (
+                    <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Nuevo permiso en el catálogo</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" value={nuevoPasNumero} onChange={e => setNuevoPasNumero(e.target.value)} placeholder="N° PAS (ej: PAS 161)" className={inputCls} />
+                        <input type="text" value={nuevoPasSector} onChange={e => setNuevoPasSector(e.target.value)} placeholder="Sector / materia" className={inputCls} />
+                      </div>
+                      <input type="text" value={nuevoPasNombre} onChange={e => setNuevoPasNombre(e.target.value)} placeholder="Nombre del permiso" className={inputCls} />
+                      <input type="text" value={nuevoPasOrgano} onChange={e => setNuevoPasOrgano(e.target.value)} placeholder="Órgano otorgante" className={inputCls} />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setNuevoPasOpen(false)} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancelar</button>
+                        <button
+                          onClick={crearYAgregarPas}
+                          disabled={permisoSaving || !nuevoPasNombre.trim()}
+                          className="text-sm bg-violet-700 text-white px-4 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                        >
+                          {permisoSaving ? 'Guardando…' : 'Agregar al proyecto'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {permisos.length === 0 ? (
+                    <EmptyState
+                      title="Sin permisos registrados"
+                      description="Los permisos (PAS) que este proyecto necesita tramitar quedan acá."
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d="M9 12l2 2 4-4M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2z"/>
+                        </svg>
+                      }
+                    />
+                  ) : (
+                    <div className="overflow-x-auto -mx-1 px-1">
+                      <table className="w-full text-xs border-collapse min-w-[640px]">
+                        <thead>
+                          <tr className="border-b border-gray-200 text-gray-500">
+                            <th className="text-left font-semibold py-1.5 pr-3">N°</th>
+                            <th className="text-left font-semibold py-1.5 pr-3">Nombre</th>
+                            <th className="text-left font-semibold py-1.5 pr-3">Sector / materia</th>
+                            <th className="text-left font-semibold py-1.5 pr-3">Órgano otorgante</th>
+                            <th className="text-left font-semibold py-1.5 pr-3">Estado</th>
+                            <th className="py-1.5"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {permisos.map(p => {
+                            const cfg = p.estado ? ESTADO_PERMISO[p.estado] : null
+                            return (
+                              <tr key={p.id} className="border-b border-gray-100">
+                                <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{p.pas.n_pas}</td>
+                                <td className="py-2 pr-3 text-gray-800 max-w-[220px] truncate" title={p.pas.nombre}>{p.pas.nombre}</td>
+                                <td className="py-2 pr-3 text-gray-600 max-w-[160px] truncate">{p.pas.sector_materia ?? '—'}</td>
+                                <td className="py-2 pr-3 text-gray-600 max-w-[160px] truncate">{p.pas.organo_otorgante ?? '—'}</td>
+                                <td className="py-2 pr-3">
+                                  {editable ? (
+                                    <select
+                                      value={p.estado ?? ''}
+                                      onChange={e => cambiarEstadoPermiso(p.id, e.target.value)}
+                                      className={`text-xs rounded-full pl-2 pr-1 py-0.5 border-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
+                                    >
+                                      <option value="">Sin estado</option>
+                                      {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
+                                        <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}>{cfg?.label ?? 'Sin estado'}</span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-right">
+                                  {editable && (
+                                    <button onClick={() => quitarPermiso(p)} className="text-gray-300 hover:text-red-500 p-0.5" title="Quitar permiso">
+                                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                        <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+                                      </svg>
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Avances registrados</p>
+                </div>
+
+                {/* Filtros — por permiso, institución (órgano otorgante) y ministerio del autor */}
+                {avances.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    <select value={filtroPermisoId} onChange={e => setFiltroPermisoId(e.target.value ? Number(e.target.value) : '')} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
+                      <option value="">Todos los permisos</option>
+                      {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
+                    </select>
+                    <select value={filtroInstitucion} onChange={e => setFiltroInstitucion(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
+                      <option value="">Toda institución</option>
+                      {opcionesInstitucion.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <select value={filtroMinisterio} onChange={e => setFiltroMinisterio(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
+                      <option value="">Todo ministerio</option>
+                      {opcionesMinisterio.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {hayFiltrosAvances && (
+                      <button onClick={() => { setFiltroPermisoId(''); setFiltroInstitucion(''); setFiltroMinisterio('') }} className="text-xs text-gray-400 hover:text-gray-700">
+                        Limpiar filtros
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {editable && (
+                  <button
+                    onClick={() => setShowForm(v => !v)}
+                    className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-colors mb-4"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+                    </svg>
+                    Agregar actualización
+                  </button>
+                )}
+
+                {showForm && (
+                  <div className="bg-gray-50 rounded-xl p-3 space-y-2.5 mb-4">
+                    <div className="flex items-center gap-2">
+                      <select value={avanceEstado} onChange={e => setAvanceEstado(e.target.value as typeof avanceEstado)} className={`${inputCls} flex-1`}>
+                        <option value="">Estado (sin cambio)</option>
+                        {(Object.keys(ESTADO_AVANCE) as (keyof typeof ESTADO_AVANCE)[]).map(k => (
+                          <option key={k} value={k}>{ESTADO_AVANCE[k].label}</option>
+                        ))}
+                      </select>
+                      <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputCls} w-auto flex-shrink-0`} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={avancePermisoId}
+                        onChange={e => { setAvancePermisoId(e.target.value ? Number(e.target.value) : ''); setAvancePermisoEstado('') }}
+                        className={`${inputCls} flex-1`}
+                      >
+                        <option value="">Permiso asociado (opcional) — avance general</option>
+                        {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
+                      </select>
+                      {avancePermisoId !== '' && (
+                        <select
+                          value={avancePermisoEstado}
+                          onChange={e => setAvancePermisoEstado(e.target.value as typeof avancePermisoEstado)}
+                          className={`${inputCls} w-auto flex-shrink-0`}
+                        >
+                          <option value="">Estado del permiso (sin cambio)</option>
+                          {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
+                            <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <textarea
+                      autoFocus
+                      value={avanceDescripcion}
+                      onChange={e => setAvanceDescripcion(e.target.value)}
+                      rows={3}
+                      placeholder="Describe el avance…"
+                      className={`${inputCls} resize-none`}
+                    />
+                    {currentUserEmail && (
+                      <p className="text-xs text-gray-400">Se registrará a tu nombre: <span className="font-mono">{currentUserEmail}</span></p>
+                    )}
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={resetAvanceForm} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancelar</button>
+                      <button
+                        onClick={agregarAvance}
+                        disabled={avanceSaving || !avanceDescripcion.trim()}
+                        className="text-sm bg-violet-700 text-white px-4 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                      >
+                        {avanceSaving ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {avancesFiltrados.length === 0 ? (
+                  <EmptyState
+                    title={avances.length === 0 ? 'Sin avances aún' : 'Ningún avance calza con los filtros'}
+                    description={avances.length === 0 ? 'Las actualizaciones que registre cada SEREMI en este proyecto quedan acá.' : undefined}
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4l3 3" strokeLinecap="round"/>
+                      </svg>
+                    }
+                  />
+                ) : (
+                  <div className="relative">
+                    <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
+                    <div className="space-y-5">
+                      {avancesFiltrados.map(a => {
+                        const puedeEditar = puedeOperar || a.autor === currentUserEmail
+                        const cfg = a.estado ? ESTADO_AVANCE[a.estado] : null
+                        const permisoLigado = a.permiso_id != null ? permisoById.get(a.permiso_id) : null
+                        const ministerioAutor = a.autor ? ministerioPorEmail.get(a.autor) : null
+                        return (
+                          <div key={a.id} className="flex gap-4 pl-1 group">
+                            <div className={`w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 ${cfg?.dot ?? 'bg-gray-300'} ring-2 ring-white`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                {puedeEditar ? (
+                                  <select
+                                    value={a.estado ?? ''}
+                                    onChange={e => handleInlineEstado(a, e.target.value)}
+                                    className={`text-xs rounded-full pl-1.5 pr-1 py-0.5 border-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
+                                  >
+                                    <option value="">Sin estado</option>
+                                    {(Object.keys(ESTADO_AVANCE) as (keyof typeof ESTADO_AVANCE)[]).map(k => (
+                                      <option key={k} value={k}>{ESTADO_AVANCE[k].label}</option>
+                                    ))}
+                                  </select>
+                                ) : cfg ? (
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
+                                ) : null}
+                                {permisoLigado && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100" title={permisoLigado.pas.organo_otorgante ?? undefined}>
+                                    {permisoLigado.pas.n_pas}
+                                  </span>
+                                )}
+                                {puedeEditar ? (
+                                  <input
+                                    type="date"
+                                    value={a.fecha}
+                                    onChange={e => handleInlineFecha(a, e.target.value)}
+                                    className="text-xs text-gray-500 ml-auto border-0 bg-transparent hover:bg-gray-100 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                                  />
+                                ) : (
+                                  <span className="text-xs text-gray-400 ml-auto">{fmtFecha(a.fecha)}</span>
+                                )}
+                                {puedeEditar && (
+                                  <button
+                                    onClick={() => borrarAvance(a)}
+                                    className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+                                    title="Borrar avance"
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                      <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-700 leading-snug">{a.descripcion}</p>
+                              {a.autor && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {a.autor}{ministerioAutor ? ` · ${ministerioAutor}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+function DetailRow({ label, children, stacked = false }: { label: string; children: React.ReactNode; stacked?: boolean }) {
+  if (stacked) {
+    return (
+      <div className="px-3 py-2">
+        <span className="text-gray-400 text-xs block mb-1">{label}</span>
+        {children}
+      </div>
+    )
+  }
   return (
-    <label className="flex flex-col gap-0.5">
-      <span className={labelCls}>{label}</span>
-      {children}
-    </label>
+    <div className="flex items-center gap-2 px-3 py-2">
+      <span className="text-gray-400 w-40 flex-shrink-0 text-xs">{label}</span>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  )
+}
+
+// ── Pills de la tarjeta de detalle — mismo lenguaje visual que la metadata
+// de ProjectTrackerModal.tsx (ficha de iniciativa): fila label + pill
+// redondeada, click para editar, chevron sutil, sin bordes ásperos.
+
+const ChevronDown = ({ cls = 'text-gray-500' }: { cls?: string }) => (
+  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" className={`opacity-40 group-hover:opacity-70 flex-shrink-0 ${cls}`}>
+    <path d="M1.5 3L4 5.5L6.5 3"/>
+  </svg>
+)
+
+// Categorías estándar de estado_actual (lib/comiteEconomico.ts) — mismo
+// criterio que etapaColor() para la iniciativa: progresión de madurez.
+const ESTADO_ACTUAL_COLOR: Record<string, { bg: string; text: string }> = {
+  'Preliminar':               { bg: 'bg-gray-100',   text: 'text-gray-500'   },
+  'En calificación (SEIA)':   { bg: 'bg-orange-100',  text: 'text-orange-700' },
+  'Aprobado ambientalmente':  { bg: 'bg-green-100',   text: 'text-green-700'  },
+  'En construcción':          { bg: 'bg-blue-100',    text: 'text-blue-700'   },
+  'En pruebas':                { bg: 'bg-violet-100',  text: 'text-violet-700' },
+  'Operación':                 { bg: 'bg-green-100',   text: 'text-green-700'  },
+  'Otro':                      { bg: 'bg-gray-100',    text: 'text-gray-500'   },
+}
+
+const pillRowCls = 'flex items-center gap-2 py-1.5 px-3'
+const pillLabelCls = 'text-gray-400 w-36 flex-shrink-0 text-xs'
+const pillEditInputCls = 'text-xs text-gray-800 placeholder:text-gray-400 border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white'
+const pillSaveBtnCls = 'text-xs px-2 py-0.5 bg-violet-700 text-white rounded hover:bg-violet-800 flex-shrink-0'
+const pillCancelBtnCls = 'text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 flex-shrink-0'
+
+// Campo con opciones fijas (select) — pill de color + overlay transparente,
+// mismo mecanismo que Etapa actual/RAT en ProjectTrackerModal.tsx.
+function PillField({
+  label, value, display, colorClass, editable, options, onChange,
+}: {
+  label: string
+  value: string
+  display?: string
+  colorClass: { bg: string; text: string }
+  editable: boolean
+  options: { value: string; label: string }[]
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className={pillRowCls}>
+      <span className={pillLabelCls}>{label}</span>
+      <label className={`relative flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full transition-all group flex-1 min-w-0 ${editable ? 'cursor-pointer hover:brightness-95' : 'cursor-default'} ${colorClass.bg}`}>
+        <span className={`text-xs font-medium truncate flex-1 ${value ? colorClass.text : 'text-gray-400'}`}>{display ?? value ?? '—'}</span>
+        {editable && <ChevronDown cls={colorClass.text} />}
+        <select
+          value={value}
+          disabled={!editable}
+          onChange={e => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-default"
+        >
+          <option value="">—</option>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </label>
+    </div>
+  )
+}
+
+// Campo booleano — pill que se togglea al click, sin checkbox.
+function TogglePillField({
+  label, value, editable, activeBg, activeText, onToggle,
+}: {
+  label: string
+  value: boolean
+  editable: boolean
+  activeBg: string
+  activeText: string
+  onToggle: (v: boolean) => void
+}) {
+  return (
+    <div className={pillRowCls}>
+      <span className={pillLabelCls}>{label}</span>
+      <button
+        type="button"
+        onClick={() => editable && onToggle(!value)}
+        disabled={!editable}
+        className={`flex items-center pl-2.5 pr-2 py-0.5 rounded-full flex-1 min-w-0 transition-colors ${value ? activeBg : 'bg-gray-100'} ${editable ? 'cursor-pointer hover:brightness-95' : 'cursor-default'}`}
+      >
+        <span className={`text-xs font-medium flex-1 truncate text-left ${value ? activeText : 'text-gray-400'}`}>{value ? 'Sí' : 'No'}</span>
+      </button>
+    </div>
+  )
+}
+
+// Campo de texto/número libre — pill neutra que al click abre un input +
+// Guardar/✕, mismo patrón que Cód. BIP/Inversión en ProjectTrackerModal.tsx.
+function TextPillField({
+  label, value, editable, onCommit, type = 'text', placeholder, formatDisplay,
+}: {
+  label: string
+  value: string
+  editable: boolean
+  onCommit: (v: string) => void
+  type?: 'text' | 'number'
+  placeholder?: string
+  formatDisplay?: (v: string) => string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+
+  if (editing) {
+    return (
+      <div className={pillRowCls}>
+        <span className={pillLabelCls}>{label}</span>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <input
+            autoFocus
+            type={type}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder={placeholder}
+            className={`flex-1 min-w-0 ${pillEditInputCls}`}
+          />
+          <button onClick={() => { onCommit(draft); setEditing(false) }} className={pillSaveBtnCls}>Guardar</button>
+          <button onClick={() => { setDraft(value); setEditing(false) }} className={pillCancelBtnCls}>✕</button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className={pillRowCls}>
+      <span className={pillLabelCls}>{label}</span>
+      <button
+        type="button"
+        onClick={() => editable && setEditing(true)}
+        disabled={!editable}
+        className="flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group flex-1 min-w-0 cursor-pointer disabled:cursor-default disabled:hover:bg-slate-100"
+      >
+        <span className={`text-xs font-medium flex-1 truncate text-left ${value ? 'text-slate-700' : 'text-slate-400'}`}>
+          {value ? (formatDisplay ? formatDisplay(value) : value) : '—'}
+        </span>
+        {editable && <ChevronDown cls="text-slate-500" />}
+      </button>
+    </div>
+  )
+}
+
+// Inversión — monto + moneda se editan juntos (dos inputs), mismo espíritu
+// que "Próximo hito" (fecha + tipo) en ProjectTrackerModal.tsx.
+function InversionPillField({
+  monto, moneda, editable, onCommit,
+}: {
+  monto: number | null
+  moneda: string | null
+  editable: boolean
+  onCommit: (monto: number | null, moneda: string | null) => void
+}) {
+  const [editing, setEditing]         = useState(false)
+  const [draftMonto, setDraftMonto]   = useState(monto != null ? String(monto) : '')
+  const [draftMoneda, setDraftMoneda] = useState(moneda ?? '')
+  useEffect(() => { setDraftMonto(monto != null ? String(monto) : ''); setDraftMoneda(moneda ?? '') }, [monto, moneda])
+
+  if (editing) {
+    return (
+      <div className={pillRowCls}>
+        <span className={pillLabelCls}>Inversión</span>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <input autoFocus type="number" value={draftMonto} onChange={e => setDraftMonto(e.target.value)} placeholder="Monto" className={`w-24 flex-shrink-0 ${pillEditInputCls}`} />
+          <input type="text" value={draftMoneda} onChange={e => setDraftMoneda(e.target.value)} placeholder="Moneda" className={`w-16 flex-shrink-0 ${pillEditInputCls}`} />
+          <button onClick={() => { onCommit(draftMonto.trim() ? Number(draftMonto.trim()) : null, draftMoneda.trim() || null); setEditing(false) }} className={pillSaveBtnCls}>Guardar</button>
+          <button onClick={() => { setDraftMonto(monto != null ? String(monto) : ''); setDraftMoneda(moneda ?? ''); setEditing(false) }} className={pillCancelBtnCls}>✕</button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className={pillRowCls}>
+      <span className={pillLabelCls}>Inversión</span>
+      <button
+        type="button"
+        onClick={() => editable && setEditing(true)}
+        disabled={!editable}
+        className="flex items-center gap-1.5 pl-2.5 pr-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors group flex-1 min-w-0 cursor-pointer disabled:cursor-default disabled:hover:bg-slate-100"
+      >
+        <span className={`text-xs font-medium flex-1 truncate text-left ${monto != null ? 'text-slate-700' : 'text-slate-400'}`}>
+          {monto != null ? `$${monto.toLocaleString('es-CL')} MM${moneda ? ` ${moneda}` : ''}` : '—'}
+        </span>
+        {editable && <ChevronDown cls="text-slate-500" />}
+      </button>
+    </div>
   )
 }

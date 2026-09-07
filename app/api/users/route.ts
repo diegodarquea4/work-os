@@ -34,14 +34,18 @@ export async function GET(req: Request) {
     .map(u => ({ email: u.email ?? '', name: u.user_metadata?.full_name ?? u.email ?? '' }))
     .filter(u => u.email)
 
+  // `ministerio` (mig 088) — se agrega siempre al padrón, con o sin filtro de
+  // región: lo usa el filtro por ministerio de los avances del Comité
+  // Económico (ministerio de quien registró cada avance).
+  const { data: profiles } = await db.from('user_profiles').select('email, role, region_cods, ministerio')
+  const byEmail = new Map((profiles ?? []).map(p => [p.email, p as { role: string; region_cods: string[]; ministerio: string | null }]))
+  const listConMinisterio = list.map(u => ({ ...u, ministerio: byEmail.get(u.email)?.ministerio ?? null }))
+
   if (!region) {
-    return NextResponse.json(list.sort((a, b) => a.email.localeCompare(b.email)))
+    return NextResponse.json(listConMinisterio.sort((a, b) => a.email.localeCompare(b.email)))
   }
 
-  const { data: profiles } = await db.from('user_profiles').select('email, role, region_cods')
-  const byEmail = new Map((profiles ?? []).map(p => [p.email, p as { role: string; region_cods: string[] }]))
-
-  const filtered = list.filter(u => {
+  const filtered = listConMinisterio.filter(u => {
     const p = byEmail.get(u.email)
     if (!p) return false
     if (p.role === 'admin' || p.role === 'editor') return true

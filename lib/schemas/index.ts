@@ -125,6 +125,9 @@ export const adminUsersPostSchema = z.object({
   full_name:   z.string().min(1).optional(),
   role:        z.enum(['admin', 'editor', 'regional', 'viewer']),
   region_cods: z.array(z.string().min(1)).optional(),
+  // Ministerio del usuario (mig 088) — filtra los avances de proyectos del
+  // Comité Económico por el ministerio de quien los registró.
+  ministerio:  z.string().min(1).nullable().optional(),
 })
 
 export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
@@ -135,6 +138,7 @@ export const adminUsersPatchSchema = z.object({
   role:          z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
   region_cods:   z.array(z.string().min(1)).optional(),
   full_name:     z.string().min(1).optional(),
+  ministerio:    z.string().min(1).nullable().optional(),
   // Reemplazan al viejo reset_password (que ponía DCI2026):
   recuperar:     z.boolean().optional(),  // emite código nuevo + bloquea la clave anterior + cierra sesiones
   forzar_cambio: z.boolean().optional(),  // marca debe_cambiar_clave + cierra sesiones (sin código)

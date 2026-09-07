@@ -976,7 +976,34 @@ export type ComiteEconomicoProyectoSeguimiento = {
   descripcion: string
   estado: 'pendiente' | 'en_curso' | 'completado' | 'bloqueado' | null
   autor: string | null
+  // Permiso del proyecto al que refiere este avance (mig 088) — opcional,
+  // NULL = avance general del proyecto (no habla de un permiso puntual).
+  permiso_id: number | null
   created_at: string
+}
+
+// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 088) — no
+// region-scoped, mismo espíritu que `oaeca` (mig 051): precargado y crece
+// cuando alguien escribe uno nuevo al asociarlo a un proyecto.
+export type PasCatalogo = {
+  id: number
+  n_pas: string
+  sector_materia: string | null
+  nombre: string
+  organo_otorgante: string | null
+  created_at: string
+  created_by_email: string | null
+}
+
+// Qué permiso del catálogo necesita CADA proyecto privado, con su propio
+// estado tri-color (mig 088). NULL = sin estado (default al crearlo).
+export type ComiteEconomicoProyectoPermiso = {
+  id: number
+  proyecto_id: number
+  pas_id: number
+  estado: 'pendiente' | 'otorgado' | 'frenado' | null
+  created_at: string
+  created_by_email: string | null
 }
 
 // Oficio tratado — vive ENTRE sesiones igual que SesionCompromiso: se carga

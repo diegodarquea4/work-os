@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { REGIONS } from '@/lib/regions'
 import type { UserRole } from '@/lib/apiAuth'
+import { LISTA_CANONICA } from '@/lib/ministerios'
 import DocumentosRegionalesPanel from './DocumentosRegionalesPanel'
 import ImportProposalsPanel from './ImportProposalsPanel'
 import { Alert } from '@/components/ui'
@@ -14,6 +15,9 @@ type UserRow = {
   full_name: string | null
   role: UserRole
   region_cods: string[]
+  // Ministerio del usuario (mig 088) — alimenta el filtro por ministerio de
+  // los avances de proyectos del Comité Económico.
+  ministerio: string | null
   created_at: string
   // ISO timestamp del último login (auth.users.last_sign_in_at). null si el
   // usuario nunca inició sesión (recién creado y no entró todavía).
@@ -143,6 +147,7 @@ export default function AdminUsersView() {
   const [inviteName, setInviteName]     = useState('')
   const [inviteRole, setInviteRole]     = useState<UserRole>('viewer')
   const [inviteRegions, setInviteRegions] = useState<string[]>([])
+  const [inviteMinisterio, setInviteMinisterio] = useState('')
   const [inviting, setInviting]         = useState(false)
   const [inviteError, setInviteError]   = useState<string | null>(null)
 
@@ -194,6 +199,19 @@ export default function AdminUsersView() {
     if (res.ok) {
       setUsers(prev => prev.map(u => u.id === id ? { ...u, region_cods } : u))
     } else { setError('Error al actualizar regiones') }
+    setSaving(null)
+  }
+
+  async function handleMinisterioChange(id: string, ministerio: string) {
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ministerio: ministerio || null }),
+    })
+    if (res.ok) {
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, ministerio: ministerio || null } : u))
+    } else { setError('Error al actualizar ministerio') }
     setSaving(null)
   }
 
@@ -272,13 +290,14 @@ export default function AdminUsersView() {
         full_name: inviteName.trim() || undefined,
         role: inviteRole,
         region_cods: (inviteRole === 'regional' || inviteRole === 'viewer') ? inviteRegions : [],
+        ministerio: inviteMinisterio || undefined,
       }),
     })
     const body = await res.json().catch(() => ({}))
     if (res.ok && body.codigo) {
       const email = inviteEmail.trim()
       setShowInvite(false)
-      setInviteEmail(''); setInviteName(''); setInviteRole('viewer'); setInviteRegions([])
+      setInviteEmail(''); setInviteName(''); setInviteRole('viewer'); setInviteRegions([]); setInviteMinisterio('')
       await loadUsers()
       setCodeModal({ email, codigo: body.codigo })   // muestra el código de activación
     } else {
@@ -418,6 +437,7 @@ export default function AdminUsersView() {
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ministerio</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
                         <th className="px-5 py-3"></th>
                       </tr>
@@ -457,6 +477,17 @@ export default function AdminUsersView() {
                             ) : (
                               <span className="text-gray-300 text-xs">—</span>
                             )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <select
+                              value={u.ministerio ?? ''}
+                              disabled={saving === u.id}
+                              onChange={e => handleMinisterioChange(u.id, e.target.value)}
+                              className="text-xs border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 max-w-[160px]"
+                            >
+                              <option value="">— Sin asignar —</option>
+                              {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
                           </td>
                           <td className="px-5 py-3.5">
                             {(() => {
@@ -566,6 +597,19 @@ export default function AdminUsersView() {
                   <option value="editor">Editor — acceso total de edición</option>
                   <option value="regional">Regional — edita solo sus regiones asignadas</option>
                   <option value="viewer">Solo lectura — sin edición</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ministerio <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <select
+                  value={inviteMinisterio}
+                  onChange={e => setInviteMinisterio(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
+                >
+                  <option value="">— Sin asignar —</option>
+                  {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               {(inviteRole === 'regional' || inviteRole === 'viewer') && (

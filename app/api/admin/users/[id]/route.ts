@@ -37,7 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     )
   }
-  const { role, region_cods, full_name, recuperar, forzar_cambio } = parse.data
+  const { role, region_cods, full_name, ministerio, recuperar, forzar_cambio } = parse.data
 
   const db = getSupabaseAdmin()
 
@@ -96,6 +96,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (region_cods !== undefined) patch.region_cods = region_cods
   if (full_name !== undefined) patch.full_name = full_name
+  if (ministerio !== undefined) patch.ministerio = ministerio
 
   const { error } = await db.from('user_profiles').update(patch).eq('id', id)
   if (error) return Response.json({ error: error.message }, { status: 500 })
