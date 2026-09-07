@@ -27,7 +27,7 @@ type Props = {
 type DetalleSesion = {
   asistencia: AsistenciaRow[]
   proyectos: { nota: string | null; nombre: string; tag: 'Privado' | 'Público' | null }[]
-  oficios: (SesionOficioTratado & { oaeca: { nombre: string } | null; proyecto: { nombre: string } | null })[]
+  oficios: (Pick<SesionOficioTratado, 'id' | 'fecha_limite' | 'estado'> & { nombre: string; tag: 'Privado' | 'Público' | null; oaeca: { nombre: string } | null })[]
   compromisos: SesionCompromiso[]
 }
 
@@ -90,7 +90,7 @@ export default function HistorialSesionesInversionModal({ region, onClose, initi
         .select('nota, proyecto_privado_id, prioridad_id, proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
         .eq('sesion_id', s.id),
       sb.from('sesion_oficios_tratados')
-        .select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
+        .select('id, fecha_limite, estado, proyecto_privado_id, prioridad_id, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
         .eq('sesion_origen_id', s.id)
         .order('created_at'),
       sb.from('sesion_compromisos')
@@ -106,10 +106,25 @@ export default function HistorialSesionesInversionModal({ region, onClose, initi
       proyecto: { nombre: string } | null
       proyecto_privado: { nombre: string } | null
     }
+    type OficioRow = {
+      id: number
+      fecha_limite: string | null
+      estado: 'pendiente' | 'resuelto'
+      proyecto_privado_id: number | null
+      prioridad_id: number | null
+      oaeca: { nombre: string } | null
+      proyecto: { nombre: string } | null
+      proyecto_privado: { nombre: string } | null
+    }
     const proyectosRows = (proyRes.data ?? []) as unknown as ProyectoRow[]
+    const oficiosRows = (oficRes.data ?? []) as unknown as OficioRow[]
     // `prioridad_id` es denormalizado sin FK (mismo criterio que
-    // sesion_proyectos en generarActa.ts) — se resuelve con una query aparte.
-    const prioridadIds = [...new Set(proyectosRows.map(p => p.prioridad_id).filter((id): id is number => id != null))]
+    // sesion_proyectos/sesion_oficios_tratados en generarActa.ts) — un solo
+    // lookup para proyectos y oficios.
+    const prioridadIds = [...new Set([
+      ...proyectosRows.map(p => p.prioridad_id),
+      ...oficiosRows.map(o => o.prioridad_id),
+    ].filter((id): id is number => id != null))]
     const prioridadNombres = prioridadIds.length
       ? new Map((((await sb.from('prioridades_territoriales').select('id, nombre').in('id', prioridadIds)).data ?? []) as { id: number; nombre: string }[])
           .map(p => [p.id, p.nombre]))
@@ -124,7 +139,15 @@ export default function HistorialSesionesInversionModal({ region, onClose, initi
           if (p.prioridad_id != null) return { nombre: prioridadNombres.get(p.prioridad_id) ?? '—', nota: p.nota, tag: 'Público' as const }
           return { nombre: p.proyecto?.nombre ?? '—', nota: p.nota, tag: null }
         }),
-        oficios:     (oficRes.data ?? []) as unknown as DetalleSesion['oficios'],
+        oficios: oficiosRows.map(o => {
+          const nombre = o.proyecto_privado_id != null ? (o.proyecto_privado?.nombre ?? '—')
+            : o.prioridad_id != null ? (prioridadNombres.get(o.prioridad_id) ?? '—')
+            : (o.proyecto?.nombre ?? '—')
+          const tag = o.proyecto_privado_id != null ? 'Privado' as const
+            : o.prioridad_id != null ? 'Público' as const
+            : null
+          return { id: o.id, fecha_limite: o.fecha_limite, estado: o.estado, nombre, tag, oaeca: o.oaeca }
+        }),
         compromisos: (compRes.data ?? []) as SesionCompromiso[],
       },
     }))
@@ -195,7 +218,14 @@ export default function HistorialSesionesInversionModal({ region, onClose, initi
                             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${ESTADO_OFIC[o.estado]}`}>
                               {o.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
                             </span>
-                            <span className="flex-1 leading-snug">{o.proyecto?.nombre ?? '—'} <span className="text-slate-400">— {o.oaeca?.nombre ?? '—'}</span></span>
+                            <span className="flex-1 leading-snug">
+                              {o.tag && (
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full mr-1.5 ${TAG_PROYECTO_CLASS[o.tag]}`}>
+                                  {o.tag}
+                                </span>
+                              )}
+                              {o.nombre} <span className="text-slate-400">— {o.oaeca?.nombre ?? '—'}</span>
+                            </span>
                           </div>
                         ))}
                       </div>

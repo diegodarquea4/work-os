@@ -231,13 +231,14 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     // Oficios: verificados (resueltos en esta sesión o aún pendientes) +
     // nuevos (marcados "tratado" durante esta sesión) — mismo criterio.
-    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
+    // Mismo esquema privado/público/legado que sesion_proyectos (mig 089).
+    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('region_cod', sesion.region_cod)
       .neq('sesion_origen_id', sesionId)
       .or(opts.preview
         ? `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente,and(estado.eq.resuelto,resuelto_en_sesion_id.is.null)`
         : `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente`),
-    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
+    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('sesion_origen_id', sesionId).order('created_at'),
     // Mesa Empleo (mig 052): el cierre ya sumó el valor de esta sesión al
     // acumulado ANTES de generar el acta — igual que valor_actual en el
@@ -253,7 +254,11 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
   const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
-  type OficioConNombres = SesionOficioTratado & { oaeca: { nombre: string } | null; proyecto: { nombre: string } | null }
+  type OficioConNombres = SesionOficioTratado & {
+    oaeca: { nombre: string } | null
+    proyecto: { nombre: string } | null
+    proyecto_privado: { nombre: string } | null
+  }
   const oficios = [
     ...((oficVerifRes.data ?? []) as unknown as OficioConNombres[]),
     ...((oficNuevosRes.data ?? []) as unknown as OficioConNombres[]),
@@ -267,7 +272,12 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     proyecto_privado: { nombre: string } | null
   }
   const proyectosRows = (proyRes.data ?? []) as unknown as ProyectoTratadoRow[]
-  const prioridadIds = [...new Set(proyectosRows.map(p => p.prioridad_id).filter((id): id is number => id != null))]
+  // Un solo lookup de prioridades para proyectos tratados Y oficios — ambos
+  // son denormalizados sin FK (mismo criterio que seguimientos.prioridad_id).
+  const prioridadIds = [...new Set([
+    ...proyectosRows.map(p => p.prioridad_id),
+    ...oficios.map(o => o.prioridad_id),
+  ].filter((id): id is number => id != null))]
   const prioridadNombres = prioridadIds.length
     ? new Map((((await db.from('prioridades_territoriales').select('id, nombre').in('id', prioridadIds)).data ?? []) as { id: number; nombre: string }[])
         .map(p => [p.id, p.nombre]))
@@ -315,12 +325,21 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
       if (p.prioridad_id != null) return { nombre: prioridadNombres.get(p.prioridad_id) ?? '—', nota: p.nota, tag: 'Público' as const }
       return { nombre: p.proyecto?.nombre ?? '—', nota: p.nota, tag: null }
     }),
-    oficiosTratados: oficios.map(o => ({
-      nombreProyecto: o.proyecto?.nombre ?? '—',
-      oaeca:          o.oaeca?.nombre ?? '—',
-      fechaLimite:    o.fecha_limite,
-      estado:         o.estado,
-    })),
+    oficiosTratados: oficios.map(o => {
+      const nombreProyecto = o.proyecto_privado_id != null ? (o.proyecto_privado?.nombre ?? '—')
+        : o.prioridad_id != null ? (prioridadNombres.get(o.prioridad_id) ?? '—')
+        : (o.proyecto?.nombre ?? '—')
+      const tag = o.proyecto_privado_id != null ? 'Privado' as const
+        : o.prioridad_id != null ? 'Público' as const
+        : null
+      return {
+        nombreProyecto,
+        tag,
+        oaeca:       o.oaeca?.nombre ?? '—',
+        fechaLimite: o.fecha_limite,
+        estado:      o.estado,
+      }
+    }),
     temas: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
       descripcion: c.descripcion,

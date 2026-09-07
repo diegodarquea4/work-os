@@ -5,7 +5,6 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import type { Region } from '@/lib/regions'
-import { INE_CODE } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
   ComiteEconomicoProyecto, EjeSesion, Oaeca, RegionMetaEmpleo, RegionSubsidioEmpleo, SeccionComiteEconomico,
@@ -136,70 +135,6 @@ function fmtFecha(fecha: string | null): string {
 }
 
 // ── Comboboxes locales (precargados — sin ida y vuelta al servidor) ─────────
-
-function ComboboxProyecto({
-  proyectos, value, onSelect, placeholder, label,
-}: {
-  proyectos: V2Proyecto[]
-  value: V2Proyecto | null
-  onSelect: (p: V2Proyecto | null) => void
-  placeholder: string
-  label?: string
-}) {
-  const [query, setQuery] = useState(value?.nombre ?? '')
-  const [open, setOpen]   = useState(false)
-
-  useEffect(() => { setQuery(value?.nombre ?? '') }, [value])
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const base = q ? proyectos.filter(p => p.nombre.toLowerCase().includes(q)) : proyectos
-    return base.slice(0, 30)
-  }, [query, proyectos])
-
-  const input = (
-    <input
-      type="text"
-      value={query}
-      onChange={e => {
-        setQuery(e.target.value)
-        setOpen(true)
-        if (value) onSelect(null)
-      }}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setTimeout(() => setOpen(false), 150)}
-      placeholder={placeholder}
-      className={`${inputCls} w-full`}
-    />
-  )
-
-  return (
-    <div className="relative">
-      {label ? (
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] text-gray-500 font-medium">{label}</span>
-          {input}
-        </label>
-      ) : input}
-      {open && matches.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-          {matches.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => { onSelect(p); setQuery(p.nombre); setOpen(false) }}
-              className="w-full text-left px-3 py-2 hover:bg-violet-50 border-b border-gray-100 last:border-0"
-            >
-              <p className="text-sm text-gray-800 truncate">{p.nombre}</p>
-              <p className="text-[11px] text-gray-400 truncate">{p.titular ?? '—'}{p.etapa ? ` · ${p.etapa}` : ''}</p>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function ComboboxOaeca({
   oaecaList, value, onSelect, onCreate, placeholder, label,
@@ -335,6 +270,59 @@ function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
   )
 }
 
+// "+" para dejar un avance rápido en un proyecto/iniciativa de la cartera
+// desde dentro de la sesión (proyectos tratados, oficios, compromisos) —
+// mismo estilo liviano que agregar un avance en la ficha del proyecto.
+function AgregarAvanceInline({ onSubmit }: { onSubmit: (texto: string) => Promise<void> }) {
+  const [open, setOpen]     = useState(false)
+  const [texto, setTexto]   = useState('')
+  const [saving, setSaving] = useState(false)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-gray-300 hover:text-violet-600 p-0.5 flex-shrink-0"
+        title="Agregar un avance a este proyecto"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+        </svg>
+      </button>
+    )
+  }
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      <textarea
+        autoFocus
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        rows={2}
+        placeholder="Avance para este proyecto…"
+        className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
+      />
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={() => { setOpen(false); setTexto('') }} className="text-xs text-gray-400 hover:text-gray-600">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            setSaving(true)
+            await onSubmit(texto.trim())
+            setSaving(false); setOpen(false); setTexto('')
+          }}
+          disabled={saving || !texto.trim()}
+          className="text-xs px-3 py-1 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
+        >
+          {saving ? 'Guardando…' : 'Guardar avance'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onClose }: Props) {
   const [sesion, setSesion]         = useState<EjeSesion | null>(null)
   const [initError, setInitError]   = useState<string | null>(null)
@@ -349,11 +337,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [oficioNotaDraft, setOficioNotaDraft]             = useState<Record<number, string>>({})
 
   const [oaecaList, setOaecaList]           = useState<Oaeca[]>([])
-  const [proyectosRegion, setProyectosRegion] = useState<V2Proyecto[]>([])
 
   const [proyectosSesion, setProyectosSesion] = useState<SesionProyecto[]>([])
   const [proyectosInfo, setProyectosInfo]     = useState<Map<string, V2Proyecto>>(new Map())
-  const [proyectoNotaDraft, setProyectoNotaDraft] = useState<Record<number, string>>({})
   // Zona 4c: cartera propia del comité (privados) — públicos se resuelven
   // desde la prop `iniciativas` (misma fuente que ComiteEconomicoProyectosPanel).
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
@@ -371,9 +357,13 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosSeccionOpen, setProyectosSeccionOpen] = useState(true)
   const [oficiosSeccionOpen, setOficiosSeccionOpen]     = useState(true)
 
-  // Alta de oficio nuevo (Seguimiento de la Inversión)
-  const [oficioOaeca, setOficioOaeca]         = useState<Oaeca | null>(null)
-  const [oficioProyecto, setOficioProyecto]   = useState<V2Proyecto | null>(null)
+  // Alta de oficio nuevo (Seguimiento de la Inversión) — proyecto que
+  // considera viene de la misma cartera (privado/público) que 4c, no del
+  // catálogo SEIA legado (mig 089).
+  const [oficioOaeca, setOficioOaeca]                 = useState<Oaeca | null>(null)
+  const [oficioProyectoTipo, setOficioProyectoTipo]   = useState<'privado' | 'publico'>('privado')
+  const [oficioProyectoPrivado, setOficioProyectoPrivado] = useState<ComiteEconomicoProyecto | null>(null)
+  const [oficioProyectoPublico, setOficioProyectoPublico] = useState<Iniciativa | null>(null)
   const [oficioFechaLimite, setOficioFechaLimite] = useState('')
   const [oficioSaving, setOficioSaving]       = useState(false)
 
@@ -472,7 +462,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const OFICIO_SELECT = '*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)'
     const [
       nominaRes, asisRes, compRes, nuevosRes, oficiosAntRes, oficiosTratRes,
-      oaecaRes, proyRegionRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
+      oaecaRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
       subRegionRes, subSesionRes,
     ] = await Promise.all([
       sb.from('sesion_nomina').select('*')
@@ -496,10 +486,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         .order('created_at'),
       sb.from('sesion_oficios_tratados').select(OFICIO_SELECT).eq('sesion_origen_id', s.id).order('created_at'),
       sb.from('oaeca').select('*').order('nombre'),
-      sb.from('v2_proyectos_inversion')
-        .select('id, nombre, titular, inversion, moneda, etapa')
-        .eq('region_id', INE_CODE[region.cod])
-        .order('nombre'),
       sb.from('comite_economico_proyecto').select('*').eq('region_cod', region.cod).order('nombre'),
       sb.from('sesion_proyectos').select('*').eq('sesion_id', s.id),
       sb.from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
@@ -515,7 +501,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     setOficiosAnteriores((oficiosAntRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOficiosTratadosSesion((oficiosTratRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOaecaList((oaecaRes.data ?? []) as Oaeca[])
-    setProyectosRegion((proyRegionRes.data ?? []) as V2Proyecto[])
     setProyectosPrivados((proyPrivadosRes.data ?? []) as ComiteEconomicoProyecto[])
     setMetaEmpleoRegion((metaRegionRes.data as RegionMetaEmpleo | null) ?? null)
     const metaSesion = (metaSesionRes.data as SesionMetaEmpleoValor | null) ?? null
@@ -720,7 +705,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   }
 
   async function agregarOficioNuevo() {
-    if (!sesion || !oficioOaeca || !oficioProyecto) return
+    if (!sesion || !oficioOaeca) return
+    if (oficioProyectoTipo === 'privado' && !oficioProyectoPrivado) return
+    if (oficioProyectoTipo === 'publico' && !oficioProyectoPublico) return
     setOficioSaving(true)
     try {
       const rows = await safeWrite(
@@ -728,7 +715,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
           region_cod: region.cod,
           sesion_origen_id: sesion.id,
           oaeca_id: oficioOaeca.id,
-          proyecto_id: oficioProyecto.id,
+          proyecto_privado_id: oficioProyectoTipo === 'privado' ? oficioProyectoPrivado!.id : null,
+          prioridad_id: oficioProyectoTipo === 'publico' ? oficioProyectoPublico!.id : null,
           fecha_limite: oficioFechaLimite || null,
         }),
         `sesion_oficios_tratados insert sesion=${sesion.id}`,
@@ -736,10 +724,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       const nuevo: SesionOficioConNombres = {
         ...(rows[0] as SesionOficioTratado),
         oaeca: { nombre: oficioOaeca.nombre },
-        proyecto: { nombre: oficioProyecto.nombre },
+        proyecto: null,
       }
       setOficiosTratadosSesion(prev => [...prev, nuevo])
-      setOficioOaeca(null); setOficioProyecto(null); setOficioFechaLimite('')
+      setOficioOaeca(null); setOficioProyectoPrivado(null); setOficioProyectoPublico(null); setOficioFechaLimite('')
     } catch (err) {
       window.alert((err as Error).message)
     } finally {
@@ -777,24 +765,62 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  function abrirFichaProyectoTratado(sp: SesionProyecto) {
-    if (sp.proyecto_privado_id != null) { setFichaPrivadoId(sp.proyecto_privado_id); return }
-    if (sp.prioridad_id != null) {
-      const ini = iniciativas.find(i => i.id === sp.prioridad_id)
+  // Abre la ficha completa de un item de la cartera (proyecto privado o
+  // iniciativa pública) referenciado desde cualquier lado de la sesión —
+  // proyectos tratados, oficios, compromisos: los tres comparten esta misma
+  // forma (proyecto_privado_id / prioridad_id) desde mig 086/087/089.
+  function abrirFichaCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }) {
+    if (row.proyecto_privado_id != null) { setFichaPrivadoId(row.proyecto_privado_id); return }
+    if (row.prioridad_id != null) {
+      const ini = iniciativas.find(i => i.id === row.prioridad_id)
       if (ini) onAbrirIniciativa(ini)
     }
     // proyecto_id legado (v2_proyectos_inversion): sin ficha en este flujo.
   }
 
-  async function commitNotaProyecto(sp: SesionProyecto) {
-    const nota = (proyectoNotaDraft[sp.id] ?? sp.nota ?? '').trim()
-    if (nota === (sp.nota ?? '')) return
+  // Resuelve nombre + tag de cualquier referencia a la cartera (proyecto
+  // tratado, oficio u compromiso) — misma forma en las tres tablas.
+  function resolverCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null; proyecto_id?: string | null }, nombreLegado?: string | null) {
+    if (row.proyecto_privado_id != null) {
+      return { nombre: proyectosPrivados.find(p => p.id === row.proyecto_privado_id)?.nombre ?? `#${row.proyecto_privado_id}`, tag: 'Privado' as const, tieneFicha: true }
+    }
+    if (row.prioridad_id != null) {
+      return { nombre: iniciativas.find(i => i.id === row.prioridad_id)?.nombre ?? `#${row.prioridad_id}`, tag: 'Público' as const, tieneFicha: true }
+    }
+    if (row.proyecto_id) {
+      return { nombre: nombreLegado ?? row.proyecto_id, tag: 'SEIA' as const, tieneFicha: false }
+    }
+    return { nombre: '—', tag: null, tieneFicha: false }
+  }
+
+  // "+" en cualquier fila de la cartera (proyecto tratado, oficio, o
+  // compromiso) — agrega un avance REAL al proyecto/iniciativa (no una nota
+  // aislada de la sesión): comite_economico_proyecto_seguimiento si es
+  // privado, seguimientos si es pública, para que quede en su propio
+  // historial de avances.
+  async function agregarAvanceCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }, texto: string) {
     try {
-      await safeWrite(
-        getSupabase().from('sesion_proyectos').update({ nota: nota || null }).eq('id', sp.id),
-        `sesion_proyectos nota id=${sp.id}`,
-      )
-      setProyectosSesion(prev => prev.map(x => x.id === sp.id ? { ...x, nota: nota || null } : x))
+      if (row.proyecto_privado_id != null) {
+        await safeWrite(
+          getSupabase().from('comite_economico_proyecto_seguimiento').insert({
+            proyecto_id: row.proyecto_privado_id,
+            descripcion: texto,
+            autor: currentUserEmail || null,
+          }),
+          `comite_economico_proyecto_seguimiento insert (sesion) proyecto=${row.proyecto_privado_id}`,
+        )
+      } else if (row.prioridad_id != null) {
+        await safeWrite(
+          getSupabase().from('seguimientos').insert({
+            prioridad_id: row.prioridad_id,
+            tipo: 'avance',
+            descripcion: texto,
+            autor: currentUserEmail || null,
+            asistentes: [],
+          }),
+          `seguimientos insert (sesion) prioridad=${row.prioridad_id}`,
+        )
+      }
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -1151,7 +1177,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                 <div className="p-3 space-y-2">
                   {compAnteriores.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
-                  ) : compAnteriores.map(c => (
+                  ) : compAnteriores.map(c => {
+                    const { nombre: nombreProy, tag: tagProy, tieneFicha } = resolverCartera(c)
+                    return (
                     <div key={c.id} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg">
                       <div className="flex-1 min-w-0">
                         {c.seccion && <div className="mb-1"><SeccionTag seccion={c.seccion} /></div>}
@@ -1159,6 +1187,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         <p className="text-xs text-gray-400 mt-0.5">
                           {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
                         </p>
+                        {tieneFicha && (
+                          <button
+                            type="button"
+                            onClick={() => abrirFichaCartera(c)}
+                            className="mt-1 text-xs text-violet-700 hover:underline"
+                            title="Ver ficha y avances previos"
+                          >
+                            {tagProy} · {nombreProy}
+                          </button>
+                        )}
+                        {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} />}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {(Object.keys(ESTADO_COMPROMISO) as (keyof typeof ESTADO_COMPROMISO)[]).map(est => (
@@ -1189,7 +1228,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         ))}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </section>
 
@@ -1396,27 +1436,23 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         {proyectosSesion.length === 0 ? (
                           <p className="text-xs text-gray-500 text-center py-2">Sin proyectos tratados en esta sesión.</p>
                         ) : proyectosSesion.map(sp => {
-                          const esPrivado = sp.proyecto_privado_id != null
-                          const esPublico = sp.prioridad_id != null
-                          const nombre = esPrivado
-                            ? (proyectosPrivados.find(p => p.id === sp.proyecto_privado_id)?.nombre ?? `#${sp.proyecto_privado_id}`)
-                            : esPublico
-                              ? (iniciativas.find(i => i.id === sp.prioridad_id)?.nombre ?? `#${sp.prioridad_id}`)
-                              : (proyectosInfo.get(sp.proyecto_id ?? '')?.nombre ?? sp.proyecto_id ?? '—')
+                          const { nombre, tag, tieneFicha } = resolverCartera(sp, proyectosInfo.get(sp.proyecto_id ?? '')?.nombre)
                           return (
                             <div key={sp.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
                               <div className="flex items-start gap-3">
                                 <button
                                   type="button"
-                                  onClick={() => abrirFichaProyectoTratado(sp)}
-                                  disabled={!esPrivado && !esPublico}
+                                  onClick={() => abrirFichaCartera(sp)}
+                                  disabled={!tieneFicha}
                                   className="flex-1 min-w-0 text-left disabled:cursor-default"
-                                  title={esPrivado || esPublico ? 'Ver ficha y avances previos' : undefined}
+                                  title={tieneFicha ? 'Ver ficha y avances previos' : undefined}
                                 >
-                                  <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${esPrivado ? 'bg-violet-50 text-violet-700 border-violet-200' : esPublico ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                                    {esPrivado ? 'Privado' : esPublico ? 'Público' : 'SEIA'}
-                                  </span>
-                                  <span className={`text-sm truncate ${esPrivado || esPublico ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
+                                  {tag && (
+                                    <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${tag === 'Privado' ? 'bg-violet-50 text-violet-700 border-violet-200' : tag === 'Público' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                      {tag}
+                                    </span>
+                                  )}
+                                  <span className={`text-sm truncate ${tieneFicha ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
                                 </button>
                                 <button onClick={() => quitarProyecto(sp)} className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0" title="Quitar proyecto">
                                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -1424,14 +1460,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   </svg>
                                 </button>
                               </div>
-                              <textarea
-                                defaultValue={sp.nota ?? ''}
-                                onChange={e => setProyectoNotaDraft(prev => ({ ...prev, [sp.id]: e.target.value }))}
-                                onBlur={() => commitNotaProyecto(sp)}
-                                rows={2}
-                                placeholder="Notas de la discusión en profundidad…"
-                                className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
-                              />
+                              {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(sp, texto)} />}
                             </div>
                           )
                         })}
@@ -1457,11 +1486,26 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           <div className="space-y-2">
                             {oficiosAnteriores.length === 0 ? (
                               <p className="text-xs text-gray-400 text-center py-2">Sin oficios pendientes de sesiones anteriores.</p>
-                            ) : oficiosAnteriores.map(o => (
+                            ) : oficiosAnteriores.map(o => {
+                              const { nombre, tag, tieneFicha } = resolverCartera(o, o.proyecto?.nombre)
+                              return (
                               <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
                                 <div className="flex items-start gap-3">
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-gray-700 leading-snug truncate">{o.proyecto?.nombre ?? 'Sin proyecto'}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirFichaCartera(o)}
+                                      disabled={!tieneFicha}
+                                      className="text-left disabled:cursor-default"
+                                      title={tieneFicha ? 'Ver ficha y avances previos' : undefined}
+                                    >
+                                      {tag && (
+                                        <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${tag === 'Privado' ? 'bg-violet-50 text-violet-700 border-violet-200' : tag === 'Público' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                          {tag}
+                                        </span>
+                                      )}
+                                      <span className={`text-sm leading-snug truncate ${tieneFicha ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
+                                    </button>
                                     <p className="text-xs text-gray-400 mt-0.5">
                                       {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
                                     </p>
@@ -1488,8 +1532,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   placeholder="Nota (ej: por qué sigue pendiente)…"
                                   className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300"
                                 />
+                                {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} />}
                               </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </div>
 
@@ -1500,7 +1546,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                             <span className="text-xs text-gray-400 ml-auto">{oficiosTratadosSesion.length}</span>
                           </div>
                           <div className="space-y-2">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <ComboboxOaeca
                                 oaecaList={oaecaList}
                                 value={oficioOaeca}
@@ -1518,17 +1564,48 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   className={`${inputCls} w-full`}
                                 />
                               </label>
-                              <ComboboxProyecto
-                                proyectos={proyectosRegion}
-                                value={oficioProyecto}
-                                onSelect={setOficioProyecto}
-                                placeholder="Proyecto que considera…"
-                                label="Proyecto que considera"
-                              />
                             </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-gray-500 font-medium">Proyecto que considera:</span>
+                              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setOficioProyectoTipo('privado')}
+                                  className={`text-xs px-2.5 py-1 font-medium transition-colors ${oficioProyectoTipo === 'privado' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                  Privado
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setOficioProyectoTipo('publico')}
+                                  className={`text-xs px-2.5 py-1 font-medium transition-colors border-l border-gray-200 ${oficioProyectoTipo === 'publico' ? 'bg-violet-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                  Público
+                                </button>
+                              </div>
+                            </div>
+                            {oficioProyectoTipo === 'privado' ? (
+                              oficioProyectoPrivado ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-violet-50 text-violet-800 border border-violet-200 rounded-lg px-2 py-1.5">
+                                  <span className="truncate">{oficioProyectoPrivado.nombre}</span>
+                                  <button type="button" onClick={() => setOficioProyectoPrivado(null)} className="text-violet-400 hover:text-violet-700 flex-shrink-0">✕</button>
+                                </span>
+                              ) : (
+                                <ComboboxProyectoEconomico items={proyectosPrivados} onSelect={setOficioProyectoPrivado} placeholder="Buscar proyecto privado…" />
+                              )
+                            ) : (
+                              oficioProyectoPublico ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-sky-50 text-sky-800 border border-sky-200 rounded-lg px-2 py-1.5">
+                                  <span className="truncate">{oficioProyectoPublico.nombre}</span>
+                                  <button type="button" onClick={() => setOficioProyectoPublico(null)} className="text-sky-400 hover:text-sky-700 flex-shrink-0">✕</button>
+                                </span>
+                              ) : (
+                                <ComboboxProyectoEconomico items={iniciativasCER} onSelect={setOficioProyectoPublico} placeholder="Buscar iniciativa pública (CER)…" />
+                              )
+                            )}
                             <button
                               onClick={agregarOficioNuevo}
-                              disabled={oficioSaving || !oficioOaeca || !oficioProyecto}
+                              disabled={oficioSaving || !oficioOaeca || (oficioProyectoTipo === 'privado' ? !oficioProyectoPrivado : !oficioProyectoPublico)}
                               className="text-xs px-3.5 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
                             >
                               {oficioSaving ? 'Guardando…' : '+ Oficio pendiente'}
@@ -1536,14 +1613,31 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
                             {oficiosTratadosSesion.length > 0 && (
                               <div className="space-y-1.5 pt-1">
-                                {oficiosTratadosSesion.map(o => (
-                                  <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg">
-                                    <p className="text-sm text-gray-700 truncate">{o.proyecto?.nombre ?? '—'}</p>
+                                {oficiosTratadosSesion.map(o => {
+                                  const { nombre, tag, tieneFicha } = resolverCartera(o, o.proyecto?.nombre)
+                                  return (
+                                  <div key={o.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirFichaCartera(o)}
+                                      disabled={!tieneFicha}
+                                      className="text-left disabled:cursor-default"
+                                      title={tieneFicha ? 'Ver ficha y avances previos' : undefined}
+                                    >
+                                      {tag && (
+                                        <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${tag === 'Privado' ? 'bg-violet-50 text-violet-700 border-violet-200' : tag === 'Público' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                          {tag}
+                                        </span>
+                                      )}
+                                      <span className={`text-sm truncate ${tieneFicha ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
+                                    </button>
                                     <p className="text-[11px] text-gray-400 truncate">
                                       {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
                                     </p>
+                                    {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} />}
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             )}
                           </div>
@@ -1563,15 +1657,29 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                   <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
                 </div>
                 <div className="p-3 space-y-2">
-                  {compNuevos.map(c => (
+                  {compNuevos.map(c => {
+                    const { nombre: nombreProy, tag: tagProy, tieneFicha } = resolverCartera(c)
+                    return (
                     <div key={c.id} className="px-3 py-2 bg-gray-50 rounded-lg">
                       {c.seccion && <div className="mb-1"><SeccionTag seccion={c.seccion} /></div>}
                       <p className="text-sm text-gray-700 leading-snug">{c.descripcion}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {c.responsable_institucion}{c.responsable_nombre ? ` · ${c.responsable_nombre}` : ''}{c.plazo ? ` · plazo ${fmtFecha(c.plazo)}` : ''}
                       </p>
+                      {tieneFicha && (
+                        <button
+                          type="button"
+                          onClick={() => abrirFichaCartera(c)}
+                          className="mt-1 text-xs text-violet-700 hover:underline"
+                          title="Ver ficha y avances previos"
+                        >
+                          {tagProy} · {nombreProy}
+                        </button>
+                      )}
+                      {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} />}
                     </div>
-                  ))}
+                    )
+                  })}
                   <form onSubmit={agregarCompromiso} className="space-y-2 pt-1">
                     <textarea
                       value={cDescripcion}

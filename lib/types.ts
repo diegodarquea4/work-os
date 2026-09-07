@@ -1014,7 +1014,11 @@ export type SesionOficioTratado = {
   region_cod: string
   sesion_origen_id: number
   oaeca_id: number
-  proyecto_id: string
+  // Legado (v2_proyectos_inversion) — los oficios nuevos usan
+  // proyecto_privado_id (privado) o prioridad_id (público) — mig 089.
+  proyecto_id: string | null
+  proyecto_privado_id: number | null
+  prioridad_id: number | null
   fecha_limite: string | null        // date puro YYYY-MM-DD
   estado: 'pendiente' | 'resuelto'
   nota: string | null

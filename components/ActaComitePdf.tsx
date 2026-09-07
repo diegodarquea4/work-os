@@ -77,6 +77,7 @@ export type ActaData = ActaBranding & {
   proyectosTratados: { nombre: string; nota: string | null; tag: 'Privado' | 'Público' | null }[]
   oficiosTratados: {
     nombreProyecto: string
+    tag: 'Privado' | 'Público' | null
     oaeca: string
     fechaLimite: string | null
     estado: 'pendiente' | 'resuelto'
@@ -293,7 +294,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </View>
             {data.oficiosTratados.map((o, i) => (
               <View key={i} style={s.tr} wrap={false}>
-                <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
+                <Text style={[s.td, { flex: 3 }]}>{o.tag ? `[${o.tag}] ` : ''}{o.nombreProyecto}</Text>
                 <Text style={[s.td, { flex: 2, color: C.muted }]}>{o.oaeca}</Text>
                 <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
                 <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.muted }]}>
