@@ -552,6 +552,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                       />
                       <TextPillField label="Fuente de financiamiento" value={proyecto.fuente_financiamiento ?? ''} editable={editable} onCommit={v => commitCampo('fuente_financiamiento', v.trim() || null)} />
                       <TextPillField label="Responsable operativo" value={proyecto.responsable_operativo ?? ''} editable={editable} onCommit={v => commitCampo('responsable_operativo', v.trim() || null)} />
+                      <TextAreaPillField label="Estado inicial" value={proyecto.estado_inicial ?? ''} editable={editable} onCommit={v => commitCampo('estado_inicial', v.trim() || null)} />
                     </div>
                     <div className="flex flex-col divide-y divide-gray-200/60 border-l border-gray-200/60 pl-3">
                       <PillField
@@ -572,17 +573,8 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         formatDisplay={v => `${v} años`}
                         onCommit={v => commitCampo('vida_util_anios', v.trim() ? Number(v.trim()) : null)}
                       />
+                      <TextAreaPillField label="Meta 2026 - 2027" value={proyecto.meta_2026_2027 ?? ''} editable={editable} onCommit={v => commitCampo('meta_2026_2027', v.trim() || null)} />
                     </div>
-                  </div>
-
-                  {/* Texto libre — no cabe en pill, mismo tratamiento que Descripción arriba */}
-                  <div className="bg-gray-50 rounded-xl divide-y divide-gray-200/70 text-sm overflow-hidden">
-                    <DetailRow label="Estado inicial" stacked>
-                      {editable ? <textarea defaultValue={proyecto.estado_inicial ?? ''} onBlur={e => commitCampo('estado_inicial', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-gray-800 whitespace-pre-wrap">{proyecto.estado_inicial ?? '—'}</p>}
-                    </DetailRow>
-                    <DetailRow label="Meta 2026 - 2027" stacked>
-                      {editable ? <textarea defaultValue={proyecto.meta_2026_2027 ?? ''} onBlur={e => commitCampo('meta_2026_2027', e.target.value || null)} rows={2} className={`${inputCls} resize-y`} /> : <p className="text-gray-800 whitespace-pre-wrap">{proyecto.meta_2026_2027 ?? '—'}</p>}
-                    </DetailRow>
                   </div>
                 </div>
               )}
@@ -906,23 +898,6 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   )
 }
 
-function DetailRow({ label, children, stacked = false }: { label: string; children: React.ReactNode; stacked?: boolean }) {
-  if (stacked) {
-    return (
-      <div className="px-3 py-2">
-        <span className="text-gray-400 text-xs block mb-1">{label}</span>
-        {children}
-      </div>
-    )
-  }
-  return (
-    <div className="flex items-center gap-2 px-3 py-2">
-      <span className="text-gray-400 w-40 flex-shrink-0 text-xs">{label}</span>
-      <div className="flex-1 min-w-0">{children}</div>
-    </div>
-  )
-}
-
 // ── Pills de la tarjeta de detalle — mismo lenguaje visual que la metadata
 // de ProjectTrackerModal.tsx (ficha de iniciativa): fila label + pill
 // redondeada, click para editar, chevron sutil, sin bordes ásperos.
@@ -1059,6 +1034,63 @@ function TextPillField({
           {value ? (formatDisplay ? formatDisplay(value) : value) : '—'}
         </span>
         {editable && <ChevronDown cls="text-slate-500" />}
+      </button>
+    </div>
+  )
+}
+
+// Campo de texto largo (Estado inicial, Meta) — colapsado es una sola línea
+// truncada, igual que los demás pills; al apretarlo se despliega: editable
+// abre un textarea (mismo Guardar/✕ que TextPillField), de solo lectura
+// alterna a mostrar el texto completo envuelto.
+function TextAreaPillField({
+  label, value, editable, onCommit, placeholder,
+}: {
+  label: string
+  value: string
+  editable: boolean
+  onCommit: (v: string) => void
+  placeholder?: string
+}) {
+  const [editing, setEditing]   = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [draft, setDraft]       = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+
+  if (editing) {
+    return (
+      <div className={pillRowCls}>
+        <span className={pillLabelCls}>{label}</span>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <textarea
+            autoFocus
+            rows={3}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder={placeholder}
+            className={`w-full ${pillEditInputCls} resize-y`}
+          />
+          <div className="flex justify-end gap-1.5">
+            <button onClick={() => { onCommit(draft); setEditing(false) }} className={pillSaveBtnCls}>Guardar</button>
+            <button onClick={() => { setDraft(value); setEditing(false) }} className={pillCancelBtnCls}>✕</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className={pillRowCls}>
+      <span className={pillLabelCls}>{label}</span>
+      <button
+        type="button"
+        onClick={() => editable ? setEditing(true) : setExpanded(v => !v)}
+        disabled={!editable && !value}
+        className={`flex-1 min-w-0 text-left pl-2.5 pr-2 py-0.5 bg-slate-100 hover:bg-slate-200 transition-colors group cursor-pointer disabled:cursor-default disabled:hover:bg-slate-100 ${expanded ? 'rounded-lg py-1.5' : 'rounded-full flex items-center gap-1.5'}`}
+      >
+        <span className={`text-xs font-medium ${value ? 'text-slate-700' : 'text-slate-400'} ${expanded ? 'block whitespace-pre-wrap' : 'flex-1 truncate'}`}>
+          {value || '—'}
+        </span>
+        {!expanded && editable && <ChevronDown cls="text-slate-500" />}
       </button>
     </div>
   )
