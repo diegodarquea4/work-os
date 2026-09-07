@@ -7,6 +7,8 @@ import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEco
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 import { EmptyState } from '@/components/ui'
+import FilterPopover, { type FilterOption } from './FilterPopover'
+import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 
 /**
  * Ficha de un proyecto privado del Comité Económico — mismo lenguaje visual
@@ -84,10 +86,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [permisoSaving, setPermisoSaving]     = useState(false)
 
   // Filtros de avances — por permiso, por institución (órgano otorgante del
-  // permiso asociado) y por ministerio (del autor del avance).
-  const [filtroPermisoId, setFiltroPermisoId]     = useState<number | ''>('')
-  const [filtroInstitucion, setFiltroInstitucion] = useState('')
-  const [filtroMinisterio, setFiltroMinisterio]   = useState('')
+  // permiso asociado) y por ministerio (del autor del avance). Mismo patrón
+  // multi-select (Set<string>) que los filtros de ComiteEconomicoProyectosPanel.tsx.
+  const [fPermiso, setFPermiso]         = useState<Set<string>>(new Set())
+  const [fInstitucion, setFInstitucion] = useState<Set<string>>(new Set())
+  const [fMinisterio, setFMinisterio]   = useState<Set<string>>(new Set())
 
   const [showForm, setShowForm]                   = useState(false)
   const [avanceFecha, setAvanceFecha]             = useState(hoyISO)
@@ -373,37 +376,49 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
 
   const permisoById = useMemo(() => new Map(permisos.map(p => [p.id, p])), [permisos])
 
-  const opcionesInstitucion = useMemo(() => {
+  const opcionesPermisoFiltro = useMemo((): FilterOption[] =>
+    permisos.map(p => ({ value: String(p.id), label: `${p.pas.n_pas} — ${p.pas.nombre}` })),
+  [permisos])
+
+  const opcionesInstitucion = useMemo((): FilterOption[] => {
     const vistos = new Set<string>()
     for (const p of permisos) if (p.pas.organo_otorgante) vistos.add(p.pas.organo_otorgante)
-    return [...vistos].sort()
+    return [...vistos].sort().map(v => ({ value: v, label: v }))
   }, [permisos])
 
-  const opcionesMinisterio = useMemo(() => {
+  const opcionesMinisterio = useMemo((): FilterOption[] => {
     const vistos = new Set<string>()
     for (const a of avances) {
       const m = a.autor ? ministerioPorEmail.get(a.autor) : null
       if (m) vistos.add(m)
     }
-    return [...vistos].sort()
+    return [...vistos].sort().map(v => ({ value: v, label: v }))
   }, [avances, ministerioPorEmail])
 
   const avancesFiltrados = useMemo(() => {
     return avances.filter(a => {
-      if (filtroPermisoId !== '' && a.permiso_id !== filtroPermisoId) return false
-      if (filtroInstitucion) {
+      if (fPermiso.size && (a.permiso_id == null || !fPermiso.has(String(a.permiso_id)))) return false
+      if (fInstitucion.size) {
         const permiso = a.permiso_id != null ? permisoById.get(a.permiso_id) : null
-        if (permiso?.pas.organo_otorgante !== filtroInstitucion) return false
+        if (!permiso?.pas.organo_otorgante || !fInstitucion.has(permiso.pas.organo_otorgante)) return false
       }
-      if (filtroMinisterio) {
+      if (fMinisterio.size) {
         const m = a.autor ? ministerioPorEmail.get(a.autor) : null
-        if (m !== filtroMinisterio) return false
+        if (!m || !fMinisterio.has(m)) return false
       }
       return true
     })
-  }, [avances, filtroPermisoId, filtroInstitucion, filtroMinisterio, permisoById, ministerioPorEmail])
+  }, [avances, fPermiso, fInstitucion, fMinisterio, permisoById, ministerioPorEmail])
 
-  const hayFiltrosAvances = filtroPermisoId !== '' || !!filtroInstitucion || !!filtroMinisterio
+  const chipsAvances = [
+    setChip('Permiso', fPermiso, () => setFPermiso(new Set()), v => opcionesPermisoFiltro.find(o => o.value === v)?.label ?? v),
+    setChip('Institución', fInstitucion, () => setFInstitucion(new Set())),
+    setChip('Ministerio', fMinisterio, () => setFMinisterio(new Set())),
+  ].filter((c): c is NonNullable<typeof c> => c !== null)
+
+  function clearFiltrosAvances() {
+    setFPermiso(new Set()); setFInstitucion(new Set()); setFMinisterio(new Set())
+  }
 
   // ── Derivados: picker de permisos (catálogo global, excluye ya agregados) ──
 
@@ -725,24 +740,13 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
 
                 {/* Filtros — por permiso, institución (órgano otorgante) y ministerio del autor */}
                 {avances.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
-                    <select value={filtroPermisoId} onChange={e => setFiltroPermisoId(e.target.value ? Number(e.target.value) : '')} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
-                      <option value="">Todos los permisos</option>
-                      {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
-                    </select>
-                    <select value={filtroInstitucion} onChange={e => setFiltroInstitucion(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
-                      <option value="">Toda institución</option>
-                      {opcionesInstitucion.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <select value={filtroMinisterio} onChange={e => setFiltroMinisterio(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-300">
-                      <option value="">Todo ministerio</option>
-                      {opcionesMinisterio.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    {hayFiltrosAvances && (
-                      <button onClick={() => { setFiltroPermisoId(''); setFiltroInstitucion(''); setFiltroMinisterio('') }} className="text-xs text-gray-400 hover:text-gray-700">
-                        Limpiar filtros
-                      </button>
-                    )}
+                  <div className="mb-3 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <FilterPopover label="Permiso" options={opcionesPermisoFiltro} selected={fPermiso} onChange={setFPermiso} />
+                      <FilterPopover label="Institución" options={opcionesInstitucion} selected={fInstitucion} onChange={setFInstitucion} />
+                      <FilterPopover label="Ministerio" options={opcionesMinisterio} selected={fMinisterio} onChange={setFMinisterio} />
+                    </div>
+                    {chipsAvances.length > 0 && <ActiveFiltersBar chips={chipsAvances} clearFilters={clearFiltrosAvances} />}
                   </div>
                 )}
 
