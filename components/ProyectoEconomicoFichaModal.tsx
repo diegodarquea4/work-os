@@ -437,7 +437,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[min(72rem,95vw)] max-h-[95vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {loading || !proyecto ? (
@@ -447,9 +447,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
         ) : (
           <>
             {/* Encabezado — Nombre + Descripción (campo notas), click-to-edit */}
-            <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 bg-violet-50/40 flex items-start justify-between gap-3">
+            <header className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide mb-0.5">Proyecto privado — Comité Económico</p>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Proyecto privado — Comité Económico</span>
+                </div>
 
                 {editingNombre && editable ? (
                   <input
@@ -508,14 +510,14 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   </div>
                 )}
               </div>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0" title="Cerrar">
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0 mt-0.5" title="Cerrar">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l12 12M16 4L4 16"/>
                 </svg>
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {/* Toggle de la tarjeta de detalle */}
               <button
                 type="button"
@@ -590,14 +592,14 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 <button
                   type="button"
                   onClick={() => setTab('avances')}
-                  className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${tab === 'avances' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'avances' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
                   Avances
                 </button>
                 <button
                   type="button"
                   onClick={() => setTab('permisos')}
-                  className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${tab === 'permisos' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'permisos' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
                   Permisos {permisos.length > 0 && <span className="text-gray-400 font-normal">({permisos.length})</span>}
                 </button>
@@ -607,36 +609,37 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 <div className="pt-1 space-y-3">
                   {editable && (
                     <div className="relative">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={permisoQuery}
-                          onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true) }}
-                          onFocus={() => setPermisoOpen(true)}
-                          onBlur={() => setTimeout(() => setPermisoOpen(false), 150)}
-                          placeholder="Buscar permiso por N° PAS o nombre…"
-                          className={inputCls}
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={permisoQuery}
+                        onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true) }}
+                        onFocus={() => setPermisoOpen(true)}
+                        onBlur={() => setTimeout(() => setPermisoOpen(false), 150)}
+                        placeholder="Buscar permiso por N° PAS o nombre…"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                      />
                       {permisoOpen && (
-                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                        <div className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+                          {pasMatches.length === 0 && (
+                            <p className="px-4 py-4 text-sm text-gray-400 text-center">Sin resultados en el catálogo.</p>
+                          )}
                           {pasMatches.map(p => (
                             <button
                               key={p.id}
                               type="button"
                               onMouseDown={e => e.preventDefault()}
                               onClick={() => agregarPermiso(p)}
-                              className="w-full text-left px-3 py-2 hover:bg-violet-50 border-b border-gray-100 last:border-0"
+                              className="w-full text-left px-4 py-3 hover:bg-violet-50 border-b border-gray-100 last:border-0"
                             >
-                              <p className="text-sm text-gray-800 truncate"><span className="font-semibold">{p.n_pas}</span> — {p.nombre}</p>
-                              <p className="text-[11px] text-gray-400 truncate">{p.organo_otorgante ?? '—'}</p>
+                              <p className="text-sm text-gray-800"><span className="font-semibold">{p.n_pas}</span> — {p.nombre}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{p.organo_otorgante ?? '—'}</p>
                             </button>
                           ))}
                           <button
                             type="button"
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => { setNuevoPasOpen(true); setNuevoPasNombre(permisoQuery); setPermisoOpen(false) }}
-                            className="w-full text-left px-3 py-2 text-sm text-violet-700 font-medium hover:bg-violet-50"
+                            className="w-full text-left px-4 py-3 text-sm text-violet-700 font-medium hover:bg-violet-50"
                           >
                             + Crear nuevo permiso en el catálogo
                           </button>
@@ -753,7 +756,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 {editable && (
                   <button
                     onClick={() => setShowForm(v => !v)}
-                    className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-colors mb-4"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mb-5"
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
