@@ -54,6 +54,7 @@ export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onA
   const [fEstado, setFEstado]         = useState<Set<string>>(new Set())
   const [sortCol, setSortCol]         = useState<SortCol | null>(null)
   const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('desc')
+  const [exportando, setExportando]   = useState(false)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -112,6 +113,18 @@ export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onA
     setFRiesgo(new Set()); setFEstado(new Set())
   }
 
+  async function handleExportar() {
+    setExportando(true)
+    try {
+      const { exportProyectosEconomicosXlsx } = await import('@/lib/comiteEconomico')
+      await exportProyectosEconomicosXlsx(filtrados, region.nombre)
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setExportando(false)
+    }
+  }
+
   const chips = [
     setChip('Plazo', fPlazo, () => setFPlazo(new Set())),
     setChip('Priorizado', fPriorizado, () => setFPriorizado(new Set())),
@@ -143,12 +156,22 @@ export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onA
           </div>
         </div>
         {vista === 'privado' && (
-          <button
-            onClick={() => setNuevoOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
-          >
-            + Nuevo proyecto
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportar}
+              disabled={exportando || filtrados.length === 0}
+              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:text-violet-700 hover:border-violet-200 transition-colors disabled:opacity-50"
+              title="Descarga la lista filtrada, con el último avance y los permisos de cada proyecto"
+            >
+              {exportando ? 'Generando…' : '↓ Descargar Excel'}
+            </button>
+            <button
+              onClick={() => setNuevoOpen(true)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
+            >
+              + Nuevo proyecto
+            </button>
+          </div>
         )}
       </div>
 
