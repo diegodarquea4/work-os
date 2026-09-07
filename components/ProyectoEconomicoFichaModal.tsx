@@ -51,6 +51,10 @@ type Usuario = { email: string; ministerio: string | null }
 const inputCls = 'px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 w-full'
 const DETAIL_COLLAPSED_KEY = 'workos:proyectoEconomicoDetailCollapsed'
 
+function hoyISO(): string {
+  return new Date().toLocaleDateString('en-CA')
+}
+
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
@@ -82,7 +86,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [filtroMinisterio, setFiltroMinisterio]   = useState('')
 
   const [showForm, setShowForm]                   = useState(false)
-  const [avanceFecha, setAvanceFecha]             = useState('')
+  const [avanceFecha, setAvanceFecha]             = useState(hoyISO)
   const [avanceDescripcion, setAvanceDescripcion] = useState('')
   // Permiso asociado (opcional) — el único cambio de estado posible en un
   // avance es el del permiso elegido; sin permiso, el avance queda general
@@ -221,7 +225,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   }
 
   function resetAvanceForm() {
-    setAvanceFecha(''); setAvanceDescripcion('')
+    setAvanceFecha(hoyISO()); setAvanceDescripcion('')
     setAvancePermisoId(''); setAvancePermisoEstado(''); setShowForm(false)
   }
 
@@ -753,33 +757,28 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 {showForm && (
                   <div className="bg-gray-50 rounded-xl p-3 space-y-2.5 mb-4">
                     <div className="flex items-center gap-2">
-                      <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputCls} w-auto flex-shrink-0`} />
-                      <span className="text-xs text-gray-400 flex-1">
-                        {avancePermisoId === '' ? 'Avance general — sin permiso asociado' : 'Este avance queda ligado al permiso elegido abajo'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       <select
                         value={avancePermisoId}
                         onChange={e => { setAvancePermisoId(e.target.value ? Number(e.target.value) : ''); setAvancePermisoEstado('') }}
-                        className={`${inputCls} flex-1`}
+                        className={`${inputCls} flex-1 min-w-0`}
                       >
-                        <option value="">Permiso asociado (opcional) — avance general</option>
+                        <option value="">Avance general (sin permiso asociado)</option>
                         {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
                       </select>
-                      {avancePermisoId !== '' && (
-                        <select
-                          value={avancePermisoEstado}
-                          onChange={e => setAvancePermisoEstado(e.target.value as typeof avancePermisoEstado)}
-                          className={`${inputCls} w-auto flex-shrink-0`}
-                        >
-                          <option value="">Estado del permiso (sin cambio)</option>
-                          {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
-                            <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
-                          ))}
-                        </select>
-                      )}
+                      <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputCls} w-40 flex-shrink-0`} />
                     </div>
+                    {avancePermisoId !== '' && (
+                      <select
+                        value={avancePermisoEstado}
+                        onChange={e => setAvancePermisoEstado(e.target.value as typeof avancePermisoEstado)}
+                        className={inputCls}
+                      >
+                        <option value="">Estado del permiso (sin cambio)</option>
+                        {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
+                          <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
+                        ))}
+                      </select>
+                    )}
                     <textarea
                       autoFocus
                       value={avanceDescripcion}
