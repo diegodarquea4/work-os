@@ -16,11 +16,11 @@ import { EmptyState } from '@/components/ui'
  *   · El resto de los 14 campos restantes vive en UNA tarjeta desplegable
  *     (grid label/valor, mismo estilo que la metadata de la iniciativa),
  *     colapsable con preferencia persistida en localStorage.
- *   · Avances = mismo timeline con punto de color + chip de estado editable
- *     inline + fecha editable inline que SeguimientoTab.tsx, pero con los
- *     campos propios de esta tabla (fecha/descripción/estado/autor, sin
- *     tipo/reunión/hito — comite_economico_proyecto_seguimiento es más chica
- *     que seguimientos).
+ *   · Avances = mismo timeline con punto de color + fecha editable inline
+ *     que SeguimientoTab.tsx, pero el "estado" que se puede cambiar es el
+ *     del PERMISO asociado (Pendiente/Otorgado/Frenado), no uno propio del
+ *     avance: un avance o se liga a un permiso del proyecto (y ahí puede
+ *     mover su estado) o queda general, sin estado ni punto de color.
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
@@ -35,17 +35,14 @@ type Props = {
   onChanged?: () => void
 }
 
-const ESTADO_AVANCE = {
-  pendiente:  { label: 'Pendiente',  cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'   },
-  en_curso:   { label: 'En curso',   cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'   },
-  completado: { label: 'Completado', cls: 'bg-green-100 text-green-700', dot: 'bg-green-500'  },
-  bloqueado:  { label: 'Bloqueado',  cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'    },
-} as const
-
+// El estado que se puede cambiar al registrar un avance es el del PERMISO
+// (tricolor Pendiente/Otorgado/Frenado) — no existe un estado propio del
+// avance desacoplado de eso: un avance o habla de un permiso puntual (y
+// entonces puede mover SU estado) o es general (sin estado, punto gris).
 const ESTADO_PERMISO = {
-  pendiente: { label: 'Pendiente', cls: 'bg-amber-100 text-amber-700' },
-  otorgado:  { label: 'Otorgado',  cls: 'bg-green-100 text-green-700' },
-  frenado:   { label: 'Frenado',   cls: 'bg-red-100 text-red-700'     },
+  pendiente: { label: 'Pendiente', cls: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
+  otorgado:  { label: 'Otorgado',  cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  frenado:   { label: 'Frenado',   cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 } as const
 
 type PermisoConCatalogo = ComiteEconomicoProyectoPermiso & { pas: PasCatalogo }
@@ -87,9 +84,9 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [showForm, setShowForm]                   = useState(false)
   const [avanceFecha, setAvanceFecha]             = useState('')
   const [avanceDescripcion, setAvanceDescripcion] = useState('')
-  const [avanceEstado, setAvanceEstado]           = useState<'' | keyof typeof ESTADO_AVANCE>('')
-  // Permiso asociado (opcional) — al elegir uno se puede además actualizar
-  // su estado tri-color como parte de este mismo avance.
+  // Permiso asociado (opcional) — el único cambio de estado posible en un
+  // avance es el del permiso elegido; sin permiso, el avance queda general
+  // y sin estado.
   const [avancePermisoId, setAvancePermisoId]         = useState<number | ''>('')
   const [avancePermisoEstado, setAvancePermisoEstado] = useState<'' | keyof typeof ESTADO_PERMISO>('')
   const [avanceSaving, setAvanceSaving]           = useState(false)
@@ -224,7 +221,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   }
 
   function resetAvanceForm() {
-    setAvanceFecha(''); setAvanceDescripcion(''); setAvanceEstado('')
+    setAvanceFecha(''); setAvanceDescripcion('')
     setAvancePermisoId(''); setAvancePermisoEstado(''); setShowForm(false)
   }
 
@@ -237,7 +234,6 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
           proyecto_id: proyectoId,
           fecha: avanceFecha || undefined,
           descripcion: avanceDescripcion.trim(),
-          estado: avanceEstado || null,
           permiso_id: avancePermisoId || null,
           autor: currentUserEmail || null,
         }),
@@ -277,20 +273,6 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       await safeWrite(
         getSupabase().from('comite_economico_proyecto_seguimiento').update({ fecha }).eq('id', a.id),
         `comite_economico_proyecto_seguimiento fecha id=${a.id}`,
-      )
-    } catch (err) {
-      window.alert((err as Error).message)
-      cargar()
-    }
-  }
-
-  async function handleInlineEstado(a: ComiteEconomicoProyectoSeguimiento, estado: string) {
-    const val = (estado || null) as ComiteEconomicoProyectoSeguimiento['estado']
-    setAvances(prev => prev.map(x => x.id === a.id ? { ...x, estado: val } : x))
-    try {
-      await safeWrite(
-        getSupabase().from('comite_economico_proyecto_seguimiento').update({ estado: val }).eq('id', a.id),
-        `comite_economico_proyecto_seguimiento estado id=${a.id}`,
       )
     } catch (err) {
       window.alert((err as Error).message)
@@ -771,13 +753,10 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 {showForm && (
                   <div className="bg-gray-50 rounded-xl p-3 space-y-2.5 mb-4">
                     <div className="flex items-center gap-2">
-                      <select value={avanceEstado} onChange={e => setAvanceEstado(e.target.value as typeof avanceEstado)} className={`${inputCls} flex-1`}>
-                        <option value="">Estado (sin cambio)</option>
-                        {(Object.keys(ESTADO_AVANCE) as (keyof typeof ESTADO_AVANCE)[]).map(k => (
-                          <option key={k} value={k}>{ESTADO_AVANCE[k].label}</option>
-                        ))}
-                      </select>
                       <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputCls} w-auto flex-shrink-0`} />
+                      <span className="text-xs text-gray-400 flex-1">
+                        {avancePermisoId === '' ? 'Avance general — sin permiso asociado' : 'Este avance queda ligado al permiso elegido abajo'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <select
@@ -842,32 +821,35 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                     <div className="space-y-5">
                       {avancesFiltrados.map(a => {
                         const puedeEditar = puedeOperar || a.autor === currentUserEmail
-                        const cfg = a.estado ? ESTADO_AVANCE[a.estado] : null
                         const permisoLigado = a.permiso_id != null ? permisoById.get(a.permiso_id) : null
+                        const cfg = permisoLigado?.estado ? ESTADO_PERMISO[permisoLigado.estado] : null
                         const ministerioAutor = a.autor ? ministerioPorEmail.get(a.autor) : null
                         return (
                           <div key={a.id} className="flex gap-4 pl-1 group">
                             <div className={`w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 ${cfg?.dot ?? 'bg-gray-300'} ring-2 ring-white`} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                {puedeEditar ? (
-                                  <select
-                                    value={a.estado ?? ''}
-                                    onChange={e => handleInlineEstado(a, e.target.value)}
-                                    className={`text-xs rounded-full pl-1.5 pr-1 py-0.5 border-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
-                                  >
-                                    <option value="">Sin estado</option>
-                                    {(Object.keys(ESTADO_AVANCE) as (keyof typeof ESTADO_AVANCE)[]).map(k => (
-                                      <option key={k} value={k}>{ESTADO_AVANCE[k].label}</option>
-                                    ))}
-                                  </select>
-                                ) : cfg ? (
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
-                                ) : null}
-                                {permisoLigado && (
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100" title={permisoLigado.pas.organo_otorgante ?? undefined}>
-                                    {permisoLigado.pas.n_pas}
-                                  </span>
+                                {permisoLigado ? (
+                                  <>
+                                    <span className="text-xs font-medium text-gray-500" title={permisoLigado.pas.nombre}>{permisoLigado.pas.n_pas}</span>
+                                    {puedeEditar ? (
+                                      <select
+                                        value={permisoLigado.estado ?? ''}
+                                        onChange={e => cambiarEstadoPermiso(permisoLigado.id, e.target.value)}
+                                        className={`text-xs rounded-full pl-1.5 pr-1 py-0.5 border-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
+                                        title="Cambia el estado de este permiso"
+                                      >
+                                        <option value="">Sin estado</option>
+                                        {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
+                                          <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}>{cfg?.label ?? 'Sin estado'}</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-gray-400">Avance general</span>
                                 )}
                                 {puedeEditar ? (
                                   <input
