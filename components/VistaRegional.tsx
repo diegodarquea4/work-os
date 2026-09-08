@@ -25,7 +25,7 @@ import HistorialSesionesPoliticoModal from './HistorialSesionesPoliticoModal'
 import DesalojoBadge from './DesalojoBadge'
 import { FlagIcon } from './icons/FlagIcon'
 import MetricasClaveSection, { MetricCard } from './MetricasClaveSection'
-import { useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
+import { useCan, useCanEditAny, useCanEditOperational } from '@/lib/context/UserContext'
 import { useRegionEjes } from '@/lib/hooks/useRegionEjes'
 import { composeEjeLabel } from '@/lib/ejes'
 import {
@@ -167,8 +167,12 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
 
   const region: Region | null = REGIONS.find(r => r.cod === selectedCod) ?? null
 
+  // Gestionar el catálogo de ejes ya no va por rol sino por capacidad, acotada
+  // a ESTA región (mig 092): se concede desde Usuarios → Permisos.
+  const puedeGestionarEjes = useCan('region.gestionar_ejes', region?.cod)
+
   // Catálogo de ejes de la región activa (migración 015). `refresh` se llama
-  // desde RegionEjesPanel cuando admin agrega/edita/elimina un eje.
+  // desde RegionEjesPanel cuando se agrega/edita/elimina un eje.
   const { ejes: regionEjes, loading: regionEjesLoading, refresh: refreshRegionEjes } = useRegionEjes(selectedCod)
 
   // Initiatives for this region
@@ -461,8 +465,9 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             la sección "Avance por eje" — split en dos columnas. Ver más abajo. */}
 
         {/* RegionEjesPanel — modal para gestionar el catálogo de ejes de la
-            región. Solo admin/editor (RLS lo refuerza). Se abre desde el
-            botón "Gestionar ejes" junto al título de "Avance por eje". */}
+            región. Gateado por `region.gestionar_ejes` en esta región (RLS lo
+            refuerza). Se abre desde el botón "Gestionar ejes" junto al título
+            de "Avance por eje". */}
         {region && (
           <RegionEjesPanel
             open={manageEjesOpen}
@@ -688,7 +693,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ejes estratégicos</h3>
-              {canEditAny && (
+              {puedeGestionarEjes && (
                 <button
                   onClick={() => setManageEjesOpen(true)}
                   className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-slate-700 transition-colors"
@@ -708,7 +713,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 {regionEjes.length === 0
                   ? 'Esta región aún no tiene ejes en el catálogo.'
                   : 'El catálogo está definido pero no hay iniciativas asociadas todavía.'}
-                {canEditAny && regionEjes.length === 0 && ' Definí los ejes desde "Gestionar ejes".'}
+                {puedeGestionarEjes && regionEjes.length === 0 && ' Define los ejes desde "Gestionar ejes".'}
               </p>
             )}
             {/* Container flex — la transición real ocurre en los hijos (ancho,
