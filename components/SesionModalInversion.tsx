@@ -332,7 +332,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // Alta de oficio nuevo (Seguimiento de la Inversión) — proyecto que
   // considera viene de la misma cartera (privado/público) que 4c, no del
-  // catálogo SEIA legado (mig 096).
+  // catálogo SEIA legado (mig 097).
   const [oficioOaeca, setOficioOaeca]                 = useState<Oaeca | null>(null)
   const [oficioProyectoTipo, setOficioProyectoTipo]   = useState<'privado' | 'publico'>('privado')
   const [oficioProyectoPrivado, setOficioProyectoPrivado] = useState<ComiteEconomicoProyecto | null>(null)
@@ -489,7 +489,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
     const proy = (proyRes.data ?? []) as SesionProyecto[]
     setProyectosSesion(proy)
-    // Solo filas legadas (previas a mig 093) siguen apuntando a proyecto_id;
+    // Solo filas legadas (previas a mig 094) siguen apuntando a proyecto_id;
     // las nuevas usan proyecto_privado_id/prioridad_id (resueltas contra
     // proyectosPrivados/iniciativas, sin query aparte).
     const idsLegado = proy.map(p => p.proyecto_id).filter((id): id is string => id != null)
@@ -758,7 +758,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // Abre la ficha completa de un item de la cartera (proyecto privado o
   // iniciativa pública) referenciado desde cualquier lado de la sesión —
   // proyectos tratados, oficios, compromisos: los tres comparten esta misma
-  // forma (proyecto_privado_id / prioridad_id) desde mig 093/094/096.
+  // forma (proyecto_privado_id / prioridad_id) desde mig 094/095/097.
   function abrirFichaCartera(
     row: { proyecto_privado_id?: number | null; prioridad_id?: number | null },
     opts: { avance?: boolean } = {},

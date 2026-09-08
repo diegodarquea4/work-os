@@ -920,7 +920,7 @@ export type Oaeca = {
 }
 
 // Proyecto tratado en profundidad en una sesión — selección desde la
-// cartera del Comité Económico (mig 093): privado (comite_economico_proyecto)
+// cartera del Comité Económico (mig 094): privado (comite_economico_proyecto)
 // o público (iniciativa con tag 'CER'), exactamente uno de los tres no-NULL.
 // `proyecto_id` (TEXT → v2_proyectos_inversion) queda deprecado — ya no se
 // escribe, solo lectura para sesiones históricas previas a la 086.
@@ -934,7 +934,7 @@ export type SesionProyecto = {
   created_at: string
 }
 
-// Cartera de proyectos privados del Comité Económico (mig 093) — cargados a
+// Cartera de proyectos privados del Comité Económico (mig 094) — cargados a
 // mano por el responsable (no sincronizados, a diferencia de
 // v2_proyectos_inversion). Los públicos NO tienen tabla propia: son
 // iniciativas (Prioridad) con la etiqueta 'CER' en `tags`.
@@ -955,7 +955,7 @@ export type ComiteEconomicoProyecto = {
   meta_2026_2027: string | null
   estado_inicial: string | null
   estado_actual: string | null
-  // Detalle libre (N° de RCA, fechas, contexto) — mig 094. `estado_actual`
+  // Detalle libre (N° de RCA, fechas, contexto) — mig 095. `estado_actual`
   // se estandarizó a un puñado de categorías (ver lib/comiteEconomico.ts);
   // el resto de lo que antes vivía mezclado en ese campo va aquí.
   notas: string | null
@@ -976,21 +976,21 @@ export type ComiteEconomicoProyectoSeguimiento = {
   descripcion: string
   estado: 'pendiente' | 'en_curso' | 'completado' | 'bloqueado' | null
   autor: string | null
-  // Permiso del proyecto al que refiere este avance (mig 095) — opcional,
+  // Permiso del proyecto al que refiere este avance (mig 096) — opcional,
   // NULL = avance general del proyecto (no habla de un permiso puntual).
   permiso_id: number | null
-  // Estado del permiso que este avance dejó registrado al crearse (mig 097)
+  // Estado del permiso que este avance dejó registrado al crearse (mig 098)
   // — snapshot histórico, no el estado actual del permiso (ese vive en
   // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
   // el estado del permiso (o es un avance general, sin permiso).
   estado_permiso_registrado: 'pendiente' | 'otorgado' | 'frenado' | null
-  // Sesión en la que se escribió este avance (mig 100). NULL = avance normal
+  // Sesión en la que se escribió este avance (mig 101). NULL = avance normal
   // de cartera; con valor, el acta de esa sesión lo reporta bajo su proyecto.
   sesion_id: number | null
   created_at: string
 }
 
-// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 095) — no
+// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 096) — no
 // region-scoped, mismo espíritu que `oaeca` (mig 051): precargado y crece
 // cuando alguien escribe uno nuevo al asociarlo a un proyecto.
 export type PasCatalogo = {
@@ -1004,7 +1004,7 @@ export type PasCatalogo = {
 }
 
 // Qué permiso del catálogo necesita CADA proyecto privado, con su propio
-// estado tri-color (mig 095). NULL = sin estado (default al crearlo).
+// estado tri-color (mig 096). NULL = sin estado (default al crearlo).
 export type ComiteEconomicoProyectoPermiso = {
   id: number
   proyecto_id: number
@@ -1023,7 +1023,7 @@ export type SesionOficioTratado = {
   sesion_origen_id: number
   oaeca_id: number
   // Legado (v2_proyectos_inversion) — los oficios nuevos usan
-  // proyecto_privado_id (privado) o prioridad_id (público) — mig 096.
+  // proyecto_privado_id (privado) o prioridad_id (público) — mig 097.
   proyecto_id: string | null
   proyecto_privado_id: number | null
   prioridad_id: number | null
@@ -1128,45 +1128,6 @@ export type SeiaProject = {
   actividad_actual: string | null
   url_ficha: string | null
   synced_at: string
-}
-
-// ── PREGO ────────────────────────────────────────────────────────────────────
-export type PregoEstado = 'pendiente' | 'en_curso' | 'completado' | 'bloqueado'
-
-export type PregoRow = {
-  region_cod:       string
-  f0_contacto:      PregoEstado
-  f1_borrador:      PregoEstado
-  f2_revision:      PregoEstado
-  e3_dipres:        PregoEstado
-  e3_desi:          PregoEstado
-  e3_subdere:       PregoEstado
-  e3_gore:          PregoEstado
-  f6_consolidacion: PregoEstado
-  f7_firma:         PregoEstado
-  updated_at:       string
-  updated_by:       string | null
-}
-
-export type PregoFaseKey = keyof Omit<PregoRow, 'region_cod' | 'updated_at' | 'updated_by'>
-
-export const PREGO_FASES: { key: PregoFaseKey; label: string; sublabel: string }[] = [
-  { key: 'f0_contacto',      label: 'F0', sublabel: 'Contacto' },
-  { key: 'f1_borrador',      label: 'F1', sublabel: 'Borrador' },
-  { key: 'f2_revision',      label: 'F2', sublabel: 'Revisión' },
-  { key: 'e3_dipres',        label: 'F3', sublabel: 'DIPRES' },
-  { key: 'e3_desi',          label: 'F3', sublabel: 'DESI' },
-  { key: 'e3_subdere',       label: 'F3', sublabel: 'SUBDERE' },
-  { key: 'e3_gore',          label: 'F3', sublabel: 'GORE' },
-  { key: 'f6_consolidacion', label: 'F4', sublabel: 'Consolidación' },
-  { key: 'f7_firma',         label: 'F5', sublabel: 'Firma' },
-]
-
-export const PREGO_ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
-  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',   dot: '○' },
-  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', dot: '◐' },
-  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
-  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
 }
 
 // ── v2 Types ────────────────────────────────────────────────────────────────

@@ -11,9 +11,9 @@ import { EmptyState } from '@/components/ui'
  * Es GLOBAL, no regional: las 16 regiones comparten la misma lista (mismo
  * criterio que `oaeca`, mig 051). Nació con los 50 PAS 111-160 y crece por dos
  * caminos: acá, y desde la ficha de un proyecto cuando alguien necesita uno
- * que todavía no está (mig 095).
+ * que todavía no está (mig 096).
  *
- * Editar necesita la policy de UPDATE de la mig 098; borrar no existe a
+ * Editar necesita la policy de UPDATE de la mig 099; borrar no existe a
  * propósito (un PAS puede estar asociado a proyectos — ver esa migración).
  */
 

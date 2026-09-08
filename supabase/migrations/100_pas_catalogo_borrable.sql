@@ -1,8 +1,8 @@
 -- ============================================================================
--- 099_pas_catalogo_borrable.sql
+-- 100_pas_catalogo_borrable.sql
 --
 -- Completa la administración del catálogo de PAS: además de ver, editar (mig
--- 098) y agregar (mig 095), ahora se puede borrar una entrada.
+-- 099) y agregar (mig 096), ahora se puede borrar una entrada.
 --
 -- La FK `comite_economico_proyecto_permiso.pas_id` se deja como está (sin
 -- ON DELETE): en RESTRICT, la base RECHAZA borrar un PAS que algún proyecto

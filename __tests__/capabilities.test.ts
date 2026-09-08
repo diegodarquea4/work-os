@@ -38,7 +38,7 @@ describe('capsMatchMirror', () => {
   })
 
   it('false si hay una capacidad de más (personalizado: concedido)', async () => {
-    const extra = [...mirrorRows, { capability_key: 'prego.editar', region_cod: '*' }]
+    const extra = [...mirrorRows, { capability_key: 'desalojos.editar', region_cod: '*' }]
     expect(await capsMatchMirror(stubDb(extra), 'u1', viewerI)).toBe(false)
   })
 

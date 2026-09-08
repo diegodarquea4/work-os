@@ -45,7 +45,7 @@ You are a senior full-stack engineer who knows the **work-os** codebase deeply. 
 **v1 (legacy, still primary for iniciativas + minutas):**
 - `prioridades_territoriales` — central table, see schema in [README.md](../README.md). PK is `n` (integer).
 - `region_metrics` (wide, ~90 cols), `regional_metrics` (long, time-series)
-- `seguimientos`, `semaforo_log`, `documentos_prioridad`, `prego_monitoreo`, `seia_projects`, `mop_projects`, `stop_stats`, `minuta_cache`, `planes_regionales`, `user_profiles`
+- `seguimientos`, `semaforo_log`, `documentos_prioridad`, `seia_projects`, `mop_projects`, `stop_stats`, `minuta_cache`, `planes_regionales`, `user_profiles`
 
 **v2 (prefix `v2_*`, see [supabase/migrations/001_v2_schema.sql](../supabase/migrations/001_v2_schema.sql)):**
 - `v2_indicadores_catalogo` (66 indicadores)
@@ -68,7 +68,7 @@ You are a senior full-stack engineer who knows the **work-os** codebase deeply. 
 
 ```
 WorkOSApp (client, owns `localIniciativas` + `onUpdatePrioridad` callback)
-├── header: 6 views — Mapa | Dashboard | Atención | Kanban | Mi Región | PREGO (+ Usuarios for admin)
+├── header: 4 views — Mapa | Iniciativas | Tablero | Mi Región (+ tuerca: Desalojos / Permisos)
 ├── ChileMap (dynamic ssr:false, Leaflet GeoJSON)
 ├── ProjectsPanel (right panel for selected region in Mapa view)
 │   └── ProjectTrackerModal (Seguimiento/Historial/Calendario/Documentos tabs)
@@ -76,7 +76,6 @@ WorkOSApp (client, owns `localIniciativas` + `onUpdatePrioridad` callback)
 ├── KanbanView (4 columns by semáforo)
 ├── AttentionTray (alerts grouped: rojo + sin actividad + avance bajo)
 ├── VistaRegional ("Mi Región" — uses useV2Dashboard, opens IndicadoresModalV2)
-├── PregoView (matrix 16 regiones × 9 fases)
 └── AdminUsersView (admin only) + PlanesRegionalesPanel
 ```
 

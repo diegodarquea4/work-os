@@ -53,7 +53,7 @@ type Props = {
    */
   abrirFormAvance?: boolean
   /**
-   * Sesión desde la que se abrió la ficha (mig 100). Los avances que se creen
+   * Sesión desde la que se abrió la ficha (mig 101). Los avances que se creen
    * quedan marcados con ella y el acta de esa sesión los reporta bajo su
    * proyecto. NULL/ausente = avance normal de cartera, fuera de toda acta.
    */
@@ -306,11 +306,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
           descripcion: avanceDescripcion.trim(),
           permiso_id: avancePermisoId || null,
           // Snapshot histórico del cambio de estado que este avance deja
-          // registrado (mig 097) — la bitácora del permiso lo muestra junto
+          // registrado (mig 098) — la bitácora del permiso lo muestra junto
           // a este avance, no solo como el estado actual del permiso.
           estado_permiso_registrado: estadoRegistrado,
           // Si la ficha se abrió desde una sesión, el avance queda ligado a
-          // ella y sale en su acta (mig 100).
+          // ella y sale en su acta (mig 101).
           sesion_id: sesionId,
           autor: currentUserEmail || null,
         }),

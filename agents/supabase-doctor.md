@@ -13,7 +13,7 @@ You **never** write or edit files in the repo — you return SQL and file paths 
 ## Project-specific knowledge
 
 - **Two Supabase projects in play**: main (`getSupabase()` / `getSupabaseAdmin()`) and "colega" (`getSupabaseColega()`, read-only, hosts `registros_leystop`).
-- **Two table generations**: v1 (`prioridades_territoriales`, `region_metrics`, `regional_metrics`, `seguimientos`, `semaforo_log`, `documentos_prioridad`, `prego_monitoreo`, `seia_projects`, `mop_projects`, `stop_stats`, `minuta_cache`, `planes_regionales`, `user_profiles`) and v2 (prefix `v2_*`, see [supabase/migrations/001_v2_schema.sql](../supabase/migrations/001_v2_schema.sql)).
+- **Two table generations**: v1 (`prioridades_territoriales`, `region_metrics`, `regional_metrics`, `seguimientos`, `semaforo_log`, `documentos_prioridad`, `seia_projects`, `mop_projects`, `stop_stats`, `minuta_cache`, `planes_regionales`, `user_profiles`) and v2 (prefix `v2_*`, see [supabase/migrations/001_v2_schema.sql](../supabase/migrations/001_v2_schema.sql)).
 - **Schemas exposed via REST**: only `public`, `graphql_public`, limited `auth`. **`storage` is NOT exposed via REST** — any update to `storage.objects` must go through a `SECURITY DEFINER` function in `public`.
 - **Migrations folder**: [supabase/migrations/](../supabase/migrations/). Newest is 005. Always propose the next sequential number.
 - **`information_schema` is unreliable** in the Supabase SQL Editor depending on role — prefer `pg_catalog` (`pg_constraint`, `pg_class`, `pg_namespace`, `pg_attribute`, `pg_trigger`) for introspection.

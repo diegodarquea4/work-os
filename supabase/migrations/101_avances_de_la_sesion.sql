@@ -1,5 +1,5 @@
 -- ============================================================================
--- 100_avances_de_la_sesion.sql
+-- 101_avances_de_la_sesion.sql
 --
 -- Vínculo explícito avance → sesión, para que el acta del Comité Económico
 -- pueda reportar los avances que se registraron DURANTE esa sesión, bajo cada
@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_cep_seguimiento_sesion
 
 -- Misma columna en los seguimientos de iniciativas, anticipando que el acta
 -- reportara también los avances de las iniciativas públicas tratadas.
--- REVERTIDA por la mig 101: la decisión fue que una iniciativa pública figure
+-- REVERTIDA por la mig 102: la decisión fue que una iniciativa pública figure
 -- en el acta solo como tratada en la sesión, sin detalle de avances, con lo
 -- que esta columna quedaba sin nadie que la escribiera. Se deja el ALTER acá
 -- para que la 101 se lea como lo que es y el historial no mienta.

@@ -1,7 +1,7 @@
 -- ============================================================================
--- 094_comite_economico_notas_y_compromiso_privado.sql
+-- 095_comite_economico_notas_y_compromiso_privado.sql
 --
--- Dos cambios al módulo de Proyectos del Comité Económico (mig 093):
+-- Dos cambios al módulo de Proyectos del Comité Económico (mig 094):
 --   1. `comite_economico_proyecto.notas` — el Excel de carga inicial traía
 --      el detalle (N° de RCA, fechas, contexto) mezclado dentro de
 --      "Estado actual" (ej. "Aprobado Ambientalmente, RCA N°... del..."). Se
@@ -21,7 +21,7 @@ ALTER TABLE public.comite_economico_proyecto
 ALTER TABLE public.sesion_compromisos
   ADD COLUMN IF NOT EXISTS proyecto_privado_id BIGINT REFERENCES public.comite_economico_proyecto(id);
 
--- ── Estandarización de los 62 proyectos cargados desde el Excel (mig 093) ───
+-- ── Estandarización de los 62 proyectos cargados desde el Excel (mig 094) ───
 -- Separa la categoría estándar (columna estado_actual) del detalle (RCA,
 -- fechas, contexto), que pasa a notas. Match por nombre — único dentro de
 -- Tarapacá al momento de esta migración.

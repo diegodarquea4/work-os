@@ -19,7 +19,7 @@ import ConsolaSesionShell from './sesiones/ConsolaSesionShell'
  * Cartera de proyectos del Comité Económico — dos fuentes NO unificadas
  * (toggle, nunca ambas al mismo tiempo, mismo criterio que el resto del
  * panel: o se ve una instancia o se ve la otra):
- *   · Privados: tabla propia `comite_economico_proyecto` (mig 093),
+ *   · Privados: tabla propia `comite_economico_proyecto` (mig 094),
  *     cargados a mano — filtros + orden por columna.
  *   · Públicos: iniciativas con la etiqueta 'CER' — mismo patrón de card
  *     que ComiteInfraestructuraTab.tsx (semáforo + TagChips + avance),

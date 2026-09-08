@@ -188,7 +188,7 @@ function groupByCategoria(entries: FaqEntry[]): [string, FaqEntry[]][] {
     'Carga semanal',
     'Permisos y roles',
     'Ejes',
-    'Métricas y PREGO',
+    'Métricas de eje',
     'Atención y foco',
     'Minutas e indicadores',
     'Cuenta y acceso',

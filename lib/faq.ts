@@ -117,7 +117,7 @@ Si echas en falta algún atajo en particular, escríbenos.`,
 `Cuando haces clic en una región en el Mapa, el panel lateral derecho muestra una previsualización rápida de esa región:
 
 - 3 KPI cards: Atención (alertas activas), Próximo hito (con cuántos días para vencer) y Última actividad (cuándo se actualizó algo).
-- Avance promedio + delta vs nacional + fase PREGO actual.
+- Avance promedio + delta vs nacional.
 - Avance por eje en barras compactas.
 - Dos CTAs al pie: "Ver Mi Región" (entra directo al Dashboard regional) y "Cerrar".
 
@@ -588,7 +588,7 @@ Aprobar = aplicar todo lo válido + dejar los errores parciales sin aplicar. Rec
 
 - Regional: equipos de Delegaciones Presidenciales Regionales. Ven solo su(s) región(es). Editan operativo (semáforo, % avance, foco, seguimientos). Cargan cambios estructurales vía Excel/propuesta.
 - Editor: equipo DCI central. Ven todas las regiones. Editan estructural y operativo directo. Gestionan catálogo de ejes y métricas. NO aprueban propuestas ni gestionan usuarios.
-- Admin: jefatura DCI. Todo lo del editor + aprobar/rechazar propuestas + gestionar usuarios + acceso al PREGO.
+- Admin: jefatura DCI. Todo lo del editor + aprobar/rechazar propuestas + gestionar usuarios.
 - Viewer: solo lectura. Para autoridades externas o equipos que necesitan visibilidad sin tocar.
 
 Las diferencias entre regional y editor/admin no son jerárquicas, son de scope: regional sabe lo que pasa en terreno, admin/editor mantiene la coherencia estructural y compara entre regiones.`,
@@ -1051,11 +1051,11 @@ Cada cambio queda en el historial con tu email como autor.`,
     ultima_revision: '2026-06-16',
   },
 
-  // ── 4. Métricas y PREGO ──────────────────────────────────────────────────
+  // ── 4. Métricas de eje ───────────────────────────────────────────────────
   {
     id: 'metricas-reportar-valor',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Dónde reporto el valor actual de las métricas de mi región?',
     respuesta:
 `En Mi Región → haz clic en cualquier tarjeta de eje en "Ejes estratégicos" → se abre el drawer de métricas de ese eje.
@@ -1071,7 +1071,7 @@ Si una métrica no aplica esta semana (ej. la mides trimestralmente), simplement
   {
     id: 'metricas-meta-mal',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: 'La meta de una métrica está mal, ¿la puedo corregir?',
     respuesta:
 `Tú no, la meta la define admin/editor de DCI. Es parte del compromiso programático estructural — modificarla por tu cuenta rompería la lógica de "compromiso negociado".
@@ -1083,23 +1083,9 @@ Lo que tú sí puedes y debes hacer: reportar el valor actual real con honestida
     ultima_revision: '2026-06-08',
   },
   {
-    id: 'prego-fases-donde',
-    audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
-    pregunta: 'Veo "PREGO 4/9" en Mi Región pero no encuentro dónde abrir las fases, ¿dónde está?',
-    respuesta:
-`La vista completa del PREGO (Plan Regional de Gobierno) es exclusiva de admin/editor de DCI. Tú ves el indicador "X/9" en el header de Mi Región para que sepas en qué fase está tu región, pero el detalle por fase y la gestión las maneja la división central.
-
-Tu rol en el PREGO: reportar evidencia de cumplimiento cuando la división te lo pida. Habitualmente la evidencia se sube como documento adjunto a una iniciativa específica o se envía por el canal de contacto.
-
-Para saber en qué fase está hoy tu región y qué se necesita para avanzar, conversa con tu contraparte en DCI.`,
-    relacionadas: ['prego-avanzar-fase', 'permisos-roles-existentes'],
-    ultima_revision: '2026-06-08',
-  },
-  {
     id: 'metricas-vs-avance',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Cuál es la diferencia entre una métrica de eje y el % de avance de una iniciativa?',
     respuesta:
 `Son dos cosas distintas que conviene no confundir:
@@ -1121,7 +1107,7 @@ Una iniciativa puede estar al 100% y la métrica del eje seguir al 40% si el com
   {
     id: 'metricas-frecuencia',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Tengo que reportar todas las métricas con la misma frecuencia (semanal)?',
     respuesta:
 `No necesariamente. Algunas métricas naturalmente se miden semanal (ej. casos resueltos), otras mensual (ej. cobertura), trimestral (ej. PIB) o anual (ej. pobreza).
@@ -1138,7 +1124,7 @@ Si una métrica necesita una frecuencia clara (ej. "actualizar quincenal en toda
   {
     id: 'metricas-crear',
     audiencia: 'admin_editor',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Cómo defino una métrica nueva para un eje?',
     respuesta:
 `Desde el drawer de métricas del eje (Mi Región → tarjeta del eje):
@@ -1157,7 +1143,7 @@ La métrica queda visible para el equipo regional, quien va a reportar valores. 
   {
     id: 'metricas-meta-cualitativa',
     audiencia: 'admin_editor',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Cómo manejo una métrica que es cualitativa o subjetiva (ej. "satisfacción ciudadana")?',
     respuesta:
 `El panel solo acepta valores numéricos en las métricas — es por diseño, para que sean comparables y agregables.
@@ -1173,41 +1159,9 @@ Lo importante: una métrica con un número que nadie sabe de dónde sale es peor
     ultima_revision: '2026-06-08',
   },
   {
-    id: 'prego-avanzar-fase',
-    audiencia: 'admin_editor',
-    categoria: 'Métricas y PREGO',
-    pregunta: '¿Cómo avanzo a una región a la siguiente fase del PREGO?',
-    respuesta:
-`En la vista PREGO (acceso solo admin/editor desde el menú de configuración — la tuerca arriba a la derecha):
-
-1. Selecciona la región.
-2. Abre la fase actual → revisa la evidencia cargada por el equipo regional.
-3. Si los requisitos están cumplidos, botón "Aprobar fase" → la región avanza a la siguiente.
-4. Si no, deja comentarios indicando qué falta para que el equipo regional cargue lo pendiente.
-
-Cada cambio de fase queda registrado con autor, fecha y nota. La región puede ver su nuevo "X/9" en Mi Región en su próximo refresh.`,
-    relacionadas: ['prego-fases-donde', 'prego-notifica-regional'],
-    ultima_revision: '2026-06-08',
-  },
-  {
-    id: 'prego-notifica-regional',
-    audiencia: 'admin_editor',
-    categoria: 'Métricas y PREGO',
-    pregunta: 'Cuando avanzo una fase del PREGO, ¿se le avisa al regional?',
-    respuesta:
-`Hoy no hay notificación automática por correo. La región ve el cambio en su próximo login (el contador "X/9" se actualiza).
-
-Si el avance de fase es relevante (típicamente lo es), complementá con un correo o llamada al equipo regional. La nota que dejas en el panel queda para trazabilidad histórica, no para enterar urgente.
-
-Notificación automática por correo está en la lista de mejoras a futuro.`,
-    relacionadas: ['prego-avanzar-fase'],
-    ultima_revision: '2026-06-08',
-  },
-
-  {
     id: 'metricas-drawer-eje',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Cómo abro las métricas de un eje específico para reportar valores?',
     respuesta:
 `En Mi Región, en la sección "Ejes estratégicos", haz clic en la tarjeta del eje que quieres trabajar. Se abre un drawer lateral con todas las métricas definidas para ese eje en tu región.
@@ -1229,7 +1183,7 @@ Si no ves métricas en el eje, es porque la división aún no las definió para 
   {
     id: 'metricas-historial-valores',
     audiencia: 'regional',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Se puede ver cómo evolucionó una métrica en el tiempo?',
     respuesta:
 `Sí. En el drawer de métricas del eje, cada métrica tiene un mini-historial con los últimos valores reportados y sus fechas. Útil para ver la tendencia de un vistazo: ¿está mejorando? ¿estancada? ¿cayó la semana pasada?
@@ -1248,7 +1202,7 @@ Si necesitas exportar este histórico para análisis externo, escríbenos a ${CO
   {
     id: 'metricas-eliminar-revisar',
     audiencia: 'admin_editor',
-    categoria: 'Métricas y PREGO',
+    categoria: 'Métricas de eje',
     pregunta: '¿Qué pasa si elimino una métrica que ya tiene valores reportados?',
     respuesta:
 `El sistema te lo advierte explícitamente con el conteo de valores reportados antes de proceder.

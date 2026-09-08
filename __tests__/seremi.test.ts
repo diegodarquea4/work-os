@@ -87,13 +87,12 @@ describe('preset del rol seremi — no debe ensancharse por accidente', () => {
     expect(can(seremi, 'iniciativa.gestionar_ajeno', 'VII')).toBe(false)
   })
 
-  it('NO ve comités, gabinete, desalojos, PREGO ni permisos', () => {
+  it('NO ve comités, gabinete, desalojos ni permisos', () => {
     expect(can(seremi, 'comite.policial.operar', 'VII')).toBe(false)
     expect(can(seremi, 'comite.economico.operar', 'VII')).toBe(false)
     expect(can(seremi, 'comite.gabinete.operar', 'VII')).toBe(false)
     expect(can(seremi, 'comite.gabinete.preparar', 'VII')).toBe(false)
     expect(can(seremi, 'sec.desalojos')).toBe(false)
-    expect(can(seremi, 'sec.prego')).toBe(false)
     expect(can(seremi, 'sec.permisos')).toBe(false)
     expect(can(seremi, 'usuarios.gestionar')).toBe(false)
     expect(can(seremi, 'dashboard.importar')).toBe(false)

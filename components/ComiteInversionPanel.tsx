@@ -23,7 +23,7 @@ import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
 
 type Props = {
   region: Region
-  // Cartera de la región — alimenta la cartera de proyectos (mig 093,
+  // Cartera de la región — alimenta la cartera de proyectos (mig 094,
   // vista "Público" filtrada por tag CER) y la ficha completa que abre
   // VistaRegional con su ProjectTrackerModal, sin queries nuevas.
   iniciativas: Iniciativa[]

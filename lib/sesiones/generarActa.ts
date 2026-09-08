@@ -231,7 +231,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     // Oficios: verificados (resueltos en esta sesión o aún pendientes) +
     // nuevos (marcados "tratado" durante esta sesión) — mismo criterio.
-    // Mismo esquema privado/público/legado que sesion_proyectos (mig 096).
+    // Mismo esquema privado/público/legado que sesion_proyectos (mig 097).
     db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('region_cod', sesion.region_cod)
       .neq('sesion_origen_id', sesionId)
@@ -283,14 +283,14 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
         .map(p => [p.id, p.nombre]))
     : new Map<number, string>()
 
-  // Avances escritos con ESTA sesión abierta (mig 100). Van bajo su proyecto
+  // Avances escritos con ESTA sesión abierta (mig 101). Van bajo su proyecto
   // en el acta: es el registro de lo que se avanzó en la reunión. El vínculo
   // es la columna `sesion_id`, no la fecha — un borrador puede quedar abierto
   // varios días y un proyecto puede recibir avances por fuera de la sesión.
   //
   // Solo proyectos privados: una iniciativa pública figura en el acta como
   // tratada en la sesión, sin detalle de avances (decisión de producto; ver
-  // mig 101, que por eso sacó la columna espejo de `seguimientos`).
+  // mig 102, que por eso sacó la columna espejo de `seguimientos`).
   type AvanceActa = { descripcion: string; permiso: string | null }
   type AvanceRow = { proyecto_id: number; descripcion: string; permiso_id: number | null }
   const avRes = await db.from('comite_economico_proyecto_seguimiento')

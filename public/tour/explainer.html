@@ -132,12 +132,6 @@
   .semrow .it{display:flex;align-items:center;gap:.3em;font-size:.6em}
   .semrow .n{font-weight:700}.n.v{color:var(--green-700)}.n.a{color:var(--amber-700)}.n.r{color:var(--red-700)}.n.g{color:var(--gray-500)}
   .semrow .t{color:var(--gray-500)}
-  .prego{text-align:right}
-  .prego .pl{font-size:.54em;color:var(--gray-400);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35em}
-  .prego .dots{display:inline-flex;gap:.2em;align-items:center}
-  .prego .dots i{width:1.02em;height:1.02em;border-radius:.26em;background:var(--gray-200);display:flex;align-items:center;justify-content:center;font-size:.54em;font-weight:800;color:#fff;font-style:normal}
-  .prego .dots i.ok{background:var(--green-500)}.prego .dots i.warn{background:var(--amber-400)}
-  .prego .dots b{font-size:.6em;color:var(--gray-400);margin-left:.3em;font-weight:500}
   .btns{display:flex;gap:.45em;justify-content:flex-end;margin-top:.65em}
 
   .alert{background:var(--amber-50);border:1px solid #fde68a;border-radius:.55em;padding:.6em .75em}
@@ -376,7 +370,6 @@
           <div class="panelcol" id="mp-panel">
             <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.5em">
               <div style="font-size:.7em;font-weight:700;color:#b8860b">Antofagasta</div>
-              <div style="font-size:.5em;color:var(--gray-500)">PREGO 4/9</div>
             </div>
             <div style="display:flex;align-items:baseline;gap:.5em;margin-bottom:.6em">
               <span style="font-size:1.4em;font-weight:800;color:var(--slate-800);font-variant-numeric:tabular-nums">52%</span>
@@ -434,7 +427,6 @@
               </div>
             </div>
             <div>
-              <div class="prego"><div class="pl">PREGO</div><div class="dots"><i class="ok">✓</i><i class="ok">✓</i><i class="ok">✓</i><i class="warn">!</i><i></i><i></i><i></i><i></i><i></i><b>4/9</b></div></div>
               <div class="btns"><span class="btn">＋ Proponer actualización</span><span class="btn">📊 Indicadores</span><span class="btn dark">📄 Minutas ▾</span></div>
             </div>
           </div>
@@ -710,9 +702,9 @@ const CHILE=[
     {view:'map', t:'mp-map', kick:'Tu región', title:'El mapa te ubica en tu región', text:'El globo resume tu cartera: 325 iniciativas, 47 de prioridad alta.', dur:10500,
      narr:'Al entrar, el mapa te ubica en tu región y la resalta. El globo resume tu cartera, el conjunto de tus iniciativas: 325 en total, 47 de prioridad alta y 277 media.'},
     {view:'map', t:'mp-panel', kick:'Previsualización', title:'KPIs y avance por eje', text:'Decide rápido si entrar a la región. CTA directo a Mi Región.', dur:12500,
-     narr:'A la derecha se abre la previsualización de la región: avance promedio con delta vs nacional, fase PREGO, los KPIs claves de atención, y los ejes en barras compactas. Es para decidir rápido si vale la pena entrar al Dashboard sin perder de vista el mapa. Abajo, el botón Ver Mi Región te lleva directo al tablero de la región con un clic.'},
-    {view:'miregion', t:'mr-head', kick:'Mi Región', title:'Tu tablero, de un vistazo', text:'Avance, semáforo y fase PREGO. Botones: Proponer, Indicadores y minutas.', dur:17000,
-     narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. El contador PREGO muestra tu Plan Regional de Gobierno: 9 fases que estructuran el compromiso con la región. La división central evalúa cada fase; tú reportas la evidencia de cumplimiento. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y descargas las minutas de tu región — ejecutiva, contexto y kit de viaje. La versión vigente de cada minuta la genera y actualiza la división.'},
+     narr:'A la derecha se abre la previsualización de la región: avance promedio con delta vs nacional, los KPIs claves de atención, y los ejes en barras compactas. Es para decidir rápido si vale la pena entrar al Dashboard sin perder de vista el mapa. Abajo, el botón Ver Mi Región te lleva directo al tablero de la región con un clic.'},
+    {view:'miregion', t:'mr-head', kick:'Mi Región', title:'Tu tablero, de un vistazo', text:'Avance y semáforo. Botones: Proponer, Indicadores y minutas.', dur:17000,
+     narr:'En Mi Región tienes tu tablero. Arriba, tu avance promedio y el semáforo: verde avanza, amarillo necesita revisión, rojo está bloqueado y requiere tu gestión, gris aún no se evalúa. Desde aquí también abres Indicadores, con el contexto socioeconómico de la región (pobreza, empleo, salud), y descargas las minutas de tu región — ejecutiva, contexto y kit de viaje. La versión vigente de cada minuta la genera y actualiza la división.'},
     {view:'miregion', t:'mr-ejes', kick:'Tu cartera', title:'Avance por eje estratégico', text:'Los ejes los define tu región en su catálogo formal.', dur:11500,
      narr:'Más abajo, tu cartera agrupada por los ejes estratégicos de tu región. Cada región tiene su propio catálogo formal, acordado entre la Delegación y la división. Pueden ser cuatro, cinco o más, según el plan regional. Si necesitas un eje nuevo, pídelo a tu contraparte de la división. Cada tarjeta muestra el avance y la inversión del eje.'},
     {view:'metricas', t:'me-cards', kick:'Métricas por eje', title:'La meta y el valor actual', text:'La división define qué medir y la meta; tú reportas el valor actual.', dur:13000,

@@ -26,7 +26,6 @@ export const SECTIONS = [
   { key: 'sec.mi_region', label: 'Mi Región' },
   { key: 'sec.metricas',  label: 'Métricas' },
   { key: 'sec.desalojos', label: 'Desalojos' },
-  { key: 'sec.prego',     label: 'PREGO' },
   { key: 'sec.permisos',  label: 'Permisos (Usuarios)' },
 ] as const
 
@@ -78,8 +77,6 @@ export const FUNCTIONS = [
   // Desalojos
   { key: 'desalojos.editar',         label: 'Editar desalojos',        group: 'Desalojos' },
   { key: 'desalojos.descargar_docs', label: 'Descargar docs firmados', group: 'Desalojos' },
-  // PREGO
-  { key: 'prego.editar', label: 'Editar PREGO', group: 'PREGO' },
   // Permisos / transversales
   { key: 'usuarios.gestionar',      label: 'Gestionar usuarios',            group: 'Permisos' },
   { key: 'docs_regionales.gestionar', label: 'Gestionar documentos regionales', group: 'Documentos regionales' },
@@ -120,7 +117,7 @@ type PresetEntry = readonly [CapabilityKey, RegionPolicy]
 // se acotan por otras capacidades/RLS).
 const SEC_STAFF_FULL: PresetEntry[] = [
   ['sec.mapa', 'all'], ['sec.dashboard', 'all'], ['sec.gabinete', 'all'],
-  ['sec.mi_region', 'all'], ['sec.metricas', 'all'], ['sec.prego', 'all'],
+  ['sec.mi_region', 'all'], ['sec.metricas', 'all'],
 ]
 const SEC_REGIONAL_VIEWER: PresetEntry[] = [
   ['sec.mapa', 'all'], ['sec.dashboard', 'all'], ['sec.gabinete', 'all'],
@@ -152,7 +149,7 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
     // en RLS por rol; acá es el gate de UI).
     ['comite.metricas.catalogo', 'all'],
     ['desalojos.editar', 'all'], ['desalojos.descargar_docs', 'all'],
-    ['prego.editar', 'all'], ['usuarios.gestionar', 'all'],
+    ['usuarios.gestionar', 'all'],
     ['docs_regionales.gestionar', 'all'], ['proposals.aprobar', 'all'],
   ],
   // editor ≈ admin, SIN: desalojos (excluido), permisos, import, minuta,
@@ -172,7 +169,7 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
     ['comite.economico.operar', 'all'], ['comite.gabinete.operar', 'all'],
     ['comite.infraestructura.operar', 'all'], ['comite.infraestructura.cerrar', 'all'],
     ['comite.infraestructura.configurar', 'all'], ['comite.seia_sync', 'all'],
-    ['prego.editar', 'all'], ['docs_regionales.gestionar', 'all'],
+    ['docs_regionales.gestionar', 'all'],
   ],
   // regional: secciones 'all'; capacidades operativas 'scoped' a sus region_cods.
   regional: [
@@ -204,8 +201,8 @@ export const ROLE_PRESETS: Record<UserRole, PresetEntry[]> = {
   // (`user_profiles.ministerio` + `current_user_sees_ministerio`), porque las
   // capacidades solo tienen eje (clave, región). Puede aportar avance en su
   // cartera: seguimientos, tareas de planificación y mover semáforo/% avance.
-  // SIN comités ni gabinete (son de la delegación), sin desalojos, sin PREGO,
-  // sin nada definicional ni foco.
+  // SIN comités ni gabinete (son de la delegación), sin desalojos, sin nada
+  // definicional ni foco.
   seremi: [
     ['sec.mapa', 'all'], ['sec.dashboard', 'all'], ['sec.gabinete', 'all'],
     ['sec.mi_region', 'all'], ['sec.metricas', 'all'],

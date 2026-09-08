@@ -8,7 +8,7 @@ import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 
 /**
- * Alta de un proyecto privado de la cartera del Comité Económico (mig 093)
+ * Alta de un proyecto privado de la cartera del Comité Económico (mig 094)
  * — los 16 campos del spec del comité. Solo `nombre` es obligatorio; el
  * resto se puede completar después desde la ficha (ProyectoEconomicoFichaModal).
  */

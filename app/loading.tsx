@@ -5,6 +5,8 @@
 // al hidratar) con un skeleton de contenido neutro. El `animate-pulse` se detiene
 // bajo prefers-reduced-motion por la regla global de globals.css.
 
+import Image from 'next/image'
+
 export default function Loading() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -12,8 +14,7 @@ export default function Loading() {
           se muestran ya formados. Nav y usuario van como placeholders. */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md">
         <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-14 w-auto rounded-lg shadow-sm" />
+          <Image src="/logo-ministerio.jpg" alt="Ministerio del Interior" width={400} height={363} className="h-14 w-auto rounded-lg shadow-sm" />
           <div className="flex flex-col">
             <span className="text-white font-bold text-fluid-base tracking-wide leading-tight">PSG</span>
             <span className="text-slate-400 text-fluid-sm leading-tight">Panel Seguimiento Gubernamental — Regiones</span>

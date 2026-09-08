@@ -1,7 +1,7 @@
 -- ============================================================================
--- 098_pas_catalogo_editable.sql
+-- 099_pas_catalogo_editable.sql
 --
--- El catálogo de PAS (mig 095) nació de solo-lectura-y-agregar: tenía policies
+-- El catálogo de PAS (mig 096) nació de solo-lectura-y-agregar: tenía policies
 -- de SELECT e INSERT, ninguna de UPDATE. Con el catálogo ya administrable
 -- desde la cartera de proyectos (verlos / editarlos / agregar), corregir un
 -- nombre mal escrito o completar el órgano otorgante de una fila necesita

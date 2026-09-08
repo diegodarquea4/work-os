@@ -1,7 +1,7 @@
 -- ============================================================================
--- 101_seguimientos_sin_sesion.sql
+-- 102_seguimientos_sin_sesion.sql
 --
--- Revierte la mitad pública de la mig 100. Esa migración agregó `sesion_id` a
+-- Revierte la mitad pública de la mig 101. Esa migración agregó `sesion_id` a
 -- `seguimientos` anticipando que el acta reportara también los avances de las
 -- iniciativas públicas tratadas en la sesión. La decisión de producto fue la
 -- contraria: en el acta, una iniciativa pública figura solo como tratada en la

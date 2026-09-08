@@ -1,5 +1,5 @@
 -- ============================================================================
--- 095_permisos_pas.sql
+-- 096_permisos_pas.sql
 --
 -- Módulo de Permisos (PAS — Permisos Ambientales Sectoriales) para la ficha
 -- de proyectos privados del Comité Económico:
