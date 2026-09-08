@@ -44,18 +44,23 @@ export async function GET(req: Request) {
     .map(u => ({ email: u.email ?? '', name: u.user_metadata?.full_name ?? u.email ?? '' }))
     .filter(u => u.email)
 
+  // `ministerio` se adjunta siempre (con o sin filtro de región): lo usan los
+  // avances del Comité Económico, que se filtran por el ministerio de quien
+  // los registró. Obliga a leer los perfiles antes del atajo de admin/editor,
+  // pero no cambia a QUIÉN se le devuelve el padrón (scope de la auditoría).
+  const { data: profiles } = await db.from('user_profiles').select('email, role, region_cods, ministerio')
+  const byEmail = new Map((profiles ?? []).map(p => [p.email, p as { role: string; region_cods: string[]; ministerio: string | null }]))
+  const listConMinisterio = list.map(u => ({ ...u, ministerio: byEmail.get(u.email)?.ministerio ?? null }))
+
   // Sin `region` y sin acotar (admin/editor): padrón completo, como siempre.
   if (!region && !acotado) {
-    return NextResponse.json(list.sort((a, b) => a.email.localeCompare(b.email)))
+    return NextResponse.json(listConMinisterio.sort((a, b) => a.email.localeCompare(b.email)))
   }
 
   // Regiones contra las que se filtra: la pedida, o todas las del perfil acotado.
   const regionesVisibles = region ? [region] : profile.region_cods
 
-  const { data: profiles } = await db.from('user_profiles').select('email, role, region_cods')
-  const byEmail = new Map((profiles ?? []).map(p => [p.email, p as { role: string; region_cods: string[] }]))
-
-  const filtered = list.filter(u => {
+  const filtered = listConMinisterio.filter(u => {
     const p = byEmail.get(u.email)
     if (!p) return false
     if (p.role === 'admin' || p.role === 'editor') return true

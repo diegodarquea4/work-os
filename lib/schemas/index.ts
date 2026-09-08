@@ -124,7 +124,9 @@ export const adminUsersPostSchema = z.object({
   full_name:   z.string().min(1).optional(),
   role:        z.enum(['admin', 'editor', 'regional', 'viewer', 'seremi']),
   region_cods: z.array(z.string().min(1)).optional(),
-  // Solo rol seremi: ministerio canónico que acota su cartera (mig 087).
+  // Ministerio canónico del usuario (mig 087). Acota la cartera del rol
+  // seremi y, además, agrupa los avances del Comité Económico por el
+  // ministerio de quien los registró.
   ministerio:  z.string().min(1).nullable().optional(),
 })
 

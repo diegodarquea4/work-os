@@ -215,8 +215,12 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
+    // Privado (proyecto_privado_id) tiene FK real → embed directo. Público
+    // (prioridad_id) es denormalizado sin FK (mismo criterio que
+    // seguimientos.prioridad_id) — se resuelve aparte, después del Promise.all.
+    // proyecto_id sigue siendo el catálogo SEIA legado, solo lectura.
     db.from('sesion_proyectos')
-      .select('nota, proyecto:v2_proyectos_inversion(nombre)')
+      .select('nota, proyecto_privado_id, prioridad_id, proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('sesion_id', sesionId),
     // Verificados: compromisos de sesiones anteriores — cumplidos en esta
     // sesión o aún abiertos (mismo criterio que el Comité Policial).
@@ -227,13 +231,14 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     // Oficios: verificados (resueltos en esta sesión o aún pendientes) +
     // nuevos (marcados "tratado" durante esta sesión) — mismo criterio.
-    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
+    // Mismo esquema privado/público/legado que sesion_proyectos (mig 097).
+    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('region_cod', sesion.region_cod)
       .neq('sesion_origen_id', sesionId)
       .or(opts.preview
         ? `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente,and(estado.eq.resuelto,resuelto_en_sesion_id.is.null)`
         : `resuelto_en_sesion_id.eq.${sesionId},estado.eq.pendiente`),
-    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)')
+    db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('sesion_origen_id', sesionId).order('created_at'),
     // Mesa Empleo (mig 052): el cierre ya sumó el valor de esta sesión al
     // acumulado ANTES de generar el acta — igual que valor_actual en el
@@ -249,11 +254,70 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id)
   const sesionNumero = opts.preview ? cerradas.length + 1 : Math.max(1, cerradas.findIndex(c => c.id === sesionId) + 1)
 
-  type OficioConNombres = SesionOficioTratado & { oaeca: { nombre: string } | null; proyecto: { nombre: string } | null }
+  type OficioConNombres = SesionOficioTratado & {
+    oaeca: { nombre: string } | null
+    proyecto: { nombre: string } | null
+    proyecto_privado: { nombre: string } | null
+  }
   const oficios = [
     ...((oficVerifRes.data ?? []) as unknown as OficioConNombres[]),
     ...((oficNuevosRes.data ?? []) as unknown as OficioConNombres[]),
   ]
+
+  type ProyectoTratadoRow = {
+    nota: string | null
+    proyecto_privado_id: number | null
+    prioridad_id: number | null
+    proyecto: { nombre: string } | null
+    proyecto_privado: { nombre: string } | null
+  }
+  const proyectosRows = (proyRes.data ?? []) as unknown as ProyectoTratadoRow[]
+  // Un solo lookup de prioridades para proyectos tratados Y oficios — ambos
+  // son denormalizados sin FK (mismo criterio que seguimientos.prioridad_id).
+  const prioridadIds = [...new Set([
+    ...proyectosRows.map(p => p.prioridad_id),
+    ...oficios.map(o => o.prioridad_id),
+  ].filter((id): id is number => id != null))]
+  const prioridadNombres = prioridadIds.length
+    ? new Map((((await db.from('prioridades_territoriales').select('id, nombre').in('id', prioridadIds)).data ?? []) as { id: number; nombre: string }[])
+        .map(p => [p.id, p.nombre]))
+    : new Map<number, string>()
+
+  // Avances escritos con ESTA sesión abierta (mig 101). Van bajo su proyecto
+  // en el acta: es el registro de lo que se avanzó en la reunión. El vínculo
+  // es la columna `sesion_id`, no la fecha — un borrador puede quedar abierto
+  // varios días y un proyecto puede recibir avances por fuera de la sesión.
+  //
+  // Solo proyectos privados: una iniciativa pública figura en el acta como
+  // tratada en la sesión, sin detalle de avances (decisión de producto; ver
+  // mig 102, que por eso sacó la columna espejo de `seguimientos`).
+  type AvanceActa = { descripcion: string; permiso: string | null }
+  type AvanceRow = { proyecto_id: number; descripcion: string; permiso_id: number | null }
+  const avRes = await db.from('comite_economico_proyecto_seguimiento')
+    .select('proyecto_id, descripcion, permiso_id')
+    .eq('sesion_id', sesionId).order('fecha')
+  const avancesRows = (avRes.data ?? []) as AvanceRow[]
+
+  // A qué permiso se refiere cada avance. Lookup aparte en vez de un embed
+  // anidado de dos niveles (avance → permiso → catálogo PAS): el repo solo
+  // usa embeds de un nivel, y acá un select que PostgREST no sepa resolver
+  // se traduce en "acta no generada".
+  const permisoIds = [...new Set(avancesRows.map(a => a.permiso_id).filter((id): id is number => id != null))]
+  const permisoNombres = permisoIds.length
+    ? new Map((((await db.from('comite_economico_proyecto_permiso')
+        .select('id, pas:pas_catalogo(n_pas)').in('id', permisoIds)).data ?? []) as unknown as { id: number; pas: { n_pas: string } | null }[])
+        .map(p => [p.id, p.pas?.n_pas ?? null]))
+    : new Map<number, string | null>()
+
+  const avancesPorPrivado = new Map<number, AvanceActa[]>()
+  for (const a of avancesRows) {
+    const acc = avancesPorPrivado.get(a.proyecto_id) ?? []
+    acc.push({
+      descripcion: a.descripcion,
+      permiso: a.permiso_id != null ? (permisoNombres.get(a.permiso_id) ?? null) : null,
+    })
+    avancesPorPrivado.set(a.proyecto_id, acc)
+  }
 
   // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
   // sección no se muestra en el acta mientras esté escondida en la sesión.
@@ -292,13 +356,24 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     instituciones: [],
     metaEmpleo,
     subsidios,
-    proyectosTratados: ((proyRes.data ?? []) as unknown as { nota: string | null; proyecto: { nombre: string } | null }[])
-      .map(p => ({ nombre: p.proyecto?.nombre ?? '—', nota: p.nota })),
+    // El acta no distingue privado de público: para quien la lee son todos
+    // proyectos tratados por el comité.
+    proyectosTratados: proyectosRows.map(p => {
+      const nombre = p.proyecto_privado_id != null ? (p.proyecto_privado?.nombre ?? '—')
+        : p.prioridad_id != null ? (prioridadNombres.get(p.prioridad_id) ?? '—')
+        : (p.proyecto?.nombre ?? '—')
+      const avances = p.proyecto_privado_id != null
+        ? (avancesPorPrivado.get(p.proyecto_privado_id) ?? [])
+        : []
+      return { nombre, nota: p.nota, avances }
+    }),
     oficiosTratados: oficios.map(o => ({
-      nombreProyecto: o.proyecto?.nombre ?? '—',
-      oaeca:          o.oaeca?.nombre ?? '—',
-      fechaLimite:    o.fecha_limite,
-      estado:         o.estado,
+      nombreProyecto: o.proyecto_privado_id != null ? (o.proyecto_privado?.nombre ?? '—')
+        : o.prioridad_id != null ? (prioridadNombres.get(o.prioridad_id) ?? '—')
+        : (o.proyecto?.nombre ?? '—'),
+      oaeca:       o.oaeca?.nombre ?? '—',
+      fechaLimite: o.fecha_limite,
+      estado:      o.estado,
     })),
     temas: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({

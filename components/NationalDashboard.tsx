@@ -8,7 +8,7 @@ import ProjectTrackerModal from './ProjectTrackerModal'
 import { SEMAFORO_CONFIG as SEMAFORO_BASE, etapaColor } from '@/lib/config'
 import { useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
 import BulkEditBar, { type BulkApplyArgs } from './BulkEditBar'
-import { applyBulkUpdate } from '@/lib/bulkUpdate'
+import { applyBulkUpdate, applyBulkAddTags } from '@/lib/bulkUpdate'
 // xlsx (~424 KB) + los módulos que lo importan (templateExcel/importParser) se
 // cargan DINÁMICAMENTE dentro de los handlers (export/import), no en el bundle
 // del Dashboard — la mayoría de los usuarios nunca exporta ni importa.
@@ -472,14 +472,23 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     })
   }
 
-  async function handleBulkApply({ patch, campoLabel, valorLabel }: BulkApplyArgs) {
+  async function handleBulkApply(args: BulkApplyArgs) {
     if (bulkTargets.length === 0) return
     setBulkResult(null)
     setBulkApplying(true)
     try {
-      const res = await applyBulkUpdate(bulkTargets, patch, currentUserEmail)
-      onBulkUpdatePrioridad?.(bulkTargets.map(t => t.n), patch)
-      setBulkResult({ ...res, campoLabel, valorLabel })
+      if (args.kind === 'addTags') {
+        // Aditivo por fila (cada iniciativa conserva sus tags previos) — no
+        // es un patch plano, así que no pasa por applyBulkUpdate/onBulkUpdatePrioridad
+        // con un único patch compartido.
+        const res = await applyBulkAddTags(bulkTargets, args.tags)
+        for (const u of res.updated) onBulkUpdatePrioridad?.([u.n], { tags: u.tags })
+        setBulkResult({ ok: res.ok, sinCambio: res.sinCambio, campoLabel: args.campoLabel, valorLabel: args.valorLabel })
+      } else {
+        const res = await applyBulkUpdate(bulkTargets, args.patch, currentUserEmail)
+        onBulkUpdatePrioridad?.(bulkTargets.map(t => t.n), args.patch)
+        setBulkResult({ ...res, campoLabel: args.campoLabel, valorLabel: args.valorLabel })
+      }
       setSelectedIds(new Set())
     } catch (err) {
       window.alert((err as Error).message)

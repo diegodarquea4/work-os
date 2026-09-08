@@ -1,6 +1,6 @@
 import { Document, Page, Text, View } from '@react-pdf/renderer'
 import {
-  s, C, fmtFecha, fmtNum,
+  s, C, fmtFecha, fmtFechaCorta, fmtNum,
   PageChrome, TitleBlock, SH, SubHead, MetaRow, EstadoChip, SeccionChip, Vacio,
   type ActaBranding,
 } from './actaPdfBase'
@@ -71,7 +71,19 @@ export type ActaData = ActaBranding & {
     cupos: number
     pctAvance: number | null          // postulados/cupos, null si cupos=0
   } | null
-  proyectosTratados: { nombre: string; nota: string | null }[]
+  // De dónde sale cada proyecto (cartera privada del comité vs. iniciativa con
+  // etiqueta CER) es distinción interna: el acta lo omite a propósito, para
+  // quien la lee son todos proyectos tratados por el comité.
+  // `avances`: lo que se registró con ESTA sesión abierta (mig 101). Solo
+  // aplica a los proyectos de la cartera privada; una iniciativa pública
+  // figura como tratada, sin detalle. Va el texto y, si el avance habla de un
+  // permiso, su N° PAS — nada más: ni fecha (la del acta es la de la sesión)
+  // ni autor (el acta relata lo que hizo el comité, no quién tipeó la línea).
+  proyectosTratados: {
+    nombre: string
+    nota: string | null
+    avances: { descripcion: string; permiso: string | null }[]
+  }[]
   oficiosTratados: {
     nombreProyecto: string
     oaeca: string
@@ -275,23 +287,32 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             ) : data.proyectosTratados.map((p, i) => (
               <View key={i} style={s.block} wrap={false}>
                 <Text style={s.blockName}>{p.nombre}</Text>
-                <Text style={s.blockText}>{p.nota || '—'}</Text>
+                {(p.nota || p.avances.length === 0) && <Text style={s.blockText}>{p.nota || '—'}</Text>}
+                {/* Avances registrados con esta sesión abierta (mig 101). */}
+                {p.avances.map((a, j) => (
+                  <Text key={j} style={s.blockText}>
+                    · {a.permiso ? `${a.permiso} — ` : ''}{a.descripcion}
+                  </Text>
+                ))}
               </View>
             ))}
 
             {/* Oficios tratados */}
             <SH>{`${nOficios}. Oficios tratados`}</SH>
+            {/* Las celdas llevan su propio paddingRight: sin él las columnas se
+                tocan y "FECHA LÍMITE" queda pegado a "ESTADO". La fecha va en
+                formato corto — el largo se parte en dos líneas acá. */}
             <View style={s.th}>
-              <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
-              <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
-              <Text style={[s.thT, { flex: 1.2, textAlign: 'right' }]}>Fecha límite</Text>
+              <Text style={[s.thT, { flex: 3, paddingRight: 6 }]}>Proyecto</Text>
+              <Text style={[s.thT, { flex: 2, paddingRight: 6 }]}>OAECA</Text>
+              <Text style={[s.thT, { flex: 1.4, paddingRight: 6 }]}>Fecha límite</Text>
               <Text style={[s.thT, { flex: 1 }]}>Estado</Text>
             </View>
             {data.oficiosTratados.map((o, i) => (
               <View key={i} style={s.tr} wrap={false}>
-                <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
-                <Text style={[s.td, { flex: 2, color: C.muted }]}>{o.oaeca}</Text>
-                <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
+                <Text style={[s.td, { flex: 3, paddingRight: 6 }]}>{o.nombreProyecto}</Text>
+                <Text style={[s.td, { flex: 2, paddingRight: 6, color: C.muted }]}>{o.oaeca}</Text>
+                <Text style={[s.td, { flex: 1.4, paddingRight: 6 }]}>{fmtFechaCorta(o.fechaLimite)}</Text>
                 <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.muted }]}>
                   {o.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
                 </Text>

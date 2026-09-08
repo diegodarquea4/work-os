@@ -162,12 +162,15 @@ export async function fetchPibContexto(sb: SupabaseClient, regionNombre: string)
   const annual = allRowsReal
     .filter(r => r.indicador_limpio === 'PIB' && r.series_id?.endsWith('A') && r.valor_corregido != null)
 
+  // Normalizamos al nombre de UI acá — RM/Magallanes vienen de registros_bce
+  // con otro nombre (ver toMetricsRegionName) — para que `latestByRegion.get(regionNombre)`
+  // calce con el `region.nombre` que pasa el llamador.
   const latestByRegion = new Map<string, { valor: number; periodo: string }>()
   for (const r of annual) {
-    const reg = fromMetricsRegionName(r.nombre_region)
-    const prev = latestByRegion.get(reg)
+    const regionUI = fromMetricsRegionName(r.nombre_region)
+    const prev = latestByRegion.get(regionUI)
     if (!prev || r.periodo > prev.periodo) {
-      latestByRegion.set(reg, { valor: r.valor_corregido as number, periodo: r.periodo })
+      latestByRegion.set(regionUI, { valor: r.valor_corregido as number, periodo: r.periodo })
     }
   }
 
@@ -306,12 +309,16 @@ function ultimoValido(vals: (number | null)[]): { idx: number; valor: number | n
  */
 export async function fetchEmpleoContexto(sb: SupabaseClient, regionNombre: string): Promise<EmpleoContexto> {
   const allRows = await fetchAllEmpleoRows(sb)
+  // Normalizamos al nombre de UI acá — RM/Magallanes vienen de
+  // registros_bce_empleo con otro nombre (ver toMetricsRegionName) — para
+  // que `byRegion.get(regionNombre)` calce con el `region.nombre` que pasa
+  // el llamador.
   const byRegion = new Map<string, EmpleoRow[]>()
   for (const r of allRows) {
-    const reg = fromMetricsRegionName(r.nombre_region)
-    const arr = byRegion.get(reg) ?? []
+    const regionUI = fromMetricsRegionName(r.nombre_region)
+    const arr = byRegion.get(regionUI) ?? []
     arr.push(r)
-    byRegion.set(reg, arr)
+    byRegion.set(regionUI, arr)
   }
 
   const latestByRegion = new Map<string, number>()

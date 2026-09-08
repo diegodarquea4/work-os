@@ -62,6 +62,18 @@ function entradaInfra(over: Partial<EntradaConsola> = {}): EntradaConsola {
   return { instancia: 'infraestructura', compAnteriores: [], asistencia: { presentes: 0, total: 0 }, compNuevos: [], iniciativas: 0, ...over }
 }
 
+function entradaEconomico(over: Partial<EntradaConsola> = {}): EntradaConsola {
+  return {
+    instancia: 'economico',
+    compAnteriores: [],
+    asistencia: { presentes: 0, total: 0 },
+    compNuevos: [],
+    proyectos: 0,
+    oficios: { anteriores: [], nuevos: 0 },
+    ...over,
+  }
+}
+
 // ── railParaSesion ───────────────────────────────────────────────────────────
 
 describe('railParaSesion — Policial', () => {
@@ -146,6 +158,93 @@ describe('railParaSesion — Infraestructura', () => {
 })
 
 // ── resumenAsistencia ────────────────────────────────────────────────────────
+
+describe('railParaSesion — Económico', () => {
+  it('abre por Integrantes: 1 Integrantes · 2 Anteriores · 3 Seguimiento · 4 Nuevos', () => {
+    const rail = railParaSesion(entradaEconomico())
+    expect(rail.map(i => i.key)).toEqual(['asistencia', 'anteriores', 'seguimiento', 'nuevos'])
+    expect(rail.map(i => i.numero)).toEqual([1, 2, 3, 4])
+    // El orden invertido respecto al Policial es deliberado: cada comité
+    // conserva el que ya tenía en su modal.
+    expect(railParaSesion(entradaEje()).map(i => i.key).slice(0, 2)).toEqual(['anteriores', 'asistencia'])
+  })
+
+  it('la zona 2 se llama Integrantes, no Asistencia', () => {
+    expect(railParaSesion(entradaEconomico())[0].label).toBe('Integrantes')
+    expect(railParaSesion(entradaEje())[1].label).toBe('Asistencia')
+  })
+
+  it('Seguimiento lleva dos sub-ítems: proyectos y oficios', () => {
+    const seg = railParaSesion(entradaEconomico({
+      proyectos: 3,
+      oficios: { anteriores: [{ estado: 'pendiente' }, { estado: 'resuelto' }], nuevos: 1 },
+    })).find(i => i.key === 'seguimiento')!
+    expect(seg.subitems?.map(s => s.key)).toEqual(['proyectos', 'oficios'])
+    expect(seg.subitems?.map(s => s.badge)).toEqual(['3', '3'])
+    // Badge del padre = todo lo que hay sobre la mesa (3 proyectos + 3 oficios).
+    expect(seg.badge).toBe('6')
+  })
+
+  it('los proyectos nunca dan el ✓ por sí solos: agregar agenda no es terminarla', () => {
+    const soloProyectos = railParaSesion(entradaEconomico({ proyectos: 5 })).find(i => i.key === 'seguimiento')!
+    expect(soloProyectos.subitems?.find(s => s.key === 'proyectos')?.estado).toBe('con-actividad')
+    // Sin oficios pendientes que revisar, la zona madre sí puede quedar lista.
+    expect(soloProyectos.estado).toBe('listo')
+  })
+
+  it('un oficio anterior sin revisar deja la zona en actividad, no lista', () => {
+    const seg = railParaSesion(entradaEconomico({
+      proyectos: 2,
+      oficios: { anteriores: [{ estado: 'pendiente' }, { estado: 'resuelto' }], nuevos: 0 },
+    })).find(i => i.key === 'seguimiento')!
+    expect(seg.subitems?.find(s => s.key === 'oficios')?.estado).toBe('con-actividad')
+    expect(seg.estado).toBe('con-actividad')
+  })
+
+  it('todos los oficios anteriores resueltos = sub-ítem listo', () => {
+    const seg = railParaSesion(entradaEconomico({
+      oficios: { anteriores: [{ estado: 'resuelto' }, { estado: 'resuelto' }], nuevos: 0 },
+    })).find(i => i.key === 'seguimiento')!
+    expect(seg.subitems?.find(s => s.key === 'oficios')?.estado).toBe('listo')
+  })
+
+  it('un oficio NUEVO suma actividad pero no impide el ✓ (nace pendiente por definición)', () => {
+    const seg = railParaSesion(entradaEconomico({
+      oficios: { anteriores: [], nuevos: 2 },
+    })).find(i => i.key === 'seguimiento')!
+    expect(seg.subitems?.find(s => s.key === 'oficios')?.estado).toBe('con-actividad')
+    expect(seg.estado).toBe('listo')
+  })
+
+  it('sesión sin nada tratado: zona y sub-ítems vacíos', () => {
+    const seg = railParaSesion(entradaEconomico()).find(i => i.key === 'seguimiento')!
+    expect(seg.estado).toBe('vacio')
+    expect(seg.subitems?.map(s => s.estado)).toEqual(['vacio', 'vacio'])
+    expect(seg.badge).toBe('0')
+  })
+
+  it('no tiene reporte por institución, comentarios ni iniciativas', () => {
+    const keys = railParaSesion(entradaEconomico()).map(i => i.key)
+    expect(keys).not.toContain('reporte')
+    expect(keys).not.toContain('comentarios')
+    expect(keys).not.toContain('iniciativas')
+  })
+
+  it('el recorrido entra a cada sub-ítem de Seguimiento, no al padre', () => {
+    const rail = railParaSesion(entradaEconomico({ proyectos: 1 }))
+    expect(ordenRecorrido(rail)).toEqual([
+      { zona: 'asistencia' },
+      { zona: 'anteriores' },
+      { zona: 'seguimiento', inst: 'proyectos' },
+      { zona: 'seguimiento', inst: 'oficios' },
+      { zona: 'nuevos' },
+    ])
+    // Desde Anteriores el siguiente es Proyectos; desde Oficios, Compromisos nuevos.
+    expect(vecinos(rail, { zona: 'anteriores' }).siguiente).toEqual({ zona: 'seguimiento', inst: 'proyectos' })
+    expect(vecinos(rail, { zona: 'seguimiento', inst: 'oficios' }).siguiente).toEqual({ zona: 'nuevos' })
+    expect(etiquetaZona(rail, { zona: 'seguimiento', inst: 'oficios' })).toBe('Seguimiento · Oficios')
+  })
+})
 
 describe('resumenAsistencia', () => {
   const nomina = [{ id: 1 }, { id: 2 }, { id: 3 }]
@@ -240,6 +339,24 @@ describe('resumenCierreComite', () => {
     expect(r.instituciones).toEqual([])
     expect(r.iniciativas).toBe(4)
   })
+
+  it('en el Económico cuenta proyectos y oficios, sin instituciones ni iniciativas', () => {
+    const r = resumenCierreComite(entradaEconomico({
+      proyectos: 3,
+      oficios: { anteriores: [{ estado: 'pendiente' }, { estado: 'pendiente' }, { estado: 'resuelto' }], nuevos: 2 },
+    }))
+    expect(r.proyectos).toBe(3)
+    // total = 3 anteriores + 2 nuevos; pendientes = solo anteriores sin resolver.
+    expect(r.oficios).toEqual({ total: 5, pendientes: 2 })
+    expect(r.instituciones).toEqual([])
+    expect(r.iniciativas).toBe(0)
+  })
+
+  it('los otros comités no arrastran los conteos del Económico', () => {
+    const r = resumenCierreComite(entradaEje())
+    expect(r.proyectos).toBe(0)
+    expect(r.oficios).toEqual({ total: 0, pendientes: 0 })
+  })
 })
 
 describe('avisosCierreComite — solo texto, nunca bloquea', () => {
@@ -273,6 +390,40 @@ describe('avisosCierreComite — solo texto, nunca bloquea', () => {
     expect(avisosCierreComite(resumenCierreComite(entradaInfra()), 'infraestructura')).toContain('Sin iniciativas en la agenda')
     expect(avisosCierreComite(resumenCierreComite(entradaInfra({ iniciativas: 2 })), 'infraestructura'))
       .not.toContain('Sin iniciativas en la agenda')
+  })
+
+  it('el Económico avisa por agenda vacía y por oficios sin resolver', () => {
+    const vacia = resumenCierreComite(entradaEconomico())
+    expect(avisosCierreComite(vacia, 'economico')).toContain('Sin proyectos tratados en profundidad')
+
+    const conAgenda = resumenCierreComite(entradaEconomico({
+      proyectos: 2,
+      oficios: { anteriores: [{ estado: 'pendiente' }], nuevos: 0 },
+    }))
+    const avisos = avisosCierreComite(conAgenda, 'economico')
+    expect(avisos).not.toContain('Sin proyectos tratados en profundidad')
+    expect(avisos).toContain('1 oficio sigue pendiente')
+  })
+
+  it('los oficios nuevos no cuentan como pendientes por resolver', () => {
+    const r = resumenCierreComite(entradaEconomico({ proyectos: 1, oficios: { anteriores: [], nuevos: 3 } }))
+    expect(avisosCierreComite(r, 'economico').some(a => a.includes('oficio'))).toBe(false)
+  })
+
+  it('plural de los oficios pendientes', () => {
+    const r = resumenCierreComite(entradaEconomico({
+      proyectos: 1,
+      oficios: { anteriores: [{ estado: 'pendiente' }, { estado: 'pendiente' }], nuevos: 0 },
+    }))
+    expect(avisosCierreComite(r, 'economico')).toContain('2 oficios siguen pendientes')
+  })
+
+  it('el Económico no hereda los avisos de los otros comités', () => {
+    const avisos = avisosCierreComite(resumenCierreComite(entradaEconomico()), 'economico')
+    expect(avisos).not.toContain('Sin iniciativas en la agenda')
+    expect(avisos.some(a => a.includes('reporte por institución'))).toBe(false)
+    // Los transversales sí aplican.
+    expect(avisos).toContain('Sin asistencia registrada')
   })
 
   it('el módulo no exporta ningún bloqueo y no lanza con entradas vacías', () => {

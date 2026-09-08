@@ -46,6 +46,21 @@ export function fmtFecha(iso: string | null): string {
   } catch { return iso }
 }
 
+/**
+ * Fecha para CELDAS de tabla: "10 sep 2026". El formato largo de `fmtFecha`
+ * ("10 de septiembre de 2026") es el correcto en los encabezados y en el
+ * cuerpo del acta, pero dentro de una columna angosta se parte en dos líneas
+ * y desalinea la fila entera.
+ */
+export function fmtFechaCorta(iso: string | null): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso + 'T12:00:00')
+      .toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+      .replace(/\./g, '')
+  } catch { return iso }
+}
+
 export function fmtNum(n: number): string {
   return n.toLocaleString('es-CL')
 }
