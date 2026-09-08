@@ -27,10 +27,11 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
  *     LinkedIn cuando alguien tiene varios cargos en la misma empresa):
  *     máximo 5 visibles, el resto tras "Ver más" — ver PermisoBitacoraCard.
  *
- * Acá se crea el avance COMPLETO (fecha, permiso asociado y cambio de estado
- * de ese permiso). La sesión del comité además deja un avance rápido desde su
- * agenda —solo texto, sin permiso—, que aterriza en este mismo historial y se
- * lee como avance general.
+ * Los avances se crean SOLO acá. La sesión del comité no tiene formulario
+ * propio: su «Agregar avance» abre esta ficha con el form desplegado
+ * (`abrirFormAvance`). Tenerlo en un solo lugar evita el desfase que había
+ * cuando la sesión guardaba su propia copia — al borrar un avance acá, allá
+ * seguía apareciendo.
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
@@ -43,6 +44,13 @@ type Props = {
   onClose: () => void
   /** Refresca la lista del llamador (nombre/campos pueden haber cambiado). */
   onChanged?: () => void
+  /**
+   * Abre directo con el formulario de avance desplegado. Lo usa el
+   * «+ Agregar avance» de la agenda de la sesión: en vez de tener un form
+   * propio allá (que duplicaba el registro y se desincronizaba al borrar
+   * acá), la sesión trae al usuario a esta ficha con el form abierto.
+   */
+  abrirFormAvance?: boolean
 }
 
 // El estado que se puede cambiar al registrar un avance es el del PERMISO
@@ -69,7 +77,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, abrirFormAvance = false }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
@@ -100,7 +108,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [fInstitucion, setFInstitucion] = useState<Set<string>>(new Set())
   const [fMinisterio, setFMinisterio]   = useState<Set<string>>(new Set())
 
-  const [showForm, setShowForm]                   = useState(false)
+  const [showForm, setShowForm]                   = useState(abrirFormAvance && puedeOperar)
   const [avanceFecha, setAvanceFecha]             = useState(hoyISO)
   const [avanceDescripcion, setAvanceDescripcion] = useState('')
   // Permiso asociado (opcional) — el único cambio de estado posible en un
@@ -121,6 +129,16 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [descExpanded, setDescExpanded]       = useState(false)
   const [descOverflow, setDescOverflow]       = useState(false)
   const descRef = useRef<HTMLParagraphElement>(null)
+  // Buscador de permisos: al enfocarlo se sube al tope del panel, para que el
+  // dropdown de resultados quede entero a la vista y no medio tapado abajo.
+  const buscadorPermisoRef = useRef<HTMLDivElement>(null)
+  function traerBuscadorAlFrente() {
+    // En el mismo tick el dropdown todavía no está montado; el rAF deja que
+    // el layout se asiente antes de medir.
+    requestAnimationFrame(() => {
+      buscadorPermisoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   // Tarjeta de detalle (los otros 14 campos) — colapsable, preferencia
   // persistida igual que el detalle de la ficha de iniciativa.
@@ -670,12 +688,12 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
               {tab === 'permisos' ? (
                 <div className="pt-1 space-y-3">
                   {editable && (
-                    <div className="relative">
+                    <div className="relative" ref={buscadorPermisoRef}>
                       <input
                         type="text"
                         value={permisoQuery}
                         onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true) }}
-                        onFocus={() => setPermisoOpen(true)}
+                        onFocus={() => { setPermisoOpen(true); traerBuscadorAlFrente() }}
                         onBlur={() => setTimeout(() => setPermisoOpen(false), 150)}
                         placeholder="Buscar permiso por N° PAS o nombre…"
                         className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"

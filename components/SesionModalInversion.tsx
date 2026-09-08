@@ -43,9 +43,9 @@ import CierreSesionComite from './sesiones/CierreSesionComite'
  *      3a. Proyectos tratados en profundidad (cartera del comité: privados
  *          + iniciativas públicas con el tag CER). La lista de arriba es la
  *          selección —los ya agendados quedan marcados, no escondidos— y
- *          cada proyecto de la agenda admite avances rápidos, que aterrizan
- *          en el historial REAL del proyecto (sin permiso asociado: eso se
- *          elige en la ficha, que es donde los permisos están a la vista)
+ *          cada proyecto de la agenda linkea a su ficha, con «Agregar
+ *          avance» abriéndola derecho en el formulario. El avance se escribe
+ *          SOLO allá: la sesión no guarda copia de nada.
  *      3b. Oficios — anteriores (verificación) y nuevos (alta directa:
  *          OAECA + fecha límite + proyecto; no hay import de Excel)
  *   4. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
@@ -292,78 +292,6 @@ function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
   )
 }
 
-// "+" para dejar un avance en un proyecto de la agenda sin salir de la sesión.
-// El avance es REAL (va al historial del proyecto, no es una nota suelta de la
-// sesión) y admite varios seguidos: los ya guardados se siguen mostrando acá
-// arriba para que quede constancia de que quedaron sumados.
-function AgregarAvanceInline({
-  onSubmit, avancesPrevios = [],
-}: {
-  onSubmit: (texto: string) => Promise<void>
-  avancesPrevios?: { texto: string; fecha: string }[]
-}) {
-  const [open, setOpen]     = useState(false)
-  const [texto, setTexto]   = useState('')
-  const [saving, setSaving] = useState(false)
-
-  return (
-    <div className="mt-1.5 space-y-1.5">
-      {avancesPrevios.length > 0 && (
-        <div className="space-y-1">
-          {avancesPrevios.map((a, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-xs text-gray-600 bg-violet-50/60 border border-violet-100 rounded px-2 py-1">
-              <span className="text-violet-400 flex-shrink-0">✓</span>
-              <span className="flex-1">{a.texto}</span>
-              <span className="text-gray-400 flex-shrink-0">{fmtFecha(a.fecha)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {open ? (
-        <div className="space-y-1.5">
-          <textarea
-            autoFocus
-            value={texto}
-            onChange={e => setTexto(e.target.value)}
-            rows={2}
-            placeholder="Avance para este proyecto…"
-            className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
-          />
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => { setOpen(false); setTexto('') }} className="text-xs text-gray-400 hover:text-gray-600">
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                setSaving(true)
-                await onSubmit(texto.trim())
-                setSaving(false); setOpen(false); setTexto('')
-              }}
-              disabled={saving || !texto.trim()}
-              className="text-xs px-3 py-1 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
-            >
-              {saving ? 'Guardando…' : 'Guardar avance'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-violet-600"
-          title="Agregar un avance a este proyecto"
-        >
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
-          </svg>
-          {avancesPrevios.length > 0 ? 'Agregar otro avance' : 'Agregar avance'}
-        </button>
-      )}
-    </div>
-  )
-}
-
 export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onVerProyectos, onClose }: Props) {
   const [sesion, setSesion]         = useState<EjeSesion | null>(null)
   const [initError, setInitError]   = useState<string | null>(null)
@@ -386,10 +314,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
-  // Avances agregados en ESTA sesión, por proyecto de la agenda (clave =
-  // claveCartera). Ya quedaron guardados en el historial del proyecto; esta
-  // copia local es para poder mostrarlos de inmediato sin re-consultar.
-  const [avancesSesion, setAvancesSesion]     = useState<Map<string, { texto: string; fecha: string }[]>>(new Map())
+  // La ficha se abrió desde «Agregar avance»: entra con el form desplegado.
+  const [fichaConAvance, setFichaConAvance]   = useState(false)
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -833,9 +759,18 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // iniciativa pública) referenciado desde cualquier lado de la sesión —
   // proyectos tratados, oficios, compromisos: los tres comparten esta misma
   // forma (proyecto_privado_id / prioridad_id) desde mig 093/094/096.
-  function abrirFichaCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }) {
-    if (row.proyecto_privado_id != null) { setFichaPrivadoId(row.proyecto_privado_id); return }
+  function abrirFichaCartera(
+    row: { proyecto_privado_id?: number | null; prioridad_id?: number | null },
+    opts: { avance?: boolean } = {},
+  ) {
+    if (row.proyecto_privado_id != null) {
+      setFichaPrivadoId(row.proyecto_privado_id)
+      setFichaConAvance(!!opts.avance)
+      return
+    }
     if (row.prioridad_id != null) {
+      // La ficha de una iniciativa abre en su pestaña Seguimiento, que es
+      // donde está el alta de avance: no hace falta un deep-link aparte.
       const ini = iniciativas.find(i => i.id === row.prioridad_id)
       if (ini) onAbrirIniciativa(ini)
     }
@@ -855,53 +790,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       return { nombre: nombreLegado ?? row.proyecto_id, tag: 'SEIA' as const, tieneFicha: false }
     }
     return { nombre: '—', tag: null, tieneFicha: false }
-  }
-
-  // Clave del mapa de avances agregados en esta sesión.
-  function claveCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }): string | null {
-    if (row.proyecto_privado_id != null) return `priv-${row.proyecto_privado_id}`
-    if (row.prioridad_id != null) return `pub-${row.prioridad_id}`
-    return null
-  }
-
-  // Avance rápido desde la agenda de la sesión. Escribe en el historial REAL
-  // del proyecto —comite_economico_proyecto_seguimiento si es privado,
-  // seguimientos si es una iniciativa pública—, no en una nota aparte de la
-  // sesión. Sin permiso asociado: en la ficha se lee como avance general (el
-  // vínculo con un permiso se elige ahí, que es donde están a la vista).
-  async function agregarAvanceCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }, texto: string) {
-    const clave = claveCartera(row)
-    if (!clave || !texto) return
-    try {
-      if (row.proyecto_privado_id != null) {
-        await safeWrite(
-          getSupabase().from('comite_economico_proyecto_seguimiento').insert({
-            proyecto_id: row.proyecto_privado_id,
-            descripcion: texto,
-            autor: currentUserEmail || null,
-          }),
-          `comite_economico_proyecto_seguimiento insert (sesion) proyecto=${row.proyecto_privado_id}`,
-        )
-      } else if (row.prioridad_id != null) {
-        await safeWrite(
-          getSupabase().from('seguimientos').insert({
-            prioridad_id: row.prioridad_id,
-            tipo: 'avance',
-            descripcion: texto,
-            autor: currentUserEmail || null,
-            asistentes: [],
-          }),
-          `seguimientos insert (sesion) prioridad=${row.prioridad_id}`,
-        )
-      }
-      setAvancesSesion(prev => {
-        const next = new Map(prev)
-        next.set(clave, [...(next.get(clave) ?? []), { texto, fecha: hoyISO() }])
-        return next
-      })
-    } catch (err) {
-      window.alert((err as Error).message)
-    }
   }
 
   async function quitarProyecto(sp: SesionProyecto) {
@@ -1551,10 +1439,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                     </button>
                                   </div>
                                   {tieneFicha && (
-                                    <AgregarAvanceInline
-                                      onSubmit={texto => agregarAvanceCartera(sp, texto)}
-                                      avancesPrevios={avancesSesion.get(claveCartera(sp) ?? '') ?? []}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirFichaCartera(sp, { avance: true })}
+                                      className="mt-1.5 flex items-center gap-1 text-[11px] text-gray-400 hover:text-violet-600"
+                                      title="Abre la ficha del proyecto con el formulario de avance listo"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                        <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+                                      </svg>
+                                      Agregar avance
+                                    </button>
                                   )}
                                 </div>
                               )
@@ -1856,7 +1751,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         proyectoId={fichaPrivadoId}
         puedeOperar={true}
         currentUserEmail={currentUserEmail}
-        onClose={() => setFichaPrivadoId(null)}
+        abrirFormAvance={fichaConAvance}
+        onClose={() => { setFichaPrivadoId(null); setFichaConAvance(false) }}
       />
     )}
     </>

@@ -12,6 +12,7 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import NuevoProyectoEconomicoModal from './NuevoProyectoEconomicoModal'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
+import PasCatalogoModal from './PasCatalogoModal'
 import ConsolaSesionShell from './sesiones/ConsolaSesionShell'
 
 /**
@@ -61,6 +62,7 @@ export default function ComiteEconomicoProyectosPanel({
   const [loading, setLoading] = useState(true)
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [fichaId, setFichaId] = useState<number | null>(null)
+  const [catalogoOpen, setCatalogoOpen] = useState(false)
 
   const [fPlazo, setFPlazo]           = useState<Set<string>>(new Set())
   const [fPriorizado, setFPriorizado] = useState<Set<string>>(new Set())
@@ -268,6 +270,13 @@ export default function ComiteEconomicoProyectosPanel({
         {vista === 'privado' && (
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setCatalogoOpen(true)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:text-violet-700 hover:border-violet-200 transition-colors"
+              title="Ver, editar o agregar permisos del catálogo PAS (compartido por todas las regiones)"
+            >
+              Catálogo de permisos
+            </button>
+            <button
               onClick={handleExportar}
               disabled={exportando || filtrados.length === 0}
               className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:text-violet-700 hover:border-violet-200 transition-colors disabled:opacity-50"
@@ -391,6 +400,9 @@ export default function ComiteEconomicoProyectosPanel({
           onClose={() => setFichaId(null)}
           onChanged={cargar}
         />
+      )}
+      {catalogoOpen && (
+        <PasCatalogoModal currentUserEmail={userEmail} onClose={() => setCatalogoOpen(false)} />
       )}
     </div>
     </ConsolaSesionShell>
