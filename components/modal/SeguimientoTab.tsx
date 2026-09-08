@@ -834,10 +834,7 @@ export default function SeguimientoTab({
                       </div>
                     ) : (
                       <>
-                        {s.tipo === 'hito' && s.nombre && (
-                          <p className="text-sm font-medium text-gray-800 mb-0.5">{s.nombre}</p>
-                        )}
-                        {s.tipo === 'reunion' && s.nombre && (
+                        {(s.tipo === 'hito' || s.tipo === 'reunion' || s.tipo === 'avance') && s.nombre && (
                           <p className="text-sm font-medium text-gray-800 mb-0.5">{s.nombre}</p>
                         )}
                         {s.tipo === 'reunion' && (s.asistentes?.length ?? 0) > 0 && (

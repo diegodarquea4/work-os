@@ -330,7 +330,7 @@ export default function AdminUsersView() {
     if (res.ok && body.codigo) {
       const email = inviteEmail.trim()
       setShowInvite(false)
-      setInviteEmail(''); setInviteName(''); setInviteRole('viewer'); setInviteRegions([])
+      setInviteEmail(''); setInviteName(''); setInviteRole('viewer'); setInviteRegions([]); setInviteMinisterio('')
       await loadUsers()
       setCodeModal({ email, codigo: body.codigo })   // muestra el código de activación
     } else {

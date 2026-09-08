@@ -82,3 +82,40 @@ export async function applyBulkUpdate(
 
   return { ok, sinCambio: targets.length - ok }
 }
+
+/**
+ * Agrega `tagsToAdd` a los tags de cada target — a diferencia de
+ * `applyBulkUpdate`, no es un patch plano: cada fila termina con un array
+ * distinto (sus tags previos + los nuevos, deduplicados), así que no se puede
+ * hacer con un solo `.update(...).in('id', ids)`. Un UPDATE por fila,
+ * troceado igual que el resto para acotar el impacto de un fallo puntual.
+ * Devuelve el array final por fila para que el caller actualice el estado
+ * local sin recalcular el merge.
+ */
+export async function applyBulkAddTags(
+  targets: Iniciativa[],
+  tagsToAdd: string[],
+): Promise<BulkUpdateResult & { updated: { n: number; tags: string[] }[] }> {
+  const sb = getSupabase()
+  let ok = 0
+  const updated: { n: number; tags: string[] }[] = []
+
+  for (let i = 0; i < targets.length; i += CHUNK) {
+    const slice = targets.slice(i, i + CHUNK)
+    const results = await Promise.all(slice.map(async t => {
+      const merged = Array.from(new Set([...(t.tags ?? []), ...tagsToAdd]))
+      const { data, error } = await sb
+        .from('prioridades_territoriales')
+        .update({ tags: merged })
+        .eq('id', t.id)
+        .select('id')
+      return { t, merged, data, error }
+    }))
+    for (const r of results) {
+      if (r.error) throw new Error(`No se pudo aplicar el cambio masivo: ${r.error.message}`)
+      if (r.data?.length) { ok++; updated.push({ n: r.t.n, tags: r.merged }) }
+    }
+  }
+
+  return { ok, sinCambio: targets.length - ok, updated }
+}

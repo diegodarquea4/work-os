@@ -80,6 +80,10 @@ export function useMetricasEmpleoTodas() {
         const periodos = [...periodSet].sort()
 
         // region → periodo → { tasa, ocu }
+        // Normalizamos al nombre de UI acá — RM/Magallanes vienen de
+        // registros_bce_empleo con otro nombre (ver toMetricsRegionName) —
+        // para que las claves calcen con `Region.nombre` en todo el resto
+        // del panel (selects, comparaciones, rankings).
         const regionMap: Record<string, Record<string, { tasa?: number | null; ocu?: number | null }>> = {}
         for (const r of all) {
           const reg = fromMetricsRegionName(r.nombre_region)
@@ -155,7 +159,7 @@ export function useMetricasEmpleoRegion(regionNombre: string | null) {
 
   useEffect(() => {
     if (!regionNombre) { setSerie([]); return }
-    const nombreBd = toMetricsRegionName(regionNombre)
+    const nombreDb = toMetricsRegionName(regionNombre)
     let cancelled = false
     setLoading(true)
     async function load() {
@@ -164,7 +168,7 @@ export function useMetricasEmpleoRegion(regionNombre: string | null) {
         const { data, error } = await sb
           .from('registros_bce_empleo')
           .select('nombre_region,periodo,indicador,valor')
-          .eq('nombre_region', nombreBd)
+          .eq('nombre_region', nombreDb)
           .order('periodo', { ascending: true })
         if (cancelled) return
         if (!error && data) {

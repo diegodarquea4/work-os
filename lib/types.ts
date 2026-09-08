@@ -773,8 +773,11 @@ export type SesionCompromiso = {
   // NULL para compromisos de Comité Policial/Gabinete. Genera el tag al listar.
   seccion: SeccionComiteEconomico | null
   // Proyecto asociado (v2_proyectos_inversion), opcional — solo trazabilidad,
-  // no determina el tag.
+  // no determina el tag. Legado: los compromisos nuevos usan
+  // proyecto_privado_id (privado) o prioridad_id (público, ya genérico
+  // arriba) — mig 087.
   proyecto_id: string | null
+  proyecto_privado_id: number | null
   // Comité de Infraestructura (instancia='infraestructura') únicamente — mig
   // 059. Uno de los tags curados en region_config.infraestructura_megaproyectos
   // al momento de crear el compromiso; independiente de prioridad_id (un
@@ -932,14 +935,99 @@ export type Oaeca = {
   created_by_email: string | null
 }
 
-// Proyecto tratado en profundidad en una sesión — selección desde
-// v2_proyectos_inversion, no texto libre.
+// Proyecto tratado en profundidad en una sesión — selección desde la
+// cartera del Comité Económico (mig 094): privado (comite_economico_proyecto)
+// o público (iniciativa con tag 'CER'), exactamente uno de los tres no-NULL.
+// `proyecto_id` (TEXT → v2_proyectos_inversion) queda deprecado — ya no se
+// escribe, solo lectura para sesiones históricas previas a la 086.
 export type SesionProyecto = {
   id: number
   sesion_id: number
-  proyecto_id: string
+  proyecto_id: string | null
+  proyecto_privado_id: number | null
+  prioridad_id: number | null
   nota: string | null
   created_at: string
+}
+
+// Cartera de proyectos privados del Comité Económico (mig 094) — cargados a
+// mano por el responsable (no sincronizados, a diferencia de
+// v2_proyectos_inversion). Los públicos NO tienen tabla propia: son
+// iniciativas (Prioridad) con la etiqueta 'CER' en `tags`.
+export type ComiteEconomicoProyecto = {
+  id: number
+  region_cod: string
+  plazo: 'CP' | 'MP' | 'LP' | null
+  priorizado: boolean
+  nombre: string
+  seremi_lider: string | null
+  inversion_monto: number | null
+  inversion_moneda: string | null
+  fuente_financiamiento: string | null
+  mano_obra_directa: number | null
+  mano_obra_indirecta: number | null
+  responsable_operativo: string | null
+  kpi: string | null
+  meta_2026_2027: string | null
+  estado_inicial: string | null
+  estado_actual: string | null
+  // Detalle libre (N° de RCA, fechas, contexto) — mig 095. `estado_actual`
+  // se estandarizó a un puñado de categorías (ver lib/comiteEconomico.ts);
+  // el resto de lo que antes vivía mezclado en ese campo va aquí.
+  notas: string | null
+  vida_util_anios: number | null
+  riesgo: boolean
+  created_at: string
+  created_by_email: string | null
+  updated_at: string
+}
+
+// Avance registrado por una SEREMI en un proyecto privado del Comité
+// Económico — mismo espíritu que Seguimiento (tipo 'avance') pero tabla
+// propia: Seguimiento tiene `prioridad_id` hardcodeado en columna/RLS.
+export type ComiteEconomicoProyectoSeguimiento = {
+  id: number
+  proyecto_id: number
+  fecha: string                      // date puro YYYY-MM-DD
+  descripcion: string
+  estado: 'pendiente' | 'en_curso' | 'completado' | 'bloqueado' | null
+  autor: string | null
+  // Permiso del proyecto al que refiere este avance (mig 096) — opcional,
+  // NULL = avance general del proyecto (no habla de un permiso puntual).
+  permiso_id: number | null
+  // Estado del permiso que este avance dejó registrado al crearse (mig 098)
+  // — snapshot histórico, no el estado actual del permiso (ese vive en
+  // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
+  // el estado del permiso (o es un avance general, sin permiso).
+  estado_permiso_registrado: 'pendiente' | 'otorgado' | 'frenado' | null
+  // Sesión en la que se escribió este avance (mig 101). NULL = avance normal
+  // de cartera; con valor, el acta de esa sesión lo reporta bajo su proyecto.
+  sesion_id: number | null
+  created_at: string
+}
+
+// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 096) — no
+// region-scoped, mismo espíritu que `oaeca` (mig 051): precargado y crece
+// cuando alguien escribe uno nuevo al asociarlo a un proyecto.
+export type PasCatalogo = {
+  id: number
+  n_pas: string
+  sector_materia: string | null
+  nombre: string
+  organo_otorgante: string | null
+  created_at: string
+  created_by_email: string | null
+}
+
+// Qué permiso del catálogo necesita CADA proyecto privado, con su propio
+// estado tri-color (mig 096). NULL = sin estado (default al crearlo).
+export type ComiteEconomicoProyectoPermiso = {
+  id: number
+  proyecto_id: number
+  pas_id: number
+  estado: 'pendiente' | 'otorgado' | 'frenado' | null
+  created_at: string
+  created_by_email: string | null
 }
 
 // Oficio tratado — vive ENTRE sesiones igual que SesionCompromiso: se carga
@@ -950,7 +1038,11 @@ export type SesionOficioTratado = {
   region_cod: string
   sesion_origen_id: number
   oaeca_id: number
-  proyecto_id: string
+  // Legado (v2_proyectos_inversion) — los oficios nuevos usan
+  // proyecto_privado_id (privado) o prioridad_id (público) — mig 097.
+  proyecto_id: string | null
+  proyecto_privado_id: number | null
+  prioridad_id: number | null
   fecha_limite: string | null        // date puro YYYY-MM-DD
   estado: 'pendiente' | 'resuelto'
   nota: string | null

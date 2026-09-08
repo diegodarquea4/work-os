@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { SEMAFORO_CONFIG, type SemaforoKey } from '@/lib/config'
 import { VALID_ETAPA } from '@/lib/enums'
@@ -8,16 +8,17 @@ import { VALID_ETAPA } from '@/lib/enums'
 /**
  * Barra de edición masiva del Dashboard. Aparece cuando hay iniciativas
  * seleccionadas. El usuario elige un CAMPO y un VALOR y lo aplica a todas de una
- * vez. Los campos definicionales (Etapa, Capa) solo se ofrecen a admin/editor
- * (`canEditAny`); Estado / En foco / Responsable son operativos (también
- * regional). El backstop real por rol/columna vive en el trigger de RLS.
+ * vez. Los campos definicionales (Etapa, Capa, Etiquetas) solo se ofrecen a
+ * admin/editor (`canEditAny`) — mismo gate que la edición de tags uno-a-uno en
+ * ProjectTrackerModal.tsx; Estado / En foco / Responsable son operativos
+ * (también regional). El backstop real por rol/columna vive en el trigger de RLS.
  *
- * La barra NO escribe: construye el `patch` + etiquetas legibles y, tras la
+ * La barra NO escribe: construye los argumentos + etiquetas legibles y, tras la
  * confirmación (irreversible), llama `onApply`. El padre hace la escritura y
  * controla `applying` (spinner) y el limpiado de la selección.
  */
 
-type BulkField = 'estado_semaforo' | 'en_foco' | 'responsable' | 'etapa_actual' | 'capa'
+type BulkField = 'estado_semaforo' | 'en_foco' | 'responsable' | 'etapa_actual' | 'capa' | 'tags'
 
 const FIELDS: { value: BulkField; label: string; definitional: boolean }[] = [
   { value: 'estado_semaforo', label: 'Estado',       definitional: false },
@@ -25,6 +26,7 @@ const FIELDS: { value: BulkField; label: string; definitional: boolean }[] = [
   { value: 'responsable',     label: 'Responsable',  definitional: false },
   { value: 'etapa_actual',    label: 'Etapa actual', definitional: true  },
   { value: 'capa',            label: 'Capa',         definitional: true  },
+  { value: 'tags',            label: 'Etiquetas (agregar)', definitional: true },
 ]
 
 const SEM_KEYS: SemaforoKey[] = ['verde', 'ambar', 'rojo', 'gris']
@@ -34,11 +36,11 @@ const CAPA_OPTS: { value: Capa; label: string }[] = [
   { value: 'lll', label: 'Capa III' },
 ]
 
-export type BulkApplyArgs = {
-  patch: Partial<Iniciativa>
-  campoLabel: string
-  valorLabel: string
-}
+// `tags` es aditivo (union con lo que ya tenía cada fila) — no cabe en un
+// patch plano igual para todas, así que se distingue con `kind`.
+export type BulkApplyArgs =
+  | { kind: 'patch'; patch: Partial<Iniciativa>; campoLabel: string; valorLabel: string }
+  | { kind: 'addTags'; tags: string[]; campoLabel: string; valorLabel: string }
 
 type Props = {
   count: number
@@ -60,22 +62,45 @@ export default function BulkEditBar({ count, canEditAny, applying, onApply, onCl
   const [capaVal, setCapaVal]   = useState<Capa>('l')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
+  // Etiquetas a agregar (multi-chip) + universo existente para autocompletar
+  // — mismo dato que ProjectTrackerModal.tsx (/api/tags), cargado una vez.
+  const [tagsVal, setTagsVal]     = useState<string[]>([])
+  const [tagDraft, setTagDraft]   = useState('')
+  const [tagsOpen, setTagsOpen]   = useState(false)
+  const [universoEtiquetas, setUniversoEtiquetas] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/tags').then(r => r.ok ? r.json() : []).then(setUniversoEtiquetas).catch(() => {})
+  }, [])
+
+  function addTagVal(t: string) {
+    const v = t.trim()
+    if (!v || tagsVal.includes(v)) { setTagDraft(''); return }
+    setTagsVal(prev => [...prev, v])
+    setTagDraft('')
+  }
+
   // Responsable exige un valor: vaciarlo en masa borraría el responsable de N
-  // filas por accidente. El resto siempre tiene un valor válido seleccionado.
-  const canApply = field !== 'responsable' || respVal.trim().length > 0
+  // filas por accidente. Etiquetas exige al menos una. El resto siempre tiene
+  // un valor válido seleccionado.
+  const canApply =
+    field === 'responsable' ? respVal.trim().length > 0 :
+    field === 'tags'        ? tagsVal.length > 0 :
+    true
 
   function build(): BulkApplyArgs {
     switch (field) {
       case 'estado_semaforo':
-        return { patch: { estado_semaforo: semVal }, campoLabel: 'Estado', valorLabel: SEMAFORO_CONFIG[semVal].label }
+        return { kind: 'patch', patch: { estado_semaforo: semVal }, campoLabel: 'Estado', valorLabel: SEMAFORO_CONFIG[semVal].label }
       case 'en_foco':
-        return { patch: { en_foco: focoVal }, campoLabel: 'En foco', valorLabel: focoVal ? 'En foco' : 'Sin foco' }
+        return { kind: 'patch', patch: { en_foco: focoVal }, campoLabel: 'En foco', valorLabel: focoVal ? 'En foco' : 'Sin foco' }
       case 'responsable':
-        return { patch: { responsable: respVal.trim() }, campoLabel: 'Responsable', valorLabel: respVal.trim() }
+        return { kind: 'patch', patch: { responsable: respVal.trim() }, campoLabel: 'Responsable', valorLabel: respVal.trim() }
       case 'etapa_actual':
-        return { patch: { etapa_actual: etapaVal }, campoLabel: 'Etapa actual', valorLabel: etapaVal }
+        return { kind: 'patch', patch: { etapa_actual: etapaVal }, campoLabel: 'Etapa actual', valorLabel: etapaVal }
       case 'capa':
-        return { patch: { capa: capaVal }, campoLabel: 'Capa', valorLabel: CAPA_OPTS.find(c => c.value === capaVal)!.label }
+        return { kind: 'patch', patch: { capa: capaVal }, campoLabel: 'Capa', valorLabel: CAPA_OPTS.find(c => c.value === capaVal)!.label }
+      case 'tags':
+        return { kind: 'addTags', tags: tagsVal, campoLabel: 'Etiquetas', valorLabel: tagsVal.join(', ') }
     }
   }
 
@@ -165,6 +190,52 @@ export default function BulkEditBar({ count, canEditAny, applying, onApply, onCl
           </div>
         )}
 
+        {field === 'tags' && (
+          <div className="relative">
+            <div className="flex items-center gap-1 flex-wrap bg-white border border-violet-200 rounded-md px-1.5 py-1 min-w-[220px]">
+              {tagsVal.map(t => (
+                <span key={t} className="inline-flex items-center gap-1 text-xs bg-violet-100 text-violet-800 rounded px-1.5 py-0.5">
+                  {t}
+                  <button onClick={() => setTagsVal(prev => prev.filter(x => x !== t))} className="text-violet-500 hover:text-violet-800">✕</button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagDraft}
+                onChange={e => { setTagDraft(e.target.value); setTagsOpen(true) }}
+                onFocus={() => setTagsOpen(true)}
+                onBlur={() => setTimeout(() => setTagsOpen(false), 150)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTagVal(tagDraft) }
+                  else if (e.key === 'Backspace' && tagDraft === '' && tagsVal.length > 0) setTagsVal(prev => prev.slice(0, -1))
+                }}
+                placeholder={tagsVal.length === 0 ? 'Nueva etiqueta…' : 'Agregar otra…'}
+                className="flex-1 min-w-[100px] text-sm text-slate-800 focus:outline-none py-0.5"
+              />
+            </div>
+            {tagsOpen && (() => {
+              const q = tagDraft.trim().toLowerCase()
+              const matches = universoEtiquetas.filter(t => !tagsVal.includes(t) && (!q || t.toLowerCase().includes(q))).slice(0, 8)
+              if (matches.length === 0) return null
+              return (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                  {matches.map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => addTagVal(t)}
+                      className="w-full text-left px-3 py-1.5 text-sm text-gray-800 hover:bg-violet-50"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         <button
           onClick={() => setConfirmOpen(true)}
           disabled={!canApply || applying}
@@ -194,10 +265,17 @@ export default function BulkEditBar({ count, canEditAny, applying, onApply, onCl
               <h2 className="text-base font-semibold text-gray-900">Confirmar cambio masivo</h2>
             </div>
             <div className="px-6 py-5 text-sm text-gray-700 leading-relaxed">
-              Vas a cambiar <span className="font-semibold">{pending.campoLabel}</span> a{' '}
-              «<span className="font-semibold text-violet-800">{pending.valorLabel}</span>» en{' '}
-              <span className="font-semibold tabular-nums">{count}</span>{' '}
-              {count === 1 ? 'iniciativa' : 'iniciativas'}.
+              {pending.kind === 'addTags' ? (
+                <>Vas a agregar {pending.tags.length === 1 ? 'la etiqueta' : 'las etiquetas'}{' '}
+                «<span className="font-semibold text-violet-800">{pending.valorLabel}</span>» a{' '}
+                <span className="font-semibold tabular-nums">{count}</span>{' '}
+                {count === 1 ? 'iniciativa' : 'iniciativas'} (sin quitar las que ya tenían).</>
+              ) : (
+                <>Vas a cambiar <span className="font-semibold">{pending.campoLabel}</span> a{' '}
+                «<span className="font-semibold text-violet-800">{pending.valorLabel}</span>» en{' '}
+                <span className="font-semibold tabular-nums">{count}</span>{' '}
+                {count === 1 ? 'iniciativa' : 'iniciativas'}.</>
+              )}
               <p className="text-xs text-gray-400 mt-2">Esta acción no se puede deshacer con un clic.</p>
             </div>
             <div className="px-6 py-3 bg-gray-50 flex justify-end gap-2">

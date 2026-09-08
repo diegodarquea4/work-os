@@ -19,8 +19,11 @@ on:
   schedule:
     - cron: '0 6 * * *'           # sinca + health (diario)
     - cron: '0 7 * * 1'           # ine-sync
-    # SEIA salió del cron: pasó a refresco on-demand (botón "Actualizar
-    # proyectos en SEIA" del Comité de Inversión → /api/seia-sync-v2 reanudable).
+    # SEIA: el botón "Actualizar proyectos en SEIA" del Comité de Inversión
+    # se retiró (PR #13, Manuel) al reordenar ese panel — sin cron, el sync
+    # queda sin ningún disparador y repite el silencio de 53 días de 2026-04.
+    # Vuelve a tener cron, apuntando a la v2 reanudable (ver step "SEIA" abajo).
+    - cron: '30 8 * * 1'          # seia-sync-v2 (antes de mop-sync)
     - cron: '0 9 * * 1'           # mop-sync
     - cron: '0 10 * * 3'          # stop-sync (miércoles)
     - cron: '0 11 * * 1'          # pib-sync
@@ -42,6 +45,7 @@ on:
         options:
           - sinca-sync
           - ine-sync
+          - seia-sync-v2
           - mop-sync
           - pib-sync
           - stop-sync
@@ -76,6 +80,7 @@ jobs:
           case "${{ github.event.schedule }}" in
             '0 6 * * *')          ENDPOINTS="sinca-sync health" ;;
             '0 7 * * 1')          ENDPOINTS="ine-sync" ;;
+            '30 8 * * 1')         ENDPOINTS="seia-sync-v2" ;;
             '0 9 * * 1')          ENDPOINTS="mop-sync" ;;
             '0 10 * * 3')         ENDPOINTS="stop-sync" ;;
             '0 11 * * 1')         ENDPOINTS="pib-sync" ;;
@@ -113,6 +118,41 @@ jobs:
           for ep in ${{ steps.resolve.outputs.endpoints }}; do
             echo "::group::POST /api/$ep"
             echo "→ $BASE_URL/api/$ep"
+
+            # seia-sync-v2 es reanudable (mig 8 de la consolidación backend):
+            # trocea por presupuesto de tiempo y devuelve partial:true con un
+            # cursor si le quedan regiones. Reinvocar hasta partial:false —
+            # mismo criterio que el botón manual que reemplaza.
+            if [ "$ep" = "seia-sync-v2" ]; then
+              intento=1
+              while [ "$intento" -le 6 ]; do
+                echo "-- intento $intento --"
+                HTTP_CODE=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+                  --max-time 300 \
+                  -X POST "$BASE_URL/api/$ep" \
+                  -H "Authorization: Bearer $CRON_SECRET" \
+                  -H "Content-Type: application/json" \
+                  || echo "000")
+                echo "HTTP $HTTP_CODE"
+                head -c 4096 /tmp/body.json
+                echo
+                if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
+                  echo "::error::$ep falló con HTTP $HTTP_CODE"
+                  fail=1
+                  break
+                fi
+                if ! grep -q '"partial":true' /tmp/body.json; then
+                  break
+                fi
+                intento=$((intento + 1))
+              done
+              if [ "$intento" -gt 6 ] && grep -q '"partial":true' /tmp/body.json; then
+                echo "::warning::seia-sync-v2 no terminó las 16 regiones en 6 intentos — API flaky, el próximo cron retoma el cursor."
+              fi
+              echo "::endgroup::"
+              continue
+            fi
+
             HTTP_CODE=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
               --max-time 600 \
               -X POST "$BASE_URL/api/$ep" \

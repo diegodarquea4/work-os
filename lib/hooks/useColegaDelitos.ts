@@ -87,10 +87,12 @@ export function useColegaDelitosAll(id_semana?: number) {
 
         if (cancelled) return
         if (data) {
-          // Normaliza nombre_region al del panel (RM/Magallanes) para que los
-          // consumidores que filtran por r.nombre_region === region.nombre calcen.
-          const mapped = (data as unknown as DelitosRow[])
-            .map(r => ({ ...r, nombre_region: fromMetricsRegionName(r.nombre_region) }))
+          // RM/Magallanes vienen de registros_leystop_delitos con otro
+          // nombre (ver toMetricsRegionName) — normalizamos acá para que
+          // calce con `Region.nombre` en comparaciones/filtros del panel.
+          const mapped = (data as unknown as DelitosRow[]).map(r => ({
+            ...r, nombre_region: fromMetricsRegionName(r.nombre_region),
+          }))
           setRows(mapped)
           setSemana(mapped[0]?.semana ?? '')
         }
