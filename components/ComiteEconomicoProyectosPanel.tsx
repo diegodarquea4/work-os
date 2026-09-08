@@ -12,6 +12,7 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import NuevoProyectoEconomicoModal from './NuevoProyectoEconomicoModal'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
+import ConsolaSesionShell from './sesiones/ConsolaSesionShell'
 
 /**
  * Cartera de proyectos del Comité Económico — dos fuentes NO unificadas
@@ -23,8 +24,13 @@ import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
  *     que ComiteInfraestructuraTab.tsx (semáforo + TagChips + avance),
  *     click abre la ficha completa vía onAbrirIniciativa (igual que ahí).
  *
- * Se monta debajo de la tarjeta de sesión de ComiteInversionPanel — no
- * reemplaza nada de lo que ya existe ahí.
+ * Se muestra en DOS modos, porque la cartera entera no cabe dentro del panel
+ * del comité sin tapar lo que ese panel es (la sesión):
+ *   · 'preview'  — la tarjeta que vive dentro de ComiteInversionPanel: SOLO
+ *     los proyectos priorizados, sin filtros ni alta. Es un vistazo.
+ *   · 'completo' — la cartera a pantalla completa (mismo esqueleto que la
+ *     consola de sesión), con el toggle Privado/Público, los filtros, el
+ *     orden por columna, Descargar Excel y + Nuevo proyecto.
  */
 
 const TAG_ECONOMICO = 'CER'
@@ -35,9 +41,18 @@ type Props = {
   region: Region
   iniciativas: Iniciativa[]
   onAbrirIniciativa: (p: Iniciativa) => void
+  modo?: 'preview' | 'completo'
+  /** 'preview': abrir la cartera completa. */
+  onVerTodos?: () => void
+  /** 'completo': salir de la pantalla completa. */
+  onClose?: () => void
+  /** 'completo': saltar directo a la consola de sesión (ida y vuelta). */
+  onIrASesion?: () => void
 }
 
-export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onAbrirIniciativa }: Props) {
+export default function ComiteEconomicoProyectosPanel({
+  region, iniciativas, onAbrirIniciativa, modo = 'completo', onVerTodos, onClose, onIrASesion,
+}: Props) {
   const puedeOperar = useCan('comite.economico.operar', region.cod)
   const userEmail = useCurrentUserEmail()
 
@@ -135,8 +150,103 @@ export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onA
 
   if (!puedeOperar) return null
 
+  // ── Modo preview: solo los priorizados, dentro del panel del comité ───────
+  if (modo === 'preview') {
+    const priorizados = proyectos.filter(p => p.priorizado)
+    return (
+      <div className="mt-3 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Proyectos priorizados</p>
+          <span className="text-[11px] text-gray-400 ml-auto tabular-nums">
+            {priorizados.length} de {proyectos.length}
+          </span>
+        </div>
+        <div className="px-4 pb-4">
+          {loading ? (
+            <p className="text-center text-sm text-gray-400 py-6">Cargando proyectos…</p>
+          ) : priorizados.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-6 border border-dashed border-gray-200 rounded-lg">
+              {proyectos.length === 0
+                ? 'Sin proyectos privados cargados todavía.'
+                : 'Ningún proyecto está marcado como priorizado.'}
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {priorizados.slice(0, 10).map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setFichaId(p.id)}
+                  className="w-full text-left px-2.5 py-2 border border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50/50 transition-colors flex items-center gap-2.5"
+                  title="Ver la ficha del proyecto"
+                >
+                  <span className="text-sm text-slate-800 font-medium truncate flex-1 min-w-0">{p.nombre}</span>
+                  {p.riesgo && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 flex-shrink-0">Riesgo</span>
+                  )}
+                  {p.plazo && <span className="text-[10px] text-gray-400 flex-shrink-0">{p.plazo}</span>}
+                  {p.estado_actual && (
+                    <span className="text-xs text-gray-400 truncate max-w-[150px] flex-shrink-0">{p.estado_actual}</span>
+                  )}
+                </button>
+              ))}
+              {priorizados.length > 10 && (
+                <button
+                  onClick={onVerTodos}
+                  className="w-full text-center text-[11px] text-violet-700 hover:text-violet-900 font-medium py-1.5 hover:underline"
+                >
+                  y {priorizados.length - 10} priorizados más — ver todos los proyectos →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {fichaId != null && (
+          <ProyectoEconomicoFichaModal
+            proyectoId={fichaId}
+            puedeOperar={puedeOperar}
+            currentUserEmail={userEmail}
+            onClose={() => setFichaId(null)}
+            onChanged={cargar}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── Modo completo: la cartera entera a pantalla completa ──────────────────
   return (
-    <div className="mt-3 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <ConsolaSesionShell
+      ariaLabel="Cartera de proyectos — Comité Económico"
+      mainMaxWidth="max-w-7xl"
+      onEscape={onClose}
+      header={
+        <>
+          <span className="text-[14.5px] font-bold text-slate-900">
+            Cartera de proyectos <span className="font-medium text-slate-400">· {region.nombre}</span>
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {onIrASesion && (
+              <button
+                onClick={onIrASesion}
+                title="Ir a la sesión del comité"
+                className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50"
+              >
+                Ir a la sesión →
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              title="Volver"
+              className="text-slate-400 hover:text-slate-700"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+        </>
+      }
+    >
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Proyectos</p>
@@ -283,6 +393,7 @@ export default function ComiteEconomicoProyectosPanel({ region, iniciativas, onA
         />
       )}
     </div>
+    </ConsolaSesionShell>
   )
 }
 

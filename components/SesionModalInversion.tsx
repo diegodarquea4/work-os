@@ -87,6 +87,8 @@ type Props = {
   // onAbrirIniciativa que resuelve VistaRegional.
   iniciativas: Iniciativa[]
   onAbrirIniciativa: (p: Iniciativa) => void
+  /** Saltar a la cartera completa. Cierra la sesión: el borrador se guarda solo. */
+  onVerProyectos?: () => void
   onClose: () => void
 }
 
@@ -286,7 +288,7 @@ function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
   )
 }
 
-export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onClose }: Props) {
+export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onVerProyectos, onClose }: Props) {
   const [sesion, setSesion]         = useState<EjeSesion | null>(null)
   const [initError, setInitError]   = useState<string | null>(null)
 
@@ -973,6 +975,16 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         Asistencia {asist.presentes}/{asist.total}
       </span>
       <div className="ml-auto flex items-center gap-2">
+        {onVerProyectos && (
+          <button
+            onClick={() => { soltarFoco(); onVerProyectos() }}
+            disabled={cerrando}
+            title="Ir a la cartera completa (el borrador queda guardado)"
+            className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-40"
+          >
+            Ver todos los proyectos →
+          </button>
+        )}
         <button
           onClick={abrirCierre}
           disabled={!sesion || cerrando}
