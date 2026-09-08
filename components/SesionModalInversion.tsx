@@ -12,30 +12,46 @@ import type {
   SesionSubsidioEmpleoValor,
 } from '@/lib/types'
 import { Alert } from '@/components/ui'
-import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
+import {
+  railParaSesion, resumenAsistencia, vecinos, etiquetaZona,
+  type ZonaKey, type ZonaRef,
+} from '@/lib/sesiones/consola'
+import ConsolaSesionShell, { soltarFoco } from './sesiones/ConsolaSesionShell'
+import ConsolaRail from './sesiones/ConsolaRail'
+import ZonaCard from './sesiones/ZonaCard'
+import FechaEditable from './sesiones/FechaEditable'
+import CierreSesionComite from './sesiones/CierreSesionComite'
 
 /**
- * Formulario de sesión del Comité Económico — 5 zonas EN ESTE ORDEN (mismo
- * criterio que SesionModal.tsx: el orden es producto):
+ * CONSOLA DE SESIÓN del Comité Económico. El nombre del archivo es histórico:
+ * hasta 2026-09-08 esto era un modal centrado; hoy ocupa toda la pantalla con
+ * el mismo esqueleto que el Policial y el de Infraestructura
+ * (`./sesiones/ConsolaSesionShell`): cabecera + riel izquierdo con las zonas
+ * + panel principal que muestra SOLO la zona activa. El cambio es visual: lo
+ * que se registra, las queries y el cierre son los mismos.
+ *
+ * Zonas EN ESTE ORDEN (el orden es producto, y es el que este comité ya tenía
+ * en el modal — por eso abre por Integrantes y no por los compromisos, al
+ * revés que los otros dos):
  *   1. Integrantes (nómina fija + invitados — igual que Asistencia)
  *   2. Compromisos anteriores (si hubieron) — de CUALQUIERA de las dos
- *      secciones o generales, fuera de ambas; sube justo bajo Integrantes
- *      (mismo criterio que Zona 1 de SesionModal.tsx: verificar primero)
- *   3. Mesa Empleo (desplegable) — Meta Empleo (indicador con objetivo +
- *      acumulado, mig 052) y Proyectos de Inversión Pública (módulo
- *      placeholder — la tabla se arma más adelante)
- *   4. Seguimiento de la Inversión (desplegable) — lo que ya existía:
- *      4a. Oficios anteriores (verificación)
- *      4b. Oficios tratados nuevos (alta directa: OAECA + fecha límite +
- *          proyecto — no hay import de Excel)
- *      4c. Proyectos tratados en profundidad (selección desde catálogo
- *          real, v2_proyectos_inversion — no texto libre)
- *   5. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
+ *      secciones o generales, fuera de ambas
+ *   3. Seguimiento de la Inversión, con dos sub-zonas en el riel:
+ *      3a. Proyectos tratados en profundidad (cartera del comité: privados
+ *          + iniciativas públicas con el tag CER)
+ *      3b. Oficios — anteriores (verificación) y nuevos (alta directa:
+ *          OAECA + fecha límite + proyecto; no hay import de Excel)
+ *   4. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
  *      seguimiento_inversion / general) y genera el tag al listar;
- *      `proyecto_id` es opcional en cualquier sección.
+ *      el proyecto asociado es opcional en cualquier sección.
+ *
+ * Mesa Empleo (Meta Empleo + subsidios, mig 052) sigue escondida tras
+ * MESA_EMPLEO_HABILITADA. Cuando se encienda necesita SU zona en el riel
+ * (`lib/sesiones/consola.ts`): hoy cuelga de Integrantes para no inventar una
+ * entrada que nadie ve.
  *
  * A diferencia de SesionModal, este comité NO tiene eje: las queries de
  * sesion_nomina/sesion_compromisos/eje_sesiones filtran por
@@ -300,9 +316,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [pkFSeremi, setPkFSeremi]         = useState<Set<string>>(new Set())
   const [pkFRiesgo, setPkFRiesgo]         = useState<Set<string>>(new Set())
   const [pkFEstado, setPkFEstado]         = useState<Set<string>>(new Set())
-  // Oficios y Proyectos tratados, colapsables por separado dentro de zona 4.
-  const [proyectosSeccionOpen, setProyectosSeccionOpen] = useState(true)
-  const [oficiosSeccionOpen, setOficiosSeccionOpen]     = useState(true)
+  // Proyectos y Oficios ya no se colapsan: son dos sub-zonas del riel.
 
   // Alta de oficio nuevo (Seguimiento de la Inversión) — proyecto que
   // considera viene de la misma cartera (privado/público) que 4c, no del
@@ -330,11 +344,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [subEmpresasInput, setSubEmpresasInput]     = useState('')
   const [subsidioSaving, setSubsidioSaving]     = useState(false)
 
-  // Colapso de las dos secciones nuevas — ambas arrancan abiertas.
+  // Colapso de Mesa Empleo (la sección dormida tras el flag). El resto de las
+  // zonas ya no se colapsa: el riel muestra una a la vez.
   const [mesaEmpleoOpen, setMesaEmpleoOpen]     = useState(true)
-  const [seguimientoOpen, setSeguimientoOpen]   = useState(true)
-  // Zona Integrantes colapsable — para ganar espacio en el acta en curso.
-  const [integrantesOpen, setIntegrantesOpen]   = useState(true)
 
   // Invitado form
   const [invNombre, setInvNombre]           = useState('')
@@ -353,10 +365,13 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [cProyectoPublico, setCProyectoPublico] = useState<Iniciativa | null>(null)
   const [cSaving, setCSaving]               = useState(false)
 
-  // Cierre
-  const [cerrando, setCerrando]             = useState(false)
-  const [previewActa, setPreviewActa]       = useState(false)
-  const [cierreResultado, setCierreResultado] = useState<{ actaGenerada: boolean; error?: string } | null>(null)
+  // Consola: en qué zona está parado el usuario y si está en la sala o en la
+  // pantalla de cierre. Arranca en Integrantes, que es la zona 1 de este comité.
+  const [activa, setActiva] = useState<ZonaRef>({ zona: 'asistencia' })
+  const [fase, setFase]     = useState<'sala' | 'cierre'>('sala')
+  // Lo pone CierreSesionComite mientras hay un cierre en vuelo: bloquea Escape
+  // y la ✕ para no desmontar la consola a medio camino.
+  const [cerrando, setCerrando] = useState(false)
 
   // ── Init: reabrir o crear el borrador, luego cargar todo ──────────────────
 
@@ -476,14 +491,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   useEffect(() => { if (sesion) loadAll(sesion) }, [sesion, loadAll])
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !cerrando) onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, cerrando])
-
-  // Foco inicial + restauración + focus-trap por Tab (a11y de diálogo, Fase 4a).
-  const { panelRef, onKeyDown: onDialogKeyDown } = useDialogA11y<HTMLDivElement>()
+  // Escape y el focus-trap de diálogo los pone ConsolaSesionShell (con Escape
+  // ya diferenciado: en el cierre vuelve a la sala, en la sala cierra).
 
   // ── Zona 1: integrantes (igual a Asistencia) ──────────────────────────────
 
@@ -545,7 +554,29 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     }
   }
 
-  // ── Zona 3: Mesa Empleo — Meta Empleo ─────────────────────────────────────
+  // ── Zona 2: verificación de compromisos anteriores ────────────────────────
+  // Vive acá (y no inline en el JSX) porque la pantalla de cierre ofrece los
+  // mismos botones de estado: un solo camino de escritura para ambas.
+  async function setEstadoCompromisoAnterior(c: SesionCompromiso, estado: SesionCompromiso['estado']) {
+    if (c.estado === estado) return
+    const prevEstado = c.estado
+    setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado } : x))
+    try {
+      await safeWrite(
+        getSupabase().from('sesion_compromisos').update({
+          estado,
+          estado_updated_at: new Date().toISOString(),
+          estado_updated_by_email: currentUserEmail || null,
+        }).eq('id', c.id),
+        `sesion_compromisos estado id=${c.id}`,
+      )
+    } catch (err) {
+      setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado: prevEstado } : x))
+      window.alert((err as Error).message)
+    }
+  }
+
+  // ── Mesa Empleo (dormida) — Meta Empleo ───────────────────────────────────
 
   async function commitMetaEmpleo() {
     if (!sesion) return
@@ -800,71 +831,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   }
 
   // ── Cierre ────────────────────────────────────────────────────────────────
-
-  async function handleCerrar() {
-    if (!sesion) return
-    if (!confirm('¿Cerrar la sesión y generar el acta?\n\nUna sesión cerrada no se puede editar.')) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/cerrar`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        window.alert(body.error ?? `No se pudo cerrar la sesión (HTTP ${res.status})`)
-        return
-      }
-      setCierreResultado({ actaGenerada: !!body.acta_generada, error: body.error })
-    } catch {
-      window.alert('Error de red cerrando la sesión. Reintenta — el borrador sigue guardado.')
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleReintentarActa() {
-    if (!sesion) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (res.ok && body.acta_generada) {
-        setCierreResultado({ actaGenerada: true })
-      } else {
-        window.alert(body.error ?? 'No se pudo generar el acta. Puedes reintentar desde el historial.')
-      }
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleDescargarActa() {
-    if (!sesion) return
-    const res = await fetch(`/api/sesiones/${sesion.id}/acta`)
-    const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
-    else window.alert(body.error ?? 'No se pudo obtener el acta')
-  }
-
-  // Vista previa del acta con el estado actual (sin cerrar). PDF marcado "BORRADOR".
-  async function handlePreviewActa() {
-    if (!sesion || previewActa) return
-    setPreviewActa(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta/preview`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        window.alert(body.error ?? `No se pudo generar la vista previa (HTTP ${res.status})`)
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank', 'noopener,noreferrer')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch {
-      window.alert('Error de red generando la vista previa del acta.')
-    } finally {
-      setPreviewActa(false)
-    }
-  }
+  // Cerrar / previsualizar / reintentar / descargar el acta viven en
+  // ./sesiones/CierreSesionComite (la pantalla «Terminar sesión»), igual que
+  // en el Policial: mismos endpoints, mismos textos.
 
   // ── Derivados ─────────────────────────────────────────────────────────────
 
@@ -874,6 +843,55 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     () => iniciativas.filter(p => (p.tags ?? []).includes(TAG_ECONOMICO)),
     [iniciativas],
   )
+
+  // ── Consola: riel, recorrido y navegación ─────────────────────────────────
+
+  const asist = useMemo(() => resumenAsistencia(nomina, asistencia), [nomina, asistencia])
+
+  const rail = useMemo(() => railParaSesion({
+    instancia: 'economico',
+    compAnteriores,
+    asistencia: asist,
+    compNuevos,
+    proyectos: proyectosSesion.length,
+    oficios: { anteriores: oficiosAnteriores, nuevos: oficiosTratadosSesion.length },
+  }), [compAnteriores, asist, compNuevos, proyectosSesion.length, oficiosAnteriores, oficiosTratadosSesion.length])
+
+  // Cambiar de zona vacía primero un onBlur pendiente: hay campos que guardan
+  // al salir (nota del oficio, lugar) y el enfocado se va a desmontar.
+  const irA = useCallback((ref: ZonaRef) => { soltarFoco(); setActiva(ref) }, [])
+
+  const { anterior, siguiente } = vecinos(rail, activa)
+  const navAnterior  = anterior  ? { label: etiquetaZona(rail, anterior),  onClick: () => irA(anterior) }  : null
+  const navSiguiente = siguiente ? { label: etiquetaZona(rail, siguiente), onClick: () => irA(siguiente) } : null
+
+  const muestra = (z: ZonaKey) => activa.zona === z
+  // Sub-zona de Seguimiento en pantalla. Si el riel no eligió una, Proyectos.
+  const subSeguimiento = activa.zona === 'seguimiento' && activa.inst === 'oficios' ? 'oficios' : 'proyectos'
+
+  const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
+  const navTerminar = { label: 'Terminar sesión', onClick: abrirCierre }
+
+  // Lo tratado, ya resuelto contra la cartera, para la pantalla de cierre:
+  // quién referencia a qué lo sabe esta consola, no el cierre.
+  const proyectosCierre = useMemo(
+    () => proyectosSesion.map(sp => {
+      const { nombre, tag } = resolverCartera(sp, proyectosInfo.get(sp.proyecto_id ?? '')?.nombre)
+      return { id: sp.id, nombre, tag }
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [proyectosSesion, proyectosPrivados, iniciativas, proyectosInfo],
+  )
+  const oficiosCierre = useMemo(() => ({
+    anteriores: oficiosAnteriores.map(o => ({
+      id: o.id, nombre: resolverCartera(o, o.proyecto?.nombre).nombre, oaeca: o.oaeca?.nombre ?? null, estado: o.estado,
+    })),
+    nuevos: oficiosTratadosSesion.map(o => ({
+      id: o.id, nombre: resolverCartera(o, o.proyecto?.nombre).nombre, oaeca: o.oaeca?.nombre ?? null,
+    })),
+  }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [oficiosAnteriores, oficiosTratadosSesion, proyectosPrivados, iniciativas])
 
   // Picker privado (zona 4c) — mismos filtros y mismo criterio de opciones
   // dinámicas que ComiteEconomicoProyectosPanel.tsx.
@@ -914,111 +932,97 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (cierreResultado) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Resultado del cierre de sesión"
-          onKeyDown={onDialogKeyDown}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+  const headerContenido = (
+    <>
+      <span className="text-[14.5px] font-bold text-slate-900 inline-flex items-center gap-1.5 flex-wrap">
+        {NOMBRE_COMITE}
+        <span className="font-medium text-slate-400">·</span>
+        <FechaEditable
+          value={sesion?.fecha ?? hoyISO()}
+          onCommit={iso => commitSesionField({ fecha: iso })}
+          disabled={!sesion || sesion.estado !== 'borrador'}
+        />
+      </span>
+      {sesion && (
+        <input
+          key={`lugar-${sesion.id}`}
+          type="text"
+          defaultValue={sesion.lugar ?? ''}
+          onBlur={e => commitSesionField({ lugar: e.target.value.trim() || null })}
+          placeholder="Lugar…"
+          title="Lugar de la sesión"
+          className="text-[13px] text-slate-600 bg-transparent border-b border-dashed border-slate-300 focus:border-violet-400 focus:outline-none px-1 py-0.5 w-52 placeholder:text-slate-300"
+        />
+      )}
+      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
+        En sesión
+      </span>
+      <span className="text-[12.5px] text-slate-500 tabular-nums" title="Integrantes presentes">
+        Asistencia {asist.presentes}/{asist.total}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={abrirCierre}
+          disabled={!sesion || cerrando}
+          className="text-[12.5px] font-bold px-3.5 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"
         >
-          <div className={`px-6 py-4 ${cierreResultado.actaGenerada ? 'bg-green-600' : 'bg-amber-500'}`}>
-            <p className="text-white font-semibold text-sm">
-              {cierreResultado.actaGenerada ? 'Sesión cerrada — acta generada' : 'Sesión cerrada — acta pendiente'}
-            </p>
-          </div>
-          <div className="px-6 py-5 space-y-3">
-            <p className="text-sm text-gray-700">
-              {cierreResultado.actaGenerada
-                ? 'El acta quedó disponible para descargar.'
-                : 'La sesión se cerró, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
-            </p>
-            <div className="flex gap-2 pt-1">
-              {cierreResultado.actaGenerada ? (
-                <button onClick={handleDescargarActa} className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800">
-                  Descargar acta
-                </button>
-              ) : (
-                <button onClick={handleReintentarActa} disabled={cerrando} className="flex-1 py-2.5 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50">
-                  {cerrando ? 'Generando…' : 'Reintentar acta'}
-                </button>
-              )}
-              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
+          Terminar sesión
+        </button>
+        <button
+          onClick={onClose}
+          disabled={cerrando}
+          title="Salir (el borrador queda guardado)"
+          className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
-    )
-  }
+    </>
+  )
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => !cerrando && onClose()}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Sesión — ${NOMBRE_COMITE}`}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
-        onKeyDown={onDialogKeyDown}
-      >
-        {/* Header */}
-        <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3 bg-violet-50/40">
-          <div className="flex-1 min-w-0">
-            <p className="text-base font-semibold text-gray-900">{NOMBRE_COMITE} — {sesion?.estado === 'borrador' && borradorId ? 'Continuar sesión' : 'Nueva sesión'}</p>
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                Fecha
-                <input
-                  type="date"
-                  value={sesion?.fecha ?? hoyISO()}
-                  onChange={e => e.target.value && commitSesionField({ fecha: e.target.value })}
-                  className="border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                />
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 flex-1 min-w-[160px]">
-                Lugar
-                <input
-                  type="text"
-                  defaultValue={sesion?.lugar ?? ''}
-                  onBlur={e => commitSesionField({ lugar: e.target.value.trim() || null })}
-                  placeholder="Ej: Delegación Presidencial"
-                  className="flex-1 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                />
-              </label>
-            </div>
-          </div>
-          <button onClick={onClose} disabled={cerrando} className="text-gray-400 hover:text-gray-600 mt-0.5 disabled:opacity-50" title="Cerrar (el borrador queda guardado)">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l12 12M16 4L4 16"/>
-            </svg>
-          </button>
-        </header>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+    <ConsolaSesionShell
+      ariaLabel={`Sesión — ${NOMBRE_COMITE}`}
+      header={headerContenido}
+      rail={<ConsolaRail items={rail} activo={activa} onSelect={irA} />}
+      railMovil={<ConsolaRail items={rail} activo={activa} onSelect={irA} orientacion="horizontal" />}
+      onEscape={fase === 'cierre' ? () => setFase('sala') : onClose}
+      escapeDeshabilitado={cerrando}
+      overlay={fase === 'cierre' && sesion ? (
+        <CierreSesionComite
+          instancia="economico"
+          sesion={sesion}
+          nombreInstancia={NOMBRE_COMITE}
+          compAnteriores={compAnteriores}
+          onEstadoCompromiso={setEstadoCompromisoAnterior}
+          compNuevos={compNuevos}
+          nomina={nomina}
+          asistencia={asistencia}
+          proyectos={proyectosCierre}
+          oficios={oficiosCierre}
+          onVolver={() => setFase('sala')}
+          onCerrada={onClose}
+          onIrA={ref => { setFase('sala'); irA(ref) }}
+          onCerrandoChange={setCerrando}
+        />
+      ) : null}
+    >
           {initError ? (
             <Alert variant="error">{initError}</Alert>
           ) : !sesion ? (
             <p className="text-center text-sm text-gray-400 py-10">Preparando la sesión…</p>
           ) : (
-            <>
+            <div className="space-y-4">
               {/* ── Zona 1: integrantes ── */}
-              <section className={zoneCls}>
-                <button type="button" onClick={() => setIntegrantesOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>1</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Integrantes</h3>
-                  <span className="text-xs text-gray-400 ml-auto mr-2">{presentes} presente{presentes === 1 ? '' : 's'}</span>
-                  <Chevron open={integrantesOpen} />
-                </button>
-                {integrantesOpen && (
-                <div className="p-3">
+              {muestra('asistencia') && (
+              <ZonaCard numero={1} titulo="Integrantes" badge={`${presentes} presente${presentes === 1 ? '' : 's'}`}
+                descripcion="Quiénes asisten: la nómina fija del comité más los invitados de hoy."
+                anterior={navAnterior} siguiente={navSiguiente}>
+                <div>
                   {nomina.length === 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
                       La nómina de este comité está vacía.
@@ -1078,17 +1082,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     </button>
                   </form>
                 </div>
-                )}
-              </section>
+              </ZonaCard>
+              )}
 
               {/* ── Zona 2: compromisos anteriores (de cualquier sección, o generales) ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>2</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Compromisos anteriores</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{compAnteriores.length}</span>
-                </div>
-                <div className="p-3 space-y-2">
+              {muestra('anteriores') && (
+              <ZonaCard numero={2} titulo="Compromisos anteriores" badge={compAnteriores.length}
+                descripcion="Cómo quedaron los compromisos de las sesiones anteriores."
+                anterior={navAnterior} siguiente={navSiguiente}>
+                <div className="space-y-2">
                   {compAnteriores.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
                   ) : compAnteriores.map(c => {
@@ -1116,22 +1118,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         {(Object.keys(ESTADO_COMPROMISO) as (keyof typeof ESTADO_COMPROMISO)[]).map(est => (
                           <button
                             key={est}
-                            onClick={async () => {
-                              if (c.estado === est) return
-                              try {
-                                await safeWrite(
-                                  getSupabase().from('sesion_compromisos').update({
-                                    estado: est,
-                                    estado_updated_at: new Date().toISOString(),
-                                    estado_updated_by_email: currentUserEmail || null,
-                                  }).eq('id', c.id),
-                                  `sesion_compromisos estado id=${c.id}`,
-                                )
-                                setCompAnteriores(prev => prev.map(x => x.id === c.id ? { ...x, estado: est } : x))
-                              } catch (err) {
-                                window.alert((err as Error).message)
-                              }
-                            }}
+                            onClick={() => setEstadoCompromisoAnterior(c, est)}
                             className={`text-[10px] font-semibold px-2 py-1 rounded-full transition-colors ${
                               c.estado === est ? ESTADO_COMPROMISO[est].on : ESTADO_COMPROMISO[est].off
                             }`}
@@ -1144,9 +1131,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     )
                   })}
                 </div>
-              </section>
+              </ZonaCard>
+              )}
 
-              {/* ── Zona 3: Mesa Empleo (desplegable) — escondida hasta confirmar ── */}
+              {/* ── Mesa Empleo — dormida tras el flag (ver cabecera del archivo).
+                     Queda tal cual estaba en el modal: no tiene zona en el riel
+                     porque hoy no se renderiza nunca. ── */}
               {MESA_EMPLEO_HABILITADA && (
               <section className={zoneCls}>
                 <button type="button" onClick={() => setMesaEmpleoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
@@ -1268,23 +1258,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               </section>
               )}
 
-              {/* ── Zona 4: Seguimiento de la Inversión (desplegable) — 3 si Mesa Empleo está escondida ── */}
-              <section className={zoneCls}>
-                <button type="button" onClick={() => setSeguimientoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 4 : 3}</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Seguimiento de la Inversión</h3>
-                  <Chevron open={seguimientoOpen} />
-                </button>
-                {seguimientoOpen && (
-                  <div className="p-3 space-y-4">
-                    {/* Proyectos tratados en profundidad — antes que oficios (lo que se discute primero en la sesión) */}
-                    <div>
-                      <button type="button" onClick={() => setProyectosSeccionOpen(o => !o)} className="flex items-center gap-2 mb-2 w-full text-left">
-                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Proyectos tratados en profundidad</h4>
-                        <span className="text-xs text-gray-400 ml-auto mr-1">{proyectosSesion.length}</span>
-                        <Chevron open={proyectosSeccionOpen} />
-                      </button>
-                      {proyectosSeccionOpen && (
+              {/* ── Zona 3a: proyectos tratados en profundidad ── */}
+              {muestra('seguimiento') && subSeguimiento === 'proyectos' && (
+                  <ZonaCard numero={3} titulo="Seguimiento de la inversión · Proyectos"
+                    badge={proyectosSesion.length}
+                    descripcion="Los proyectos de la cartera que se discuten hoy. Click en uno abre su ficha; los avances se registran ahí."
+                    anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-2">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] text-gray-500 font-medium">Agregar:</span>
@@ -1377,17 +1356,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           )
                         })}
                       </div>
-                      )}
-                    </div>
+                  </ZonaCard>
+              )}
 
-                    {/* Oficios — anteriores (verificación) + nuevos (alta), colapsable como un solo bloque */}
-                    <div className="pt-3 border-t border-gray-100">
-                      <button type="button" onClick={() => setOficiosSeccionOpen(o => !o)} className="flex items-center gap-2 mb-2 w-full text-left">
-                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Oficios</h4>
-                        <span className="text-xs text-gray-400 ml-auto mr-1">{oficiosAnteriores.length + oficiosTratadosSesion.length}</span>
-                        <Chevron open={oficiosSeccionOpen} />
-                      </button>
-                      {oficiosSeccionOpen && (
+              {/* ── Zona 3b: oficios — anteriores (verificación) + nuevos (alta) ── */}
+              {muestra('seguimiento') && subSeguimiento === 'oficios' && (
+                  <ZonaCard numero={3} titulo="Seguimiento de la inversión · Oficios"
+                    badge={oficiosAnteriores.length + oficiosTratadosSesion.length}
+                    descripcion="Los oficios pendientes de sesiones anteriores se verifican acá; abajo se levantan los nuevos."
+                    anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
                         {/* Oficios anteriores */}
                         <div>
@@ -1553,20 +1530,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           </div>
                         </div>
                       </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </section>
+                  </ZonaCard>
+              )}
 
-              {/* ── Zona 5: compromisos nuevos — 4 si Mesa Empleo está escondida ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>{MESA_EMPLEO_HABILITADA ? 5 : 4}</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
-                </div>
-                <div className="p-3 space-y-2">
+              {/* ── Zona 4: compromisos nuevos ── */}
+              {muestra('nuevos') && (
+              <ZonaCard numero={4} titulo="Compromisos nuevos" badge={compNuevos.length}
+                descripcion="Lo que queda comprometido hoy. Reaparece para verificarlo en la próxima sesión."
+                anterior={navAnterior} siguiente={navTerminar} siguienteDestacado>
+                <div className="space-y-2">
                   {compNuevos.map(c => {
                     const { nombre: nombreProy, tag: tagProy, tieneFicha } = resolverCartera(c)
                     return (
@@ -1668,38 +1640,11 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     </div>
                   </form>
                 </div>
-              </section>
-            </>
+              </ZonaCard>
+              )}
+            </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={cerrando}
-            className="text-sm px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-white disabled:opacity-50 whitespace-nowrap"
-          >
-            Guardar borrador
-          </button>
-          <button
-            onClick={handlePreviewActa}
-            disabled={cerrando || previewActa || !sesion}
-            title="Ver el acta con el estado actual, antes de cerrar (borrador)"
-            className="text-sm px-4 py-2 border border-violet-200 text-violet-700 font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 whitespace-nowrap"
-          >
-            {previewActa ? 'Generando…' : 'Previsualizar acta'}
-          </button>
-          <button
-            onClick={handleCerrar}
-            disabled={cerrando || !sesion}
-            className="text-sm px-4 py-2 bg-violet-700 text-white font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50 whitespace-nowrap"
-          >
-            {cerrando ? 'Cerrando sesión…' : 'Cerrar sesión y generar acta'}
-          </button>
-        </footer>
-      </div>
-    </div>
+    </ConsolaSesionShell>
     {fichaPrivadoId != null && (
       <ProyectoEconomicoFichaModal
         proyectoId={fichaPrivadoId}

@@ -52,6 +52,13 @@ type Props = {
   valores?: SesionComiteValor[]
   // Solo Infraestructura
   iniciativas?: { fila: SesionIniciativa; p: Iniciativa | null }[]
+  // Solo Económico. Llegan ya resueltos (nombre + tag de la cartera): quién
+  // referencia a qué lo sabe la consola, no esta pantalla.
+  proyectos?: { id: number; nombre: string; tag: string | null }[]
+  oficios?: {
+    anteriores: { id: number; nombre: string; oaeca: string | null; estado: 'pendiente' | 'resuelto' }[]
+    nuevos: { id: number; nombre: string; oaeca: string | null }[]
+  }
   onVolver: () => void
   /** Tras el éxito, «Listo»: cierra la consola (el padre refresca lo suyo). */
   onCerrada: () => void
@@ -64,6 +71,7 @@ type Props = {
 export default function CierreSesionComite({
   instancia, sesion, nombreInstancia, compAnteriores, onEstadoCompromiso, compNuevos, nomina, asistencia,
   instituciones = [], catalogo = [], valores = [], iniciativas = [],
+  proyectos = [], oficios = { anteriores: [], nuevos: [] },
   onVolver, onCerrada, onIrA, onCerrandoChange,
 }: Props) {
   const [cerrando, setCerrando]   = useState(false)
@@ -79,7 +87,9 @@ export default function CierreSesionComite({
   const resumen = useMemo(() => resumenCierreComite({
     instancia, compAnteriores, asistencia: asist, compNuevos,
     instituciones, catalogo, valores, comentarios: sesion.comentarios, iniciativas: iniciativas.length,
-  }), [instancia, compAnteriores, asist, compNuevos, instituciones, catalogo, valores, sesion.comentarios, iniciativas.length])
+    proyectos: proyectos.length,
+    oficios: { anteriores: oficios.anteriores, nuevos: oficios.nuevos.length },
+  }), [instancia, compAnteriores, asist, compNuevos, instituciones, catalogo, valores, sesion.comentarios, iniciativas.length, proyectos.length, oficios])
   const avisos = useMemo(() => avisosCierreComite(resumen, instancia), [resumen, instancia])
 
   const porMetrica = useMemo(() => new Map(valores.map(v => [v.metrica_id, v])), [valores])
@@ -101,9 +111,11 @@ export default function CierreSesionComite({
     const sinDatos = instancia === 'eje' && valores.length === 0
     const msg = instancia === 'infraestructura'
       ? '¿Cerrar la sesión y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.'
-      : sinDatos
-        ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
-        : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
+      : instancia === 'economico'
+        ? '¿Cerrar la sesión y generar el acta?\n\nLos proyectos tratados, los oficios y los compromisos quedarán sellados; la sesión no se podrá editar.'
+        : sinDatos
+          ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
+          : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
     if (!confirm(msg)) return
     setCerrando(true)
     try {
@@ -206,9 +218,13 @@ export default function CierreSesionComite({
                 ? resultado.actaGenerada
                   ? 'Los acuerdos y compromisos quedaron sellados y el acta está disponible.'
                   : 'La sesión quedó cerrada con sus acuerdos, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
-                : resultado.actaGenerada
-                  ? 'El reporte por institución quedó sellado y el acta está disponible.'
-                  : 'El reporte quedó sellado, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
+                : instancia === 'economico'
+                  ? resultado.actaGenerada
+                    ? 'Los proyectos, oficios y compromisos quedaron sellados y el acta está disponible.'
+                    : 'La sesión quedó cerrada, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
+                  : resultado.actaGenerada
+                    ? 'El reporte por institución quedó sellado y el acta está disponible.'
+                    : 'El reporte quedó sellado, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
             </p>
             <div className="mt-5 flex items-center justify-center gap-2.5">
               {resultado.actaGenerada ? (
@@ -292,6 +308,59 @@ export default function CierreSesionComite({
                         )
                       })}
                 </Movimiento>
+              ) : instancia === 'economico' ? (
+                <Movimiento n={2} label="Seguimiento de la inversión — qué se trató">
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <span className="flex-1 min-w-0 text-[13.5px] font-semibold text-slate-800">Proyectos tratados en profundidad</span>
+                      {proyectos.length === 0
+                        ? <span className="text-[12px] font-semibold text-amber-700">Ninguno</span>
+                        : <span className="text-[12px] text-slate-500 tabular-nums">{proyectos.length}</span>}
+                      {corregir({ zona: 'seguimiento', inst: 'proyectos' })}
+                    </div>
+                    {proyectos.length > 0 && (
+                      <ul className="space-y-0.5">
+                        {proyectos.map(p => (
+                          <li key={p.id} className="text-[12.5px] text-slate-600 flex items-baseline gap-1.5 min-w-0">
+                            {p.tag && <span className="flex-none text-[10px] font-bold uppercase tracking-wide text-slate-400">{p.tag}</span>}
+                            <span className="truncate">{p.nombre}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <span className="flex-1 min-w-0 text-[13.5px] font-semibold text-slate-800">Oficios</span>
+                      {resumen.oficios.total === 0
+                        ? <span className="text-[12px] text-slate-400">Ninguno</span>
+                        : <span className="text-[12px] text-slate-500 tabular-nums">
+                            {resumen.oficios.total}{resumen.oficios.pendientes > 0 ? ` · ${resumen.oficios.pendientes} pendiente${resumen.oficios.pendientes === 1 ? '' : 's'}` : ''}
+                          </span>}
+                      {corregir({ zona: 'seguimiento', inst: 'oficios' })}
+                    </div>
+                    {(oficios.anteriores.length > 0 || oficios.nuevos.length > 0) && (
+                      <ul className="space-y-0.5">
+                        {oficios.anteriores.map(o => (
+                          <li key={`ant-${o.id}`} className="text-[12.5px] flex items-baseline gap-1.5 min-w-0">
+                            <span className={`flex-none text-[10px] font-bold ${o.estado === 'resuelto' ? 'text-green-700' : 'text-amber-700'}`}>
+                              {o.estado === 'resuelto' ? 'RESUELTO' : 'PENDIENTE'}
+                            </span>
+                            <span className="truncate text-slate-600">{o.nombre}</span>
+                            {o.oaeca && <span className="flex-none text-slate-400">· {o.oaeca}</span>}
+                          </li>
+                        ))}
+                        {oficios.nuevos.map(o => (
+                          <li key={`new-${o.id}`} className="text-[12.5px] flex items-baseline gap-1.5 min-w-0">
+                            <span className="flex-none text-[10px] font-bold text-violet-700">NUEVO</span>
+                            <span className="truncate text-slate-600">{o.nombre}</span>
+                            {o.oaeca && <span className="flex-none text-slate-400">· {o.oaeca}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </Movimiento>
               ) : (
                 <Movimiento n={2} label="Iniciativas tratadas">
                   {iniciativas.length === 0
@@ -348,8 +417,8 @@ export default function CierreSesionComite({
               </Movimiento>
 
               <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-[13px] text-violet-800 leading-relaxed">
-                Al generar el acta, {instancia === 'eje' ? 'el reporte por institución' : 'la agenda de iniciativas'} y los
-                compromisos quedan sellados. Los compromisos abiertos reaparecen para verificarlos en la próxima sesión.
+                Al generar el acta, {instancia === 'eje' ? 'el reporte por institución' : instancia === 'economico' ? 'lo tratado en Seguimiento de la inversión' : 'la agenda de iniciativas'} y los
+                compromisos quedan sellados. Los compromisos {instancia === 'economico' ? 'y oficios ' : ''}abiertos reaparecen para verificarlos en la próxima sesión.
               </div>
             </div>
           </section>
