@@ -291,14 +291,31 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
   // Solo proyectos privados: una iniciativa pública figura en el acta como
   // tratada en la sesión, sin detalle de avances (decisión de producto; ver
   // mig 101, que por eso sacó la columna espejo de `seguimientos`).
-  type AvanceActa = { fecha: string; descripcion: string }
+  type AvanceActa = { descripcion: string; permiso: string | null }
+  type AvanceRow = { proyecto_id: number; descripcion: string; permiso_id: number | null }
   const avRes = await db.from('comite_economico_proyecto_seguimiento')
-    .select('proyecto_id, fecha, descripcion')
+    .select('proyecto_id, descripcion, permiso_id')
     .eq('sesion_id', sesionId).order('fecha')
+  const avancesRows = (avRes.data ?? []) as AvanceRow[]
+
+  // A qué permiso se refiere cada avance. Lookup aparte en vez de un embed
+  // anidado de dos niveles (avance → permiso → catálogo PAS): el repo solo
+  // usa embeds de un nivel, y acá un select que PostgREST no sepa resolver
+  // se traduce en "acta no generada".
+  const permisoIds = [...new Set(avancesRows.map(a => a.permiso_id).filter((id): id is number => id != null))]
+  const permisoNombres = permisoIds.length
+    ? new Map((((await db.from('comite_economico_proyecto_permiso')
+        .select('id, pas:pas_catalogo(n_pas)').in('id', permisoIds)).data ?? []) as unknown as { id: number; pas: { n_pas: string } | null }[])
+        .map(p => [p.id, p.pas?.n_pas ?? null]))
+    : new Map<number, string | null>()
+
   const avancesPorPrivado = new Map<number, AvanceActa[]>()
-  for (const a of (avRes.data ?? []) as ({ proyecto_id: number } & AvanceActa)[]) {
+  for (const a of avancesRows) {
     const acc = avancesPorPrivado.get(a.proyecto_id) ?? []
-    acc.push({ fecha: a.fecha, descripcion: a.descripcion })
+    acc.push({
+      descripcion: a.descripcion,
+      permiso: a.permiso_id != null ? (permisoNombres.get(a.permiso_id) ?? null) : null,
+    })
     avancesPorPrivado.set(a.proyecto_id, acc)
   }
 
