@@ -13,6 +13,7 @@ import ConsolaSesionShell, { soltarFoco } from './sesiones/ConsolaSesionShell'
 import ConsolaRail from './sesiones/ConsolaRail'
 import ZonaCard from './sesiones/ZonaCard'
 import FechaEditable from './sesiones/FechaEditable'
+import CierreSesionComite from './sesiones/CierreSesionComite'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -28,7 +29,6 @@ import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
 import { useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
-import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import MegaproyectoGroup from './MegaproyectoGroup'
 import CapturaSalaGabinete from './gabinete/CapturaSalaGabinete'
@@ -223,9 +223,11 @@ export default function SesionModal(props: Props) {
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
+  // Sala o pantalla de cierre («Terminar sesión»). El cierre es un overlay que
+  // continúa la consola sin desmontarla; `cerrando` lo reporta él mientras
+  // habla con /cerrar, para bloquear Escape y la ✕ en ese rato.
+  const [fase, setFase]                     = useState<'sala' | 'cierre'>('sala')
   const [cerrando, setCerrando]             = useState(false)
-  const [previewActa, setPreviewActa]       = useState(false)
-  const [cierreResultado, setCierreResultado] = useState<{ actaGenerada: boolean; error?: string } | null>(null)
 
   // ── Init: reabrir o crear el borrador, luego cargar todo ──────────────────
 
@@ -460,10 +462,6 @@ export default function SesionModal(props: Props) {
   }, [region.cod, eje?.id, props.instancia, esGabinete, usaIniciativas, gabIniciativas, infraTag])
 
   useEffect(() => { if (sesion) loadAll(sesion) }, [sesion, loadAll])
-
-  // Escape y focus-trap de la consola los maneja ConsolaSesionShell. Este hook
-  // queda solo para la pantalla de éxito post-cierre (sigue siendo un modal).
-  const { panelRef, onKeyDown: onDialogKeyDown } = useDialogA11y<HTMLDivElement>()
 
   // ── Zona 1: verificación de compromisos ───────────────────────────────────
 
@@ -761,78 +759,8 @@ export default function SesionModal(props: Props) {
   }
 
   // ── Cierre ────────────────────────────────────────────────────────────────
-
-  async function handleCerrar() {
-    if (!sesion) return
-    const sinDatos = props.instancia === 'eje' && comiteValores.length === 0
-    const msg = usaIniciativas
-      ? `¿Cerrar la sesión${esGabinete ? ' de gabinete' : ''} y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.`
-      : sinDatos
-        ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
-        : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
-    if (!confirm(msg)) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/cerrar`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        window.alert(body.error ?? `No se pudo cerrar la sesión (HTTP ${res.status})`)
-        return
-      }
-      setCierreResultado({ actaGenerada: !!body.acta_generada, error: body.error })
-    } catch {
-      window.alert('Error de red cerrando la sesión. Reintenta — el borrador sigue guardado.')
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleReintentarActa() {
-    if (!sesion) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (res.ok && body.acta_generada) {
-        setCierreResultado({ actaGenerada: true })
-      } else {
-        window.alert(body.error ?? 'No se pudo generar el acta. Puedes reintentar desde el historial.')
-      }
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleDescargarActa() {
-    if (!sesion) return
-    const res = await fetch(`/api/sesiones/${sesion.id}/acta`)
-    const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
-    else window.alert(body.error ?? 'No se pudo obtener el acta')
-  }
-
-  // Vista previa del acta con el estado actual (sin cerrar). El PDF viene marcado
-  // "BORRADOR"; se abre en una pestaña nueva.
-  async function handlePreviewActa() {
-    if (!sesion || previewActa) return
-    setPreviewActa(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta/preview`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        window.alert(body.error ?? `No se pudo generar la vista previa (HTTP ${res.status})`)
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank', 'noopener,noreferrer')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch {
-      window.alert('Error de red generando la vista previa del acta.')
-    } finally {
-      setPreviewActa(false)
-    }
-  }
+  // Previsualizar / cerrar / reintentar acta / descargar viven en
+  // ./sesiones/CierreSesionComite (la pantalla «Terminar sesión»).
 
   // ── Derivados ─────────────────────────────────────────────────────────────
 
@@ -930,6 +858,17 @@ export default function SesionModal(props: Props) {
     : (comiteInstituciones[0]?.key ?? 'carabineros')
   const institucionActivaLabel = comiteInstituciones.find(i => i.key === institucionActiva)?.label ?? institucionActiva
 
+  // «Terminar sesión»: vacía un onBlur pendiente (igual que cambiar de zona) y
+  // abre el cierre. Al pie de «Compromisos nuevos» es el remate del recorrido.
+  const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
+  const navTerminar = !esGabinete ? { label: 'Terminar sesión', onClick: abrirCierre } : null
+
+  // Agenda de la sesión con su iniciativa resuelta (para el cierre de Infraestructura).
+  const iniciativasParaCierre = useMemo(
+    () => sesIniciativas.map(fila => ({ fila, p: gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null })),
+    [sesIniciativas, gabIniciativas],
+  )
+
   const headerContenido = (
     <>
       <span className="text-[14.5px] font-bold text-slate-900 inline-flex items-center gap-1.5 flex-wrap">
@@ -972,23 +911,17 @@ export default function SesionModal(props: Props) {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Asistencia {asist.presentes}/{asist.total}
         </button>
-        {/* Provisorio: en el paso siguiente estos dos botones se reemplazan por
-            «Terminar sesión», que abre la pantalla de cierre. */}
-        <button
-          onClick={handlePreviewActa}
-          disabled={cerrando || previewActa || !sesion}
-          title="Ver el acta con el estado actual, antes de cerrar (borrador)"
-          className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-        >
-          {previewActa ? 'Generando…' : 'Previsualizar acta'}
-        </button>
-        <button
-          onClick={handleCerrar}
-          disabled={cerrando || !sesion}
-          className="text-[12.5px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 px-3 py-1.5 rounded-lg hover:bg-violet-100 disabled:opacity-40"
-        >
-          {cerrando ? 'Cerrando sesión…' : 'Cerrar sesión y generar acta'}
-        </button>
+        {/* La rama gabinete (muerta) no tiene pantalla de cierre propia acá. */}
+        {!esGabinete && (
+          <button
+            onClick={abrirCierre}
+            disabled={cerrando || !sesion || !!initError}
+            title="Revisar la sesión y generar el acta"
+            className="text-[12.5px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 px-3 py-1.5 rounded-lg hover:bg-violet-100 disabled:opacity-40"
+          >
+            Terminar sesión
+          </button>
+        )}
         <button
           onClick={() => { soltarFoco(); onClose() }}
           disabled={cerrando}
@@ -1003,53 +936,6 @@ export default function SesionModal(props: Props) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Pantalla de éxito post-cierre
-  if (cierreResultado) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Resultado del cierre de sesión"
-          onKeyDown={onDialogKeyDown}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-        >
-          <div className={`px-6 py-4 ${cierreResultado.actaGenerada ? 'bg-green-600' : 'bg-amber-500'}`}>
-            <p className="text-white font-semibold text-sm">
-              {cierreResultado.actaGenerada ? 'Sesión cerrada — acta generada' : 'Sesión cerrada — acta pendiente'}
-            </p>
-          </div>
-          <div className="px-6 py-5 space-y-3">
-            <p className="text-sm text-gray-700">
-              {usaIniciativas
-                ? cierreResultado.actaGenerada
-                  ? 'Los acuerdos y compromisos quedaron sellados y el acta está disponible.'
-                  : 'La sesión quedó cerrada con sus acuerdos, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
-                : cierreResultado.actaGenerada
-                  ? 'Los indicadores alimentaron las métricas del eje y el acta quedó disponible.'
-                  : 'Los indicadores alimentaron las métricas del eje, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
-            </p>
-            <div className="flex gap-2 pt-1">
-              {cierreResultado.actaGenerada ? (
-                <button onClick={handleDescargarActa} className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800">
-                  Descargar acta
-                </button>
-              ) : (
-                <button onClick={handleReintentarActa} disabled={cerrando} className="flex-1 py-2.5 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50">
-                  {cerrando ? 'Generando…' : 'Reintentar acta'}
-                </button>
-              )}
-              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <ConsolaSesionShell
       ariaLabel={`Sesión — ${nombreInstancia}`}
@@ -1057,8 +943,28 @@ export default function SesionModal(props: Props) {
       rail={esGabinete ? null : <ConsolaRail items={rail} activo={activa} onSelect={irA} />}
       railMovil={esGabinete ? null : <ConsolaRail items={rail} activo={activa} onSelect={irA} orientacion="horizontal" />}
       mainMaxWidth={activa.zona === 'reporte' ? 'max-w-6xl' : 'max-w-5xl'}
-      onEscape={onClose}
+      onEscape={fase === 'cierre' ? () => setFase('sala') : onClose}
       escapeDeshabilitado={cerrando}
+      overlay={fase === 'cierre' && sesion && !esGabinete ? (
+        <CierreSesionComite
+          instancia={props.instancia === 'eje' ? 'eje' : 'infraestructura'}
+          sesion={sesion}
+          nombreInstancia={nombreInstancia}
+          compAnteriores={compAnteriores}
+          onEstadoCompromiso={setEstadoCompromiso}
+          compNuevos={compNuevos}
+          nomina={nomina}
+          asistencia={asistencia}
+          instituciones={comiteInstituciones}
+          catalogo={comiteCatalogo}
+          valores={comiteValores}
+          iniciativas={iniciativasParaCierre}
+          onVolver={() => setFase('sala')}
+          onCerrada={onClose}
+          onIrA={ref => { setFase('sala'); irA(ref) }}
+          onCerrandoChange={setCerrando}
+        />
+      ) : null}
     >
           {initError ? (
             <Alert variant="error">{initError}</Alert>
@@ -1402,7 +1308,7 @@ export default function SesionModal(props: Props) {
               {/* ── Zona compromisos nuevos (4 comité/infraestructura · 5 gabinete) ── */}
               {muestra('nuevos') && (
               <ZonaCard numero={esGabinete ? 5 : 4} titulo="Compromisos nuevos" badge={compNuevos.length}
-                anterior={navAnterior} siguiente={navSiguiente}>
+                anterior={navAnterior} siguiente={navSiguiente ?? navTerminar} siguienteDestacado={!navSiguiente}>
                 <div className="space-y-2">
                   {compNuevos.map(c => {
                     const vinculada = usaIniciativas && c.prioridad_id != null
