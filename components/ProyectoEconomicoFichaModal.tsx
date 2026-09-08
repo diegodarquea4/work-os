@@ -18,11 +18,18 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
  *   · El resto de los 14 campos restantes vive en UNA tarjeta desplegable
  *     (grid label/valor, mismo estilo que la metadata de la iniciativa),
  *     colapsable con preferencia persistida en localStorage.
- *   · Avances = mismo timeline con punto de color + fecha editable inline
- *     que SeguimientoTab.tsx, pero el "estado" que se puede cambiar es el
- *     del PERMISO asociado (Pendiente/Otorgado/Frenado), no uno propio del
+ *   · Avances = timeline con fecha editable inline (mismo patrón que
+ *     SeguimientoTab.tsx), pero el "estado" que se puede cambiar es el del
+ *     PERMISO asociado (Pendiente/Otorgado/Frenado), no uno propio del
  *     avance: un avance o se liga a un permiso del proyecto (y ahí puede
- *     mover su estado) o queda general, sin estado ni punto de color.
+ *     mover su estado) o queda general, sin estado ni permiso. Los avances
+ *     ligados a un mismo permiso se agrupan en una única "bitácora" (estilo
+ *     LinkedIn cuando alguien tiene varios cargos en la misma empresa):
+ *     máximo 5 visibles, el resto tras "Ver más" — ver PermisoBitacoraCard.
+ *
+ * Los avances SOLO se crean acá (no hay alta rápida desde la sesión del
+ * comité — esa solo permite buscar/agregar proyectos a tratar y abrir esta
+ * ficha con el (+) o al hacer click).
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
@@ -154,6 +161,14 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios).catch(() => {})
   }, [])
 
+  // Al entrar a Permisos se colapsa la tarjeta de detalle (sin tocar la
+  // preferencia guardada) — evita el doble scroll: página + dropdown del
+  // buscador de permisos, cuando el detalle ya venía desplegado.
+  useEffect(() => {
+    if (tab === 'permisos') setDetailCollapsed(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -240,12 +255,17 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     if (!avanceDescripcion.trim()) return
     setAvanceSaving(true)
     try {
+      const estadoRegistrado = avancePermisoId && avancePermisoEstado ? avancePermisoEstado : null
       const rows = await safeWrite(
         getSupabase().from('comite_economico_proyecto_seguimiento').insert({
           proyecto_id: proyectoId,
           fecha: avanceFecha || undefined,
           descripcion: avanceDescripcion.trim(),
           permiso_id: avancePermisoId || null,
+          // Snapshot histórico del cambio de estado que este avance deja
+          // registrado (mig 090) — la bitácora del permiso lo muestra junto
+          // a este avance, no solo como el estado actual del permiso.
+          estado_permiso_registrado: estadoRegistrado,
           autor: currentUserEmail || null,
         }),
         `comite_economico_proyecto_seguimiento insert proyecto=${proyectoId}`,
@@ -254,8 +274,8 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       // El avance puede además dejar registrado el nuevo estado del permiso
       // al que se refiere — dos escrituras, mismo criterio que el resto de
       // la app (sin triggers cruzados entre tablas).
-      if (avancePermisoId && avancePermisoEstado) {
-        await cambiarEstadoPermiso(avancePermisoId, avancePermisoEstado)
+      if (estadoRegistrado) {
+        await cambiarEstadoPermiso(avancePermisoId as number, estadoRegistrado)
       }
       resetAvanceForm()
     } catch (err) {
@@ -284,6 +304,23 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       await safeWrite(
         getSupabase().from('comite_economico_proyecto_seguimiento').update({ fecha }).eq('id', a.id),
         `comite_economico_proyecto_seguimiento fecha id=${a.id}`,
+      )
+    } catch (err) {
+      window.alert((err as Error).message)
+      cargar()
+    }
+  }
+
+  // Editar el texto de un avance ya guardado — solo quien lo redactó (o
+  // quien opera el comité, misma RLS que borrar/mover la fecha).
+  async function editarDescripcionAvance(a: ComiteEconomicoProyectoSeguimiento, descripcion: string) {
+    const val = descripcion.trim()
+    if (!val || val === a.descripcion) return
+    setAvances(prev => prev.map(x => x.id === a.id ? { ...x, descripcion: val } : x))
+    try {
+      await safeWrite(
+        getSupabase().from('comite_economico_proyecto_seguimiento').update({ descripcion: val }).eq('id', a.id),
+        `comite_economico_proyecto_seguimiento descripcion id=${a.id}`,
       )
     } catch (err) {
       window.alert((err as Error).message)
@@ -409,6 +446,34 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       return true
     })
   }, [avances, fPermiso, fInstitucion, fMinisterio, permisoById, ministerioPorEmail])
+
+  // Agrupa los avances filtrados en "items" para el timeline: los ligados a
+  // un mismo permiso quedan juntos como una bitácora (estilo LinkedIn —
+  // varios cargos bajo una misma empresa), posicionada en el punto del más
+  // reciente; los avances generales (sin permiso) quedan como items propios.
+  // `avancesFiltrados` ya viene ordenado desc por fecha, así que el primer
+  // avance que se ve de cada permiso determina la posición del grupo.
+  type AvanceItem =
+    | { kind: 'permiso'; permisoId: number; avances: ComiteEconomicoProyectoSeguimiento[] }
+    | { kind: 'general'; avance: ComiteEconomicoProyectoSeguimiento }
+  const avanceItems = useMemo(() => {
+    const items: AvanceItem[] = []
+    const indexPorPermiso = new Map<number, number>()
+    for (const a of avancesFiltrados) {
+      if (a.permiso_id != null) {
+        const idx = indexPorPermiso.get(a.permiso_id)
+        if (idx != null) {
+          (items[idx] as Extract<AvanceItem, { kind: 'permiso' }>).avances.push(a)
+        } else {
+          indexPorPermiso.set(a.permiso_id, items.length)
+          items.push({ kind: 'permiso', permisoId: a.permiso_id, avances: [a] })
+        }
+      } else {
+        items.push({ kind: 'general', avance: a })
+      }
+    }
+    return items
+  }, [avancesFiltrados])
 
   const chipsAvances = [
     setChip('Permiso', fPermiso, () => setFPermiso(new Set()), v => opcionesPermisoFiltro.find(o => o.value === v)?.label ?? v),
@@ -611,7 +676,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"
                       />
                       {permisoOpen && (
-                        <div className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+                        <div className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-[45vh] overflow-y-auto">
                           {pasMatches.length === 0 && (
                             <p className="px-4 py-4 text-sm text-gray-400 text-center">Sin resultados en el catálogo.</p>
                           )}
@@ -765,7 +830,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         onChange={e => { setAvancePermisoId(e.target.value ? Number(e.target.value) : ''); setAvancePermisoEstado('') }}
                         className={`${inputCls} flex-1 min-w-0`}
                       >
-                        <option value="">Avance Comité Económico (sin permiso asociado)</option>
+                        <option value="">Avance general (sin permiso asociado)</option>
                         {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
                       </select>
                       <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputFixedCls} w-36 flex-shrink-0`} />
@@ -806,7 +871,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   </div>
                 )}
 
-                {avancesFiltrados.length === 0 ? (
+                {avanceItems.length === 0 ? (
                   <EmptyState
                     title={avances.length === 0 ? 'Sin avances aún' : 'Ningún avance calza con los filtros'}
                     description={avances.length === 0 ? 'Las actualizaciones que registre cada SEREMI en este proyecto quedan acá.' : undefined}
@@ -818,80 +883,242 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                     }
                   />
                 ) : (
-                  <div className="relative">
-                    <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
-                    <div className="space-y-5">
-                      {avancesFiltrados.map(a => {
+                  <div className="space-y-5">
+                    {avanceItems.map(item => {
+                      if (item.kind === 'general') {
+                        const a = item.avance
                         const puedeEditar = puedeOperar || a.autor === currentUserEmail
-                        const permisoLigado = a.permiso_id != null ? permisoById.get(a.permiso_id) : null
-                        const cfg = permisoLigado?.estado ? ESTADO_PERMISO[permisoLigado.estado] : null
                         const ministerioAutor = a.autor ? ministerioPorEmail.get(a.autor) : null
                         return (
-                          <div key={a.id} className="flex gap-4 pl-1 group">
-                            <div className={`w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 ${cfg?.dot ?? 'bg-gray-300'} ring-2 ring-white`} />
+                          <div key={`g-${a.id}`} className="flex gap-4 pl-1 group">
+                            <div className="w-3.5 h-3.5 rounded-full mt-1 flex-shrink-0 bg-gray-300 ring-2 ring-white" />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                {permisoLigado ? (
-                                  <>
-                                    <span className="text-xs font-medium text-gray-500" title={permisoLigado.pas.nombre}>{permisoLigado.pas.n_pas}</span>
-                                    {puedeEditar ? (
-                                      <select
-                                        value={permisoLigado.estado ?? ''}
-                                        onChange={e => cambiarEstadoPermiso(permisoLigado.id, e.target.value)}
-                                        className={`text-xs rounded-full pl-1.5 pr-1 py-0.5 border-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
-                                        title="Cambia el estado de este permiso"
-                                      >
-                                        <option value="">Sin estado</option>
-                                        {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
-                                          <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}>{cfg?.label ?? 'Sin estado'}</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-gray-400">Avance Comité Económico</span>
-                                )}
-                                {puedeEditar ? (
-                                  <input
-                                    type="date"
-                                    value={a.fecha}
-                                    onChange={e => handleInlineFecha(a, e.target.value)}
-                                    className="text-xs text-gray-500 ml-auto border-0 bg-transparent hover:bg-gray-100 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-gray-400 ml-auto">{fmtFecha(a.fecha)}</span>
-                                )}
-                                {puedeEditar && (
-                                  <button
-                                    onClick={() => borrarAvance(a)}
-                                    className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
-                                    title="Borrar avance"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                      <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-700 leading-snug">{a.descripcion}</p>
-                              {a.autor && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {a.autor}{ministerioAutor ? ` · ${ministerioAutor}` : ''}
-                                </p>
-                              )}
+                              <AvanceRow
+                                avance={a}
+                                puedeEditar={puedeEditar}
+                                ministerioAutor={ministerioAutor}
+                                onInlineFecha={handleInlineFecha}
+                                onBorrar={borrarAvance}
+                                onEditarDescripcion={editarDescripcionAvance}
+                                fmtFecha={fmtFecha}
+                                generalLabel="Avance general"
+                              />
                             </div>
                           </div>
                         )
-                      })}
-                    </div>
+                      }
+                      const permiso = permisoById.get(item.permisoId)
+                      return (
+                        <PermisoBitacoraCard
+                          key={`p-${item.permisoId}`}
+                          permiso={permiso}
+                          avances={item.avances}
+                          puedeOperar={puedeOperar}
+                          currentUserEmail={currentUserEmail}
+                          ministerioPorEmail={ministerioPorEmail}
+                          onInlineFecha={handleInlineFecha}
+                          onBorrar={borrarAvance}
+                          onEditarDescripcion={editarDescripcionAvance}
+                          onCambiarEstado={cambiarEstadoPermiso}
+                          fmtFecha={fmtFecha}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </div>
               )}
             </div>
           </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Timeline de avances — fila individual + bitácora agrupada por permiso ──
+
+// Una fila de avance suelta (fecha editable inline + borrar + texto +
+// autor) — se usa tanto para avances generales como, dentro de la bitácora
+// de un permiso. El texto se puede editar in situ (click-to-edit, mismo
+// patrón Guardar/✕ que los TextPillField) — solo quien lo escribió o quien
+// opera el comité (mismo criterio que borrar, gated por `puedeEditar`).
+function AvanceRow({
+  avance, puedeEditar, ministerioAutor, onInlineFecha, onBorrar, onEditarDescripcion, fmtFecha, generalLabel, estadoRegistrado,
+}: {
+  avance: ComiteEconomicoProyectoSeguimiento
+  puedeEditar: boolean
+  ministerioAutor: string | null | undefined
+  onInlineFecha: (a: ComiteEconomicoProyectoSeguimiento, fecha: string) => void
+  onBorrar: (a: ComiteEconomicoProyectoSeguimiento) => void
+  onEditarDescripcion: (a: ComiteEconomicoProyectoSeguimiento, descripcion: string) => void
+  fmtFecha: (fecha: string) => string
+  generalLabel?: string
+  estadoRegistrado?: keyof typeof ESTADO_PERMISO | null
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(avance.descripcion)
+  useEffect(() => { setDraft(avance.descripcion) }, [avance.descripcion])
+
+  return (
+    <div className="group">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        {generalLabel && <span className="text-xs text-gray-400">{generalLabel}</span>}
+        {estadoRegistrado && (
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ESTADO_PERMISO[estadoRegistrado].cls}`}>
+            → {ESTADO_PERMISO[estadoRegistrado].label}
+          </span>
+        )}
+        {puedeEditar ? (
+          <input
+            type="date"
+            value={avance.fecha}
+            onChange={e => onInlineFecha(avance, e.target.value)}
+            className="text-xs text-gray-500 ml-auto border-0 bg-transparent hover:bg-gray-100 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-300"
+          />
+        ) : (
+          <span className="text-xs text-gray-400 ml-auto">{fmtFecha(avance.fecha)}</span>
+        )}
+        {puedeEditar && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-violet-600 rounded hover:bg-violet-50 transition-colors"
+            title="Editar avance"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M11 2l3 3-8 8-3.5 1 1-3.5z" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
+        {puedeEditar && (
+          <button
+            onClick={() => onBorrar(avance)}
+            className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+            title="Borrar avance"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 3.5h8M4.5 3.5V2h3v1.5M4 3.5l.5 7h3l.5-7"/>
+            </svg>
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-1.5">
+          <textarea
+            autoFocus
+            rows={3}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            className={`w-full ${pillEditInputCls} resize-y`}
+          />
+          <div className="flex justify-end gap-1.5">
+            <button onClick={() => { onEditarDescripcion(avance, draft); setEditing(false) }} className={pillSaveBtnCls}>Guardar</button>
+            <button onClick={() => { setDraft(avance.descripcion); setEditing(false) }} className={pillCancelBtnCls}>✕</button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-700 leading-snug">{avance.descripcion}</p>
+      )}
+      {avance.autor && (
+        <p className="text-xs text-gray-400 mt-1">
+          {avance.autor}{ministerioAutor ? ` · ${ministerioAutor}` : ''}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// Bitácora de un permiso — todos sus avances agrupados bajo un único
+// encabezado (N°/nombre + estado ACTUAL, el único que se ve arriba), mismo
+// criterio visual que LinkedIn cuando una persona tiene varios cargos en la
+// misma empresa: un solo bloque, ordenado cronológicamente (el más antiguo
+// primero, como una bitácora), mostrando las últimas 3 entradas y el resto
+// tras "Ver más" — cada avance conserva el cambio de estado que dejó
+// registrado en su momento (estado_permiso_registrado), si tuvo uno.
+const VISIBLES_DEFAULT = 3
+
+function PermisoBitacoraCard({
+  permiso, avances, puedeOperar, currentUserEmail, ministerioPorEmail, onInlineFecha, onBorrar, onEditarDescripcion, onCambiarEstado, fmtFecha,
+}: {
+  permiso: PermisoConCatalogo | undefined
+  avances: ComiteEconomicoProyectoSeguimiento[]
+  puedeOperar: boolean
+  currentUserEmail: string
+  ministerioPorEmail: Map<string, string | null>
+  onInlineFecha: (a: ComiteEconomicoProyectoSeguimiento, fecha: string) => void
+  onBorrar: (a: ComiteEconomicoProyectoSeguimiento) => void
+  onEditarDescripcion: (a: ComiteEconomicoProyectoSeguimiento, descripcion: string) => void
+  onCambiarEstado: (permisoId: number, estado: string) => void
+  fmtFecha: (fecha: string) => string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const cfg = permiso?.estado ? ESTADO_PERMISO[permiso.estado] : null
+
+  // Cronológico ascendente (el más antiguo primero, como una bitácora) —
+  // `avances` llega ordenado desc (más reciente primero), así que se invierte.
+  const ordenados = useMemo(() => [...avances].reverse(), [avances])
+  const resto = Math.max(0, ordenados.length - VISIBLES_DEFAULT)
+  // Colapsado: solo las últimas (más recientes) VISIBLES_DEFAULT — "Ver más"
+  // destapa las anteriores por arriba, la lectura sigue siendo cronológica.
+  const visibles = expanded ? ordenados : ordenados.slice(resto)
+
+  return (
+    <div className="rounded-xl border border-gray-100 px-3 py-2.5">
+      <div className="flex items-center gap-2 pb-2 mb-2 border-b border-gray-100">
+        <div className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${cfg?.dot ?? 'bg-gray-300'} ring-2 ring-white`} />
+        <span className="text-sm font-semibold text-gray-800 flex-shrink-0" title={permiso?.pas.nombre}>{permiso?.pas.n_pas ?? '—'}</span>
+        <span className="text-xs text-gray-400 truncate flex-1">{permiso?.pas.nombre}</span>
+        {puedeOperar && permiso ? (
+          <select
+            value={permiso.estado ?? ''}
+            onChange={e => onCambiarEstado(permiso.id, e.target.value)}
+            className={`text-xs rounded-full pl-2 pr-1 py-0.5 border-0 flex-shrink-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}
+            title="Cambia el estado de este permiso"
+          >
+            <option value="">Sin estado</option>
+            {(Object.keys(ESTADO_PERMISO) as (keyof typeof ESTADO_PERMISO)[]).map(k => (
+              <option key={k} value={k}>{ESTADO_PERMISO[k].label}</option>
+            ))}
+          </select>
+        ) : (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${cfg ? cfg.cls : 'bg-gray-100 text-gray-500'}`}>{cfg?.label ?? 'Sin estado'}</span>
+        )}
+      </div>
+      <div className="pl-5 ml-1.5 border-l border-gray-100 space-y-4">
+        {resto > 0 && !expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+          >
+            Ver {resto} más
+          </button>
+        )}
+        {visibles.map(a => {
+          const puedeEditar = puedeOperar || a.autor === currentUserEmail
+          const ministerioAutor = a.autor ? ministerioPorEmail.get(a.autor) : null
+          return (
+            <AvanceRow
+              key={a.id}
+              avance={a}
+              puedeEditar={puedeEditar}
+              ministerioAutor={ministerioAutor}
+              onInlineFecha={onInlineFecha}
+              onBorrar={onBorrar}
+              onEditarDescripcion={onEditarDescripcion}
+              fmtFecha={fmtFecha}
+              estadoRegistrado={a.estado_permiso_registrado}
+            />
+          )
+        })}
+        {expanded && resto > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="text-xs text-gray-400 hover:text-gray-600 font-medium"
+          >
+            Ver menos
+          </button>
         )}
       </div>
     </div>

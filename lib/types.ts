@@ -979,6 +979,11 @@ export type ComiteEconomicoProyectoSeguimiento = {
   // Permiso del proyecto al que refiere este avance (mig 088) — opcional,
   // NULL = avance general del proyecto (no habla de un permiso puntual).
   permiso_id: number | null
+  // Estado del permiso que este avance dejó registrado al crearse (mig 090)
+  // — snapshot histórico, no el estado actual del permiso (ese vive en
+  // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
+  // el estado del permiso (o es un avance general, sin permiso).
+  estado_permiso_registrado: 'pendiente' | 'otorgado' | 'frenado' | null
   created_at: string
 }
 
