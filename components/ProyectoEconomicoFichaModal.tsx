@@ -156,9 +156,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   useEffect(() => { cargar() }, [cargar])
 
   // Padrón con ministerio (mig 087) — una sola vez, no depende del proyecto.
-  // Alimenta el filtro de avances por ministerio del autor. OJO: hoy el
-  // ministerio solo se puebla para el rol `seremi`, así que el filtro solo
-  // separa a esos autores (ver nota de integración con main).
+  // Alimenta el filtro de avances por ministerio del autor. `ministerio` solo
+  // se puebla para el rol `seremi` (en cualquier otro rol acotaría su cartera
+  // — ver mig 087), así que el filtro separa solo a esos autores. Es
+  // deliberado: los avances los cargan principalmente los SEREMI, y para el
+  // resto el filtro simplemente no aparece.
   useEffect(() => {
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios).catch(() => {})
   }, [])
@@ -800,13 +802,17 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Avances registrados</p>
                 </div>
 
-                {/* Filtros — por permiso, institución (órgano otorgante) y ministerio del autor */}
-                {avances.length > 0 && (
+                {/* Filtros — por permiso, institución (órgano otorgante) y ministerio
+                    del autor. Cada uno aparece solo si tiene por qué filtrar: un
+                    FilterPopover sin opciones igual abre, y muestra "Sin resultados".
+                    El de Ministerio es el que más se ausenta — solo el rol seremi
+                    tiene ministerio, así que lista únicamente a esos autores. */}
+                {avances.length > 0 && (opcionesPermisoFiltro.length > 0 || opcionesInstitucion.length > 0 || opcionesMinisterio.length > 0) && (
                   <div className="mb-3 space-y-1.5">
                     <div className="flex items-center gap-1.5">
-                      <FilterPopover label="Permiso" options={opcionesPermisoFiltro} selected={fPermiso} onChange={setFPermiso} />
-                      <FilterPopover label="Institución" options={opcionesInstitucion} selected={fInstitucion} onChange={setFInstitucion} />
-                      <FilterPopover label="Ministerio" options={opcionesMinisterio} selected={fMinisterio} onChange={setFMinisterio} />
+                      {opcionesPermisoFiltro.length > 0 && <FilterPopover label="Permiso" options={opcionesPermisoFiltro} selected={fPermiso} onChange={setFPermiso} />}
+                      {opcionesInstitucion.length > 0 && <FilterPopover label="Institución" options={opcionesInstitucion} selected={fInstitucion} onChange={setFInstitucion} />}
+                      {opcionesMinisterio.length > 0 && <FilterPopover label="Ministerio" options={opcionesMinisterio} selected={fMinisterio} onChange={setFMinisterio} />}
                     </div>
                     {chipsAvances.length > 0 && <ActiveFiltersBar chips={chipsAvances} clearFilters={clearFiltrosAvances} />}
                   </div>

@@ -19,8 +19,10 @@
 --     `current_user_sees_ministerio()`. El ALTER de acá quedó idempotente y
 --     sin efecto, y la columna hoy la gobierna la 087: solo se puebla para
 --     el rol `seremi`, porque un valor no nulo en cualquier otro rol le
---     achica la cartera que ese usuario ve. Mientras siga así, el filtro
---     por ministerio de los avances solo separa a los SEREMI.
+--     achica la cartera que ese usuario ve. Decisión tomada: se deja así —
+--     los avances los cargan principalmente los SEREMI, así que el filtro
+--     por ministerio separa a quienes importa y no se abre una segunda
+--     columna de "ministerio de pertenencia" sin efecto en la RLS.
 -- ============================================================================
 
 ALTER TABLE public.user_profiles
