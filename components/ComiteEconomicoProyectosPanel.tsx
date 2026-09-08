@@ -69,17 +69,43 @@ export default function ComiteEconomicoProyectosPanel({
   const [fSeremi, setFSeremi]         = useState<Set<string>>(new Set())
   const [fRiesgo, setFRiesgo]         = useState<Set<string>>(new Set())
   const [fEstado, setFEstado]         = useState<Set<string>>(new Set())
+  const [fPermiso, setFPermiso]       = useState<Set<string>>(new Set())
   const [sortCol, setSortCol]         = useState<SortCol | null>(null)
   const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('desc')
   const [exportando, setExportando]   = useState(false)
 
+  // Qué permisos tiene cada proyecto, por N° PAS. Se lee de los permisos YA
+  // asociados a proyectos de esta región — no del catálogo completo: filtrar
+  // por un PAS que nadie tramita solo ofrece resultados vacíos.
+  const [permisosPorProyecto, setPermisosPorProyecto] = useState<Map<number, Set<string>>>(new Map())
+
   const cargar = useCallback(async () => {
     setLoading(true)
-    const { data } = await getSupabase()
+    const sb = getSupabase()
+    const { data } = await sb
       .from('comite_economico_proyecto').select('*')
       .eq('region_cod', region.cod)
       .order('nombre')
-    setProyectos((data ?? []) as ComiteEconomicoProyecto[])
+    const filas = (data ?? []) as ComiteEconomicoProyecto[]
+    setProyectos(filas)
+
+    const ids = filas.map(p => p.id)
+    if (ids.length) {
+      const { data: links } = await sb
+        .from('comite_economico_proyecto_permiso')
+        .select('proyecto_id, pas:pas_catalogo(n_pas)')
+        .in('proyecto_id', ids)
+      const mapa = new Map<number, Set<string>>()
+      for (const l of (links ?? []) as unknown as { proyecto_id: number; pas: { n_pas: string } | null }[]) {
+        if (!l.pas?.n_pas) continue
+        const set = mapa.get(l.proyecto_id) ?? new Set<string>()
+        set.add(l.pas.n_pas)
+        mapa.set(l.proyecto_id, set)
+      }
+      setPermisosPorProyecto(mapa)
+    } else {
+      setPermisosPorProyecto(new Map())
+    }
     setLoading(false)
   }, [region.cod])
 
@@ -102,6 +128,16 @@ export default function ComiteEconomicoProyectosPanel({
     return [...vistos].sort().map(v => ({ value: v, label: v }))
   }, [proyectos])
 
+  // Solo los N° PAS que algún proyecto de la región tramita, ordenados como
+  // se leen ("PAS 9" antes que "PAS 111", no al revés).
+  const opcionesPermiso = useMemo((): FilterOption[] => {
+    const vistos = new Set<string>()
+    for (const set of permisosPorProyecto.values()) for (const n of set) vistos.add(n)
+    return [...vistos]
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+      .map(v => ({ value: v, label: v }))
+  }, [permisosPorProyecto])
+
   const filtrados = useMemo(() => {
     let list = proyectos
     if (fPlazo.size)      list = list.filter(p => p.plazo && fPlazo.has(p.plazo))
@@ -109,6 +145,11 @@ export default function ComiteEconomicoProyectosPanel({
     if (fSeremi.size)     list = list.filter(p => p.seremi_lider && fSeremi.has(p.seremi_lider))
     if (fRiesgo.size)     list = list.filter(p => fRiesgo.has(p.riesgo ? 'Si' : 'No'))
     if (fEstado.size)     list = list.filter(p => p.estado_actual && fEstado.has(p.estado_actual))
+    // Multi-select: basta con que el proyecto tramite ALGUNO de los elegidos.
+    if (fPermiso.size)    list = list.filter(p => {
+      const suyos = permisosPorProyecto.get(p.id)
+      return !!suyos && [...fPermiso].some(n => suyos.has(n))
+    })
     if (sortCol) {
       list = [...list].sort((a, b) => {
         const av = a[sortCol] ?? -Infinity
@@ -117,7 +158,7 @@ export default function ComiteEconomicoProyectosPanel({
       })
     }
     return list
-  }, [proyectos, fPlazo, fPriorizado, fSeremi, fRiesgo, fEstado, sortCol, sortDir])
+  }, [proyectos, fPlazo, fPriorizado, fSeremi, fRiesgo, fEstado, fPermiso, permisosPorProyecto, sortCol, sortDir])
 
   function handleSort(col: SortCol) {
     if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return }
@@ -127,7 +168,7 @@ export default function ComiteEconomicoProyectosPanel({
 
   function clearFiltros() {
     setFPlazo(new Set()); setFPriorizado(new Set()); setFSeremi(new Set())
-    setFRiesgo(new Set()); setFEstado(new Set())
+    setFRiesgo(new Set()); setFEstado(new Set()); setFPermiso(new Set())
   }
 
   async function handleExportar() {
@@ -148,6 +189,7 @@ export default function ComiteEconomicoProyectosPanel({
     setChip('SEREMI líder', fSeremi, () => setFSeremi(new Set())),
     setChip('Riesgo', fRiesgo, () => setFRiesgo(new Set())),
     setChip('Estado actual', fEstado, () => setFEstado(new Set())),
+    setChip('Permiso', fPermiso, () => setFPermiso(new Set())),
   ].filter((c): c is NonNullable<typeof c> => c !== null)
 
   if (!puedeOperar) return null
@@ -302,6 +344,11 @@ export default function ComiteEconomicoProyectosPanel({
             <FilterPopover label="SEREMI líder" options={opcionesSeremi} selected={fSeremi} onChange={setFSeremi} />
             <FilterPopover label="Riesgo" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={fRiesgo} onChange={setFRiesgo} />
             <FilterPopover label="Estado actual" options={opcionesEstado} selected={fEstado} onChange={setFEstado} />
+            {/* Solo aparece si hay permisos tramitándose: sin eso el filtro no
+                tendría por dónde filtrar. */}
+            {opcionesPermiso.length > 0 && (
+              <FilterPopover label="Permiso" options={opcionesPermiso} selected={fPermiso} onChange={setFPermiso} />
+            )}
           </div>
           {chips.length > 0 && (
             <div className="mb-2">

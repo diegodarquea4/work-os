@@ -1,6 +1,6 @@
 import { Document, Page, Text, View } from '@react-pdf/renderer'
 import {
-  s, C, fmtFecha, fmtNum,
+  s, C, fmtFecha, fmtFechaCorta, fmtNum,
   PageChrome, TitleBlock, SH, SubHead, MetaRow, EstadoChip, SeccionChip, Vacio,
   type ActaBranding,
 } from './actaPdfBase'
@@ -299,17 +299,20 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
 
             {/* Oficios tratados */}
             <SH>{`${nOficios}. Oficios tratados`}</SH>
+            {/* Las celdas llevan su propio paddingRight: sin él las columnas se
+                tocan y "FECHA LÍMITE" queda pegado a "ESTADO". La fecha va en
+                formato corto — el largo se parte en dos líneas acá. */}
             <View style={s.th}>
-              <Text style={[s.thT, { flex: 3 }]}>Proyecto</Text>
-              <Text style={[s.thT, { flex: 2 }]}>OAECA</Text>
-              <Text style={[s.thT, { flex: 1.2, textAlign: 'right' }]}>Fecha límite</Text>
+              <Text style={[s.thT, { flex: 3, paddingRight: 6 }]}>Proyecto</Text>
+              <Text style={[s.thT, { flex: 2, paddingRight: 6 }]}>OAECA</Text>
+              <Text style={[s.thT, { flex: 1.4, paddingRight: 6 }]}>Fecha límite</Text>
               <Text style={[s.thT, { flex: 1 }]}>Estado</Text>
             </View>
             {data.oficiosTratados.map((o, i) => (
               <View key={i} style={s.tr} wrap={false}>
-                <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
-                <Text style={[s.td, { flex: 2, color: C.muted }]}>{o.oaeca}</Text>
-                <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
+                <Text style={[s.td, { flex: 3, paddingRight: 6 }]}>{o.nombreProyecto}</Text>
+                <Text style={[s.td, { flex: 2, paddingRight: 6, color: C.muted }]}>{o.oaeca}</Text>
+                <Text style={[s.td, { flex: 1.4, paddingRight: 6 }]}>{fmtFechaCorta(o.fechaLimite)}</Text>
                 <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.muted }]}>
                   {o.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
                 </Text>
