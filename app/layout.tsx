@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PSG · Panel Seguimiento Gubernamental — Regiones",
   description: "Panel de seguimiento de iniciativas territoriales — División de Coordinación Interministerial, Ministerio del Interior",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

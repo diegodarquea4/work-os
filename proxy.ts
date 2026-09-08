@@ -56,6 +56,11 @@ export async function proxy(request: NextRequest) {
   // Activación de cuenta: la usa un usuario SIN sesión (define su clave con un
   // código). Debe ser accesible sin redirigir a /login.
   const isPublicAccount = pathname.startsWith('/api/account/activate')
+  // /robots.txt (app/robots.ts) tiene que ser legible sin sesión — si no, un
+  // crawler recibe un 307 a /login en vez del Disallow, lo que anula el punto
+  // de bloquear la indexación (Google trata un robots.txt inalcanzable/inválido
+  // como "sin restricciones").
+  const isRobotsTxt     = pathname === '/robots.txt'
   // Canjear un código de respaldo lo hace, por definición, una sesión a la que
   // le falta el segundo factor (perdió el teléfono). Si el gate de más abajo la
   // bloqueara, la salida de emergencia quedaría tras la puerta que abre.
@@ -85,7 +90,7 @@ export async function proxy(request: NextRequest) {
     // Se auto-protege con isCronAuthorized, igual que los syncs.
     pathname.startsWith('/api/health')
 
-  if (!user && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount) {
+  if (!user && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount && !isRobotsTxt) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -98,7 +103,7 @@ export async function proxy(request: NextRequest) {
   // Con el código pendiente no se entra a ninguna otra parte. Las páginas van a
   // /login a completarlo; las rutas /api devuelven 401 (redirigir un fetch a
   // HTML deja al cliente parseando una página de login como si fuera JSON).
-  if (faltaSegundoFactor && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount && !isMfaRecover) {
+  if (faltaSegundoFactor && !isLoginPage && !isAuthCallback && !isCronRoute && !isPublicAccount && !isMfaRecover && !isRobotsTxt) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
         { error: 'Verificación en dos pasos requerida', code: 'mfa_required' },

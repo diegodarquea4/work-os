@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import FaqList from '@/components/FaqList'
 import { TOUR_CATALOG } from '@/lib/tours'
@@ -44,7 +45,7 @@ export default function AyudaPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="flex-shrink-0 h-16 bg-slate-900 flex items-center justify-between px-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-10 w-auto rounded-md" />
+          <Image src="/logo-ministerio.jpg" alt="Ministerio del Interior" width={400} height={363} className="h-10 w-auto rounded-md" />
           <div className="flex flex-col">
             <span className="text-white font-bold text-sm leading-tight">Centro de Ayuda · PSG</span>
             <span className="text-slate-400 text-xs leading-tight">Panel Seguimiento Gubernamental</span>

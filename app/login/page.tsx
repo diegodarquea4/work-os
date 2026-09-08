@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { getSupabase } from '@/lib/supabase'
 import { complexityOk } from '@/lib/passwordRules'
 import NewPasswordFields from '@/components/NewPasswordFields'
@@ -169,7 +170,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm px-4">
         <div className="mb-8 text-center">
-          <img src="/logo-ministerio.jpg" alt="Ministerio del Interior" className="h-20 w-auto rounded-xl shadow-sm mx-auto mb-5" />
+          <Image src="/logo-ministerio.jpg" alt="Ministerio del Interior" width={400} height={363} priority className="h-20 w-auto rounded-xl shadow-sm mx-auto mb-5" />
           <h1 className="text-xl font-bold text-gray-900">Panel Seguimiento Gubernamental</h1>
           <p className="text-sm text-gray-500 mt-1">Regiones · PSG</p>
         </div>
