@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEconomicoProyectoSeguimiento, PasCatalogo } from '@/lib/types'
@@ -129,16 +130,29 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [descExpanded, setDescExpanded]       = useState(false)
   const [descOverflow, setDescOverflow]       = useState(false)
   const descRef = useRef<HTMLParagraphElement>(null)
-  // Buscador de permisos: al enfocarlo se sube al tope del panel, para que el
-  // dropdown de resultados quede entero a la vista y no medio tapado abajo.
-  const buscadorPermisoRef = useRef<HTMLDivElement>(null)
-  function traerBuscadorAlFrente() {
-    // En el mismo tick el dropdown todavía no está montado; el rAF deja que
-    // el layout se asiente antes de medir.
-    requestAnimationFrame(() => {
-      buscadorPermisoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
+
+  // Buscador de permisos: el desplegable se saca de la ficha con createPortal
+  // + position:fixed (mismo patrón que IniciativaTypeahead en SesionModal.tsx).
+  // La ficha tiene overflow-hidden y su cuerpo hace scroll, así que un
+  // desplegable `absolute` quedaba recortado y obligaba a scrollear la ficha
+  // entera para verlo. Anclado al input por getBoundingClientRect, se
+  // reposiciona en scroll/resize y abre hacia arriba si no cabe abajo.
+  const permisoInputRef = useRef<HTMLInputElement>(null)
+  const [permisoRect, setPermisoRect] = useState<DOMRect | null>(null)
+  const medirPermiso = useCallback(() => {
+    const el = permisoInputRef.current
+    if (el) setPermisoRect(el.getBoundingClientRect())
+  }, [])
+
+  useEffect(() => {
+    if (!permisoOpen) return
+    window.addEventListener('scroll', medirPermiso, true)
+    window.addEventListener('resize', medirPermiso)
+    return () => {
+      window.removeEventListener('scroll', medirPermiso, true)
+      window.removeEventListener('resize', medirPermiso)
+    }
+  }, [permisoOpen, medirPermiso])
 
   // Tarjeta de detalle (los otros 14 campos) — colapsable, preferencia
   // persistida igual que el detalle de la ficha de iniciativa.
@@ -522,6 +536,33 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       .slice(0, 20)
   }, [pasDisponibles, permisoQ])
 
+  // Geometría del desplegable de permisos. Las filas tienen alto fijo para que
+  // "3 a la vez" sea exacto: el resto se alcanza scrolleando ahí adentro, no
+  // moviendo la ficha. El pie ("crear nuevo") queda fuera del scroll, siempre
+  // visible.
+  const PERMISO_FILA_H = 58
+  const PERMISO_PIE_H  = 42
+  const PERMISO_GAP    = 4
+  const PERMISO_LISTA_MAXH = PERMISO_FILA_H * 3
+  let permisoDropStyle: CSSProperties = {}
+  let permisoListaMaxH = PERMISO_LISTA_MAXH
+  if (permisoOpen && permisoRect) {
+    const espacioAbajo = window.innerHeight - permisoRect.bottom
+    const deseado = PERMISO_LISTA_MAXH + PERMISO_PIE_H + PERMISO_GAP
+    const arriba = espacioAbajo < deseado && permisoRect.top > espacioAbajo
+    const disponible = (arriba ? permisoRect.top : espacioAbajo) - PERMISO_GAP
+    permisoListaMaxH = Math.max(PERMISO_FILA_H, Math.min(PERMISO_LISTA_MAXH, disponible - PERMISO_PIE_H))
+    permisoDropStyle = {
+      position: 'fixed',
+      left: permisoRect.left,
+      width: permisoRect.width,
+      zIndex: 9999,
+      ...(arriba
+        ? { bottom: window.innerHeight - permisoRect.top + PERMISO_GAP }
+        : { top: permisoRect.bottom + PERMISO_GAP }),
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -688,42 +729,47 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
               {tab === 'permisos' ? (
                 <div className="pt-1 space-y-3">
                   {editable && (
-                    <div className="relative" ref={buscadorPermisoRef}>
+                    <div className="relative">
                       <input
+                        ref={permisoInputRef}
                         type="text"
                         value={permisoQuery}
-                        onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true) }}
-                        onFocus={() => { setPermisoOpen(true); traerBuscadorAlFrente() }}
+                        onChange={e => { setPermisoQuery(e.target.value); setPermisoOpen(true); medirPermiso() }}
+                        onFocus={() => { setPermisoOpen(true); medirPermiso() }}
                         onBlur={() => setTimeout(() => setPermisoOpen(false), 150)}
                         placeholder="Buscar permiso por N° PAS o nombre…"
                         className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"
                       />
-                      {permisoOpen && (
-                        <div className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-[45vh] overflow-y-auto">
-                          {pasMatches.length === 0 && (
-                            <p className="px-4 py-4 text-sm text-gray-400 text-center">Sin resultados en el catálogo.</p>
-                          )}
-                          {pasMatches.map(p => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onMouseDown={e => e.preventDefault()}
-                              onClick={() => agregarPermiso(p)}
-                              className="w-full text-left px-4 py-3 hover:bg-violet-50 border-b border-gray-100 last:border-0"
-                            >
-                              <p className="text-sm text-gray-800"><span className="font-semibold">{p.n_pas}</span> — {p.nombre}</p>
-                              <p className="text-xs text-gray-400 mt-0.5">{p.organo_otorgante ?? '—'}</p>
-                            </button>
-                          ))}
+                      {permisoOpen && permisoRect && createPortal(
+                        <div style={permisoDropStyle} className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col">
+                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: permisoListaMaxH }}>
+                            {pasMatches.length === 0 ? (
+                              <p className="px-4 py-4 text-sm text-gray-400 text-center">Sin resultados en el catálogo.</p>
+                            ) : pasMatches.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => agregarPermiso(p)}
+                                style={{ height: PERMISO_FILA_H }}
+                                className="w-full text-left px-4 flex flex-col justify-center hover:bg-violet-50 border-b border-gray-100 last:border-0"
+                              >
+                                <p className="text-sm text-gray-800 truncate"><span className="font-semibold">{p.n_pas}</span> — {p.nombre}</p>
+                                <p className="text-xs text-gray-400 truncate">{p.organo_otorgante ?? '—'}</p>
+                              </button>
+                            ))}
+                          </div>
                           <button
                             type="button"
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => { setNuevoPasOpen(true); setNuevoPasNombre(permisoQuery); setPermisoOpen(false) }}
-                            className="w-full text-left px-4 py-3 text-sm text-violet-700 font-medium hover:bg-violet-50"
+                            style={{ height: PERMISO_PIE_H }}
+                            className="flex-none border-t border-gray-100 w-full text-left px-4 text-sm text-violet-700 font-medium hover:bg-violet-50"
                           >
                             + Crear nuevo permiso en el catálogo
                           </button>
-                        </div>
+                        </div>,
+                        document.body,
                       )}
                     </div>
                   )}

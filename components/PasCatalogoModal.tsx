@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import { safeWrite } from '@/lib/dbWrite'
+import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { PasCatalogo } from '@/lib/types'
 import { EmptyState } from '@/components/ui'
 
@@ -41,10 +41,26 @@ export default function PasCatalogoModal({ currentUserEmail, onClose }: Props) {
   const [editId, setEditId]     = useState<number | null>(null)
   const [edit, setEdit]         = useState<Borrador>(VACIO)
 
+  // Cuántos proyectos usan cada PAS. Sirve para avisar ANTES de borrar, en vez
+  // de dejar que la FK reviente. OJO: la RLS de comite_economico_proyecto_permiso
+  // acota por región, así que este conteo solo ve las regiones del usuario — un
+  // PAS usado en otra región se ve en 0 acá y la base igual rechaza el borrado.
+  // Por eso `eliminar` además traduce el error de FK.
+  const [usoPorPas, setUsoPorPas] = useState<Map<number, number>>(new Map())
+
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await getSupabase().from('pas_catalogo').select('*').order('n_pas')
+    const sb = getSupabase()
+    const [{ data }, { data: enlaces }] = await Promise.all([
+      sb.from('pas_catalogo').select('*').order('n_pas'),
+      sb.from('comite_economico_proyecto_permiso').select('pas_id'),
+    ])
     setLista((data ?? []) as PasCatalogo[])
+    const uso = new Map<number, number>()
+    for (const e of (enlaces ?? []) as { pas_id: number }[]) {
+      uso.set(e.pas_id, (uso.get(e.pas_id) ?? 0) + 1)
+    }
+    setUsoPorPas(uso)
     setLoading(false)
   }, [])
 
@@ -116,6 +132,36 @@ export default function PasCatalogoModal({ currentUserEmail, onClose }: Props) {
       await load()
     } catch (err) {
       window.alert((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function eliminar(p: PasCatalogo) {
+    const enUso = usoPorPas.get(p.id) ?? 0
+    if (enUso > 0) {
+      window.alert(
+        `«${p.n_pas}» está asociado a ${enUso} proyecto${enUso === 1 ? '' : 's'}.\n\n` +
+        'Quítalo de esos proyectos antes de sacarlo del catálogo: borrarlo acá se llevaría ' +
+        'también el estado del permiso en cada uno.',
+      )
+      return
+    }
+    if (!confirm(`¿Borrar «${p.n_pas} — ${p.nombre}» del catálogo?\n\nEs un catálogo compartido por las 16 regiones.`)) return
+    setSaving(true)
+    try {
+      await safeDelete(
+        getSupabase().from('pas_catalogo').delete().eq('id', p.id),
+        `pas_catalogo delete id=${p.id}`,
+      )
+      await load()
+    } catch (err) {
+      const msg = (err as Error).message
+      // 23503 = violación de FK: lo usa un proyecto de una región que este
+      // usuario no ve, así que el conteo de arriba no lo pudo detectar.
+      window.alert(/23503|foreign key|llave for|viola/i.test(msg)
+        ? `No se puede borrar «${p.n_pas}»: hay proyectos que lo tienen asociado, probablemente de otra región.`
+        : msg)
     } finally {
       setSaving(false)
     }
@@ -195,6 +241,7 @@ export default function PasCatalogoModal({ currentUserEmail, onClose }: Props) {
                     <th className="text-left font-semibold py-1.5 pr-3">Nombre</th>
                     <th className="text-left font-semibold py-1.5 pr-3">Sector / materia</th>
                     <th className="text-left font-semibold py-1.5 pr-3">Órgano otorgante</th>
+                    <th className="text-right font-semibold py-1.5 pr-3" title="Proyectos que lo tienen asociado">En uso</th>
                     <th className="py-1.5"></th>
                   </tr>
                 </thead>
@@ -214,6 +261,7 @@ export default function PasCatalogoModal({ currentUserEmail, onClose }: Props) {
                         <td className="py-2 pr-3 align-top">
                           <input type="text" value={edit.organo_otorgante} onChange={e => setEdit({ ...edit, organo_otorgante: e.target.value })} className={`${inputCls} w-full text-xs`} />
                         </td>
+                        <td className="py-2 pr-3" />
                         <td className="py-2 text-right align-top whitespace-nowrap">
                           <button
                             onClick={guardarEdicion}
@@ -231,12 +279,31 @@ export default function PasCatalogoModal({ currentUserEmail, onClose }: Props) {
                         <td className="py-2 pr-3 text-gray-800">{p.nombre}</td>
                         <td className="py-2 pr-3 text-gray-600">{p.sector_materia ?? '—'}</td>
                         <td className="py-2 pr-3 text-gray-600">{p.organo_otorgante ?? '—'}</td>
-                        <td className="py-2 text-right">
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {(usoPorPas.get(p.id) ?? 0) > 0
+                            ? <span className="text-violet-700 font-semibold">{usoPorPas.get(p.id)}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="py-2 text-right whitespace-nowrap">
                           <button
                             onClick={() => { abrirEdicion(p); setNuevoOpen(false) }}
                             className="text-xs text-violet-700 opacity-0 group-hover:opacity-100 hover:underline font-medium"
                           >
                             Editar
+                          </button>
+                          <button
+                            onClick={() => eliminar(p)}
+                            disabled={saving}
+                            title={(usoPorPas.get(p.id) ?? 0) > 0
+                              ? 'Lo usan proyectos: hay que quitarlo de ellos antes'
+                              : 'Borrar del catálogo'}
+                            className={`text-xs ml-2 opacity-0 group-hover:opacity-100 font-medium disabled:opacity-30 ${
+                              (usoPorPas.get(p.id) ?? 0) > 0
+                                ? 'text-gray-300 cursor-help'
+                                : 'text-red-600 hover:underline'
+                            }`}
+                          >
+                            Borrar
                           </button>
                         </td>
                       </tr>
