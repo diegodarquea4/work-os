@@ -1,7 +1,7 @@
 /**
- * Lógica pura de la CONSOLA de sesión de los comités (Policial e
- * Infraestructura): qué muestra el riel izquierdo, en qué orden se recorre la
- * reunión, y qué resume / avisa la pantalla de cierre.
+ * Lógica pura de la CONSOLA de sesión de los comités (Policial,
+ * Infraestructura y Económico): qué muestra el riel izquierdo, en qué orden se
+ * recorre la reunión, y qué resume / avisa la pantalla de cierre.
  *
  * Nada de acá toca la red ni React: recibe el estado que `SesionModal` ya
  * carga y devuelve datos para pintar. Por eso se puede probar en vitest sin UI
@@ -9,17 +9,24 @@
  *
  * Regla de oro (decisión de Diego, 2026-09-08): el cambio a pantalla completa
  * es VISUAL. La numeración de las zonas es la misma que veía el usuario en el
- * modal (1 · 2 · 3 · 4), y el cierre NO agrega bloqueos — solo avisos.
+ * modal (1 · 2 · 3 · 4), y el cierre NO agrega bloqueos — solo avisos. Por eso
+ * cada comité conserva SU orden: el Económico abre por Integrantes y los otros
+ * dos por Compromisos anteriores, tal como venían.
  */
 
 import { tieneValorComite } from './helpers'
-import type { ComiteMetrica, SesionAsistencia, SesionComiteValor, SesionCompromiso } from '@/lib/types'
+import type {
+  ComiteMetrica, SesionAsistencia, SesionComiteValor, SesionCompromiso, SesionOficioTratado,
+} from '@/lib/types'
 
-export type InstanciaConsola = 'eje' | 'infraestructura'
+export type InstanciaConsola = 'eje' | 'infraestructura' | 'economico'
 
 // ── Zonas y riel ─────────────────────────────────────────────────────────────
 
-export type ZonaKey = 'anteriores' | 'asistencia' | 'reporte' | 'comentarios' | 'iniciativas' | 'nuevos'
+export type ZonaKey =
+  | 'anteriores' | 'asistencia' | 'reporte' | 'comentarios' | 'iniciativas' | 'nuevos'
+  /** Solo Económico: Seguimiento de la inversión (proyectos + oficios). */
+  | 'seguimiento'
 
 /** Dónde está parado el usuario. `inst` solo tiene sentido con zona='reporte'. */
 export type ZonaRef = { zona: ZonaKey; inst?: string }
@@ -68,6 +75,11 @@ export type EntradaConsola = {
   comentarios?: string | null
   // Solo Infraestructura
   iniciativas?: number
+  // Solo Económico: los dos sub-ítems de «Seguimiento de la inversión».
+  // Los oficios se parten en anteriores (los que se verifican, con estado) y
+  // nuevos (recién levantados, siempre pendientes por definición).
+  proyectos?: number
+  oficios?: { anteriores: Pick<SesionOficioTratado, 'estado'>[]; nuevos: number }
 }
 
 /**
@@ -108,27 +120,84 @@ function estadoAnteriores(comps: Pick<SesionCompromiso, 'estado'>[]): EstadoRail
 }
 
 /**
+ * Oficios del Económico. Lo único con criterio de "queda algo por hacer" son
+ * los ANTERIORES sin revisar — mismo criterio que los compromisos anteriores.
+ * Los nuevos nacen pendientes por definición (son el oficio que se va a
+ * despachar), así que suman actividad pero nunca impiden el ✓.
+ */
+function estadoOficios(anteriores: Pick<SesionOficioTratado, 'estado'>[], nuevos: number): EstadoRail {
+  if (anteriores.length === 0 && nuevos === 0) return 'vacio'
+  if (anteriores.length > 0 && anteriores.every(o => o.estado !== 'pendiente')) return 'listo'
+  return anteriores.some(o => o.estado === 'resuelto') || nuevos > 0 ? 'con-actividad' : 'vacio'
+}
+
+/**
+ * Zona madre del Económico. ✓ solo cuando hay algo tratado Y no quedan oficios
+ * anteriores sin revisar; los proyectos no tienen criterio de completitud, así
+ * que por sí solos nunca dan el ✓.
+ */
+function estadoSeguimiento(proyectos: number, oficiosTotal: number, oficiosPendientes: number): EstadoRail {
+  if (proyectos === 0 && oficiosTotal === 0) return 'vacio'
+  return oficiosPendientes === 0 ? 'listo' : 'con-actividad'
+}
+
+/**
  * Ítems del riel para la instancia. La numeración es la que el usuario ya
- * conocía en el modal — NO se renumera al insertar «Comentarios».
+ * conocía en el modal — NO se renumera al insertar «Comentarios», y cada
+ * comité conserva su propio orden de apertura.
  *
  *   eje:             1 Anteriores · 2 Asistencia · 3 Reporte (▸ instituciones) · (ícono) Comentarios · 4 Nuevos
  *   infraestructura: 1 Anteriores · 2 Asistencia · 3 Iniciativas · 4 Nuevos
+ *   economico:       1 Integrantes · 2 Anteriores · 3 Seguimiento (▸ proyectos, oficios) · 4 Nuevos
  */
 export function railParaSesion(e: EntradaConsola): RailItem[] {
-  const items: RailItem[] = [
-    {
-      key: 'anteriores', numero: 1, label: 'Compromisos anteriores',
-      badge: String(e.compAnteriores.length),
-      estado: estadoAnteriores(e.compAnteriores),
-    },
-    {
-      key: 'asistencia', numero: 2, label: 'Asistencia',
-      badge: `${e.asistencia.presentes}/${e.asistencia.total}`,
-      estado: e.asistencia.presentes > 0 ? 'con-actividad' : 'vacio',
-    },
-  ]
+  // El Económico entra por Integrantes y deja los compromisos anteriores en 2;
+  // Policial e Infraestructura verifican primero. Es el orden que cada comité
+  // ya tenía en su modal.
+  const esEconomico = e.instancia === 'economico'
 
-  if (e.instancia === 'eje') {
+  const itemAnteriores: RailItem = {
+    key: 'anteriores', numero: esEconomico ? 2 : 1, label: 'Compromisos anteriores',
+    badge: String(e.compAnteriores.length),
+    estado: estadoAnteriores(e.compAnteriores),
+  }
+  const itemAsistencia: RailItem = {
+    key: 'asistencia', numero: esEconomico ? 1 : 2, label: esEconomico ? 'Integrantes' : 'Asistencia',
+    badge: `${e.asistencia.presentes}/${e.asistencia.total}`,
+    estado: e.asistencia.presentes > 0 ? 'con-actividad' : 'vacio',
+  }
+
+  const items: RailItem[] = esEconomico
+    ? [itemAsistencia, itemAnteriores]
+    : [itemAnteriores, itemAsistencia]
+
+  if (e.instancia === 'economico') {
+    const proyectos = e.proyectos ?? 0
+    const oficiosAnteriores = e.oficios?.anteriores ?? []
+    const oficiosNuevos = e.oficios?.nuevos ?? 0
+    const oficiosTotal = oficiosAnteriores.length + oficiosNuevos
+    const oficiosPendientes = oficiosAnteriores.filter(o => o.estado === 'pendiente').length
+
+    items.push({
+      key: 'seguimiento', numero: 3, label: 'Seguimiento de la inversión',
+      // Cuántas cosas hay sobre la mesa (proyectos + oficios), mismo criterio
+      // que el badge de «Iniciativas contempladas» en Infraestructura.
+      badge: String(proyectos + oficiosTotal),
+      estado: estadoSeguimiento(proyectos, oficiosTotal, oficiosPendientes),
+      subitems: [
+        {
+          key: 'proyectos', label: 'Proyectos tratados', badge: String(proyectos),
+          // Sin criterio de completitud: agregar proyectos es abrir la agenda,
+          // no terminarla. Solo distingue vacío de con-actividad.
+          estado: proyectos > 0 ? 'con-actividad' : 'vacio',
+        },
+        {
+          key: 'oficios', label: 'Oficios', badge: String(oficiosTotal),
+          estado: estadoOficios(oficiosAnteriores, oficiosNuevos),
+        },
+      ],
+    })
+  } else if (e.instancia === 'eje') {
     const catalogo = e.catalogo ?? []
     const porMetrica = new Map((e.valores ?? []).map(v => [v.metrica_id, v]))
     const conteos = (e.instituciones ?? []).map(inst => ({ inst, ...conteoInstitucion(inst.key, catalogo, porMetrica) }))
@@ -214,10 +283,14 @@ export function etiquetaZona(items: RailItem[], ref: ZonaRef): string {
 
 export type ResumenCierreComite = {
   anteriores: { total: number; cumplidos: number; enCurso: number; pendientes: number }
-  /** Vacío en infraestructura. */
+  /** Solo Policial. */
   instituciones: { key: string; label: string; conDato: number; total: number }[]
-  /** 0 en el Policial. */
+  /** Solo Infraestructura. */
   iniciativas: number
+  /** Solo Económico. */
+  proyectos: number
+  /** Solo Económico: `pendientes` cuenta anteriores sin resolver. */
+  oficios: { total: number; pendientes: number }
   nuevos: { total: number; escalados: number }
   asistencia: { presentes: number; total: number }
 }
@@ -236,6 +309,13 @@ export function resumenCierreComite(e: EntradaConsola): ResumenCierreComite {
       ? (e.instituciones ?? []).map(inst => ({ key: inst.key, label: inst.label, ...conteoInstitucion(inst.key, e.catalogo ?? [], porMetrica) }))
       : [],
     iniciativas: e.instancia === 'infraestructura' ? (e.iniciativas ?? 0) : 0,
+    proyectos: e.instancia === 'economico' ? (e.proyectos ?? 0) : 0,
+    oficios: e.instancia === 'economico'
+      ? {
+          total: (e.oficios?.anteriores.length ?? 0) + (e.oficios?.nuevos ?? 0),
+          pendientes: (e.oficios?.anteriores ?? []).filter(o => o.estado === 'pendiente').length,
+        }
+      : { total: 0, pendientes: 0 },
     nuevos: {
       total:     e.compNuevos.length,
       escalados: e.compNuevos.filter(c => c.escalado_a_gabinete).length,
@@ -263,6 +343,11 @@ export function avisosCierreComite(r: ResumenCierreComite, instancia: InstanciaC
       avisos.push('No se registró ningún dato en el reporte por institución')
     } else {
       for (const i of vacias) avisos.push(`${i.label} sin datos esta semana`)
+    }
+  } else if (instancia === 'economico') {
+    if (r.proyectos === 0) avisos.push('Sin proyectos tratados en profundidad')
+    if (r.oficios.pendientes > 0) {
+      avisos.push(`${r.oficios.pendientes} ${plural(r.oficios.pendientes, 'oficio sigue pendiente', 'oficios siguen pendientes')}`)
     }
   } else if (r.iniciativas === 0) {
     avisos.push('Sin iniciativas en la agenda')
