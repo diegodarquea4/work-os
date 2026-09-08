@@ -765,7 +765,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         onChange={e => { setAvancePermisoId(e.target.value ? Number(e.target.value) : ''); setAvancePermisoEstado('') }}
                         className={`${inputCls} flex-1 min-w-0`}
                       >
-                        <option value="">Avance general (sin permiso asociado)</option>
+                        <option value="">Avance Comité Económico (sin permiso asociado)</option>
                         {permisos.map(p => <option key={p.id} value={p.id}>{p.pas.n_pas} — {p.pas.nombre}</option>)}
                       </select>
                       <input type="date" value={avanceFecha} onChange={e => setAvanceFecha(e.target.value)} className={`${inputFixedCls} w-36 flex-shrink-0`} />
@@ -851,7 +851,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                                     )}
                                   </>
                                 ) : (
-                                  <span className="text-xs text-gray-400">Avance general</span>
+                                  <span className="text-xs text-gray-400">Avance Comité Económico</span>
                                 )}
                                 {puedeEditar ? (
                                   <input
