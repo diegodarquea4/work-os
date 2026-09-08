@@ -7,6 +7,10 @@ import {
   institucionesSugeridas,
   puedeCerrar,
   puedeRegenerarActa,
+  serieGraficoComite,
+  alinearConTimeline,
+  desgloseInicial,
+  valorDesglosePara,
 } from '@/lib/sesiones/helpers'
 import { sesionIdSchema } from '@/lib/schemas'
 
@@ -34,6 +38,108 @@ describe('aplicarValorMetrica (suma/pulso)', () => {
 
   it('pulso con valor_actual null también reemplaza', () => {
     expect(aplicarValorMetrica('pulso', null, 7)).toBe(7)
+  })
+})
+
+describe('serieGraficoComite (gráfico de la zona de reporte)', () => {
+  const historico = [{ fecha: '2026-08-01', valor: 10 }, { fecha: '2026-08-08', valor: 12 }]
+
+  it('agrega el valor en curso al final, marcado enCurso', () => {
+    const serie = serieGraficoComite(historico, '2026-08-15', 15)
+    expect(serie).toHaveLength(3)
+    expect(serie[2]).toEqual({ fecha: '2026-08-15', valor: 15, enCurso: true })
+    expect(serie[0].enCurso).toBeUndefined()
+  })
+
+  it('sin valor en curso (nada digitado todavía), solo el histórico', () => {
+    expect(serieGraficoComite(historico, '2026-08-15', null)).toEqual(historico)
+  })
+
+  it('sin histórico y con valor en curso, un solo punto', () => {
+    expect(serieGraficoComite([], '2026-08-15', 5)).toEqual([{ fecha: '2026-08-15', valor: 5, enCurso: true }])
+  })
+
+  it('sin histórico ni valor en curso, arreglo vacío', () => {
+    expect(serieGraficoComite([], '2026-08-15', null)).toEqual([])
+  })
+
+  it('no muta el arreglo histórico recibido', () => {
+    const original = [...historico]
+    serieGraficoComite(historico, '2026-08-15', 20)
+    expect(historico).toEqual(original)
+  })
+})
+
+describe('alinearConTimeline (huecos honestos en el gráfico)', () => {
+  it('rellena con null las fechas sin dato, preservando el orden del timeline', () => {
+    const serie = [{ fecha: '2026-08-01', valor: 10 }, { fecha: '2026-08-15', valor: 12 }]
+    const fechas = ['2026-08-01', '2026-08-08', '2026-08-15']
+    expect(alinearConTimeline(serie, fechas)).toEqual([
+      { fecha: '2026-08-01', valor: 10 },
+      { fecha: '2026-08-08', valor: null },
+      { fecha: '2026-08-15', valor: 12 },
+    ])
+  })
+
+  it('timeline vacío, arreglo vacío', () => {
+    expect(alinearConTimeline([{ fecha: '2026-08-01', valor: 10 }], [])).toEqual([])
+  })
+
+  it('serie vacía, todo null', () => {
+    expect(alinearConTimeline([], ['2026-08-01', '2026-08-08'])).toEqual([
+      { fecha: '2026-08-01', valor: null },
+      { fecha: '2026-08-08', valor: null },
+    ])
+  })
+
+  it('no muta la serie ni el timeline recibidos', () => {
+    const serie = [{ fecha: '2026-08-01', valor: 10 }]
+    const fechas = ['2026-08-01', '2026-08-08']
+    const serieCopia = [...serie]
+    const fechasCopia = [...fechas]
+    alinearConTimeline(serie, fechas)
+    expect(serie).toEqual(serieCopia)
+    expect(fechas).toEqual(fechasCopia)
+  })
+})
+
+describe('desgloseInicial (plantilla → filas listas para digitar)', () => {
+  it('sin plantilla, arreglo vacío', () => {
+    expect(desgloseInicial({ desglose_plantilla: [] })).toEqual([])
+  })
+
+  it('mapea cada ítem de la plantilla a una fila con valor vacío', () => {
+    const plantilla = [{ clave: '5303', etiqueta: 'Rinconada' }, { clave: '5301', etiqueta: 'Los Andes' }]
+    expect(desgloseInicial({ desglose_plantilla: plantilla })).toEqual([
+      { etiqueta: 'Rinconada', clave: '5303', valor: '' },
+      { etiqueta: 'Los Andes', clave: '5301', valor: '' },
+    ])
+  })
+})
+
+describe('valorDesglosePara (lectura de un ítem del desglose para el gráfico)', () => {
+  it('match por clave', () => {
+    const desglose = [{ etiqueta: 'Viña del Mar', clave: '5109', valor: '120' }]
+    expect(valorDesglosePara(desglose, '5109')).toBe(120)
+  })
+
+  it('fallback por etiqueta cuando no hay clave (filas de antes de la plantilla)', () => {
+    const desglose = [{ etiqueta: 'Viña del Mar', valor: '120' }]
+    expect(valorDesglosePara(desglose, 'Viña del Mar')).toBe(120)
+  })
+
+  it('sin match, null', () => {
+    expect(valorDesglosePara([], 'algo')).toBeNull()
+  })
+
+  it('valor no numérico (ej. "20%"), null — no es un dato de esta serie, no un cero', () => {
+    const desglose = [{ etiqueta: 'X', clave: 'x', valor: '20%' }]
+    expect(valorDesglosePara(desglose, 'x')).toBeNull()
+  })
+
+  it('tolera separador de miles y decimal chileno', () => {
+    const desglose = [{ etiqueta: 'X', clave: 'x', valor: '1.234,5' }]
+    expect(valorDesglosePara(desglose, 'x')).toBe(1234.5)
   })
 })
 

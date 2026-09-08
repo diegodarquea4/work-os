@@ -5,8 +5,10 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ColaPorClave } from '@/lib/colaPorClave'
 import type { ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
-import { deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
+import { deltaPulso, tieneValorComite, serieGraficoComite, alinearConTimeline, desgloseInicial } from '@/lib/sesiones/helpers'
 import type { InstitucionComite } from '@/lib/hooks/useComiteMetricas'
+import { Tabs } from './ui/Tabs'
+import MetricaGraficoCard from './sesiones/MetricaGraficoCard'
 import MetricaComiteEditModal from './MetricaComiteEditModal'
 import MetricasComiteModal from './MetricasComiteModal'
 
@@ -43,15 +45,20 @@ type Props = {
   onCatalogoChange: () => void                  // recarga el catálogo en el padre
   instituciones: InstitucionComite[]            // dinámicas por región (mig 078)
   onInstitucionesChange: () => void             // recarga la lista de instituciones
+  series: Map<number, { fecha: string; valor: number }[]>  // histórico (sesiones cerradas) por métrica
+  fechas: string[]                                          // TODAS las fechas de sesión cerrada (huecos honestos en el gráfico)
+  fechaSesion: string                                       // fecha de la sesión en curso (punto "esta semana")
+  ejeId: number                                              // para el histórico por desglose (useSerieDesgloseComite en MetricaGraficoCard)
 }
 
 export default function ReporteInstitucionZona({
   sesionId, regionCod, catalogo, valores, onValoresChange, encolar, valoresPrev,
   institucion, currentUserEmail, onCatalogoChange,
-  instituciones, onInstitucionesChange,
+  instituciones, onInstitucionesChange, series, fechas, fechaSesion, ejeId,
 }: Props) {
   const [editModal, setEditModal] = useState<{ metrica: ComiteMetrica | null } | null>(null)
   const [metricasModal, setMetricasModal] = useState(false)
+  const [modo, setModo] = useState<'registro' | 'graficos'>('registro')
 
   // Institución seleccionada segura: si la elegida ya no está en la lista
   // (borrada), cae a la primera (las 4 base siempre están).
@@ -62,10 +69,18 @@ export default function ReporteInstitucionZona({
     .filter(m => m.institucion === instSel && m.activo)
     .sort((a, b) => a.orden - b.orden || a.id - b.id)
   const ordenSugerido = Math.max(0, ...catalogo.filter(m => m.institucion === instSel).map(m => m.orden)) + 1
+  // Métricas de texto no tienen serie numérica que graficar.
+  const filasNumericas = filas.filter(m => m.tipo === 'numerico')
 
   function valorDe(metricaId: number): SesionComiteValor {
-    return valores.find(v => v.metrica_id === metricaId)
-      ?? { id: 0, sesion_id: sesionId, metrica_id: metricaId, valor_num: null, valor_texto: null, observaciones: null, desglose: [] }
+    const existente = valores.find(v => v.metrica_id === metricaId)
+    if (existente) return existente
+    const metrica = catalogo.find(m => m.id === metricaId)
+    return {
+      id: 0, sesion_id: sesionId, metrica_id: metricaId, valor_num: null, valor_texto: null,
+      observaciones: null,
+      desglose: metrica ? desgloseInicial(metrica) : [],
+    }
   }
 
   // Actualiza SOLO el estado local (para inputs controlados / feedback WoW).
@@ -139,6 +154,41 @@ export default function ReporteInstitucionZona({
   // institución las pone la consola (ZonaCard + riel); acá solo va el cuerpo.
   return (
     <div>
+      <div className="mb-3">
+        <Tabs
+          ariaLabel="Modo de la zona de reporte"
+          variant="segmented"
+          value={modo}
+          onChange={k => setModo(k as 'registro' | 'graficos')}
+          items={[
+            { key: 'registro', label: 'Registrar valores' },
+            { key: 'graficos', label: 'Ver métricas y gráficos' },
+          ]}
+        />
+      </div>
+
+      {modo === 'graficos' ? (
+        <div className="space-y-3">
+          {filasNumericas.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">
+              Sin métricas numéricas para graficar en {instLabel}.
+            </p>
+          ) : (
+            filasNumericas.map(m => (
+              <MetricaGraficoCard
+                key={m.id}
+                metrica={m}
+                datos={serieGraficoComite(alinearConTimeline(series.get(m.id) ?? [], fechas), fechaSesion, valorDe(m.id).valor_num)}
+                regionCod={regionCod}
+                ejeId={ejeId}
+                fechas={fechas}
+                fechaSesion={fechaSesion}
+                valorActual={valorDe(m.id)}
+              />
+            ))
+          )}
+        </div>
+      ) : (
       <div className="space-y-3">
         {filas.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-2">
@@ -200,7 +250,10 @@ export default function ReporteInstitucionZona({
                 />
               )}
 
-              {/* Desglose (sub-valores libres) — solo métricas numéricas */}
+              {/* Desglose (sub-valores) — solo métricas numéricas. El botón de
+                  agregar se oculta si la métrica no tiene desglose habilitado
+                  (mig 094); las filas ya existentes (de antes del cambio de
+                  tipo, o desglose libre cargado a mano) se siguen mostrando. */}
               {m.tipo === 'numerico' && (
                 <div className="mt-2">
                   {v.desglose.map((d, i) => (
@@ -227,21 +280,23 @@ export default function ReporteInstitucionZona({
                       </button>
                     </div>
                   ))}
-                  <button
-                    onClick={() => setLocal({ ...valorDe(m.id), desglose: [...valorDe(m.id).desglose, { etiqueta: '', valor: '' }] })}
-                    className="text-[11px] text-violet-700 hover:text-violet-900 font-medium hover:underline"
-                  >
-                    + desglose (sub-valor)
-                  </button>
+                  {m.desglose_tipo !== 'ninguno' && (
+                    <button
+                      onClick={() => setLocal({ ...valorDe(m.id), desglose: [...valorDe(m.id).desglose, { etiqueta: '', valor: '' }] })}
+                      className="text-[11px] text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                    >
+                      + Desglose métrica
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Observaciones (columna del acta: año a la fecha / contexto) */}
+              {/* Observaciones: nota libre sobre ESTE dato puntual, va en el acta */}
               <input
                 key={`obs-${sesionId}-${m.id}`}
                 type="text" defaultValue={v.observaciones ?? ''}
                 onBlur={e => commit({ ...valorDe(m.id), observaciones: e.target.value.trim() || null })}
-                placeholder="Observaciones (año a la fecha, contexto)…"
+                placeholder="Nota sobre este dato, para el acta (opcional)…"
                 className={`${inputCls} mt-2 text-xs py-1.5 bg-white`}
               />
             </div>
@@ -265,6 +320,7 @@ export default function ReporteInstitucionZona({
           </button>
         </div>
       </div>
+      )}
 
       {editModal && (
         <MetricaComiteEditModal

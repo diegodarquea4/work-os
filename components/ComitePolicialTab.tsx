@@ -46,7 +46,7 @@ export default function ComitePolicialTab({ region, eje }: Props) {
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'eje', ejeId: eje.id }, sesionesOn)
   const { catalogo, refresh: refreshCatalogo } = useCatalogoComite(region.cod, sesionesOn)
   const { instituciones, refresh: refreshInstituciones } = useInstitucionesComite(region.cod, sesionesOn)
-  const series = useSeriesComite(region.cod, eje.id, sesionesOn, seriesKey)
+  const { series } = useSeriesComite(region.cod, eje.id, sesionesOn, seriesKey)
 
   if (!sesionesOn) {
     return (

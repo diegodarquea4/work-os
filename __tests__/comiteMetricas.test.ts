@@ -23,6 +23,8 @@ function metrica(over: Partial<ComiteMetrica> & { id: number }): ComiteMetrica {
     activo: true,
     estandar_id: null,
     origen: 'propia',
+    desglose_tipo: 'ninguno',
+    desglose_plantilla: [],
     ...over,
   }
 }

@@ -684,6 +684,14 @@ export type ComiteInstitucionCatalogo = {
 
 // Ítem del catálogo (comite_metrica) — la DEFINICIÓN de una métrica por
 // institución. `numerico` alimenta el seguimiento WoW; `texto` es bloque libre.
+// Ítem de la plantilla de desglose de una métrica (mig 094): `clave` es el
+// identificador ESTABLE para seguir el mismo ítem semana a semana (CUT de
+// comuna como string, nombre de provincia, o la propia etiqueta si es campo
+// libre); `etiqueta` es lo que se muestra. Misma forma sin importar el tipo —
+// la lógica que siembra el desglose al abrir sesión no necesita saber de
+// comunas ni provincias, solo lee esta plantilla.
+export type DesglosePlantillaItem = { clave: string; etiqueta: string }
+
 export type ComiteMetrica = {
   id: number
   region_cod: string
@@ -697,6 +705,11 @@ export type ComiteMetrica = {
   // estándar copiada; origen distingue 'estandar' (adoptada) de 'propia'.
   estandar_id: number | null
   origen: 'estandar' | 'propia'
+  // Desglose predeterminado (mig 094): `desglose_tipo` es metadata de UI (qué
+  // editor mostrar al editar la métrica); `desglose_plantilla` es la fuente de
+  // verdad que efectivamente se siembra en una sesión nueva.
+  desglose_tipo: 'ninguno' | 'comuna' | 'provincia' | 'libre'
+  desglose_plantilla: DesglosePlantillaItem[]
 }
 
 // Ítem del catálogo NACIONAL de métricas estándar (comite_metrica_estandar,
@@ -712,8 +725,11 @@ export type ComiteMetricaEstandar = {
 }
 
 // Sub-valor libre de una métrica (desglose por prefectura, comparación de
-// años, etc.). `valor` es texto para admitir "20%", "833", etc.
-export type ComiteDesglose = { etiqueta: string; valor: string }
+// años, etc.). `valor` es texto para admitir "20%", "833", etc. `clave`
+// (mig 094, opcional) es el identificador estable de la plantilla que sembró
+// esta fila — filas de antes de la plantilla no lo tienen, se comparan por
+// `etiqueta` como fallback (ver `valorDesglosePara` en lib/sesiones/helpers).
+export type ComiteDesglose = { etiqueta: string; valor: string; clave?: string }
 
 // Valor reportado por (sesión × métrica) — hija de eje_sesiones, se sella al
 // cerrar. El desglose viaja como JSONB en la misma fila.

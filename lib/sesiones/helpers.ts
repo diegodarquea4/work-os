@@ -15,7 +15,7 @@
 
 import type {
   EjeSesion, SesionCompromiso, SesionIniciativa, SesionOficioTratado,
-  ComiteInstitucion, ComiteMetrica, SesionComiteValor,
+  ComiteInstitucion, ComiteMetrica, SesionComiteValor, ComiteDesglose,
 } from '@/lib/types'
 
 // Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
@@ -168,6 +168,73 @@ export function formatoValorComite(v: SesionComiteValor | null, m: ComiteMetrica
   if (v?.valor_num == null) return '—'
   const num = v.valor_num.toLocaleString('es-CL')
   return m.unidad ? `${num} ${m.unidad}` : num
+}
+
+/** Punto del gráfico de evolución de una métrica: fecha + valor, con `enCurso`
+ *  cuando es el valor recién digitado en la sesión ABIERTA — todavía no forma
+ *  parte del histórico de sesiones cerradas (`useSeriesComite`), así que hay
+ *  que pintarlo distinto: puede cambiar hasta que se cierre la sesión.
+ *  `valor: null` = semana sin dato para ese ítem (corte real en la línea, ver
+ *  `alinearConTimeline` — nunca se dibuja como cero). */
+export type PuntoGraficoComite = { fecha: string; valor: number | null; enCurso?: boolean }
+
+/**
+ * Alinea una serie dispersa (solo las fechas que SÍ reportaron algo) contra la
+ * lista COMPLETA de fechas de sesión cerrada de la región/eje: la semana sin
+ * dato queda con `valor: null` en vez de desaparecer. Sin esto, un gráfico
+ * "conecta" dos semanas no consecutivas como si no faltara nada entre medio —
+ * confuso sobre todo al filtrar por un ítem del desglose que no siempre se
+ * reporta (una comuna sin novedades esa semana).
+ */
+export function alinearConTimeline(
+  serie: { fecha: string; valor: number }[],
+  fechas: string[],
+): { fecha: string; valor: number | null }[] {
+  const porFecha = new Map(serie.map(p => [p.fecha, p.valor]))
+  return fechas.map(fecha => ({ fecha, valor: porFecha.get(fecha) ?? null }))
+}
+
+/**
+ * Serie histórica YA alineada (con huecos explícitos, `alinearConTimeline`) +
+ * el valor en curso, si ya se digitó algo en la sesión abierta. `historico`
+ * nunca trae la fecha de la sesión abierta (no está cerrada), así que no hay
+ * riesgo de duplicar el punto.
+ */
+export function serieGraficoComite(
+  historico: { fecha: string; valor: number | null }[],
+  fechaSesion: string,
+  valorEnCurso: number | null,
+): PuntoGraficoComite[] {
+  const puntos: PuntoGraficoComite[] = historico.map(p => ({ fecha: p.fecha, valor: p.valor }))
+  if (valorEnCurso != null) puntos.push({ fecha: fechaSesion, valor: valorEnCurso, enCurso: true })
+  return puntos
+}
+
+/**
+ * Desglose inicial de una fila NUEVA (sin reportar aún esta sesión): si la
+ * métrica tiene una plantilla predefinida (mig 094 — comuna/provincia/libre),
+ * se usa como punto de partida (etiquetas y llave listas, valor vacío) — así
+ * el acta-taker no vuelve a escribir "Viña del Mar / Valparaíso / …" cada
+ * semana. Sin plantilla, arreglo vacío (comportamiento de siempre).
+ */
+export function desgloseInicial(metrica: Pick<ComiteMetrica, 'desglose_plantilla'>): ComiteDesglose[] {
+  return metrica.desglose_plantilla.map(p => ({ etiqueta: p.etiqueta, clave: p.clave, valor: '' }))
+}
+
+/**
+ * Valor numérico de un ítem del desglose (por `clave`, con fallback a
+ * `etiqueta` para filas de antes de la plantilla que no tienen `clave`).
+ * Mismo criterio de parseo que el input numérico principal (separador de
+ * miles '.', decimal ','). Sin match, valor vacío o no numérico (ej. "20%",
+ * texto libre) → null — semana sin dato para ESE ítem, nunca cero.
+ */
+export function valorDesglosePara(desglose: ComiteDesglose[], clave: string): number | null {
+  const fila = desglose.find(d => d.clave === clave) ?? desglose.find(d => d.etiqueta === clave)
+  if (!fila) return null
+  const texto = fila.valor.trim().replace(/\./g, '').replace(',', '.')
+  if (texto === '') return null
+  const n = Number(texto)
+  return Number.isFinite(n) ? n : null
 }
 
 // ── Compromisos ──────────────────────────────────────────────────────────────

@@ -3,9 +3,20 @@
 import { useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
-import type { ComiteMetrica } from '@/lib/types'
+import type { ComiteMetrica, DesglosePlantillaItem } from '@/lib/types'
 import { COMITE_INSTITUCIONES } from '@/lib/sesiones/helpers'
+import { comunasDeRegion } from '@/lib/comunas'
+import { provinciasDeRegion } from '@/lib/provincias'
 import { Alert } from '@/components/ui'
+
+type DesgloseTipo = ComiteMetrica['desglose_tipo']
+
+const DESGLOSE_TIPO_LABEL: Record<DesgloseTipo, string> = {
+  ninguno: 'Ninguno',
+  comuna: 'Por comuna',
+  provincia: 'Por provincia',
+  libre: 'Campo libre',
+}
 
 /**
  * Editor de la DEFINICIÓN de un ítem del catálogo por institución
@@ -36,6 +47,10 @@ export default function MetricaComiteEditModal({
   const [nombre, setNombre]   = useState(metrica?.nombre ?? '')
   const [tipo, setTipo]       = useState<'numerico' | 'texto'>(metrica?.tipo ?? 'numerico')
   const [unidad, setUnidad]   = useState(metrica?.unidad ?? '')
+  const [desgloseTipo, setDesgloseTipo] = useState<DesgloseTipo>(metrica?.desglose_tipo ?? 'ninguno')
+  const [etiquetasLibres, setEtiquetasLibres] = useState<string[]>(
+    metrica?.desglose_tipo === 'libre' ? metrica.desglose_plantilla.map(p => p.etiqueta) : [],
+  )
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState<string | null>(null)
 
@@ -44,6 +59,24 @@ export default function MetricaComiteEditModal({
   const instLabel = institucionLabel ?? COMITE_INSTITUCIONES.find(i => i.key === institucion)?.label ?? institucion
 
   function handleClose() { if (!saving) onClose() }
+
+  // Plantilla de desglose (mig 094): SIEMPRE {clave, etiqueta}[], sin importar
+  // el tipo — comuna/provincia se resuelven contra el catálogo de la región en
+  // este momento (snapshot; no se recalcula después si el catálogo cambiara),
+  // libre usa lo que el usuario tipeó. Ninguno/tipo texto → [].
+  function resolverPlantilla(): DesglosePlantillaItem[] {
+    if (tipo !== 'numerico') return []
+    if (desgloseTipo === 'comuna') {
+      return comunasDeRegion(regionCod).map(c => ({ clave: String(c.cut), etiqueta: c.nombre }))
+    }
+    if (desgloseTipo === 'provincia') {
+      return provinciasDeRegion(regionCod).map(nombre => ({ clave: nombre, etiqueta: nombre }))
+    }
+    if (desgloseTipo === 'libre') {
+      return etiquetasLibres.map(e => e.trim()).filter(Boolean).map(e => ({ clave: e, etiqueta: e }))
+    }
+    return []
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -54,6 +87,8 @@ export default function MetricaComiteEditModal({
       nombre: nombre.trim(),
       tipo,
       unidad: tipo === 'numerico' ? (unidad.trim() || null) : null,
+      desglose_tipo: tipo === 'numerico' ? desgloseTipo : 'ninguno',
+      desglose_plantilla: resolverPlantilla(),
     }
     try {
       if (isEdit) {
@@ -150,6 +185,59 @@ export default function MetricaComiteEditModal({
             </div>
           )}
 
+          {tipo === 'numerico' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Desglose predeterminado</label>
+              <p className="text-[11px] text-slate-500 mb-1.5">
+                Etiquetas que van a aparecer ya listas para completar en cada sesión (ej. una fila por comuna).
+                El valor se escribe cada semana; esto solo predefine los nombres.
+              </p>
+              <div className="flex flex-wrap items-center gap-1 border border-slate-200 rounded-lg p-0.5 w-fit">
+                {(['ninguno', 'comuna', 'provincia', 'libre'] as DesgloseTipo[]).map(t => (
+                  <button
+                    key={t} type="button" onClick={() => setDesgloseTipo(t)}
+                    className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${desgloseTipo === t ? 'bg-slate-200 text-slate-800' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    {DESGLOSE_TIPO_LABEL[t]}
+                  </button>
+                ))}
+              </div>
+
+              {desgloseTipo === 'comuna' && (
+                <PreviewCatalogo etiquetas={comunasDeRegion(regionCod).map(c => c.nombre)} sustantivo="comunas" />
+              )}
+              {desgloseTipo === 'provincia' && (
+                <PreviewCatalogo etiquetas={provinciasDeRegion(regionCod)} sustantivo="provincias" />
+              )}
+              {desgloseTipo === 'libre' && (
+                <div className="mt-2 space-y-1">
+                  {etiquetasLibres.map((etq, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <input
+                        type="text" value={etq}
+                        onChange={e => setEtiquetasLibres(arr => arr.map((x, k) => k === i ? e.target.value : x))}
+                        placeholder="Etiqueta (ej. Total región)"
+                        className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                      />
+                      <button
+                        type="button" onClick={() => setEtiquetasLibres(arr => arr.filter((_, k) => k !== i))}
+                        className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0" title="Quitar etiqueta"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button" onClick={() => setEtiquetasLibres(arr => [...arr, ''])}
+                    className="text-[11px] text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                  >
+                    + agregar etiqueta
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {error && <Alert variant="error">{error}</Alert>}
 
           <div className="flex gap-2 pt-1">
@@ -171,5 +259,18 @@ export default function MetricaComiteEditModal({
         </form>
       </div>
     </div>
+  )
+}
+
+// Vista de solo lectura del catálogo que se va a copiar como plantilla
+// (comuna/provincia): confirma el alcance sin obligar a leer los N nombres.
+function PreviewCatalogo({ etiquetas, sustantivo }: { etiquetas: string[]; sustantivo: string }) {
+  const visibles = etiquetas.slice(0, 6)
+  const resto = etiquetas.length - visibles.length
+  return (
+    <p className="mt-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2">
+      Se va a desglosar por las <strong>{etiquetas.length} {sustantivo}</strong> de la región: {visibles.join(', ')}
+      {resto > 0 ? `, +${resto} más` : ''}.
+    </p>
   )
 }

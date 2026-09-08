@@ -28,7 +28,7 @@ import {
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
-import { useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
+import { useInstitucionesComite, useSeriesComite } from '@/lib/hooks/useComiteMetricas'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import MegaproyectoGroup from './MegaproyectoGroup'
 import CapturaSalaGabinete from './gabinete/CapturaSalaGabinete'
@@ -185,6 +185,10 @@ export default function SesionModal(props: Props) {
   // Instituciones que reportan (mig 078) — dinámicas por región (4 base + propias).
   const { instituciones: comiteInstituciones, refresh: reloadComiteInstituciones } =
     useInstitucionesComite(region.cod, props.instancia === 'eje')
+  // Histórico (sesiones cerradas) por métrica, para "Ver métricas y gráficos"
+  // dentro de la zona de reporte — la sesión en curso se suma aparte con el
+  // valor todavía sin cerrar (serieGraficoComite en ReporteInstitucionZona).
+  const { series: seriesComite, fechas: fechasComite } = useSeriesComite(region.cod, eje?.id ?? 0, props.instancia === 'eje' && !!eje)
   // Zona 4 gabinete: apuntes por institución (el comité ya no usa esta zona).
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
   const encolarApunte = useRef(crearColaPorClave<string>()).current
@@ -1212,6 +1216,10 @@ export default function SesionModal(props: Props) {
                     onCatalogoChange={reloadComiteCatalogo}
                     instituciones={comiteInstituciones}
                     onInstitucionesChange={reloadComiteInstituciones}
+                    series={seriesComite}
+                    fechas={fechasComite}
+                    fechaSesion={sesion.fecha}
+                    ejeId={eje?.id ?? 0}
                   />
                 </ZonaCard>
               )}
