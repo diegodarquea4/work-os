@@ -273,52 +273,73 @@ function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
 // "+" para dejar un avance rápido en un proyecto/iniciativa de la cartera
 // desde dentro de la sesión (proyectos tratados, oficios, compromisos) —
 // mismo estilo liviano que agregar un avance en la ficha del proyecto.
-function AgregarAvanceInline({ onSubmit }: { onSubmit: (texto: string) => Promise<void> }) {
+function AgregarAvanceInline({
+  onSubmit, avancesPrevios = [],
+}: {
+  onSubmit: (texto: string) => Promise<void>
+  /** Avances ya guardados EN ESTA SESIÓN para este proyecto/iniciativa — se
+   * siguen mostrando acá aunque el form se cierre, para que quede constancia
+   * de que quedaron sumados al historial del proyecto (no solo en la BD). */
+  avancesPrevios?: { texto: string; fecha: string }[]
+}) {
   const [open, setOpen]     = useState(false)
   const [texto, setTexto]   = useState('')
   const [saving, setSaving] = useState(false)
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-gray-300 hover:text-violet-600 p-0.5 flex-shrink-0"
-        title="Agregar un avance a este proyecto"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
-        </svg>
-      </button>
-    )
-  }
   return (
     <div className="mt-1.5 space-y-1.5">
-      <textarea
-        autoFocus
-        value={texto}
-        onChange={e => setTexto(e.target.value)}
-        rows={2}
-        placeholder="Avance para este proyecto…"
-        className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
-      />
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={() => { setOpen(false); setTexto('') }} className="text-xs text-gray-400 hover:text-gray-600">
-          Cancelar
-        </button>
+      {avancesPrevios.length > 0 && (
+        <div className="space-y-1">
+          {avancesPrevios.map((a, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-gray-600 bg-violet-50/60 border border-violet-100 rounded px-2 py-1">
+              <span className="text-violet-400 flex-shrink-0">✓</span>
+              <span className="flex-1">{a.texto}</span>
+              <span className="text-gray-400 flex-shrink-0">{fmtFecha(a.fecha)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open ? (
+        <div className="space-y-1.5">
+          <textarea
+            autoFocus
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            rows={2}
+            placeholder="Avance para este proyecto…"
+            className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => { setOpen(false); setTexto('') }} className="text-xs text-gray-400 hover:text-gray-600">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setSaving(true)
+                await onSubmit(texto.trim())
+                setSaving(false); setOpen(false); setTexto('')
+              }}
+              disabled={saving || !texto.trim()}
+              className="text-xs px-3 py-1 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
+            >
+              {saving ? 'Guardando…' : 'Guardar avance'}
+            </button>
+          </div>
+        </div>
+      ) : (
         <button
           type="button"
-          onClick={async () => {
-            setSaving(true)
-            await onSubmit(texto.trim())
-            setSaving(false); setOpen(false); setTexto('')
-          }}
-          disabled={saving || !texto.trim()}
-          className="text-xs px-3 py-1 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-violet-600"
+          title="Agregar un avance a este proyecto"
         >
-          {saving ? 'Guardando…' : 'Guardar avance'}
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+          </svg>
+          {avancesPrevios.length > 0 ? 'Agregar otro avance' : 'Agregar avance'}
         </button>
-      </div>
+      )}
     </div>
   )
 }
@@ -345,6 +366,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
+  // Avances agregados en ESTA sesión desde cualquier fila de la cartera
+  // (proyectos tratados, oficios, compromisos) — clave = claveCartera(row).
+  // Se muestran de inmediato aunque ya hayan quedado guardados en la BD.
+  const [avancesSesion, setAvancesSesion]     = useState<Map<string, { texto: string; fecha: string }[]>>(new Map())
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -793,12 +818,25 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     return { nombre: '—', tag: null, tieneFicha: false }
   }
 
+  // Clave del mapa de avances agregados en ESTA sesión (para volver a
+  // mostrarlos inline tras guardar — ver avancesSesion más abajo).
+  function claveCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }): string | null {
+    if (row.proyecto_privado_id != null) return `priv-${row.proyecto_privado_id}`
+    if (row.prioridad_id != null) return `pub-${row.prioridad_id}`
+    return null
+  }
+
   // "+" en cualquier fila de la cartera (proyecto tratado, oficio, o
   // compromiso) — agrega un avance REAL al proyecto/iniciativa (no una nota
   // aislada de la sesión): comite_economico_proyecto_seguimiento si es
-  // privado, seguimientos si es pública, para que quede en su propio
-  // historial de avances.
+  // privado, seguimientos si es pública (con nombre "Avance Comité
+  // Económico" para distinguirlo de otros avances de la iniciativa), para
+  // que quede en su propio historial de avances. `avancesSesion` guarda una
+  // copia local para poder mostrarlos de inmediato dentro de la sesión —
+  // si no, quedaban guardados pero invisibles hasta reabrir la ficha.
   async function agregarAvanceCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }, texto: string) {
+    const clave = claveCartera(row)
+    if (!clave) return
     try {
       if (row.proyecto_privado_id != null) {
         await safeWrite(
@@ -814,6 +852,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
           getSupabase().from('seguimientos').insert({
             prioridad_id: row.prioridad_id,
             tipo: 'avance',
+            nombre: 'Avance Comité Económico',
             descripcion: texto,
             autor: currentUserEmail || null,
             asistentes: [],
@@ -821,6 +860,11 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
           `seguimientos insert (sesion) prioridad=${row.prioridad_id}`,
         )
       }
+      setAvancesSesion(prev => {
+        const next = new Map(prev)
+        next.set(clave, [...(next.get(clave) ?? []), { texto, fecha: hoyISO() }])
+        return next
+      })
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -1197,7 +1241,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                             {tagProy} · {nombreProy}
                           </button>
                         )}
-                        {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} />}
+                        {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} avancesPrevios={avancesSesion.get(claveCartera(c) ?? '') ?? []} />}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {(Object.keys(ESTADO_COMPROMISO) as (keyof typeof ESTADO_COMPROMISO)[]).map(est => (
@@ -1460,7 +1504,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   </svg>
                                 </button>
                               </div>
-                              {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(sp, texto)} />}
+                              {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(sp, texto)} avancesPrevios={avancesSesion.get(claveCartera(sp) ?? '') ?? []} />}
                             </div>
                           )
                         })}
@@ -1532,7 +1576,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   placeholder="Nota (ej: por qué sigue pendiente)…"
                                   className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300"
                                 />
-                                {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} />}
+                                {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} avancesPrevios={avancesSesion.get(claveCartera(o) ?? '') ?? []} />}
                               </div>
                               )
                             })}
@@ -1634,7 +1678,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                     <p className="text-[11px] text-gray-400 truncate">
                                       {o.oaeca?.nombre ?? '—'}{o.fecha_limite ? ` · límite ${fmtFecha(o.fecha_limite)}` : ''}
                                     </p>
-                                    {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} />}
+                                    {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(o, texto)} avancesPrevios={avancesSesion.get(claveCartera(o) ?? '') ?? []} />}
                                   </div>
                                   )
                                 })}
@@ -1676,7 +1720,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           {tagProy} · {nombreProy}
                         </button>
                       )}
-                      {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} />}
+                      {tieneFicha && <AgregarAvanceInline onSubmit={texto => agregarAvanceCartera(c, texto)} avancesPrevios={avancesSesion.get(claveCartera(c) ?? '') ?? []} />}
                     </div>
                     )
                   })}
