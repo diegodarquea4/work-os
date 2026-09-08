@@ -38,8 +38,7 @@ type Props = {
   onValoresChange: Dispatch<SetStateAction<SesionComiteValor[]>>  // setter del padre
   encolar: ColaPorClave<number>                                   // cola por métrica, creada en el padre
   valoresPrev: Map<number, SesionComiteValor>   // WoW: sesión cerrada anterior
-  institucion: string                           // institución activa (la elige el riel / las tabs)
-  onInstitucionChange: (key: string) => void
+  institucion: string                           // institución activa (la elige el riel de la consola)
   currentUserEmail: string
   onCatalogoChange: () => void                  // recarga el catálogo en el padre
   instituciones: InstitucionComite[]            // dinámicas por región (mig 078)
@@ -48,7 +47,7 @@ type Props = {
 
 export default function ReporteInstitucionZona({
   sesionId, regionCod, catalogo, valores, onValoresChange, encolar, valoresPrev,
-  institucion, onInstitucionChange, currentUserEmail, onCatalogoChange,
+  institucion, currentUserEmail, onCatalogoChange,
   instituciones, onInstitucionesChange,
 }: Props) {
   const [editModal, setEditModal] = useState<{ metrica: ComiteMetrica | null } | null>(null)
@@ -136,35 +135,11 @@ export default function ReporteInstitucionZona({
 
   const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 
+  // La cabecera de la zona («3 · Reporte por institución») y la elección de
+  // institución las pone la consola (ZonaCard + riel); acá solo va el cuerpo.
   return (
-    <section className="border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2">
-        <span className="w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
-        <h3 className="text-sm font-semibold text-gray-800">Reporte por institución</h3>
-      </div>
-
-      {/* Sub-tabs de institución (dinámicas por región, mig 078) */}
-      <div className="flex flex-wrap gap-1 px-3 pt-3">
-        {instituciones.map(i => {
-          const activa = instSel === i.key
-          const conDato = catalogo.some(m => m.institucion === i.key && m.activo && tieneValorComite(valores.find(v => v.metrica_id === m.id) ?? null))
-          return (
-            <button
-              key={i.key}
-              onClick={() => onInstitucionChange(i.key)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
-                activa ? 'bg-violet-700 text-white'
-                  : conDato ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {i.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="p-3 space-y-3">
+    <div>
+      <div className="space-y-3">
         {filas.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-2">
             Sin métricas para {instLabel}. Agrega la primera con “+ métrica”.
@@ -313,7 +288,7 @@ export default function ReporteInstitucionZona({
           onSaved={() => { onCatalogoChange(); onInstitucionesChange() }}
         />
       )}
-    </section>
+    </div>
   )
 }
 
