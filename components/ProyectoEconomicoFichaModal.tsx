@@ -7,7 +7,7 @@ import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEconomicoProyectoSeguimiento, PasCatalogo } from '@/lib/types'
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 
@@ -29,10 +29,10 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
  *     máximo 5 visibles, el resto tras "Ver más" — ver PermisoBitacoraCard.
  *
  * Los avances se crean SOLO acá. La sesión del comité no tiene formulario
- * propio: su «Agregar avance» abre esta ficha con el form desplegado
- * (`abrirFormAvance`). Tenerlo en un solo lugar evita el desfase que había
- * cuando la sesión guardaba su propia copia — al borrar un avance acá, allá
- * seguía apareciendo.
+ * propio: su «Agregar avance» abre esta misma ficha (sin saltar directo al
+ * form — primero el detalle, tal como pidió Diego). Tenerlo en un solo lugar
+ * evita el desfase que había cuando la sesión guardaba su propia copia — al
+ * borrar un avance acá, allá seguía apareciendo.
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
@@ -45,13 +45,6 @@ type Props = {
   onClose: () => void
   /** Refresca la lista del llamador (nombre/campos pueden haber cambiado). */
   onChanged?: () => void
-  /**
-   * Abre directo con el formulario de avance desplegado. Lo usa el
-   * «+ Agregar avance» de la agenda de la sesión: en vez de tener un form
-   * propio allá (que duplicaba el registro y se desincronizaba al borrar
-   * acá), la sesión trae al usuario a esta ficha con el form abierto.
-   */
-  abrirFormAvance?: boolean
   /**
    * Sesión desde la que se abrió la ficha (mig 101). Los avances que se creen
    * quedan marcados con ella y el acta de esa sesión los reporta bajo su
@@ -84,7 +77,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, abrirFormAvance = false, sesionId = null }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
@@ -115,7 +108,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [fInstitucion, setFInstitucion] = useState<Set<string>>(new Set())
   const [fMinisterio, setFMinisterio]   = useState<Set<string>>(new Set())
 
-  const [showForm, setShowForm]                   = useState(abrirFormAvance && puedeOperar)
+  const [showForm, setShowForm]                   = useState(false)
   const [avanceFecha, setAvanceFecha]             = useState(hoyISO)
   const [avanceDescripcion, setAvanceDescripcion] = useState('')
   // Permiso asociado (opcional) — el único cambio de estado posible en un
@@ -894,7 +887,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
 
                 {editable && (
                   <button
-                    onClick={() => setShowForm(v => !v)}
+                    onClick={() => setShowForm(true)}
                     className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-slate-300 hover:text-slate-500 transition-colors mb-5"
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
@@ -904,8 +897,26 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   </button>
                 )}
 
-                {showForm && (
-                  <div className="bg-gray-50 rounded-xl p-3 space-y-2.5 mb-4">
+                <Modal
+                  open={showForm}
+                  onClose={resetAvanceForm}
+                  title="Agregar actualización"
+                  size="lg"
+                  dismissable={!avanceSaving}
+                  footer={
+                    <>
+                      <button onClick={resetAvanceForm} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancelar</button>
+                      <button
+                        onClick={agregarAvance}
+                        disabled={avanceSaving || !avanceDescripcion.trim()}
+                        className="text-sm bg-violet-700 text-white px-4 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                      >
+                        {avanceSaving ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    </>
+                  }
+                >
+                  <div className="space-y-2.5">
                     <div className="flex items-center gap-2">
                       <select
                         value={avancePermisoId}
@@ -940,18 +951,8 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                     {currentUserEmail && (
                       <p className="text-xs text-gray-400">Se registrará a tu nombre: <span className="font-mono">{currentUserEmail}</span></p>
                     )}
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={resetAvanceForm} className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1.5">Cancelar</button>
-                      <button
-                        onClick={agregarAvance}
-                        disabled={avanceSaving || !avanceDescripcion.trim()}
-                        className="text-sm bg-violet-700 text-white px-4 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
-                      >
-                        {avanceSaving ? 'Guardando…' : 'Guardar'}
-                      </button>
-                    </div>
                   </div>
-                )}
+                </Modal>
 
                 {avanceItems.length === 0 ? (
                   <EmptyState

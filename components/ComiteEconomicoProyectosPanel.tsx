@@ -363,9 +363,9 @@ export default function ComiteEconomicoProyectosPanel({
               {proyectos.length === 0 ? 'Sin proyectos privados cargados todavía.' : 'Ningún proyecto calza con los filtros.'}
             </p>
           ) : (
-            <div className="overflow-x-auto -mx-4 px-4">
+            <div className="overflow-x-auto overflow-y-auto max-h-[65vh] -mx-4 px-4">
               <table className="w-full text-xs border-collapse min-w-[820px]">
-                <thead>
+                <thead className="sticky top-0 bg-white z-[1]">
                   <tr className="border-b border-gray-200 text-gray-500">
                     <th className="text-left font-semibold py-1.5 pr-3">Nombre</th>
                     <th className="text-left font-semibold py-1.5 pr-3">Plazo</th>
@@ -422,7 +422,7 @@ export default function ComiteEconomicoProyectosPanel({
               Ninguna iniciativa tiene la etiqueta &quot;{TAG_ECONOMICO}&quot; todavía — agrégala desde su ficha.
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 overflow-y-auto max-h-[65vh] -mx-1 px-1">
               {iniciativasCER.map(p => (
                 <IniciativaCard key={p.id} p={p} onClick={() => onAbrirIniciativa(p)} />
               ))}

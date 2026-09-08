@@ -314,8 +314,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
-  // La ficha se abrió desde «Agregar avance»: entra con el form desplegado.
-  const [fichaConAvance, setFichaConAvance]   = useState(false)
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -761,11 +759,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // forma (proyecto_privado_id / prioridad_id) desde mig 094/095/097.
   function abrirFichaCartera(
     row: { proyecto_privado_id?: number | null; prioridad_id?: number | null },
-    opts: { avance?: boolean } = {},
   ) {
     if (row.proyecto_privado_id != null) {
       setFichaPrivadoId(row.proyecto_privado_id)
-      setFichaConAvance(!!opts.avance)
       return
     }
     if (row.prioridad_id != null) {
@@ -1417,7 +1413,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         {proyectosSesion.length === 0 ? (
                           <p className="text-xs text-gray-500 text-center py-2">Sin proyectos tratados en esta sesión.</p>
                         ) : (
-                          <div className="space-y-2 pt-1">
+                          <div className="grid grid-cols-2 gap-2 pt-1">
                             {proyectosSesion.map(sp => {
                               const { nombre, tieneFicha } = resolverCartera(sp, proyectosInfo.get(sp.proyecto_id ?? '')?.nombre)
                               return (
@@ -1441,9 +1437,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   {tieneFicha && (
                                     <button
                                       type="button"
-                                      onClick={() => abrirFichaCartera(sp, { avance: true })}
+                                      onClick={() => abrirFichaCartera(sp)}
                                       className="mt-1.5 flex items-center gap-1 text-[11px] text-gray-400 hover:text-violet-600"
-                                      title="Abre la ficha del proyecto con el formulario de avance listo"
+                                      title="Abre la ficha del proyecto para agregar un avance"
                                     >
                                       <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
                                         <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
@@ -1751,9 +1747,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         proyectoId={fichaPrivadoId}
         puedeOperar={true}
         currentUserEmail={currentUserEmail}
-        abrirFormAvance={fichaConAvance}
         sesionId={sesion?.id ?? null}
-        onClose={() => { setFichaPrivadoId(null); setFichaConAvance(false) }}
+        onClose={() => setFichaPrivadoId(null)}
       />
     )}
     </>
