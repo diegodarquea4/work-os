@@ -316,6 +316,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [pkFSeremi, setPkFSeremi]         = useState<Set<string>>(new Set())
   const [pkFRiesgo, setPkFRiesgo]         = useState<Set<string>>(new Set())
   const [pkFEstado, setPkFEstado]         = useState<Set<string>>(new Set())
+  // Buscador por nombre del picker privado. Busca sobre TODA la cartera, no
+  // sobre lo que dejaron los filtros: si alguien escribe el nombre de un
+  // proyecto, quiere ese proyecto aunque los filtros lo estén dejando fuera.
+  const [pkQuery, setPkQuery]             = useState('')
   // Proyectos y Oficios ya no se colapsan: son dos sub-zonas del riel.
 
   // Alta de oficio nuevo (Seguimiento de la Inversión) — proyecto que
@@ -909,7 +913,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     for (const p of proyectosPrivadosDisponibles) if (p.estado_actual) vistos.add(p.estado_actual)
     return [...vistos].sort().map(v => ({ value: v, label: v }))
   }, [proyectosPrivadosDisponibles])
+  // Buscar por nombre CORTOCIRCUITA los filtros: quien escribe un nombre
+  // quiere ese proyecto, no el que sobrevivió a los cinco popovers (y el
+  // filtro Priorizado viene encendido por defecto, así que sin esto buscar un
+  // proyecto no priorizado no devolvía nada y parecía que no existía).
+  const pkBuscando = pkQuery.trim().length > 0
   const proyectosPrivadosFiltrados = useMemo(() => {
+    const q = pkQuery.trim().toLowerCase()
+    if (q) return proyectosPrivadosDisponibles.filter(p => p.nombre.toLowerCase().includes(q))
     let list = proyectosPrivadosDisponibles
     if (pkFPlazo.size)      list = list.filter(p => p.plazo && pkFPlazo.has(p.plazo))
     if (pkFPriorizado.size) list = list.filter(p => pkFPriorizado.has(p.priorizado ? 'Si' : 'No'))
@@ -917,7 +928,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     if (pkFRiesgo.size)     list = list.filter(p => pkFRiesgo.has(p.riesgo ? 'Si' : 'No'))
     if (pkFEstado.size)     list = list.filter(p => p.estado_actual && pkFEstado.has(p.estado_actual))
     return list
-  }, [proyectosPrivadosDisponibles, pkFPlazo, pkFPriorizado, pkFSeremi, pkFRiesgo, pkFEstado])
+  }, [proyectosPrivadosDisponibles, pkQuery, pkFPlazo, pkFPriorizado, pkFSeremi, pkFRiesgo, pkFEstado])
   const pkChips = [
     setChip('Plazo', pkFPlazo, () => setPkFPlazo(new Set())),
     setChip('Priorizado', pkFPriorizado, () => setPkFPriorizado(new Set())),
@@ -990,6 +1001,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       header={headerContenido}
       rail={<ConsolaRail items={rail} activo={activa} onSelect={irA} />}
       railMovil={<ConsolaRail items={rail} activo={activa} onSelect={irA} orientacion="horizontal" />}
+      // Seguimiento es la zona con más contenido (picker + lista + oficios):
+      // se le da el ancho grande, igual que el reporte del Policial.
+      mainMaxWidth={activa.zona === 'seguimiento' ? 'max-w-6xl' : 'max-w-5xl'}
       onEscape={fase === 'cierre' ? () => setFase('sala') : onClose}
       escapeDeshabilitado={cerrando}
       overlay={fase === 'cierre' && sesion ? (
@@ -1286,19 +1300,50 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         </div>
                         {pickerVista === 'privado' ? (
                           <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <FilterPopover label="Plazo" options={[{ value: 'CP', label: 'Corto plazo' }, { value: 'MP', label: 'Mediano plazo' }, { value: 'LP', label: 'Largo plazo' }]} selected={pkFPlazo} onChange={setPkFPlazo} />
-                              <FilterPopover label="Priorizado" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFPriorizado} onChange={setPkFPriorizado} />
-                              <FilterPopover label="SEREMI líder" options={pkOpcionesSeremi} selected={pkFSeremi} onChange={setPkFSeremi} />
-                              <FilterPopover label="Riesgo" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFRiesgo} onChange={setPkFRiesgo} />
-                              <FilterPopover label="Estado actual" options={pkOpcionesEstado} selected={pkFEstado} onChange={setPkFEstado} />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={pkQuery}
+                                onChange={e => setPkQuery(e.target.value)}
+                                placeholder="Buscar proyecto por nombre en toda la cartera…"
+                                className={`${inputCls} w-full pr-8`}
+                              />
+                              {pkQuery && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPkQuery('')}
+                                  title="Limpiar la búsqueda"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                    <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+                                  </svg>
+                                </button>
+                              )}
                             </div>
-                            {pkChips.length > 0 && <ActiveFiltersBar chips={pkChips} clearFilters={clearPkFiltros} />}
+                            {/* Mientras se busca, los filtros quedan fuera de juego: la
+                                búsqueda corre sobre toda la cartera. */}
+                            {!pkBuscando && (
+                              <>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <FilterPopover label="Plazo" options={[{ value: 'CP', label: 'Corto plazo' }, { value: 'MP', label: 'Mediano plazo' }, { value: 'LP', label: 'Largo plazo' }]} selected={pkFPlazo} onChange={setPkFPlazo} />
+                                  <FilterPopover label="Priorizado" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFPriorizado} onChange={setPkFPriorizado} />
+                                  <FilterPopover label="SEREMI líder" options={pkOpcionesSeremi} selected={pkFSeremi} onChange={setPkFSeremi} />
+                                  <FilterPopover label="Riesgo" options={[{ value: 'Si', label: 'Sí' }, { value: 'No', label: 'No' }]} selected={pkFRiesgo} onChange={setPkFRiesgo} />
+                                  <FilterPopover label="Estado actual" options={pkOpcionesEstado} selected={pkFEstado} onChange={setPkFEstado} />
+                                </div>
+                                {pkChips.length > 0 && <ActiveFiltersBar chips={pkChips} clearFilters={clearPkFiltros} />}
+                              </>
+                            )}
                             {proyectosPrivadosFiltrados.length === 0 ? (
-                              <p className="text-xs text-gray-500 text-center py-2">Ningún proyecto privado calza con los filtros.</p>
+                              <p className="text-xs text-gray-500 text-center py-2">
+                                {pkBuscando
+                                  ? `Ningún proyecto de la cartera contiene «${pkQuery.trim()}».`
+                                  : 'Ningún proyecto privado calza con los filtros.'}
+                              </p>
                             ) : (
                               <div className="space-y-1">
-                                {proyectosPrivadosFiltrados.slice(0, 5).map(p => (
+                                {proyectosPrivadosFiltrados.slice(0, 10).map(p => (
                                   <button
                                     key={p.id}
                                     type="button"
@@ -1313,8 +1358,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                 ))}
                               </div>
                             )}
-                            {proyectosPrivadosFiltrados.length > 5 && (
-                              <p className="text-[10px] text-gray-400">Mostrando 5 de {proyectosPrivadosFiltrados.length} — usa los filtros para acotar.</p>
+                            {proyectosPrivadosFiltrados.length > 10 && (
+                              <p className="text-[10px] text-gray-400">
+                                Mostrando 10 de {proyectosPrivadosFiltrados.length} — {pkBuscando ? 'afina la búsqueda' : 'busca por nombre o usa los filtros'} para acotar.
+                              </p>
                             )}
                           </div>
                         ) : (
