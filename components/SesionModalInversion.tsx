@@ -41,7 +41,11 @@ import CierreSesionComite from './sesiones/CierreSesionComite'
  *      secciones o generales, fuera de ambas
  *   3. Seguimiento de la Inversión, con dos sub-zonas en el riel:
  *      3a. Proyectos tratados en profundidad (cartera del comité: privados
- *          + iniciativas públicas con el tag CER)
+ *          + iniciativas públicas con el tag CER). La lista de arriba es la
+ *          selección —los ya agendados quedan marcados, no escondidos— y
+ *          cada proyecto de la agenda admite avances rápidos, que aterrizan
+ *          en el historial REAL del proyecto (sin permiso asociado: eso se
+ *          elige en la ficha, que es donde los permisos están a la vista)
  *      3b. Oficios — anteriores (verificación) y nuevos (alta directa:
  *          OAECA + fecha límite + proyecto; no hay import de Excel)
  *   4. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
@@ -288,6 +292,78 @@ function ComboboxProyectoEconomico<T extends { id: number; nombre: string }>({
   )
 }
 
+// "+" para dejar un avance en un proyecto de la agenda sin salir de la sesión.
+// El avance es REAL (va al historial del proyecto, no es una nota suelta de la
+// sesión) y admite varios seguidos: los ya guardados se siguen mostrando acá
+// arriba para que quede constancia de que quedaron sumados.
+function AgregarAvanceInline({
+  onSubmit, avancesPrevios = [],
+}: {
+  onSubmit: (texto: string) => Promise<void>
+  avancesPrevios?: { texto: string; fecha: string }[]
+}) {
+  const [open, setOpen]     = useState(false)
+  const [texto, setTexto]   = useState('')
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      {avancesPrevios.length > 0 && (
+        <div className="space-y-1">
+          {avancesPrevios.map((a, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-gray-600 bg-violet-50/60 border border-violet-100 rounded px-2 py-1">
+              <span className="text-violet-400 flex-shrink-0">✓</span>
+              <span className="flex-1">{a.texto}</span>
+              <span className="text-gray-400 flex-shrink-0">{fmtFecha(a.fecha)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open ? (
+        <div className="space-y-1.5">
+          <textarea
+            autoFocus
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            rows={2}
+            placeholder="Avance para este proyecto…"
+            className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-y"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => { setOpen(false); setTexto('') }} className="text-xs text-gray-400 hover:text-gray-600">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setSaving(true)
+                await onSubmit(texto.trim())
+                setSaving(false); setOpen(false); setTexto('')
+              }}
+              disabled={saving || !texto.trim()}
+              className="text-xs px-3 py-1 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800 disabled:opacity-40"
+            >
+              {saving ? 'Guardando…' : 'Guardar avance'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-violet-600"
+          title="Agregar un avance a este proyecto"
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M7 2v10M2 7h10" strokeLinecap="round"/>
+          </svg>
+          {avancesPrevios.length > 0 ? 'Agregar otro avance' : 'Agregar avance'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function SesionModalInversion({ region, borradorId, currentUserEmail, iniciativas, onAbrirIniciativa, onVerProyectos, onClose }: Props) {
   const [sesion, setSesion]         = useState<EjeSesion | null>(null)
   const [initError, setInitError]   = useState<string | null>(null)
@@ -310,6 +386,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
+  // Avances agregados en ESTA sesión, por proyecto de la agenda (clave =
+  // claveCartera). Ya quedaron guardados en el historial del proyecto; esta
+  // copia local es para poder mostrarlos de inmediato sin re-consultar.
+  const [avancesSesion, setAvancesSesion]     = useState<Map<string, { texto: string; fecha: string }[]>>(new Map())
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -777,6 +857,53 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     return { nombre: '—', tag: null, tieneFicha: false }
   }
 
+  // Clave del mapa de avances agregados en esta sesión.
+  function claveCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }): string | null {
+    if (row.proyecto_privado_id != null) return `priv-${row.proyecto_privado_id}`
+    if (row.prioridad_id != null) return `pub-${row.prioridad_id}`
+    return null
+  }
+
+  // Avance rápido desde la agenda de la sesión. Escribe en el historial REAL
+  // del proyecto —comite_economico_proyecto_seguimiento si es privado,
+  // seguimientos si es una iniciativa pública—, no en una nota aparte de la
+  // sesión. Sin permiso asociado: en la ficha se lee como avance general (el
+  // vínculo con un permiso se elige ahí, que es donde están a la vista).
+  async function agregarAvanceCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }, texto: string) {
+    const clave = claveCartera(row)
+    if (!clave || !texto) return
+    try {
+      if (row.proyecto_privado_id != null) {
+        await safeWrite(
+          getSupabase().from('comite_economico_proyecto_seguimiento').insert({
+            proyecto_id: row.proyecto_privado_id,
+            descripcion: texto,
+            autor: currentUserEmail || null,
+          }),
+          `comite_economico_proyecto_seguimiento insert (sesion) proyecto=${row.proyecto_privado_id}`,
+        )
+      } else if (row.prioridad_id != null) {
+        await safeWrite(
+          getSupabase().from('seguimientos').insert({
+            prioridad_id: row.prioridad_id,
+            tipo: 'avance',
+            descripcion: texto,
+            autor: currentUserEmail || null,
+            asistentes: [],
+          }),
+          `seguimientos insert (sesion) prioridad=${row.prioridad_id}`,
+        )
+      }
+      setAvancesSesion(prev => {
+        const next = new Map(prev)
+        next.set(clave, [...(next.get(clave) ?? []), { texto, fecha: hoyISO() }])
+        return next
+      })
+    } catch (err) {
+      window.alert((err as Error).message)
+    }
+  }
+
   async function quitarProyecto(sp: SesionProyecto) {
     try {
       await safeDelete(
@@ -899,11 +1026,20 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [oficiosAnteriores, oficiosTratadosSesion, proyectosPrivados, iniciativas])
 
-  // Picker privado (zona 4c) — mismos filtros y mismo criterio de opciones
-  // dinámicas que ComiteEconomicoProyectosPanel.tsx.
-  const proyectosPrivadosDisponibles = useMemo(
-    () => proyectosPrivados.filter(p => !proyectosSesion.some(sp => sp.proyecto_privado_id === p.id)),
-    [proyectosPrivados, proyectosSesion],
+  // Picker privado — mismos filtros y mismo criterio de opciones dinámicas que
+  // ComiteEconomicoProyectosPanel.tsx. La lista NO esconde los ya agregados:
+  // los marca. El picker es la selección de la agenda, no una bolsa de "los
+  // que faltan", así que un proyecto ya elegido tiene que verse elegido.
+  const proyectosPrivadosDisponibles = proyectosPrivados
+  // Fila de sesion_proyectos de cada privado ya agendado, para marcarlo y para
+  // poder sacarlo desde la misma lista.
+  const spPorPrivado = useMemo(
+    () => new Map(
+      proyectosSesion
+        .filter(sp => sp.proyecto_privado_id != null)
+        .map(sp => [sp.proyecto_privado_id as number, sp]),
+    ),
+    [proyectosSesion],
   )
   const pkOpcionesSeremi = useMemo((): FilterOption[] => {
     const vistos = new Set<string>()
@@ -1288,7 +1424,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               {muestra('seguimiento') && subSeguimiento === 'proyectos' && (
                   <ZonaCard numero={3} titulo="Seguimiento de la inversión · Proyectos"
                     badge={proyectosSesion.length}
-                    descripcion="Los proyectos de la cartera que se discuten hoy. Click en uno abre su ficha; los avances se registran ahí."
+                    descripcion="Los proyectos de la cartera que se discuten hoy. El avance queda en el historial del proyecto; click en su nombre abre la ficha completa."
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-2">
                         <div className="flex items-center gap-1.5">
@@ -1354,26 +1490,30 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   : 'Ningún proyecto privado calza con los filtros.'}
                               </p>
                             ) : (
-                              <div className="space-y-1">
-                                {proyectosPrivadosFiltrados.slice(0, 10).map(p => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    onClick={() => agregarProyectoPrivado(p)}
-                                    className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 border border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50/50"
-                                  >
-                                    <span className="flex-1 min-w-0 truncate text-sm text-slate-800">{p.nombre}</span>
-                                    {p.plazo && <span className="text-[10px] text-gray-400 flex-shrink-0">{p.plazo}</span>}
-                                    {p.seremi_lider && <span className="text-[10px] text-gray-400 truncate max-w-[120px] flex-shrink-0">{p.seremi_lider}</span>}
-                                    <span className="text-violet-600 text-sm font-semibold flex-shrink-0">+</span>
-                                  </button>
-                                ))}
+                              // Alto acotado con scroll propio: la lista completa queda
+                              // alcanzable sin empujar la agenda fuera de la pantalla.
+                              <div className="max-h-[210px] overflow-y-auto overscroll-contain space-y-1 pr-0.5">
+                                {proyectosPrivadosFiltrados.map(p => {
+                                  const sp = spPorPrivado.get(p.id)
+                                  return (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => sp ? quitarProyecto(sp) : agregarProyectoPrivado(p)}
+                                      title={sp ? 'Ya está en la agenda — click para sacarlo' : 'Agregar a la agenda de hoy'}
+                                      className={`w-full flex items-center gap-2 text-left px-2.5 py-1.5 border rounded-lg transition-colors ${
+                                        sp
+                                          ? 'border-violet-300 bg-violet-50 hover:bg-violet-100'
+                                          : 'border-slate-200 hover:border-violet-300 hover:bg-violet-50/50'
+                                      }`}
+                                    >
+                                      <span className={`flex-1 min-w-0 truncate text-sm ${sp ? 'text-violet-900 font-medium' : 'text-slate-800'}`}>{p.nombre}</span>
+                                      {p.seremi_lider && <span className="text-[10px] text-gray-400 truncate max-w-[120px] flex-shrink-0">{p.seremi_lider}</span>}
+                                      <span className={`text-sm font-semibold flex-shrink-0 ${sp ? 'text-violet-600' : 'text-violet-600'}`}>{sp ? '✓' : '+'}</span>
+                                    </button>
+                                  )
+                                })}
                               </div>
-                            )}
-                            {proyectosPrivadosFiltrados.length > 10 && (
-                              <p className="text-[10px] text-gray-400">
-                                Mostrando 10 de {proyectosPrivadosFiltrados.length} — {pkBuscando ? 'afina la búsqueda' : 'busca por nombre o usa los filtros'} para acotar.
-                              </p>
                             )}
                           </div>
                         ) : (
@@ -1384,36 +1524,43 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           />
                         )}
 
+                        {/* La agenda de hoy: solo el nombre (el tag Privado/Público
+                            ya lo dice el toggle de arriba) y el avance rápido. */}
                         {proyectosSesion.length === 0 ? (
                           <p className="text-xs text-gray-500 text-center py-2">Sin proyectos tratados en esta sesión.</p>
-                        ) : proyectosSesion.map(sp => {
-                          const { nombre, tag, tieneFicha } = resolverCartera(sp, proyectosInfo.get(sp.proyecto_id ?? '')?.nombre)
-                          return (
-                            <div key={sp.id} className="px-3 py-2 bg-gray-50 rounded-lg space-y-1.5">
-                              <div className="flex items-start gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => abrirFichaCartera(sp)}
-                                  disabled={!tieneFicha}
-                                  className="flex-1 min-w-0 text-left disabled:cursor-default"
-                                  title={tieneFicha ? 'Ver ficha y avances previos' : undefined}
-                                >
-                                  {tag && (
-                                    <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border mr-1.5 ${tag === 'Privado' ? 'bg-violet-50 text-violet-700 border-violet-200' : tag === 'Público' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                                      {tag}
-                                    </span>
+                        ) : (
+                          <div className="space-y-2 pt-1">
+                            {proyectosSesion.map(sp => {
+                              const { nombre, tieneFicha } = resolverCartera(sp, proyectosInfo.get(sp.proyecto_id ?? '')?.nombre)
+                              return (
+                                <div key={sp.id} className="px-3 py-2 bg-gray-50 rounded-lg">
+                                  <div className="flex items-start gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirFichaCartera(sp)}
+                                      disabled={!tieneFicha}
+                                      className="flex-1 min-w-0 text-left disabled:cursor-default"
+                                      title={tieneFicha ? 'Ver ficha y avances previos' : undefined}
+                                    >
+                                      <span className={`text-sm ${tieneFicha ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
+                                    </button>
+                                    <button onClick={() => quitarProyecto(sp)} className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0" title="Quitar proyecto">
+                                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                        <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                  {tieneFicha && (
+                                    <AgregarAvanceInline
+                                      onSubmit={texto => agregarAvanceCartera(sp, texto)}
+                                      avancesPrevios={avancesSesion.get(claveCartera(sp) ?? '') ?? []}
+                                    />
                                   )}
-                                  <span className={`text-sm truncate ${tieneFicha ? 'text-violet-800 hover:underline' : 'text-gray-700'}`}>{nombre}</span>
-                                </button>
-                                <button onClick={() => quitarProyecto(sp)} className="text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0" title="Quitar proyecto">
-                                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                   </ZonaCard>
               )}

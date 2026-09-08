@@ -27,9 +27,10 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
  *     LinkedIn cuando alguien tiene varios cargos en la misma empresa):
  *     máximo 5 visibles, el resto tras "Ver más" — ver PermisoBitacoraCard.
  *
- * Los avances SOLO se crean acá (no hay alta rápida desde la sesión del
- * comité — esa solo permite buscar/agregar proyectos a tratar y abrir esta
- * ficha con el (+) o al hacer click).
+ * Acá se crea el avance COMPLETO (fecha, permiso asociado y cambio de estado
+ * de ese permiso). La sesión del comité además deja un avance rápido desde su
+ * agenda —solo texto, sin permiso—, que aterriza en este mismo historial y se
+ * lee como avance general.
  *
  * Se abre desde ComiteEconomicoProyectosPanel.tsx (cartera) o desde la
  * zona "Proyectos tratados" de la sesión — ambos casos solo necesitan el id.
