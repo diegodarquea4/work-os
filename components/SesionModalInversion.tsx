@@ -1752,6 +1752,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         puedeOperar={true}
         currentUserEmail={currentUserEmail}
         abrirFormAvance={fichaConAvance}
+        sesionId={sesion?.id ?? null}
         onClose={() => { setFichaPrivadoId(null); setFichaConAvance(false) }}
       />
     )}

@@ -984,6 +984,9 @@ export type ComiteEconomicoProyectoSeguimiento = {
   // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
   // el estado del permiso (o es un avance general, sin permiso).
   estado_permiso_registrado: 'pendiente' | 'otorgado' | 'frenado' | null
+  // Sesión en la que se escribió este avance (mig 100). NULL = avance normal
+  // de cartera; con valor, el acta de esa sesión lo reporta bajo su proyecto.
+  sesion_id: number | null
   created_at: string
 }
 

@@ -71,13 +71,17 @@ export type ActaData = ActaBranding & {
     cupos: number
     pctAvance: number | null          // postulados/cupos, null si cupos=0
   } | null
-  // `tag` distingue la fuente (mig 093): Privado (comite_economico_proyecto)
-  // vs. Público (iniciativa con etiqueta CER). null en filas legadas que aún
-  // apuntan al catálogo SEIA v2_proyectos_inversion.
-  proyectosTratados: { nombre: string; nota: string | null; tag: 'Privado' | 'Público' | null }[]
+  // De dónde sale cada proyecto (cartera privada del comité vs. iniciativa con
+  // etiqueta CER) es distinción interna: el acta lo omite a propósito, para
+  // quien la lee son todos proyectos tratados por el comité.
+  // `avances`: lo que se registró con ESTA sesión abierta (mig 100).
+  proyectosTratados: {
+    nombre: string
+    nota: string | null
+    avances: { fecha: string; descripcion: string; autor: string | null }[]
+  }[]
   oficiosTratados: {
     nombreProyecto: string
-    tag: 'Privado' | 'Público' | null
     oaeca: string
     fechaLimite: string | null
     estado: 'pendiente' | 'resuelto'
@@ -278,9 +282,14 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
               <Vacio>Sin proyectos tratados en esta sesión.</Vacio>
             ) : data.proyectosTratados.map((p, i) => (
               <View key={i} style={s.block} wrap={false}>
-                {p.tag && <SeccionChip label={p.tag} />}
                 <Text style={s.blockName}>{p.nombre}</Text>
-                <Text style={s.blockText}>{p.nota || '—'}</Text>
+                {(p.nota || p.avances.length === 0) && <Text style={s.blockText}>{p.nota || '—'}</Text>}
+                {/* Avances registrados con esta sesión abierta (mig 100). */}
+                {p.avances.map((a, j) => (
+                  <Text key={j} style={s.blockText}>
+                    · {fmtFecha(a.fecha)} — {a.descripcion}{a.autor ? ` (${a.autor})` : ''}
+                  </Text>
+                ))}
               </View>
             ))}
 
@@ -294,7 +303,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
             </View>
             {data.oficiosTratados.map((o, i) => (
               <View key={i} style={s.tr} wrap={false}>
-                <Text style={[s.td, { flex: 3 }]}>{o.tag ? `[${o.tag}] ` : ''}{o.nombreProyecto}</Text>
+                <Text style={[s.td, { flex: 3 }]}>{o.nombreProyecto}</Text>
                 <Text style={[s.td, { flex: 2, color: C.muted }]}>{o.oaeca}</Text>
                 <Text style={[s.td, { flex: 1.2, textAlign: 'right' }]}>{fmtFecha(o.fechaLimite)}</Text>
                 <Text style={[s.td, { flex: 1, color: o.estado === 'resuelto' ? C.verde : C.muted }]}>

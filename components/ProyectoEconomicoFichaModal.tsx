@@ -52,6 +52,12 @@ type Props = {
    * acá), la sesión trae al usuario a esta ficha con el form abierto.
    */
   abrirFormAvance?: boolean
+  /**
+   * Sesión desde la que se abrió la ficha (mig 100). Los avances que se creen
+   * quedan marcados con ella y el acta de esa sesión los reporta bajo su
+   * proyecto. NULL/ausente = avance normal de cartera, fuera de toda acta.
+   */
+  sesionId?: number | null
 }
 
 // El estado que se puede cambiar al registrar un avance es el del PERMISO
@@ -78,7 +84,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, abrirFormAvance = false }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, abrirFormAvance = false, sesionId = null }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
@@ -303,6 +309,9 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
           // registrado (mig 097) — la bitácora del permiso lo muestra junto
           // a este avance, no solo como el estado actual del permiso.
           estado_permiso_registrado: estadoRegistrado,
+          // Si la ficha se abrió desde una sesión, el avance queda ligado a
+          // ella y sale en su acta (mig 100).
+          sesion_id: sesionId,
           autor: currentUserEmail || null,
         }),
         `comite_economico_proyecto_seguimiento insert proyecto=${proyectoId}`,

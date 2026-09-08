@@ -283,6 +283,32 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
         .map(p => [p.id, p.nombre]))
     : new Map<number, string>()
 
+  // Avances escritos con ESTA sesión abierta (mig 100). Van bajo su proyecto
+  // en el acta: es el registro de lo que se avanzó en la reunión. El vínculo
+  // es la columna `sesion_id`, no la fecha — un borrador puede quedar abierto
+  // varios días y un proyecto puede recibir avances por fuera de la sesión.
+  type AvanceActa = { fecha: string; descripcion: string; autor: string | null }
+  const [avPrivRes, avPubRes] = await Promise.all([
+    db.from('comite_economico_proyecto_seguimiento')
+      .select('proyecto_id, fecha, descripcion, autor')
+      .eq('sesion_id', sesionId).order('fecha'),
+    db.from('seguimientos')
+      .select('prioridad_id, fecha, descripcion, autor')
+      .eq('sesion_id', sesionId).order('fecha'),
+  ])
+  const avancesPorPrivado = new Map<number, AvanceActa[]>()
+  for (const a of (avPrivRes.data ?? []) as ({ proyecto_id: number } & AvanceActa)[]) {
+    const acc = avancesPorPrivado.get(a.proyecto_id) ?? []
+    acc.push({ fecha: a.fecha, descripcion: a.descripcion, autor: a.autor })
+    avancesPorPrivado.set(a.proyecto_id, acc)
+  }
+  const avancesPorPrioridad = new Map<number, AvanceActa[]>()
+  for (const a of (avPubRes.data ?? []) as ({ prioridad_id: number } & AvanceActa)[]) {
+    const acc = avancesPorPrioridad.get(a.prioridad_id) ?? []
+    acc.push({ fecha: a.fecha, descripcion: a.descripcion, autor: a.autor })
+    avancesPorPrioridad.set(a.prioridad_id, acc)
+  }
+
   // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
   // sección no se muestra en el acta mientras esté escondida en la sesión.
   const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
@@ -320,26 +346,27 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     instituciones: [],
     metaEmpleo,
     subsidios,
+    // El acta no distingue privado de público: para quien la lee son todos
+    // proyectos tratados por el comité.
     proyectosTratados: proyectosRows.map(p => {
-      if (p.proyecto_privado_id != null) return { nombre: p.proyecto_privado?.nombre ?? '—', nota: p.nota, tag: 'Privado' as const }
-      if (p.prioridad_id != null) return { nombre: prioridadNombres.get(p.prioridad_id) ?? '—', nota: p.nota, tag: 'Público' as const }
-      return { nombre: p.proyecto?.nombre ?? '—', nota: p.nota, tag: null }
+      const nombre = p.proyecto_privado_id != null ? (p.proyecto_privado?.nombre ?? '—')
+        : p.prioridad_id != null ? (prioridadNombres.get(p.prioridad_id) ?? '—')
+        : (p.proyecto?.nombre ?? '—')
+      const avances = p.proyecto_privado_id != null
+        ? (avancesPorPrivado.get(p.proyecto_privado_id) ?? [])
+        : p.prioridad_id != null
+          ? (avancesPorPrioridad.get(p.prioridad_id) ?? [])
+          : []
+      return { nombre, nota: p.nota, avances }
     }),
-    oficiosTratados: oficios.map(o => {
-      const nombreProyecto = o.proyecto_privado_id != null ? (o.proyecto_privado?.nombre ?? '—')
+    oficiosTratados: oficios.map(o => ({
+      nombreProyecto: o.proyecto_privado_id != null ? (o.proyecto_privado?.nombre ?? '—')
         : o.prioridad_id != null ? (prioridadNombres.get(o.prioridad_id) ?? '—')
-        : (o.proyecto?.nombre ?? '—')
-      const tag = o.proyecto_privado_id != null ? 'Privado' as const
-        : o.prioridad_id != null ? 'Público' as const
-        : null
-      return {
-        nombreProyecto,
-        tag,
-        oaeca:       o.oaeca?.nombre ?? '—',
-        fechaLimite: o.fecha_limite,
-        estado:      o.estado,
-      }
-    }),
+        : (o.proyecto?.nombre ?? '—'),
+      oaeca:       o.oaeca?.nombre ?? '—',
+      fechaLimite: o.fecha_limite,
+      estado:      o.estado,
+    })),
     temas: [],
     compVerificados: ((verifRes.data ?? []) as SesionCompromiso[]).map(c => ({
       descripcion: c.descripcion,
