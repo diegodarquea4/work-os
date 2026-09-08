@@ -33,7 +33,6 @@ import { mfaRequirement, mfaRazon, fechaLimiteLegible, type MfaRequirement } fro
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
-const PregoView        = dynamic(() => import('./PregoView'))
 const DesalojosView    = dynamic(() => import('./DesalojosView'))
 const MetricasView     = dynamic(() => import('./MetricasView'))
 
@@ -41,7 +40,7 @@ const MetricasView     = dynamic(() => import('./MetricasView'))
 // spec gabinete §7.1): la Bandeja vive como pane "Preparación" dentro de
 // Gabinete (KanbanView). El valor guardado en localStorage se migra en la
 // hidratación (no hay deep links por URL — la vista persiste solo ahí).
-type View = 'mapa' | 'dashboard' | 'kanban' | 'prego' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas' | 'catalogo-comite'
+type View = 'mapa' | 'dashboard' | 'kanban' | 'usuarios' | 'vista-regional' | 'desalojos' | 'metricas' | 'catalogo-comite'
 
 type Props = {
   projects: Iniciativa[]
@@ -123,8 +122,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }, [])
 
   // Las capacidades se guardan por COD de región ('VIII'); las fichas pasan el
-  // NOMBRE ('Biobío') y PREGO pasa el cod. Normalizamos a cod antes de chequear
-  // (sin esto, un usuario scopeado nunca matchea y solo admin '*' pasaba).
+  // NOMBRE ('Biobío'). Normalizamos a cod antes de chequear (sin esto, un
+  // usuario scopeado nunca matchea y solo admin '*' pasaba).
   const codeForRegionArg = useCallback((regionNombreOrCod: string): string => {
     if (REGIONS.some(r => r.cod === regionNombreOrCod)) return regionNombreOrCod
     return REGIONS.find(r => r.nombre === regionNombreOrCod)?.cod ?? regionNombreOrCod
@@ -139,13 +138,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // "puede modificar cualquier columna". Refleja el editor de permisos.
   const canEditRegion = useCallback((regionNombreOrCod: string): boolean => {
     return can(capabilities, 'iniciativa.editar_definicional', codeForRegionArg(regionNombreOrCod))
-  }, [capabilities, codeForRegionArg])
-
-  // PREGO tiene su PROPIA capacidad por región (`prego.editar`) — no reusar la de
-  // la ficha, son permisos distintos (un usuario puede editar iniciativas y no
-  // PREGO, o al revés).
-  const canEditPregoRegion = useCallback((regionNombreOrCod: string): boolean => {
-    return can(capabilities, 'prego.editar', codeForRegionArg(regionNombreOrCod))
   }, [capabilities, codeForRegionArg])
 
   // Cods that regional/seremi/filtered-viewer users cannot open
@@ -163,7 +155,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.
   const [metricasInitialRegion, setMetricasInitialRegion] = useState<string | undefined>(undefined)
-  // Menú de configuración (tuerca): Desalojos / PREGO / Permisos / Cambiar clave / Cerrar
+  // Menú de configuración (tuerca): Desalojos / Permisos / Cambiar clave / Cerrar
   // sesión. Saca del header los accesos de baja frecuencia. Anclado a la
   // derecha (right, no left — el botón vive en el borde derecho del header).
   const [gearOpen, setGearOpen]                = useState(false)
@@ -189,7 +181,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     try {
       const storedView   = localStorage.getItem('workos:view')
       const storedRegion = localStorage.getItem('workos:activeRegion')
-      const validViews: View[] = ['mapa', 'dashboard', 'kanban', 'prego', 'usuarios', 'vista-regional', 'desalojos', 'metricas', 'catalogo-comite']
+      const validViews: View[] = ['mapa', 'dashboard', 'kanban', 'usuarios', 'vista-regional', 'desalojos', 'metricas', 'catalogo-comite']
       if (storedView === 'atencion') {
         // Fusión Atención+Gabinete: quien tenía la Bandeja guardada aterriza
         // en Gabinete con el pane Preparación abierto (su bandeja de siempre).
@@ -714,7 +706,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mi Región
             </button>
-            {/* Desalojos, PREGO y Permisos viven en el menú tuerca (configuración) —
+            {/* Desalojos y Permisos viven en el menú tuerca (configuración) —
                 accesos de baja frecuencia fuera de la barra principal. */}
           </div>
 
@@ -740,12 +732,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <circle cx="8" cy="11.4" r=".4" fill="currentColor"/>
               </svg>
             </button>
-            {/* Tuerca: PREGO / Permisos / Cambiar clave / Cerrar sesión */}
+            {/* Tuerca: Desalojos / Permisos / Cambiar clave / Cerrar sesión */}
             <button
               ref={gearBtnRef}
               onClick={handleGearToggle}
               className={`transition-colors ${
-                gearOpen || view === 'prego' || view === 'usuarios' ? 'text-white' : 'text-slate-400 hover:text-white'
+                gearOpen || view === 'usuarios' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
               title="Configuración"
               aria-label="Abrir menú de configuración"
@@ -795,13 +787,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       {view === 'usuarios' && (
         <div className="flex-1 overflow-hidden">
           <AdminUsersView />
-        </div>
-      )}
-
-      {/* PREGO view — admin/editor only */}
-      {view === 'prego' && (profile?.role === 'admin' || profile?.role === 'editor') && (
-        <div className="flex-1 overflow-hidden">
-          <PregoView canEditRegion={canEditPregoRegion} />
         </div>
       )}
 
@@ -1054,22 +1039,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 <path d="M3.6 7.6V13a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1V7.6" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Desalojos
-            </button>
-          )}
-          {(profile?.role === 'admin' || profile?.role === 'editor') && (
-            <button
-              onClick={() => { setView('prego'); setGearOpen(false) }}
-              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
-                view === 'prego'
-                  ? 'font-semibold text-violet-700 bg-violet-50'
-                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
-                <rect x="1" y="1" width="10" height="10" rx="1"/>
-                <path d="M1 4h10M1 7h10M4 4v7" strokeLinecap="round"/>
-              </svg>
-              PREGO
             </button>
           )}
           {profile?.role === 'admin' && (

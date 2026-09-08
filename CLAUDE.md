@@ -53,7 +53,7 @@ Patrón en call-site: optimistic update local → try { await safeWrite(...) } c
 - `prioridades_territoriales`: UPDATE admin/editor (cualquier columna), regional solo columnas operativas (semáforo, pct_avance, responsable, en_foco, etapa, hito). INSERT/DELETE: admin/editor.
 - `seguimientos`, `documentos_prioridad`: INSERT cualquier autenticado (mig 026 — **incluido viewer**). UPDATE/DELETE: autor O admin/editor.
 - `metricas_eje`: definición admin/editor. `valor_actual` admin/editor + regional dentro de sus `region_cods` (trigger).
-- `region_ejes`, `prego_monitoreo`: admin/editor.
+- `region_ejes`: admin/editor (y `region.gestionar_ejes` por región, mig 092). `prego_monitoreo` y `prevencion_respuesta` quedaron **dormidas** (mig 093: sin escritura, sin UI; DROP diferido).
 - `mop_projects`, `seia_projects`, `regional_metrics`: solo service role (los crons).
 - viewer = solo lectura **salvo** Seguimientos/Documentos (puede crear, y editar/borrar lo suyo). `canEditOperational` en UserContext sigue excluyendo viewer del trio operativo de prioridades.
 

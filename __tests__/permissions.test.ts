@@ -115,7 +115,7 @@ describe('capas de usuarios — espejo de roles (Fase 0)', () => {
 
   it('editor: como admin salvo admin-only, desalojos y permisos', () => {
     expect(can(editor, 'iniciativa.editar_definicional')).toBe(true)
-    expect(can(editor, 'prego.editar')).toBe(true)
+    expect(can(editor, 'region.gestionar_ejes')).toBe(true)
     expect(can(editor, 'comite.infraestructura.configurar')).toBe(true)
     expect(can(editor, 'usuarios.gestionar')).toBe(false)
     expect(can(editor, 'dashboard.importar')).toBe(false)
@@ -146,7 +146,7 @@ describe('capas de usuarios — espejo de roles (Fase 0)', () => {
     expect(can(viewer, 'planificacion.ver', 'II')).toBe(false)
     expect(can(viewer, 'planificacion.exportar_pdf')).toBe(false)   // mig 064 R3
     expect(can(viewer, 'comite.policial.operar', 'X')).toBe(false)
-    expect(can(viewer, 'sec.prego')).toBe(false)
+    expect(can(viewer, 'sec.permisos')).toBe(false)
     expect(can(viewer, 'sec.desalojos')).toBe(true)                 // lectura scopeada
   })
 

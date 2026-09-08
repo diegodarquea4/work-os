@@ -62,7 +62,7 @@ Cualquier cambio en producción a la matriz de permisos queda documentado en [`C
 
 ## Vistas principales
 
-El header tiene **5 destinos visibles**. Mapa y PREGO son botones planos; Dashboard / Atención / Kanban / Mi Región viven dentro de un dropdown agrupado, y Usuarios aparece solo para admin.
+El header tiene **4 destinos planos**: Mapa / Iniciativas / Tablero / Mi Región. Desalojos, Permisos y el catálogo de métricas viven en el menú de configuración (tuerca).
 
 Al abrir la aplicación, la región activa y la última vista se preservan en `localStorage`: si refrescás estando en Atención filtrada en Aysén, volvés ahí, no al Mapa.
 
@@ -114,14 +114,6 @@ Portfolio visual de iniciativas. Tres modos:
 - **Mosaico**: vista densa de toda la región para escaneo rápido.
 
 El selector de región muestra las 16 regiones (restringidas a las permitidas para `regional`/`viewer`), aunque alguna esté vacía.
-
-### PREGO
-
-Seguimiento del proceso **PREGO** (Programa de Gobernanza Regional). Matriz 16 regiones × 9 fases, cada celda en estado `pendiente | en_curso | completado | bloqueado`.
-
-Fases: F0 Contacto → F1 Borrador → F2 Revisión → F3 (DIPRES / DESI / SUBDERE / GORE) → F4 Consolidación → F5 Firma.
-
-Visible solo para admin y editor.
 
 ### Usuarios y Planes Regionales
 
@@ -387,7 +379,7 @@ Long format. Series temporales de BCCh y LeyStop.
 - `semaforo_log` — audit automático de cambios de semáforo y % avance.
 - `sync_status` — PK = `name`. Una fila por cron, se sobreescribe en cada corrida.
 - `user_profiles` — `id` (FK Supabase Auth) + `email`, `full_name`, `role`, `region_cods[]`.
-- `prego_monitoreo` — 16 filas. Columnas por fase PREGO con estado.
+- `prego_monitoreo`, `prevencion_respuesta` — **dormidas** desde mig 093 (la sección PREGO se retiró; sin escritura ni UI, DROP diferido).
 - `planes_regionales` — metadata de los planes regionales subidos.
 - `region_ejes` — catálogo formal de ejes por región (FK `eje_id`).
 - `metricas_eje` — métricas reportables por eje regional.
@@ -414,7 +406,7 @@ Lee `user_profiles.role` del `auth.uid()` actual. Devuelve `NULL` si el usuario 
 | `seguimientos` | **Cualquier autenticado** (mig 026) | autor O admin/editor | autor O admin/editor |
 | `documentos_prioridad` | **Cualquier autenticado** (mig 026) | autor O admin/editor | autor O admin/editor |
 | `metricas_eje` | admin/editor (definición). Regional reporta `valor_actual` en sus `region_cods` (trigger) | igual | admin/editor |
-| `region_ejes`, `prego_monitoreo` | admin/editor | admin/editor | admin/editor |
+| `region_ejes` | admin/editor | admin/editor | admin/editor |
 | `mop_projects`, `seia_projects`, `regional_metrics`, `v2_indicadores_*` | service role (los crons) | — | — |
 
 ### Storage policies
@@ -498,7 +490,6 @@ Supabase Postgres
                  ├─ Dashboard        → NationalDashboard
                  ├─ Atención         → AttentionTray
                  ├─ Kanban           → KanbanView
-                 ├─ PREGO            → PregoView
                  └─ Usuarios         → AdminUsersView + PlanesRegionalesPanel
 ```
 
@@ -549,7 +540,6 @@ components/
   AttentionTray.tsx                 # Bandeja: En foco + Sugerencias
   KanbanView.tsx                    # Portfolio: Por ministerio / Por eje / Mosaico
   VistaRegional.tsx                 # Mi Región
-  PregoView.tsx                     # Matriz PREGO 16 × 9
   AdminUsersView.tsx                # Gestión de usuarios
   ImportProposalsPanel.tsx          # Bandeja de propuestas (admin/editor)
   PlanesRegionalesPanel.tsx         # Subida de planes PDF

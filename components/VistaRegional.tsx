@@ -7,8 +7,7 @@ import { safeWrite } from '@/lib/dbWrite'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { PregoRow, EjeSesion } from '@/lib/types'
-import { PREGO_FASES, PREGO_ESTADO_CONFIG } from '@/lib/types'
+import type { EjeSesion } from '@/lib/types'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
 import dynamic from 'next/dynamic'
@@ -116,7 +115,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   const [numeroForce, setNumeroForce] = useState(false)
   const [numeroInput, setNumeroInput] = useState('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [prego, setPrego] = useState<PregoRow | null>(null)
   // Ficha abierta desde la sección "En foco" (mismo modal que Atención/Kanban).
   const [selectedIniciativa, setSelectedIniciativa] = useState<Iniciativa | null>(null)
   const [calendarioOpen, setCalendarioOpen] = useState(false)
@@ -128,18 +126,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // sincronizado en WorkOSApp y persistido en localStorage. El useMemo de
   // selectedCod arriba ya hace el fallback a allowedCods[0] si activeRegion
   // no está permitida para este usuario.)
-
-  // Fetch PREGO for selected region
-  useEffect(() => {
-    if (!selectedCod) return
-    setPrego(null)
-    getSupabase()
-      .from('prego_monitoreo')
-      .select('*')
-      .eq('region_cod', selectedCod)
-      .maybeSingle()
-      .then(({ data }) => setPrego(data as PregoRow | null))
-  }, [selectedCod])
 
   // Fetch cache status for both minuta types when region changes
   useEffect(() => {
@@ -211,10 +197,6 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
     rojo:  regionIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
     gris:  regionIniciativas.filter(p => p.estado_semaforo === 'gris').length,
   }
-
-  const pregoCompletadas = prego
-    ? PREGO_FASES.filter(f => prego[f.key] === 'completado').length
-    : 0
 
   // Iniciativas en foco de la región — misma sección principal de la Bandeja
   // de Atención, acotada a la región activa. Orden por urgencia de hito
@@ -547,29 +529,8 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
               </div>
             </div>
 
-            {/* Right: PREGO + action buttons */}
+            {/* Right: action buttons */}
             <div className="flex flex-col items-end gap-3 shrink-0">
-              {/* PREGO fases */}
-              <div className="text-right">
-                <p className="text-[10px] text-gray-400 font-medium mb-1.5 uppercase tracking-wider">PREGO</p>
-                <div className="flex items-center gap-1">
-                  {PREGO_FASES.map((f) => {
-                    const estado = prego?.[f.key] ?? 'pendiente'
-                    const cfg = PREGO_ESTADO_CONFIG[estado]
-                    return (
-                      <div
-                        key={f.key}
-                        title={`${f.label} ${f.sublabel}: ${cfg.label}`}
-                        className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold transition-colors ${cfg.pill}`}
-                      >
-                        {cfg.dot}
-                      </div>
-                    )
-                  })}
-                  <span className="text-xs text-gray-400 ml-1">{pregoCompletadas}/{PREGO_FASES.length}</span>
-                </div>
-              </div>
-
               {/* Buttons */}
               <div className="flex items-center gap-2">
                 {region && (

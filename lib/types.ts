@@ -1038,45 +1038,6 @@ export type SeiaProject = {
   synced_at: string
 }
 
-// ── PREGO ────────────────────────────────────────────────────────────────────
-export type PregoEstado = 'pendiente' | 'en_curso' | 'completado' | 'bloqueado'
-
-export type PregoRow = {
-  region_cod:       string
-  f0_contacto:      PregoEstado
-  f1_borrador:      PregoEstado
-  f2_revision:      PregoEstado
-  e3_dipres:        PregoEstado
-  e3_desi:          PregoEstado
-  e3_subdere:       PregoEstado
-  e3_gore:          PregoEstado
-  f6_consolidacion: PregoEstado
-  f7_firma:         PregoEstado
-  updated_at:       string
-  updated_by:       string | null
-}
-
-export type PregoFaseKey = keyof Omit<PregoRow, 'region_cod' | 'updated_at' | 'updated_by'>
-
-export const PREGO_FASES: { key: PregoFaseKey; label: string; sublabel: string }[] = [
-  { key: 'f0_contacto',      label: 'F0', sublabel: 'Contacto' },
-  { key: 'f1_borrador',      label: 'F1', sublabel: 'Borrador' },
-  { key: 'f2_revision',      label: 'F2', sublabel: 'Revisión' },
-  { key: 'e3_dipres',        label: 'F3', sublabel: 'DIPRES' },
-  { key: 'e3_desi',          label: 'F3', sublabel: 'DESI' },
-  { key: 'e3_subdere',       label: 'F3', sublabel: 'SUBDERE' },
-  { key: 'e3_gore',          label: 'F3', sublabel: 'GORE' },
-  { key: 'f6_consolidacion', label: 'F4', sublabel: 'Consolidación' },
-  { key: 'f7_firma',         label: 'F5', sublabel: 'Firma' },
-]
-
-export const PREGO_ESTADO_CONFIG: Record<PregoEstado, { label: string; pill: string; dot: string }> = {
-  pendiente:  { label: 'Pendiente',  pill: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',   dot: '○' },
-  en_curso:   { label: 'En curso',   pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200', dot: '◐' },
-  completado: { label: 'Completado', pill: 'bg-green-50 text-green-700 ring-1 ring-green-200', dot: '✓' },
-  bloqueado:  { label: 'Bloqueado',  pill: 'bg-red-50 text-red-700 ring-1 ring-red-200',       dot: '✗' },
-}
-
 // ── v2 Types ────────────────────────────────────────────────────────────────
 // New data model for the indicators/minutas reset.
 // v1 types above remain unchanged until cutover.

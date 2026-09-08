@@ -91,25 +91,21 @@ pregunta. Si se descarta una, marcarla con ✗ y un motivo breve.
 - **¿Qué pasa si elimino un eje que ya tiene iniciativas asociadas?**
   - *contexto:* validación e implicancias.
 
-## 4. Métricas y PREGO
+## 4. Métricas de eje
+
+(Las preguntas sobre fases del PREGO se retiraron el 2026-09-08 junto con la sección.)
 
 ### regional
 - **¿Dónde reporto el valor actual de las métricas de mi región?**
   - *contexto:* ubicación del input semanal por métrica.
 - **La meta de una métrica está mal, ¿la puedo corregir yo?**
   - *contexto:* admin/editor define meta, regional reporta valor.
-- **Veo "PREGO 3/9" en Mi Región pero no encuentro dónde abrir las fases, ¿dónde está?**
-  - *contexto:* el regional ve el contador pero no la vista, es admin/editor only.
 - **¿Cuál es la diferencia entre una métrica de eje y el % de avance de una iniciativa?**
   - *contexto:* compromiso programático (meta agregada) vs. progreso por iniciativa.
 
 ### admin_editor
 - **¿Cómo defino una métrica nueva para un eje?**
   - *contexto:* alta de métrica + meta.
-- **¿Cómo avanzo a la región a la siguiente fase del PREGO?**
-  - *contexto:* operación de las 9 fases.
-- **¿El regional recibe alguna notificación cuando avanzo la fase PREGO?**
-  - *contexto:* visibilidad del cambio del lado regional.
 
 ## 5. Atención y foco
 
@@ -241,7 +237,7 @@ con 7 tabs, columna "Último acceso" en Usuarios, sistema responsive
 - **¿Cómo entro al panel para gestionar los ejes de una región?** ✗
   - *contexto:* botón "Gestionar ejes" en Mi Región con la región seleccionada; CRUD del catálogo formal.
 
-## 5. Métricas y PREGO (3 nuevas)
+## 5. Métricas de eje (3 nuevas)
 
 ### regional
 - **¿Cómo abro las métricas de un eje específico para reportar valores?** ✗
