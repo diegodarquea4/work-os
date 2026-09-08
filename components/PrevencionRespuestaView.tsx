@@ -238,7 +238,7 @@ export default function PrevencionRespuestaView({ canEditRegion }: Props) {
     const html = buildActaHtml(region?.nombre ?? selectedCod, data[selectedCod] ?? {})
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    const w = window.open(url, '_blank')
+    const w = window.open(url, '_blank', 'noopener,noreferrer')
     if (!w) window.alert('Habilita las ventanas emergentes para descargar el acta.')
   }
 

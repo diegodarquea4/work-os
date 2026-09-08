@@ -5,7 +5,7 @@
  * and upserts into mop_projects. Iterates all 16 regions, one POST per region.
  *
  * Auth:
- *   GET  — Vercel Cron (header: x-vercel-cron: 1)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual / CI (header: Authorization: Bearer <CRON_SECRET>)
  *
  * MOP site: https://proyectos.mop.gob.cl
@@ -18,6 +18,7 @@ import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { withSyncStatus } from '@/lib/syncRunner'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime  = 'nodejs'
@@ -314,16 +315,14 @@ async function runSync() {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get('x-vercel-cron') !== '1') {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('mop', runSync)
 }
 
 export async function POST(request: NextRequest) {
-  const auth   = request.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return withSyncStatus('mop', runSync)

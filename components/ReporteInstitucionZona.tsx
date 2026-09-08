@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import type { ColaPorClave } from '@/lib/colaPorClave'
 import type { ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
 import { deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
 import type { InstitucionComite } from '@/lib/hooks/useComiteMetricas'
@@ -20,14 +21,24 @@ import MetricasComiteModal from './MetricasComiteModal'
  * (defaultValue + onBlur, key estable) para no re-renderizar por tecla.
  * Desglose: controlado (lista dinámica). Cada handler se recrea por render con
  * el `valores` fresco del closure → sin ref ni staleness.
+ *
+ * COMPONENTE CONTROLADO: `valores`, la institución activa y la cola de
+ * guardados viven en el padre (SesionModal). Razón: en la consola a pantalla
+ * completa esta zona se DESMONTA al pasar a otra zona del riel y se vuelve a
+ * montar al volver. Si el estado fuera local, al remontar se partiría de los
+ * valores viejos y, peor, con una cola nueva podrían viajar dos guardados de
+ * la misma métrica en paralelo (lo que lib/colaPorClave.ts evita).
  */
 
 type Props = {
   sesionId: number
   regionCod: string
   catalogo: ComiteMetrica[]
-  valoresIniciales: SesionComiteValor[]
+  valores: SesionComiteValor[]                                    // estado del padre
+  onValoresChange: Dispatch<SetStateAction<SesionComiteValor[]>>  // setter del padre
+  encolar: ColaPorClave<number>                                   // cola por métrica, creada en el padre
   valoresPrev: Map<number, SesionComiteValor>   // WoW: sesión cerrada anterior
+  institucion: string                           // institución activa (la elige el riel de la consola)
   currentUserEmail: string
   onCatalogoChange: () => void                  // recarga el catálogo en el padre
   instituciones: InstitucionComite[]            // dinámicas por región (mig 078)
@@ -35,19 +46,16 @@ type Props = {
 }
 
 export default function ReporteInstitucionZona({
-  sesionId, regionCod, catalogo, valoresIniciales, valoresPrev, currentUserEmail, onCatalogoChange,
+  sesionId, regionCod, catalogo, valores, onValoresChange, encolar, valoresPrev,
+  institucion, currentUserEmail, onCatalogoChange,
   instituciones, onInstitucionesChange,
 }: Props) {
-  const [valores, setValores] = useState<SesionComiteValor[]>(
-    () => valoresIniciales.map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] })),
-  )
-  const [inst, setInst] = useState<string>('carabineros')
   const [editModal, setEditModal] = useState<{ metrica: ComiteMetrica | null } | null>(null)
   const [metricasModal, setMetricasModal] = useState(false)
 
   // Institución seleccionada segura: si la elegida ya no está en la lista
   // (borrada), cae a la primera (las 4 base siempre están).
-  const instSel = instituciones.some(i => i.key === inst) ? inst : (instituciones[0]?.key ?? 'carabineros')
+  const instSel = instituciones.some(i => i.key === institucion) ? institucion : (instituciones[0]?.key ?? 'carabineros')
   const instLabel = instituciones.find(i => i.key === instSel)?.label ?? instSel
 
   const filas = catalogo
@@ -62,18 +70,24 @@ export default function ReporteInstitucionZona({
 
   // Actualiza SOLO el estado local (para inputs controlados / feedback WoW).
   function setLocal(next: SesionComiteValor) {
-    setValores(prev => {
+    onValoresChange(prev => {
       const idx = prev.findIndex(v => v.metrica_id === next.metrica_id)
       if (idx === -1) return [...prev, next]
       const out = [...prev]; out[idx] = next; return out
     })
   }
 
-  // Persiste `next` (optimistic local + write). Inserta / actualiza / borra
-  // según quede con dato o vacía. Revert por alert (patrón dbWrite).
+  // Persiste `next` (optimistic local + write). Guarda / borra según quede con
+  // dato o vacía. Revert por alert (patrón dbWrite).
   async function commit(next: SesionComiteValor) {
-    const existente = valores.find(v => v.metrica_id === next.metrica_id) ?? null
+    // Se mira ANTES del setLocal: dice si hay algo que borrar cuando la fila
+    // queda vacía.
+    const habiaFila = valores.some(v => v.metrica_id === next.metrica_id)
     setLocal(next)
+    await encolar(next.metrica_id, () => guardar(next, habiaFila))
+  }
+
+  async function guardar(next: SesionComiteValor, habiaFila: boolean) {
     const payload = {
       valor_num: next.valor_num,
       valor_texto: next.valor_texto,
@@ -82,28 +96,31 @@ export default function ReporteInstitucionZona({
     }
     try {
       if (!tieneValorComite(next)) {
-        if (existente?.id) {
-          await safeDelete(
-            getSupabase().from('sesion_comite_valor').delete().eq('id', existente.id),
-            `sesion_comite_valor delete id=${existente.id}`,
-          )
-          setValores(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
-        }
+        if (!habiaFila) return
+        await safeDelete(
+          getSupabase().from('sesion_comite_valor').delete()
+            .eq('sesion_id', sesionId).eq('metrica_id', next.metrica_id),
+          `sesion_comite_valor delete metrica=${next.metrica_id}`,
+        )
+        onValoresChange(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
         return
       }
-      if (existente?.id) {
-        await safeWrite(
-          getSupabase().from('sesion_comite_valor').update(payload).eq('id', existente.id),
-          `sesion_comite_valor update id=${existente.id}`,
-        )
-      } else {
-        const rows = await safeWrite(
-          getSupabase().from('sesion_comite_valor').insert({ sesion_id: sesionId, metrica_id: next.metrica_id, ...payload }),
-          `sesion_comite_valor insert metrica=${next.metrica_id}`,
-        )
-        const creada = rows[0] as SesionComiteValor
-        setValores(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: creada.id } : v))
-      }
+      // UPSERT, no «insertar o actualizar según el id local». La llave real es
+      // (sesion_id, metrica_id) y la conoce la base; el componente no. Antes se
+      // decidía mirando `existente.id`, que vale 0 en la fila provisoria que
+      // arma `valorDe()` mientras el primer guardado va en vuelo — así que un
+      // segundo campo de la misma métrica volvía a INSERTAR y reventaba con
+      // «duplicate key ... sesion_comite_valor_sesion_id_metrica_id_key».
+      const rows = await safeWrite(
+        getSupabase().from('sesion_comite_valor')
+          .upsert(
+            { sesion_id: sesionId, metrica_id: next.metrica_id, ...payload },
+            { onConflict: 'sesion_id,metrica_id' },
+          ),
+        `sesion_comite_valor upsert metrica=${next.metrica_id}`,
+      )
+      const guardada = rows[0] as SesionComiteValor
+      onValoresChange(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: guardada.id } : v))
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -118,35 +135,11 @@ export default function ReporteInstitucionZona({
 
   const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 
+  // La cabecera de la zona («3 · Reporte por institución») y la elección de
+  // institución las pone la consola (ZonaCard + riel); acá solo va el cuerpo.
   return (
-    <section className="border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2">
-        <span className="w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
-        <h3 className="text-sm font-semibold text-gray-800">Reporte por institución</h3>
-      </div>
-
-      {/* Sub-tabs de institución (dinámicas por región, mig 078) */}
-      <div className="flex flex-wrap gap-1 px-3 pt-3">
-        {instituciones.map(i => {
-          const activa = instSel === i.key
-          const conDato = catalogo.some(m => m.institucion === i.key && m.activo && tieneValorComite(valores.find(v => v.metrica_id === m.id) ?? null))
-          return (
-            <button
-              key={i.key}
-              onClick={() => setInst(i.key)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
-                activa ? 'bg-violet-700 text-white'
-                  : conDato ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {i.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="p-3 space-y-3">
+    <div>
+      <div className="space-y-3">
         {filas.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-2">
             Sin métricas para {instLabel}. Agrega la primera con “+ métrica”.
@@ -295,7 +288,7 @@ export default function ReporteInstitucionZona({
           onSaved={() => { onCatalogoChange(); onInstitucionesChange() }}
         />
       )}
-    </section>
+    </div>
   )
 }
 

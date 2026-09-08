@@ -1,10 +1,18 @@
 /**
  * POST /api/account/change-password — AUTENTICADA.
  *
- * La usan el cambio de clave voluntario y el overlay de cambio obligatorio. Valida
- * robustez (complejidad + HIBP) y que la clave nueva sea DISTINTA de la actual
- * (probando un login con la clave nueva: si funciona, es la misma → rechazar). Fija
- * la clave y limpia debe_cambiar_clave.
+ * La usan el cambio de clave voluntario y el overlay de cambio obligatorio.
+ * Exige la CLAVE ACTUAL, valida robustez de la nueva (complejidad + HIBP), la
+ * fija y limpia debe_cambiar_clave.
+ *
+ * Por qué pide la clave actual (auditoría 2026-09-04): antes bastaba con tener
+ * la cookie de sesión. Es decir, un robo de sesión (equipo abierto, cookie
+ * filtrada) se convertía en toma de cuenta PERMANENTE: el atacante cambiaba la
+ * clave y el dueño quedaba fuera. Pedir la clave actual corta esa cadena.
+ *
+ * De paso desaparece la verificación "distinta de la actual" que se hacía
+ * intentando un login con la clave NUEVA y era fail-open (cualquier error de red
+ * dejaba pasar una clave repetida): ahora se comparan los dos textos.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -25,25 +33,30 @@ export async function POST(request: Request) {
   if (!parse.success) {
     return Response.json({ error: 'Solicitud inválida', detalle: parse.error.issues }, { status: 400 })
   }
-  const { password } = parse.data
+  const { claveActual, password } = parse.data
 
-  const problemas = await assertStrongPassword(password)
-  if (problemas.length > 0) {
-    return Response.json({ error: problemas.join(' '), problemas }, { status: 400 })
+  if (password === claveActual) {
+    return Response.json({ error: 'La clave nueva debe ser distinta de la actual.' }, { status: 400 })
   }
 
-  // "Distinta de la actual": intentamos loguear con la clave nueva en un cliente
-  // anónimo desechable (sin persistir sesión). Si el login FUNCIONA, la clave nueva
-  // es igual a la actual → rechazar. Cualquier error se trata como "es distinta"
-  // (fail-open: no bloqueamos un cambio legítimo por un error transitorio).
+  // Reautenticación: se prueba la clave ACTUAL en un cliente anónimo desechable
+  // (sin persistir sesión, para no tocar la del usuario). Fail-CLOSED — si no
+  // valida, no se cambia nada.
   const anon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON!,
     { auth: { persistSession: false, autoRefreshToken: false } },
   )
-  const { error: signInErr } = await anon.auth.signInWithPassword({ email: profile.email, password })
-  if (!signInErr) {
-    return Response.json({ error: 'La clave nueva debe ser distinta de la actual.' }, { status: 400 })
+  const { error: signInErr } = await anon.auth.signInWithPassword({
+    email: profile.email, password: claveActual,
+  })
+  if (signInErr) {
+    return Response.json({ error: 'La clave actual no es correcta.' }, { status: 400 })
+  }
+
+  const problemas = await assertStrongPassword(password)
+  if (problemas.length > 0) {
+    return Response.json({ error: problemas.join(' '), problemas }, { status: 400 })
   }
 
   const db = getSupabaseAdmin()

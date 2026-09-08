@@ -7,7 +7,7 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionMetrics, SeiaProject, MopProject, Seguimiento, SemaforoLog, RegionEje } from '@/lib/types'
 import { INE_CODE } from '@/lib/regions'
-import { requireAuth, requireCan } from '@/lib/apiAuth'
+import { requireAuth, requireCan, isRegionRestricted } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { minutaPostSchema } from '@/lib/schemas'
 import {
@@ -133,9 +133,9 @@ export async function POST(request: Request) {
   // deja pasar el resto de Region (capital, zona) que el PDF puede usar.
   const body = parse.data as typeof parse.data & { region: Region }
 
-  // regional / filtered-viewer can only generate minutas for their assigned regions
-  const isRestricted = authProfile.role === 'regional' ||
-    (authProfile.role === 'viewer' && authProfile.region_cods.length > 0)
+  // regional / seremi / filtered-viewer can only generate minutas for their
+  // assigned regions (ver isRegionRestricted)
+  const isRestricted = isRegionRestricted(authProfile)
   if (isRestricted && !authProfile.region_cods.includes(body.region.cod)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   }

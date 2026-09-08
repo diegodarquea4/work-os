@@ -1,5 +1,5 @@
 -- ============================================================================
--- 088_permisos_pas.sql
+-- 095_permisos_pas.sql
 --
 -- Módulo de Permisos (PAS — Permisos Ambientales Sectoriales) para la ficha
 -- de proyectos privados del Comité Económico:
@@ -14,7 +14,13 @@
 --   · `comite_economico_proyecto_seguimiento.permiso_id` — un avance puede
 --     asociarse a uno de los permisos del proyecto (o ser general, NULL).
 --   · `user_profiles.ministerio` — para filtrar avances por el ministerio
---     del autor (cada usuario queda asociado a uno, vía Admin > Usuarios).
+--     del autor. OJO: esto se escribió antes de que la mig 087 (rol SEREMI)
+--     creara la MISMA columna, que además la usa para ACOTAR el acceso vía
+--     `current_user_sees_ministerio()`. El ALTER de acá quedó idempotente y
+--     sin efecto, y la columna hoy la gobierna la 087: solo se puebla para
+--     el rol `seremi`, porque un valor no nulo en cualquier otro rol le
+--     achica la cartera que ese usuario ve. Mientras siga así, el filtro
+--     por ministerio de los avances solo separa a los SEREMI.
 -- ============================================================================
 
 ALTER TABLE public.user_profiles

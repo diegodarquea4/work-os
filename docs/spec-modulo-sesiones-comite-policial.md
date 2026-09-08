@@ -173,7 +173,9 @@ Idempotencia: si el paso 5 falla tras el 3, no debe poder re-ejecutarse la suma 
 - Métricas con `se_reporta_en_sesion=true`: bloquear edición inline de `valor_actual` (el valor entra por sesión; evita doble conteo en las suma).
 
 ### `SesionModal.tsx` (nuevo)
-Modal grande, 5 zonas en este orden (el orden es producto, no estética):
+> **Actualización 2026-09-08 — consola a pantalla completa.** La sesión ya no es un modal centrado: ocupa toda la pantalla con el esqueleto del Gabinete Regional (`components/sesiones/ConsolaSesionShell`): cabecera (nombre · fecha editable · lugar · «En sesión» · Asistencia N/M · **Terminar sesión** · ✕), **riel izquierdo** con las zonas de abajo (y, dentro del reporte, una entrada por institución de la región) y un panel principal que muestra **solo la zona activa**, con ← Anterior / Siguiente → al pie. «Terminar sesión» abre una **pantalla de cierre** (`CierreSesionComite`) que revisa en 4 movimientos (compromisos anteriores · reporte por institución · compromisos de hoy · asistencia) y ofrece Previsualizar / Generar acta y cerrar. **Sin bloqueos nuevos**: solo avisos ámbar. La metodología, los datos y los endpoints son los mismos que se describen a continuación; cambió la superficie. La numeración de las zonas se conserva.
+
+Zonas en este orden (el orden es producto, no estética):
 1. **Compromisos anteriores** — botones de estado (cumplido/en curso/pendiente). Es lo primero que se ve.
 2. **Asistencia** — checkboxes sobre nómina activa + "agregar invitado" (filas `INV`, no tocan `sesion_nomina`).
 3. **Indicadores** — filas precargadas (métricas `se_reporta_en_sesion`), muestra valor de la sesión anterior como referencia y a qué métrica alimenta. "+ indicador no contemplado" crea métrica nueva (pide tipo) con `se_reporta_en_sesion=true`.

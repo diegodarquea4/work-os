@@ -288,7 +288,7 @@ function exportPDF(rows: PregoRow[], avgAvance: number) {
 
   const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
-  window.open(url, '_blank')
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function PregoMonitoreoView({ userName, canEditRegion }: Props) {

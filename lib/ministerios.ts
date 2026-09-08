@@ -167,3 +167,39 @@ export function splitMinisterio(raw: string | null | undefined): string[] {
     .map(s => s.trim())
     .filter(Boolean)
 }
+
+/** Nombre histórico del ministerio ANTES de dividirse en Interior y Seguridad
+ *  Pública. Las 519 iniciativas que lo llevan están mal categorizadas (decisión
+ *  Diego 2026-09-03): NO son cartera de ningún SEREMI hasta recategorizarlas.
+ *  Se excluye explícitamente porque `normalizeMinisterio` lo colapsa a
+ *  'Ministerio del Interior' (regla compartida con el filtro del Dashboard, que
+ *  no se toca) — y la RLS de la mig 087 tampoco lo hace calzar. */
+const MINISTERIO_COMBINADO_HISTORICO = 'ministerio del interior y seguridad publica'
+
+/**
+ * ¿La iniciativa cae dentro de la cartera de un SEREMI? (rol `seremi`, mig 087)
+ *
+ * El campo `ministerio` de una iniciativa es multi-valor (';'), así que basta con
+ * que el ministerio del SEREMI esté ENTRE los de la iniciativa: el SEREMI de MOP
+ * ve una iniciativa "Ministerio de Vivienda y Urbanismo;Ministerio de Obras
+ * Públicas". Ambos lados se normalizan, de modo que las variantes sin tilde o
+ * abreviadas ("Ministerio de Obras Publicas", "Min. Obras Publicas") también
+ * calzan.
+ *
+ * Fail-closed: un SEREMI sin ministerio asignado no ve nada, y 'Sin asignar'
+ * nunca actúa de comodín. Espeja `current_user_sees_ministerio()` de la BD, que
+ * es la barrera dura; esto es el filtro de UI.
+ */
+export function ministerioCalza(
+  ministerioSeremi: string | null | undefined,
+  ministerioIniciativa: string | null | undefined,
+): boolean {
+  const raw = (ministerioSeremi ?? '').trim()
+  if (!raw) return false
+  if (strip(raw) === MINISTERIO_COMBINADO_HISTORICO) return false
+  const clave = normalizeMinisterio(raw)
+  if (clave === 'Sin asignar') return false
+  return splitMinisterio(ministerioIniciativa).some(parte =>
+    strip(parte) !== MINISTERIO_COMBINADO_HISTORICO && normalizeMinisterio(parte) === clave,
+  )
+}

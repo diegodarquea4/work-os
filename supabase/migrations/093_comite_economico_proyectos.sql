@@ -1,5 +1,5 @@
 -- ============================================================================
--- 086_comite_economico_proyectos.sql
+-- 093_comite_economico_proyectos.sql
 --
 -- Cartera de proyectos del Comité Económico — dos fuentes:
 --   · Privados: tabla nueva `comite_economico_proyecto`, cargados a mano

@@ -10,7 +10,7 @@
  * Files update semestral (June, December).
  *
  * Auth:
- *   GET  — Vercel Cron (x-vercel-cron: 1)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual (Authorization: Bearer <CRON_SECRET>)
  */
 

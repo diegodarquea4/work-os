@@ -1,11 +1,11 @@
 -- ============================================================================
--- 089_oficios_cartera_privada.sql
+-- 096_oficios_cartera_privada.sql
 --
 -- Los oficios tratados del Comité Económico (sesion_oficios_tratados,
 -- mig 051) referenciaban el proyecto que consideran solo contra el catálogo
 -- SEIA legado (proyecto_id → v2_proyectos_inversion). Se amplía con el mismo
--- patrón ya usado en sesion_proyectos (mig 086) y sesion_compromisos (mig
--- 087): puede referenciar un proyecto privado O una iniciativa pública
+-- patrón ya usado en sesion_proyectos (mig 093) y sesion_compromisos (mig
+-- 094): puede referenciar un proyecto privado O una iniciativa pública
 -- (prioridad_id, ya genérico) en vez de únicamente el catálogo SEIA.
 -- ============================================================================
 

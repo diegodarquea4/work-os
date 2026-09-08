@@ -21,7 +21,8 @@ import React from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { Seguimiento } from '@/lib/types'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, isRegionRestricted } from '@/lib/apiAuth'
+import { ministerioCalza } from '@/lib/ministerios'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { splitMinisterios } from '@/lib/config'
 import { carteraPdfSchema } from '@/lib/schemas'
@@ -53,9 +54,9 @@ export async function POST(request: Request) {
   // el PDF lo necesita completo. El passthrough() del schema lo deja pasar.
   const body = parse.data as typeof parse.data & { region: Region }
 
-  // Restricción regional: regional/viewer solo pueden generar PDFs de regiones asignadas
-  const isRestricted = authProfile.role === 'regional' ||
-    (authProfile.role === 'viewer' && authProfile.region_cods.length > 0)
+  // Restricción regional: regional/seremi/viewer-filtrado solo pueden generar
+  // PDFs de sus regiones asignadas (ver isRegionRestricted).
+  const isRestricted = isRegionRestricted(authProfile)
   if (isRestricted && !authProfile.region_cods.includes(body.region.cod)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
   }
@@ -73,7 +74,15 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: `DB: ${iniErr.message}` }), { status: 500 })
   }
 
-  const iniciativas = (rawIniciativas ?? []) as Iniciativa[]
+  const todasLaRegion = (rawIniciativas ?? []) as Iniciativa[]
+
+  // 1b. Corte por ministerio para el rol SEREMI. La query de arriba usa
+  // service-role y por lo tanto BYPASSA la RLS (incluido
+  // current_user_sees_ministerio de la mig 087): sin este filtro un SEREMI se
+  // llevaría la cartera completa de la región en PDF.
+  const iniciativas = authProfile.role === 'seremi'
+    ? todasLaRegion.filter(p => ministerioCalza(authProfile.ministerio, p.ministerio))
+    : todasLaRegion
 
   // 2. Filtrar por flag en_foco si corresponde
   const filtradas = body.soloEnFoco

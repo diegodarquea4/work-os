@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { REGIONS } from '@/lib/regions'
+import { SEREMIS_CANONICAS } from '@/lib/cartera'
 import type { UserRole } from '@/lib/apiAuth'
-import { LISTA_CANONICA } from '@/lib/ministerios'
 import DocumentosRegionalesPanel from './DocumentosRegionalesPanel'
 import ImportProposalsPanel from './ImportProposalsPanel'
 import { Alert } from '@/components/ui'
@@ -15,13 +15,14 @@ type UserRow = {
   full_name: string | null
   role: UserRole
   region_cods: string[]
-  // Ministerio del usuario (mig 088) — alimenta el filtro por ministerio de
-  // los avances de proyectos del Comité Económico.
+  /** Solo rol seremi: ministerio canónico que acota su cartera (mig 087). */
   ministerio: string | null
   created_at: string
   // ISO timestamp del último login (auth.users.last_sign_in_at). null si el
   // usuario nunca inició sesión (recién creado y no entró todavía).
   last_sign_in_at: string | null
+  /** true si tiene un factor TOTP verificado (verificación en dos pasos activa). */
+  mfa_activo: boolean
 }
 
 /** Etiqueta y color para "Último acceso" según antigüedad. */
@@ -42,6 +43,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   editor:   'Editor',
   regional: 'Regional',
   viewer:   'Solo lectura',
+  seremi:   'SEREMI',
 }
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -49,6 +51,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   editor:   'bg-blue-100 text-blue-700',
   regional: 'bg-teal-100 text-teal-700',
   viewer:   'bg-gray-100 text-gray-600',
+  seremi:   'bg-amber-100 text-amber-700',
 }
 
 /** Inline multi-region picker for regional users — uses fixed positioning to escape overflow:hidden */
@@ -147,7 +150,7 @@ export default function AdminUsersView() {
   const [inviteName, setInviteName]     = useState('')
   const [inviteRole, setInviteRole]     = useState<UserRole>('viewer')
   const [inviteRegions, setInviteRegions] = useState<string[]>([])
-  const [inviteMinisterio, setInviteMinisterio] = useState('')
+  const [inviteMinisterio, setInviteMinisterio] = useState<string>('')
   const [inviting, setInviting]         = useState(false)
   const [inviteError, setInviteError]   = useState<string | null>(null)
 
@@ -182,10 +185,29 @@ export default function AdminUsersView() {
     if (res.ok) {
       setUsers(prev => prev.map(u =>
         u.id === id
-          ? { ...u, role, region_cods: (role !== 'regional' && role !== 'viewer') ? [] : u.region_cods }
+          ? {
+              ...u,
+              role,
+              region_cods: (role !== 'regional' && role !== 'viewer' && role !== 'seremi') ? [] : u.region_cods,
+              // El ministerio solo vive en el rol seremi (el server hace lo mismo).
+              ministerio: role === 'seremi' ? u.ministerio : null,
+            }
           : u
       ))
     } else { setError('Error al actualizar rol') }
+    setSaving(null)
+  }
+
+  async function handleMinisterioChange(id: string, ministerio: string | null) {
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ministerio }),
+    })
+    if (res.ok) {
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, ministerio } : u))
+    } else { setError('Error al actualizar ministerio') }
     setSaving(null)
   }
 
@@ -199,19 +221,6 @@ export default function AdminUsersView() {
     if (res.ok) {
       setUsers(prev => prev.map(u => u.id === id ? { ...u, region_cods } : u))
     } else { setError('Error al actualizar regiones') }
-    setSaving(null)
-  }
-
-  async function handleMinisterioChange(id: string, ministerio: string) {
-    setSaving(id)
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ministerio: ministerio || null }),
-    })
-    if (res.ok) {
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, ministerio: ministerio || null } : u))
-    } else { setError('Error al actualizar ministerio') }
     setSaving(null)
   }
 
@@ -265,6 +274,30 @@ export default function AdminUsersView() {
     setSaving(null)
   }
 
+  // Reinicia el 2FA de alguien que perdió el teléfono Y los códigos de respaldo.
+  // Es la última salida: primero debería usar un código de respaldo él mismo.
+  async function handleResetear2fa(id: string, email: string) {
+    if (!confirm(
+      `¿Reiniciar la verificación en dos pasos de ${email}?\n\n` +
+      `Se borran su configuración y sus códigos de respaldo, y se cierran sus sesiones. ` +
+      `Entrará solo con su clave y deberá configurarla de nuevo.\n\n` +
+      `Úsalo solo si perdió el teléfono Y los códigos de respaldo.`
+    )) return
+    setSaving(id)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetear_2fa: true }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setError(body.error ?? 'Error al reiniciar la verificación en dos pasos')
+    } else {
+      await loadUsers()
+    }
+    setSaving(null)
+  }
+
   // Siembra los permisos base (espejo del rol) de los usuarios que aún no tienen
   // ninguno — para usuarios nuevos o para el primer poblado. No pisa lo ya
   // personalizado desde el editor.
@@ -289,8 +322,8 @@ export default function AdminUsersView() {
         email: inviteEmail.trim(),
         full_name: inviteName.trim() || undefined,
         role: inviteRole,
-        region_cods: (inviteRole === 'regional' || inviteRole === 'viewer') ? inviteRegions : [],
-        ministerio: inviteMinisterio || undefined,
+        region_cods: (inviteRole === 'regional' || inviteRole === 'viewer' || inviteRole === 'seremi') ? inviteRegions : [],
+        ministerio: inviteRole === 'seremi' ? (inviteMinisterio || null) : null,
       }),
     })
     const body = await res.json().catch(() => ({}))
@@ -437,7 +470,6 @@ export default function AdminUsersView() {
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Regiones asignadas</th>
-                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ministerio</th>
                         <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</th>
                         <th className="px-5 py-3"></th>
                       </tr>
@@ -463,39 +495,57 @@ export default function AdminUsersView() {
                                 <option value="admin">Administrador</option>
                                 <option value="editor">Editor</option>
                                 <option value="regional">Regional</option>
+                                <option value="seremi">SEREMI</option>
                                 <option value="viewer">Solo lectura</option>
                               </select>
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
-                            {(u.role === 'regional' || u.role === 'viewer') ? (
-                              <RegionPicker
-                                value={u.region_cods}
-                                disabled={saving === u.id}
-                                onChange={cods => handleRegionsChange(u.id, cods)}
-                              />
+                            {(u.role === 'regional' || u.role === 'viewer' || u.role === 'seremi') ? (
+                              <div className="flex flex-col gap-1.5 items-start">
+                                <RegionPicker
+                                  value={u.region_cods}
+                                  disabled={saving === u.id}
+                                  onChange={cods => handleRegionsChange(u.id, cods)}
+                                />
+                                {/* El SEREMI se acota además por ministerio (mig 087):
+                                    solo ve/toca su cartera dentro de su región. */}
+                                {u.role === 'seremi' && (
+                                  <select
+                                    value={u.ministerio ?? ''}
+                                    disabled={saving === u.id}
+                                    onChange={e => handleMinisterioChange(u.id, e.target.value || null)}
+                                    className={`text-[11px] border rounded px-1.5 py-1 max-w-[220px] focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 ${
+                                      u.ministerio ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'
+                                    }`}
+                                    title="Ministerio que representa este SEREMI"
+                                  >
+                                    <option value="">— Sin ministerio (no ve nada) —</option>
+                                    {SEREMIS_CANONICAS.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-gray-300 text-xs">—</span>
                             )}
                           </td>
                           <td className="px-5 py-3.5">
-                            <select
-                              value={u.ministerio ?? ''}
-                              disabled={saving === u.id}
-                              onChange={e => handleMinisterioChange(u.id, e.target.value)}
-                              className="text-xs border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 max-w-[160px]"
-                            >
-                              <option value="">— Sin asignar —</option>
-                              {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                          </td>
-                          <td className="px-5 py-3.5">
                             {(() => {
                               const { label, color, sub } = formatUltimoAcceso(u.last_sign_in_at)
                               return (
-                                <div className="flex flex-col" title={u.last_sign_in_at ?? 'Nunca'}>
+                                <div className="flex flex-col gap-1" title={u.last_sign_in_at ?? 'Nunca'}>
                                   <span className={`text-xs font-medium ${color}`}>{label}</span>
                                   {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+                                  <span
+                                    className={`inline-flex w-fit items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                      u.mfa_activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                    }`}
+                                    title={u.mfa_activo
+                                      ? 'Verificación en dos pasos configurada'
+                                      : 'Todavía sin verificación en dos pasos'}
+                                  >
+                                    {u.mfa_activo ? '2FA activa' : '2FA pendiente'}
+                                  </span>
                                 </div>
                               )
                             })()}
@@ -533,6 +583,18 @@ export default function AdminUsersView() {
                                   <rect x="3" y="6" width="8" height="6" rx="1"/><path d="M5 6V4a2 2 0 0 1 4 0v2"/>
                                 </svg>
                               </button>
+                              {u.mfa_activo && (
+                                <button
+                                  onClick={() => handleResetear2fa(u.id, u.email)}
+                                  disabled={saving === u.id}
+                                  className="p-1.5 text-gray-300 hover:text-violet-600 transition-colors rounded hover:bg-violet-50 disabled:opacity-40"
+                                  title="Reiniciar verificación en dos pasos (perdió teléfono y códigos)"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="2.5" y="6" width="9" height="6" rx="1.5"/><path d="M4.5 6V4a2.5 2.5 0 0 1 5 0"/><path d="M6 9h2"/>
+                                  </svg>
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDelete(u.id, u.email)}
                                 disabled={saving === u.id}
@@ -590,29 +652,33 @@ export default function AdminUsersView() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
                 <select
                   value={inviteRole}
-                  onChange={e => { setInviteRole(e.target.value as UserRole); setInviteRegions([]) }}
+                  onChange={e => { setInviteRole(e.target.value as UserRole); setInviteRegions([]); setInviteMinisterio('') }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
                 >
                   <option value="admin">Administrador — acceso total + gestión de usuarios</option>
                   <option value="editor">Editor — acceso total de edición</option>
                   <option value="regional">Regional — edita solo sus regiones asignadas</option>
+                  <option value="seremi">SEREMI — solo su región y su ministerio</option>
                   <option value="viewer">Solo lectura — sin edición</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ministerio <span className="text-gray-400 font-normal">(opcional)</span>
-                </label>
-                <select
-                  value={inviteMinisterio}
-                  onChange={e => setInviteMinisterio(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
-                >
-                  <option value="">— Sin asignar —</option>
-                  {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-              {(inviteRole === 'regional' || inviteRole === 'viewer') && (
+              {inviteRole === 'seremi' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ministerio *</label>
+                  <select
+                    value={inviteMinisterio}
+                    onChange={e => setInviteMinisterio(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
+                  >
+                    <option value="">— Elegir ministerio —</option>
+                    {SEREMIS_CANONICAS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Solo verá las iniciativas de su región cuyo ministerio sea este. Elegí además <b>una</b> región abajo.
+                  </p>
+                </div>
+              )}
+              {(inviteRole === 'regional' || inviteRole === 'viewer' || inviteRole === 'seremi') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Regiones asignadas{' '}

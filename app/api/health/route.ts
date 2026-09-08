@@ -7,7 +7,7 @@
  * devuelve un resumen.
  *
  * Auth:
- *   GET  — Vercel Cron (header: x-vercel-cron: 1)
+ *   GET  — Authorization: Bearer <CRON_SECRET>
  *   POST — Manual / health checks externos (Authorization: Bearer <CRON_SECRET>)
  *
  * Comportamiento:
@@ -25,6 +25,7 @@
 
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -58,10 +59,7 @@ const EXPECTED_DAYS: Record<string, { intervalDays: number; cron: string; descri
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 function isAuthorized(req: NextRequest): boolean {
-  if (req.headers.get('x-vercel-cron') === '1') return true
-  const auth = req.headers.get('authorization') ?? ''
-  const secret = process.env.CRON_SECRET
-  return !!secret && auth === `Bearer ${secret}`
+  return isCronAuthorized(req)
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────

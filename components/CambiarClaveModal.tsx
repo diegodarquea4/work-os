@@ -6,8 +6,12 @@
  *     obligatorio (debe_cambiar_clave). Al terminar recarga la página → el flag
  *     queda en false y el panel se muestra.
  *   - 'voluntario': el usuario lo abre desde el menú; se puede cerrar.
- * En ambos, la clave nueva se valida en el servidor (complejidad + HIBP + distinta
- * de la actual) vía POST /api/account/change-password.
+ * En ambos se pide la CLAVE ACTUAL (sin ella, una sesión robada permitía tomar
+ * la cuenta para siempre) y la nueva se valida en el servidor — complejidad,
+ * HIBP y distinta de la actual — vía POST /api/account/change-password.
+ *
+ * En modo 'forzado' el usuario recuerda su clave: el flujo para quien la olvidó
+ * es Recuperación, con código de un solo uso.
  */
 
 import { useState } from 'react'
@@ -18,6 +22,7 @@ export default function CambiarClaveModal({ mode, onClose }: {
   mode: 'forzado' | 'voluntario'
   onClose?: () => void
 }) {
+  const [actual, setActual]   = useState('')
   const [pw, setPw]           = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,13 +33,14 @@ export default function CambiarClaveModal({ mode, onClose }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!actual)           { setError('Ingresa tu clave actual.'); return }
     if (!complexityOk(pw)) { setError('La clave nueva no cumple los requisitos.'); return }
     if (pw !== confirm)    { setError('Las claves no coinciden.'); return }
     setLoading(true)
     const res = await fetch('/api/account/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
+      body: JSON.stringify({ claveActual: actual, password: pw }),
     })
     setLoading(false)
     if (res.ok) {
@@ -80,6 +86,21 @@ export default function CambiarClaveModal({ mode, onClose }: {
           </div>
         ) : (
           <form onSubmit={submit} className="px-6 py-5 space-y-3">
+            <div>
+              <label htmlFor="clave-actual" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Clave actual
+              </label>
+              <input
+                id="clave-actual"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                value={actual}
+                onChange={e => setActual(e.target.value)}
+                disabled={loading}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent disabled:opacity-50"
+              />
+            </div>
             <NewPasswordFields password={pw} setPassword={setPw} confirm={confirm} setConfirm={setConfirm} disabled={loading} />
             {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg leading-relaxed">{error}</p>}
             <button

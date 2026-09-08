@@ -6,6 +6,7 @@ import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS, INE_CODE } from '@/lib/regions'
+import { ministerioCalza } from '@/lib/ministerios'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
@@ -18,13 +19,16 @@ import AutoridadesStatBar from './territorial/AutoridadesStatBar'
 import AutoridadesLeyenda from './territorial/AutoridadesLeyenda'
 import { regionKey } from '@/lib/territorial/politica'
 import { computeComunaStats } from '@/lib/comunaStats'
-import { useInactivityLogout } from '@/lib/hooks/useInactivityLogout'
+import { useInactivityLogout, IDLE_CON_2FA_MS, IDLE_DEFECTO_MS } from '@/lib/hooks/useInactivityLogout'
 import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
 import type { UserProfile } from '@/lib/apiAuth'
 import { UserProvider } from '@/lib/context/UserContext'
 import { can, type UserCapability } from '@/lib/permissions'
 import CambiarClaveModal from './CambiarClaveModal'
+import MfaSetupModal from './MfaSetupModal'
+import MfaBanner from './MfaBanner'
+import { mfaRequirement, mfaRazon, fechaLimiteLegible, type MfaRequirement } from '@/lib/mfaPolicy'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
@@ -50,12 +54,49 @@ const AyudaModal      = dynamic(() => import('./AyudaModal'))
 const CatalogoComiteNacional = dynamic(() => import('./CatalogoComiteNacional'))
 
 export default function WorkOSApp({ projects, geoData }: Props) {
-  const { warning, secondsLeft, extend } = useInactivityLogout()
-
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [capabilities, setCapabilities] = useState<UserCapability[]>([])
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [cambiarClaveOpen, setCambiarClaveOpen] = useState(false)
+
+  // ── Verificación en dos pasos ───────────────────────────────────────────────
+  // `tieneFactor` = la cuenta ya lo configuró; null mientras se averigua (así no
+  // parpadea el aviso en la primera pintada). La sesión con el código pendiente
+  // ni siquiera llega acá: la ataja el proxy.
+  const [tieneFactor, setTieneFactor] = useState<boolean | null>(null)
+  const [mfaSetupOpen, setMfaSetupOpen] = useState(false)
+  const [avisoMfaPospuesto, setAvisoMfaPospuesto] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+    getSupabase().auth.mfa.getAuthenticatorAssuranceLevel()
+      .then(({ data }) => {
+        if (cancelado) return
+        // nextLevel 'aal2' significa que hay un factor verificado.
+        setTieneFactor(data?.nextLevel === 'aal2')
+      })
+      // Si no se puede averiguar, se asume que lo tiene: es preferible no
+      // molestar con un aviso equivocado. El bloqueo real vive en el proxy.
+      .catch(() => { if (!cancelado) setTieneFactor(true) })
+    return () => { cancelado = true }
+  }, [])
+
+  const requerimientoMfa: MfaRequirement =
+    profile && tieneFactor !== null
+      ? mfaRequirement({
+          role:           profile.role,
+          tieneFactor,
+          cuentaCreadaEl: profile.created_at ?? null,
+          hoy:            new Date(),
+        })
+      : 'none'
+
+  // Una sesión que ya pasó el segundo factor dura más sin actividad: repetir
+  // clave + código varias veces al día fue parte de lo que hundió el intento de
+  // agosto.
+  const { warning, secondsLeft, extend } = useInactivityLogout(
+    tieneFactor ? IDLE_CON_2FA_MS : IDLE_DEFECTO_MS,
+  )
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(data => {
@@ -107,25 +148,22 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return can(capabilities, 'prego.editar', codeForRegionArg(regionNombreOrCod))
   }, [capabilities, codeForRegionArg])
 
-  // Cods that regional/filtered-viewer users cannot open
+  // Cods that regional/seremi/filtered-viewer users cannot open
   const lockedRegions: string[] =
-    (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0))
+    (profile?.role === 'regional' || profile?.role === 'seremi' || (profile?.role === 'viewer' && profile.region_cods.length > 0))
       ? REGIONS.filter(r => !profile!.region_cods.includes(r.cod)).map(r => r.cod)
       : []
 
   const [view, setView]                       = useState<View>('mapa')
-  // Pane inicial de Gabinete — SIEMPRE Preparación (decisión Diego 2026-08-05:
-  // al entrar a Gabinete se aterriza primero en la preparación de la sesión).
-  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('preparacion')
+  // Pane inicial del Tablero (ex Gabinete). Se aterriza en el Tablero (kanban);
+  // la Preparación es una sub-vista gateada por `comite.gabinete.preparar` y se
+  // llega vía el toggle o el CTA "preparar sesión" cuando no hay una preparada.
+  const [kanbanInitialPane, setKanbanInitialPane] = useState<'preparacion' | 'tablero'>('tablero')
   // Región a preseleccionar en Métricas > Resumen cuando se llega ahí desde el
   // link "Ver más indicadores" del Mapa. Se limpia al navegar a Métricas por
   // cualquier otra vía para no dejarla "pegada" en visitas futuras.
   const [metricasInitialRegion, setMetricasInitialRegion] = useState<string | undefined>(undefined)
-  const [viewDropOpen, setViewDropOpen]        = useState(false)
-  const [dropPos, setDropPos]                  = useState({ top: 0, left: 0 })
-  const viewDropRef                            = useRef<HTMLDivElement>(null)
-  const viewDropBtnRef                         = useRef<HTMLButtonElement>(null)
-  // Menú de configuración (tuerca): PREGO / Permisos / Cambiar clave / Cerrar
+  // Menú de configuración (tuerca): Desalojos / PREGO / Permisos / Cambiar clave / Cerrar
   // sesión. Saca del header los accesos de baja frecuencia. Anclado a la
   // derecha (right, no left — el botón vive en el borde derecho del header).
   const [gearOpen, setGearOpen]                = useState(false)
@@ -217,7 +255,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // selectores de Kanban/Atención para que muestren TODAS las regiones aunque
   // estén vacías, respetando la restricción de visibilidad.
   const allowedRegionNames: string[] | null = useMemo(() => {
-    if (profile?.role === 'regional' || (profile?.role === 'viewer' && profile.region_cods.length > 0)) {
+    if (profile?.role === 'regional' || profile?.role === 'seremi' || (profile?.role === 'viewer' && profile.region_cods.length > 0)) {
       return REGIONS.filter(r => profile!.region_cods.includes(r.cod)).map(r => r.nombre)
     }
     return null
@@ -230,22 +268,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const canSeeDesalojos =
     profile?.role === 'admin' || profile?.role === 'regional' || profile?.role === 'viewer'
   const desalojosReadOnly = profile?.role !== 'admin'
-  const GROUPED_VIEWS: { key: View; label: string; visible?: boolean }[] = [
-    { key: 'dashboard',      label: 'Dashboard' },
-    { key: 'kanban',         label: 'Gabinete'  },
-    { key: 'desalojos',      label: 'Desalojos', visible: canSeeDesalojos },
-  ]
-  const visibleGroupedViews = GROUPED_VIEWS.filter(v => v.visible !== false)
-  const isGroupedActive  = visibleGroupedViews.some(v => v.key === view)
-  const activeGroupLabel = visibleGroupedViews.find(v => v.key === view)?.label ?? 'Seguimiento'
-
-  function handleViewDropToggle() {
-    if (!viewDropOpen && viewDropBtnRef.current) {
-      const rect = viewDropBtnRef.current.getBoundingClientRect()
-      setDropPos({ top: rect.bottom + 4, left: rect.left })
-    }
-    setViewDropOpen(prev => !prev)
-  }
 
   function handleGearToggle() {
     if (!gearOpen && gearBtnRef.current) {
@@ -357,36 +379,35 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .catch(() => setActividadLoading(false))
   }, [])
 
-  // Initiatives visible to this user (regional + filtered-viewer only see assigned regions)
+  // Initiatives visible to this user (regional + filtered-viewer + seremi only
+  // see assigned regions; el seremi además se acota por ministerio)
   const needsRegionFilter =
     profile?.role === 'regional' ||
+    profile?.role === 'seremi' ||
     (profile?.role === 'viewer' && profile.region_cods.length > 0)
+
+  // Ministerio del SEREMI, normalizado una vez. NULL para el resto de los roles
+  // → sin corte por ministerio. La barrera dura es la RLS (mig 087): esto es
+  // defensa en profundidad y mantiene coherentes los agregados del Mapa.
+  const ministerioSeremi = profile?.role === 'seremi' ? (profile.ministerio ?? null) : null
 
   // Memoizado: además de estabilizar props, es la fuente de los agregados del
   // Mapa (abajo), que deben reflejar SOLO lo que el usuario puede ver (Fase 3).
-  const visibleIniciativas: Iniciativa[] = useMemo(() => needsRegionFilter
-    ? localIniciativas.filter(p => {
+  const visibleIniciativas: Iniciativa[] = useMemo(() => {
+    if (!needsRegionFilter && !ministerioSeremi) return localIniciativas
+    return localIniciativas.filter(p => {
+      if (needsRegionFilter) {
         const r = REGIONS.find(r => r.nombre === p.region)
-        return r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
-      })
-    : localIniciativas,
-  [localIniciativas, needsRegionFilter, profile])
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      const target = e.target as Node
-      if (
-        viewDropRef.current && !viewDropRef.current.contains(target) &&
-        viewDropBtnRef.current && !viewDropBtnRef.current.contains(target)
-      ) {
-        setViewDropOpen(false)
+        const enRegion = r ? profile!.region_cods.includes(r.cod) : profile!.region_cods.includes(p.region)
+        if (!enRegion) return false
       }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
+      // Multi-ministerio ("Min A;Min B"): basta que el suyo esté entre ellos.
+      if (ministerioSeremi && !ministerioCalza(ministerioSeremi, p.ministerio)) return false
+      return true
+    })
+  }, [localIniciativas, needsRegionFilter, ministerioSeremi, profile])
 
-  // Cerrar el menú tuerca al clickear fuera (mismo patrón del dropdown de vistas).
+  // Cerrar el menú tuerca al clickear fuera.
   useEffect(() => {
     if (!gearOpen) return
     function onClickOutside(e: MouseEvent) {
@@ -597,8 +618,22 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // Cambio de clave obligatorio: el overlay bloquea el panel ANTES de mostrarlo.
   // El panel no se rinde hasta que el usuario crea la clave (recarga → flag en false).
+  // Va PRIMERO: si además le toca configurar el 2FA, eso viene después.
   if (profile?.debe_cambiar_clave) {
     return <CambiarClaveModal mode="forzado" />
+  }
+
+  // Le toca configurar la verificación en dos pasos: overlay sin salida. La
+  // razón solo cambia el texto — a una cuenta nueva se le da la bienvenida, no
+  // se le notifica un plazo que nunca vio.
+  if (requerimientoMfa === 'block') {
+    return (
+      <MfaSetupModal
+        bloqueante
+        razon={mfaRazon(profile?.created_at ?? null)}
+        onListo={() => window.location.reload()}
+      />
+    )
   }
 
   return (
@@ -611,6 +646,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       capabilities={capabilities}
     >
     <div className="flex flex-col h-screen bg-gray-50">
+      {/* Aviso previo del 2FA: los días anteriores a que sea obligatorio para
+          este rol. No bloquea; se puede posponer hasta la próxima carga. */}
+      {requerimientoMfa === 'warn' && !avisoMfaPospuesto && profile && (
+        <MfaBanner
+          fechaLimite={fechaLimiteLegible(profile.role) ?? ''}
+          onConfigurar={() => setMfaSetupOpen(true)}
+          onPosponer={() => setAvisoMfaPospuesto(true)}
+        />
+      )}
       {/* Header */}
       <header className="flex-shrink-0 h-20 bg-slate-900 flex items-center justify-between px-8 shadow-md z-10">
         <div className="flex items-center gap-4">
@@ -636,24 +680,28 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mapa
             </button>
-            {/* Grouped views dropdown trigger */}
-            <div ref={viewDropRef}>
-              <button
-                ref={viewDropBtnRef}
-                onClick={handleViewDropToggle}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isGroupedActive ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
-                </svg>
-                {activeGroupLabel}
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ transform: viewDropOpen ? 'rotate(180deg)' : 'none' }}>
-                  <path d="M2 4l3 3 3-3"/>
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={() => setView('dashboard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'dashboard' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1.5 2.5h9M1.5 6h9M1.5 9.5h6"/>
+              </svg>
+              Iniciativas
+            </button>
+            <button
+              onClick={() => { setKanbanInitialPane('tablero'); setView('kanban') }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                view === 'kanban' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" strokeLinejoin="round"/>
+              </svg>
+              Tablero
+            </button>
             <button
               onClick={() => setView('vista-regional')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -666,7 +714,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               </svg>
               Mi Región
             </button>
-            {/* PREGO y Permisos viven en el menú tuerca (configuración) —
+            {/* Desalojos, PREGO y Permisos viven en el menú tuerca (configuración) —
                 accesos de baja frecuencia fuera de la barra principal. */}
           </div>
 
@@ -796,6 +844,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             onActiveRegionChange={setActiveRegionName}
             onUpdatePrioridad={handleUpdatePrioridad}
             onDeletePrioridad={handleDeletePrioridad}
+            onIrAPreparacion={regionNombre => { setActiveRegionName(regionNombre); setKanbanInitialPane('preparacion'); setView('kanban') }}
           />
         </div>
       )}
@@ -983,36 +1032,30 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       )}
 
       {/* View dropdown — rendered at root level to escape header stacking context */}
-      {viewDropOpen && (
-        <div
-          ref={viewDropRef}
-          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999, minWidth: 140 }}
-          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
-        >
-          {visibleGroupedViews.map(v => (
-            <button
-              key={v.key}
-              onClick={() => { setView(v.key); setViewDropOpen(false) }}
-              className={`block w-full px-3.5 py-2 text-xs text-left transition-colors ${
-                view === v.key
-                  ? 'font-semibold text-violet-700 bg-violet-50'
-                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Menú tuerca — a nivel raíz por la misma razón que el dropdown de
-          vistas (escapar el stacking context del header). Anclado a la derecha. */}
+      {/* Menú tuerca — a nivel raíz para escapar el stacking context del header.
+          Anclado a la derecha. */}
       {gearOpen && (
         <div
           ref={gearMenuRef}
           style={{ position: 'fixed', top: gearPos.top, right: gearPos.right, zIndex: 9999, minWidth: 176 }}
           className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-in fade-in slide-in-from-top-1 duration-100"
         >
+          {canSeeDesalojos && (
+            <button
+              onClick={() => { setView('desalojos'); setGearOpen(false) }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left transition-colors ${
+                view === 'desalojos'
+                  ? 'font-semibold text-violet-700 bg-violet-50'
+                  : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0">
+                <path d="M2 6.8L8 2l6 4.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M3.6 7.6V13a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1V7.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Desalojos
+            </button>
+          )}
           {(profile?.role === 'admin' || profile?.role === 'editor') && (
             <button
               onClick={() => { setView('prego'); setGearOpen(false) }}
@@ -1076,6 +1119,19 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             Cambiar clave
           </button>
           <button
+            onClick={() => { setMfaSetupOpen(true); setGearOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <rect x="3" y="7" width="10" height="7" rx="1.5"/>
+              <path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"/>
+            </svg>
+            <span className="flex-1">Verificación en dos pasos</span>
+            {tieneFactor === true && (
+              <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">Activa</span>
+            )}
+          </button>
+          <button
             onClick={async () => { await getSupabase().auth.signOut(); window.location.href = '/login' }}
             className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-left font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
           >
@@ -1091,6 +1147,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     </div>
     <AyudaModal open={ayudaOpen} onClose={() => setAyudaOpen(false)} />
     {cambiarClaveOpen && <CambiarClaveModal mode="voluntario" onClose={() => setCambiarClaveOpen(false)} />}
+    {mfaSetupOpen && (
+      <MfaSetupModal
+        bloqueante={false}
+        yaConfigurada={tieneFactor === true}
+        onClose={() => setMfaSetupOpen(false)}
+        onListo={() => window.location.reload()}
+      />
+    )}
     </UserProvider>
   )
 }

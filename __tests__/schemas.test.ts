@@ -24,11 +24,24 @@ describe('carteraPdfSchema', () => {
     expect(r.success).toBe(true)
   })
 
-  it('rechaza fecha sin formato YYYY-MM-DD', () => {
+  it('acepta fecha en formato display DD-MM-YYYY (lo que manda toLocaleDateString es-CL)', () => {
+    // `fecha` es solo texto de portada — el PDF la pinta tal cual, no la
+    // parsea — así que el schema NO debe exigir YYYY-MM-DD. Exigirlo dejaba
+    // la descarga en 400 «Solicitud inválida» siempre, porque el cliente
+    // manda exactamente este formato.
     const r = carteraPdfSchema.safeParse({
       region: { cod: 'XV' },
       soloEnFoco: false,
-      fecha: '11-06-2026',  // DD-MM-YYYY → inválido
+      fecha: '11-06-2026',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('rechaza fecha vacía', () => {
+    const r = carteraPdfSchema.safeParse({
+      region: { cod: 'XV' },
+      soloEnFoco: false,
+      fecha: '',
     })
     expect(r.success).toBe(false)
   })

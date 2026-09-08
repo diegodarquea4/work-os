@@ -89,7 +89,7 @@ export default function CierreGabinete({ gabineteNombre, sesionId, fecha, numero
         return
       }
       const url = URL.createObjectURL(await res.blob())
-      window.open(url, '_blank')
+      window.open(url, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch { window.alert('Error de red generando la vista previa del acta.') }
     finally { setPreview(false) }
@@ -114,7 +114,7 @@ export default function CierreGabinete({ gabineteNombre, sesionId, fecha, numero
   async function descargarActa() {
     const res = await fetch(`/api/sesiones/${sesionId}/acta`)
     const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank')
+    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
     else window.alert(body.error ?? 'No se pudo obtener el acta')
   }
 

@@ -77,8 +77,9 @@ export const ACTORES_GABINETE_NO_SEREMI: readonly string[] = [
   'SUBDERE',
 ]
 
-// SEREMIs = LISTA_CANONICA sin los buckets.
-const SEREMIS_CANONICAS: readonly MinisterioCanon[] =
+// SEREMIs = LISTA_CANONICA sin los buckets. Exportada: es también el catálogo
+// de ministerios asignables al rol `seremi` en Usuarios → Permisos (mig 087).
+export const SEREMIS_CANONICAS: readonly MinisterioCanon[] =
   LISTA_CANONICA.filter((m): m is MinisterioCanon => !BUCKETS_NO_CARTERA.has(m))
 
 // Catálogo completo del gabinete: SEREMIs + actores no-SEREMI.

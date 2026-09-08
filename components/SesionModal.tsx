@@ -4,6 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { createPortal } from 'react-dom'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { crearColaPorClave } from '@/lib/colaPorClave'
+import {
+  ESTADO_COMPROMISO, railParaSesion, resumenAsistencia, vecinos, etiquetaZona,
+  type ZonaKey, type ZonaRef,
+} from '@/lib/sesiones/consola'
+import ConsolaSesionShell, { soltarFoco } from './sesiones/ConsolaSesionShell'
+import ConsolaRail from './sesiones/ConsolaRail'
+import ZonaCard from './sesiones/ZonaCard'
+import FechaEditable from './sesiones/FechaEditable'
+import CierreSesionComite from './sesiones/CierreSesionComite'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -19,16 +29,25 @@ import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useTemasGabinete } from '@/lib/hooks/useTemasGabinete'
 import { useInstitucionesComite } from '@/lib/hooks/useComiteMetricas'
-import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
 import ReporteInstitucionZona from './ReporteInstitucionZona'
 import MegaproyectoGroup from './MegaproyectoGroup'
 import CapturaSalaGabinete from './gabinete/CapturaSalaGabinete'
 import { Alert } from '@/components/ui'
 
 /**
- * Formulario de sesión — comités (mig 044), Gabinete Regional (mig 046) y
- * Comité de Infraestructura (mig 060). Zonas EN ESTE ORDEN (el orden es
- * producto, no estética):
+ * CONSOLA DE SESIÓN de los comités — Policial (mig 044) e Infraestructura
+ * (mig 060). El nombre del archivo es histórico: hasta 2026-09-08 esto era un
+ * modal centrado; hoy ocupa toda la pantalla con el esqueleto del Gabinete
+ * (`./sesiones/ConsolaSesionShell`): cabecera + riel izquierdo con las zonas
+ * + panel principal que muestra SOLO la zona activa. El cambio fue visual, a
+ * pedido de Diego: lo que se registra y el cierre son los mismos.
+ *
+ * La rama `instancia='gabinete'` está MUERTA en producción (GabineteRegionalTab
+ * abre la Consola v2 del gabinete) pero compila: sin riel, con las zonas
+ * apiladas. Se limpia aparte, junto con el rename del archivo.
+ *
+ * Zonas EN ESTE ORDEN (el orden es producto, no estética; la numeración es la
+ * misma que veía el usuario en el modal):
  *   1. Compromisos anteriores (verificación — lo primero que se ve).
  *      Gabinete: propios ∪ escalados desde comités ∪ mandatos a verificar.
  *      Infraestructura: propios (nada escala HACIA ella).
@@ -47,7 +66,7 @@ import { Alert } from '@/components/ui'
  *      Gabinete Regional (reusa escalado_a_gabinete, no es instancia nueva).
  *
  * El borrador se persiste EN CADA interacción (safeWrite onBlur/onClick) —
- * "Guardar borrador" solo cierra el modal. "Cerrar sesión" llama al
+ * la ✕ de la cabecera solo cierra la consola. "Cerrar sesión" llama al
  * endpoint server-side que (en comité) aplica métricas y genera el acta.
  *
  * Un solo borrador por (región, instancia[, eje]): si viene borradorId se
@@ -98,12 +117,6 @@ const SIN_INICIATIVAS: Iniciativa[] = []
 const SIN_EJES: RegionEje[] = []
 const SIN_MEGAPROYECTOS: string[] = []
 
-const ESTADO_COMPROMISO = {
-  pendiente: { label: 'Pendiente', on: 'bg-gray-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-  en_curso:  { label: 'En curso',  on: 'bg-blue-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-  cumplido:  { label: 'Cumplido',  on: 'bg-green-600 text-white',  off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-} as const
-
 function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
@@ -111,16 +124,6 @@ function hoyISO(): string {
 function fmtFecha(fecha: string | null): string {
   if (!fecha) return '—'
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-/** Chevron de expandir/colapsar una zona (rota 180° al abrir). */
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"
-      className={`flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}>
-      <path d="M2.5 4.5L6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
 }
 
 export default function SesionModal(props: Props) {
@@ -166,19 +169,25 @@ export default function SesionModal(props: Props) {
   const [compAnteriores, setCompAnteriores] = useState<(SesionCompromiso & { origenTipo?: OrigenCompromisoGabinete })[]>([])
   const [nomina, setNomina]                 = useState<SesionNomina[]>([])
   const [asistencia, setAsistencia]         = useState<SesionAsistencia[]>([])
-  // Zona Asistencia colapsable — para ganar espacio en el acta en curso.
-  const [asistenciaOpen, setAsistenciaOpen] = useState(true)
+  // Zona activa de la consola (la que muestra el panel principal). En el
+  // reporte, `inst` es la institución; el riel y los botones ←/→ la mueven.
+  const [activa, setActiva]                 = useState<ZonaRef>({ zona: 'anteriores' })
   // Zona 3 comité: reporte de métricas por institución (mig 048 — reemplaza
   // los indicadores suma/pulso). Catálogo por región + valores de la sesión +
   // valores de la sesión cerrada anterior (WoW).
   const [comiteCatalogo, setComiteCatalogo]     = useState<ComiteMetrica[]>([])
   const [comiteValores, setComiteValores]       = useState<SesionComiteValor[]>([])
   const [comiteValoresPrev, setComiteValoresPrev] = useState<Map<number, SesionComiteValor>>(new Map())
+  // Cola de guardados por métrica del reporte: vive acá (no en
+  // ReporteInstitucionZona) para sobrevivir al desmontaje de la zona cuando la
+  // consola muestra otra. Ver el JSDoc de ReporteInstitucionZona.
+  const encolarComite = useRef(crearColaPorClave<number>()).current
   // Instituciones que reportan (mig 078) — dinámicas por región (4 base + propias).
   const { instituciones: comiteInstituciones, refresh: reloadComiteInstituciones } =
     useInstitucionesComite(region.cod, props.instancia === 'eje')
   // Zona 4 gabinete: apuntes por institución (el comité ya no usa esta zona).
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
+  const encolarApunte = useRef(crearColaPorClave<string>()).current
   const [instituciones, setInstituciones]   = useState<string[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
   // Zona 3 gabinete: agenda de iniciativas de la sesión (la ficha completa se
@@ -214,9 +223,11 @@ export default function SesionModal(props: Props) {
   const [cSaving, setCSaving]               = useState(false)
 
   // Cierre
+  // Sala o pantalla de cierre («Terminar sesión»). El cierre es un overlay que
+  // continúa la consola sin desmontarla; `cerrando` lo reporta él mientras
+  // habla con /cerrar, para bloquear Escape y la ✕ en ese rato.
+  const [fase, setFase]                     = useState<'sala' | 'cierre'>('sala')
   const [cerrando, setCerrando]             = useState(false)
-  const [previewActa, setPreviewActa]       = useState(false)
-  const [cierreResultado, setCierreResultado] = useState<{ actaGenerada: boolean; error?: string } | null>(null)
 
   // ── Init: reabrir o crear el borrador, luego cargar todo ──────────────────
 
@@ -380,7 +391,9 @@ export default function SesionModal(props: Props) {
           .order('fecha', { ascending: false }).limit(1),
       ])
       setComiteCatalogo((catRes.data ?? []) as ComiteMetrica[])
-      setComiteValores((valRes.data ?? []) as SesionComiteValor[])
+      // `desglose` es JSONB: se normaliza a arreglo acá, una vez, y no en la zona.
+      setComiteValores(((valRes.data ?? []) as SesionComiteValor[])
+        .map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] })))
       const prevId = prevSesRes.data?.[0]?.id
       if (prevId) {
         const { data: prevVals } = await sb.from('sesion_comite_valor').select('*').eq('sesion_id', prevId)
@@ -449,15 +462,6 @@ export default function SesionModal(props: Props) {
   }, [region.cod, eje?.id, props.instancia, esGabinete, usaIniciativas, gabIniciativas, infraTag])
 
   useEffect(() => { if (sesion) loadAll(sesion) }, [sesion, loadAll])
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !cerrando) onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, cerrando])
-
-  // Foco inicial + restauración + focus-trap por Tab (a11y de diálogo, Fase 4a).
-  const { panelRef, onKeyDown: onDialogKeyDown } = useDialogA11y<HTMLDivElement>()
 
   // ── Zona 1: verificación de compromisos ───────────────────────────────────
 
@@ -622,22 +626,32 @@ export default function SesionModal(props: Props) {
     const existente = apuntes.find(a => a.institucion === institucion)
     if (existente && existente.texto === texto) return
     if (!existente && !texto.trim()) return
+    // Un guardado a la vez por institución: dos en vuelo pueden llegar
+    // desordenados y dejar escrito el texto viejo (lib/colaPorClave.ts).
+    await encolarApunte(institucion, () => guardarApunte(institucion, texto))
+  }
+
+  async function guardarApunte(institucion: string, texto: string) {
+    if (!sesion) return
     try {
-      if (existente) {
-        await safeWrite(
-          getSupabase().from('sesion_apuntes').update({ texto }).eq('id', existente.id),
-          `sesion_apuntes update id=${existente.id}`,
-        )
-        setApuntes(prev => prev.map(a => a.id === existente.id ? { ...a, texto } : a))
-      } else {
-        const rows = await safeWrite(
-          getSupabase().from('sesion_apuntes').insert({
-            sesion_id: sesion.id, institucion, texto,
-          }),
-          `sesion_apuntes insert ${institucion}`,
-        )
-        setApuntes(prev => [...prev, rows[0] as SesionApunte])
-      }
+      // UPSERT sobre la llave real (sesion_id, institucion) en vez de decidir
+      // INSERT o UPDATE según si la fila ya está en el estado local. `apuntes`
+      // recién se actualiza cuando el guardado contesta, así que dos guardados
+      // seguidos de la misma institución (escribir, salir, volver a entrar y
+      // salir antes de que conteste el primero) veían los dos `existente ===
+      // undefined` y los dos INSERTABAN → «duplicate key ...
+      // sesion_apuntes_sesion_id_institucion_key».
+      const rows = await safeWrite(
+        getSupabase().from('sesion_apuntes').upsert(
+          { sesion_id: sesion.id, institucion, texto },
+          { onConflict: 'sesion_id,institucion' },
+        ),
+        `sesion_apuntes upsert ${institucion}`,
+      )
+      const guardado = rows[0] as SesionApunte
+      setApuntes(prev => prev.some(a => a.institucion === institucion)
+        ? prev.map(a => a.institucion === institucion ? guardado : a)
+        : [...prev, guardado])
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -745,78 +759,8 @@ export default function SesionModal(props: Props) {
   }
 
   // ── Cierre ────────────────────────────────────────────────────────────────
-
-  async function handleCerrar() {
-    if (!sesion) return
-    const sinDatos = props.instancia === 'eje' && comiteValores.length === 0
-    const msg = usaIniciativas
-      ? `¿Cerrar la sesión${esGabinete ? ' de gabinete' : ''} y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.`
-      : sinDatos
-        ? 'No se registró ningún dato en el reporte por institución. ¿Cerrar la sesión igual y generar el acta?\n\nUna sesión cerrada no se puede editar.'
-        : '¿Cerrar la sesión y generar el acta?\n\nEl reporte por institución quedará sellado y la sesión será inmutable.'
-    if (!confirm(msg)) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/cerrar`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        window.alert(body.error ?? `No se pudo cerrar la sesión (HTTP ${res.status})`)
-        return
-      }
-      setCierreResultado({ actaGenerada: !!body.acta_generada, error: body.error })
-    } catch {
-      window.alert('Error de red cerrando la sesión. Reintenta — el borrador sigue guardado.')
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleReintentarActa() {
-    if (!sesion) return
-    setCerrando(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (res.ok && body.acta_generada) {
-        setCierreResultado({ actaGenerada: true })
-      } else {
-        window.alert(body.error ?? 'No se pudo generar el acta. Puedes reintentar desde el historial.')
-      }
-    } finally {
-      setCerrando(false)
-    }
-  }
-
-  async function handleDescargarActa() {
-    if (!sesion) return
-    const res = await fetch(`/api/sesiones/${sesion.id}/acta`)
-    const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank')
-    else window.alert(body.error ?? 'No se pudo obtener el acta')
-  }
-
-  // Vista previa del acta con el estado actual (sin cerrar). El PDF viene marcado
-  // "BORRADOR"; se abre en una pestaña nueva.
-  async function handlePreviewActa() {
-    if (!sesion || previewActa) return
-    setPreviewActa(true)
-    try {
-      const res = await fetch(`/api/sesiones/${sesion.id}/acta/preview`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        window.alert(body.error ?? `No se pudo generar la vista previa (HTTP ${res.status})`)
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch {
-      window.alert('Error de red generando la vista previa del acta.')
-    } finally {
-      setPreviewActa(false)
-    }
-  }
+  // Previsualizar / cerrar / reintentar acta / descargar viven en
+  // ./sesiones/CierreSesionComite (la pantalla «Terminar sesión»).
 
   // ── Derivados ─────────────────────────────────────────────────────────────
 
@@ -874,126 +818,160 @@ export default function SesionModal(props: Props) {
     )
   }, [sesIniciativas, gabIniciativas, esInfraestructura, megaproyectosInfra])
 
-  const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
-  const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
-  const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
   const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
+
+  // ── Consola: riel, zona activa y navegación ───────────────────────────────
+
+  const asist = useMemo(() => resumenAsistencia(nomina, asistencia), [nomina, asistencia])
+
+  // La rama gabinete está muerta en producción (GabineteRegionalTab abre la
+  // Consola v2): sin riel, se pintan todas las zonas apiladas para que compile.
+  const rail = useMemo(() => {
+    if (esGabinete) return []
+    return railParaSesion({
+      instancia: props.instancia === 'eje' ? 'eje' : 'infraestructura',
+      compAnteriores,
+      asistencia: asist,
+      compNuevos,
+      instituciones: comiteInstituciones,
+      catalogo: comiteCatalogo,
+      valores: comiteValores,
+      comentarios: sesion?.comentarios ?? null,
+      iniciativas: sesIniciativas.length,
+    })
+  }, [esGabinete, props.instancia, compAnteriores, asist, compNuevos, comiteInstituciones, comiteCatalogo, comiteValores, sesion?.comentarios, sesIniciativas.length])
+
+  // Cambiar de zona vacía primero un onBlur pendiente: los campos del reporte
+  // guardan al salir, y el que estaba enfocado se va a desmontar.
+  const irA = useCallback((ref: ZonaRef) => { soltarFoco(); setActiva(ref) }, [])
+
+  const { anterior, siguiente } = vecinos(rail, activa)
+  const navAnterior  = anterior  ? { label: etiquetaZona(rail, anterior),  onClick: () => irA(anterior) }  : null
+  const navSiguiente = siguiente ? { label: etiquetaZona(rail, siguiente), onClick: () => irA(siguiente) } : null
+
+  const muestra = (z: ZonaKey) => esGabinete || activa.zona === z
+
+  // Institución del reporte que está en pantalla. Si el riel no eligió una
+  // (o ya no existe), la primera de la región.
+  const institucionActiva = activa.zona === 'reporte' && activa.inst && comiteInstituciones.some(i => i.key === activa.inst)
+    ? activa.inst
+    : (comiteInstituciones[0]?.key ?? 'carabineros')
+  const institucionActivaLabel = comiteInstituciones.find(i => i.key === institucionActiva)?.label ?? institucionActiva
+
+  // «Terminar sesión»: vacía un onBlur pendiente (igual que cambiar de zona) y
+  // abre el cierre. Al pie de «Compromisos nuevos» es el remate del recorrido.
+  const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
+  const navTerminar = !esGabinete ? { label: 'Terminar sesión', onClick: abrirCierre } : null
+
+  // Agenda de la sesión con su iniciativa resuelta (para el cierre de Infraestructura).
+  const iniciativasParaCierre = useMemo(
+    () => sesIniciativas.map(fila => ({ fila, p: gabIniciativas.find(x => x.id === fila.prioridad_id) ?? null })),
+    [sesIniciativas, gabIniciativas],
+  )
+
+  const headerContenido = (
+    <>
+      <span className="text-[14.5px] font-bold text-slate-900 inline-flex items-center gap-1.5 flex-wrap">
+        {nombreInstancia}
+        <span className="font-medium text-slate-400">·</span>
+        <FechaEditable
+          value={sesion?.fecha ?? hoyISO()}
+          onCommit={iso => commitSesionField({ fecha: iso })}
+          disabled={!sesion || sesion.estado !== 'borrador'}
+        />
+      </span>
+      {sesion && (
+        <input
+          key={`lugar-${sesion.id}`}
+          type="text"
+          defaultValue={sesion.lugar ?? ''}
+          onBlur={e => commitSesionField({ lugar: e.target.value.trim() || null })}
+          placeholder="Lugar…"
+          title="Lugar de la sesión"
+          className="text-[13px] text-slate-600 bg-transparent border-b border-dashed border-slate-300 focus:border-violet-400 focus:outline-none px-1 py-0.5 w-52 placeholder:text-slate-300"
+        />
+      )}
+      {esInfraestructura && sesion && (
+        <select
+          value={sesion.tipo_comite ?? 'cri'}
+          onChange={e => commitSesionField({ tipo_comite: e.target.value as 'cri' | 'mesa_tecnica' })}
+          className="text-[12.5px] font-medium text-slate-600 border border-slate-200 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-300"
+          title="Comité Regional Interministerial de Infraestructura o Mesa Técnica Regional Interministerial"
+        >
+          <option value="cri">CRI</option>
+          <option value="mesa_tecnica">Mesa Técnica</option>
+        </select>
+      )}
+      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> En sesión
+      </span>
+      <div className="ml-auto flex items-center gap-2.5 flex-wrap">
+        <button onClick={() => irA({ zona: 'asistencia' })} title="Ir a la asistencia"
+          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-full hover:border-violet-300 hover:text-violet-700">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Asistencia {asist.presentes}/{asist.total}
+        </button>
+        {/* La rama gabinete (muerta) no tiene pantalla de cierre propia acá. */}
+        {!esGabinete && (
+          <button
+            onClick={abrirCierre}
+            disabled={cerrando || !sesion || !!initError}
+            title="Revisar la sesión y generar el acta"
+            className="text-[12.5px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 px-3 py-1.5 rounded-lg hover:bg-violet-100 disabled:opacity-40"
+          >
+            Terminar sesión
+          </button>
+        )}
+        <button
+          onClick={() => { soltarFoco(); onClose() }}
+          disabled={cerrando}
+          title="Cerrar (el borrador queda guardado)"
+          className="text-slate-400 hover:text-slate-700 p-1 disabled:opacity-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </>
+  )
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Pantalla de éxito post-cierre
-  if (cierreResultado) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Resultado del cierre de sesión"
-          onKeyDown={onDialogKeyDown}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-        >
-          <div className={`px-6 py-4 ${cierreResultado.actaGenerada ? 'bg-green-600' : 'bg-amber-500'}`}>
-            <p className="text-white font-semibold text-sm">
-              {cierreResultado.actaGenerada ? 'Sesión cerrada — acta generada' : 'Sesión cerrada — acta pendiente'}
-            </p>
-          </div>
-          <div className="px-6 py-5 space-y-3">
-            <p className="text-sm text-gray-700">
-              {usaIniciativas
-                ? cierreResultado.actaGenerada
-                  ? 'Los acuerdos y compromisos quedaron sellados y el acta está disponible.'
-                  : 'La sesión quedó cerrada con sus acuerdos, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'
-                : cierreResultado.actaGenerada
-                  ? 'Los indicadores alimentaron las métricas del eje y el acta quedó disponible.'
-                  : 'Los indicadores alimentaron las métricas del eje, pero el acta no se pudo generar. Puedes reintentar ahora o después desde el historial.'}
-            </p>
-            <div className="flex gap-2 pt-1">
-              {cierreResultado.actaGenerada ? (
-                <button onClick={handleDescargarActa} className="flex-1 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800">
-                  Descargar acta
-                </button>
-              ) : (
-                <button onClick={handleReintentarActa} disabled={cerrando} className="flex-1 py-2.5 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50">
-                  {cerrando ? 'Generando…' : 'Reintentar acta'}
-                </button>
-              )}
-              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => !cerrando && onClose()}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Sesión — ${nombreInstancia}`}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
-        onKeyDown={onDialogKeyDown}
-      >
-        {/* Header */}
-        <header className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3 bg-violet-50/40">
-          <div className="flex-1 min-w-0">
-            <p className="text-base font-semibold text-gray-900">{nombreInstancia} — {sesion?.estado === 'borrador' && borradorId ? 'Continuar sesión' : 'Nueva sesión'}</p>
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                Fecha
-                <input
-                  type="date"
-                  value={sesion?.fecha ?? hoyISO()}
-                  onChange={e => e.target.value && commitSesionField({ fecha: e.target.value })}
-                  className="border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                />
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 flex-1 min-w-[160px]">
-                Lugar
-                <input
-                  type="text"
-                  defaultValue={sesion?.lugar ?? ''}
-                  onBlur={e => commitSesionField({ lugar: e.target.value.trim() || null })}
-                  placeholder="Ej: Delegación Presidencial"
-                  className="flex-1 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                />
-              </label>
-              {esInfraestructura && (
-                <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                  Tipo
-                  <select
-                    value={sesion?.tipo_comite ?? 'cri'}
-                    onChange={e => commitSesionField({ tipo_comite: e.target.value as 'cri' | 'mesa_tecnica' })}
-                    className="border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                    title="Comité Regional Interministerial de Infraestructura o Mesa Técnica Regional Interministerial"
-                  >
-                    <option value="cri">CRI</option>
-                    <option value="mesa_tecnica">Mesa Técnica</option>
-                  </select>
-                </label>
-              )}
-            </div>
-          </div>
-          <button onClick={onClose} disabled={cerrando} className="text-gray-400 hover:text-gray-600 mt-0.5 disabled:opacity-50" title="Cerrar (el borrador queda guardado)">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l12 12M16 4L4 16"/>
-            </svg>
-          </button>
-        </header>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+    <ConsolaSesionShell
+      ariaLabel={`Sesión — ${nombreInstancia}`}
+      header={headerContenido}
+      rail={esGabinete ? null : <ConsolaRail items={rail} activo={activa} onSelect={irA} />}
+      railMovil={esGabinete ? null : <ConsolaRail items={rail} activo={activa} onSelect={irA} orientacion="horizontal" />}
+      mainMaxWidth={activa.zona === 'reporte' ? 'max-w-6xl' : 'max-w-5xl'}
+      onEscape={fase === 'cierre' ? () => setFase('sala') : onClose}
+      escapeDeshabilitado={cerrando}
+      overlay={fase === 'cierre' && sesion && !esGabinete ? (
+        <CierreSesionComite
+          instancia={props.instancia === 'eje' ? 'eje' : 'infraestructura'}
+          sesion={sesion}
+          nombreInstancia={nombreInstancia}
+          compAnteriores={compAnteriores}
+          onEstadoCompromiso={setEstadoCompromiso}
+          compNuevos={compNuevos}
+          nomina={nomina}
+          asistencia={asistencia}
+          instituciones={comiteInstituciones}
+          catalogo={comiteCatalogo}
+          valores={comiteValores}
+          iniciativas={iniciativasParaCierre}
+          onVolver={() => setFase('sala')}
+          onCerrada={onClose}
+          onIrA={ref => { setFase('sala'); irA(ref) }}
+          onCerrandoChange={setCerrando}
+        />
+      ) : null}
+    >
           {initError ? (
             <Alert variant="error">{initError}</Alert>
           ) : !sesion ? (
             <p className="text-center text-sm text-gray-400 py-10">Preparando la sesión…</p>
           ) : (
-            <>
+            <div className="space-y-4">
               {/* Pauta general de la reunión (solo gabinete, solo lectura).
                   Sin número: no altera la numeración producto de las zonas 1-5. */}
               {esGabinete && !esV2 && temasGabinete.length > 0 && (
@@ -1031,13 +1009,11 @@ export default function SesionModal(props: Props) {
               )}
 
               {/* ── Zona 1: compromisos anteriores ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>1</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Verificación de compromisos anteriores</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{compAnteriores.length}</span>
-                </div>
-                <div className="p-3 space-y-2">
+              {muestra('anteriores') && (
+              <ZonaCard numero={1} titulo="Verificación de compromisos anteriores" badge={compAnteriores.length}
+                descripcion="Cómo quedaron los compromisos de las sesiones anteriores."
+                anterior={navAnterior} siguiente={navSiguiente}>
+                <div className="space-y-2">
                   {compAnteriores.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-2">Sin compromisos pendientes de sesiones anteriores.</p>
                   ) : compAnteriores.map(c => (
@@ -1094,18 +1070,14 @@ export default function SesionModal(props: Props) {
                     </div>
                   ))}
                 </div>
-              </section>
+              </ZonaCard>
+              )}
 
               {/* ── Zona 2: asistencia ── */}
-              <section className={zoneCls}>
-                <button type="button" onClick={() => setAsistenciaOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>2</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Asistencia</h3>
-                  <span className="text-xs text-gray-400 ml-auto mr-2">{presentes} presente{presentes === 1 ? '' : 's'}</span>
-                  <Chevron open={asistenciaOpen} />
-                </button>
-                {asistenciaOpen && (
-                <div className="p-3">
+              {muestra('asistencia') && (
+              <ZonaCard numero={2} titulo="Asistencia" badge={`${presentes} presente${presentes === 1 ? '' : 's'}`}
+                anterior={navAnterior} siguiente={navSiguiente}>
+                <div>
                   {nomina.length === 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
                       {esGabinete
@@ -1169,20 +1141,14 @@ export default function SesionModal(props: Props) {
                     </button>
                   </form>
                 </div>
-                )}
-              </section>
+              </ZonaCard>
+              )}
 
               {/* ── Zona 3 (gabinete: en foco · infraestructura: por tag) ── */}
-              {usaIniciativas && (
-                <section className={zoneCls}>
-                  <div className={zoneHead}>
-                    <span className={zoneNum}>3</span>
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      {esGabinete ? 'Iniciativas en foco' : 'Iniciativas contempladas'}
-                    </h3>
-                    <span className="text-xs text-gray-400 ml-auto">{sesIniciativas.length}</span>
-                  </div>
-                  <div className="p-3 space-y-2">
+              {usaIniciativas && muestra('iniciativas') && (
+                <ZonaCard numero={3} titulo={esGabinete ? 'Iniciativas en foco' : 'Iniciativas contempladas'} badge={sesIniciativas.length}
+                  anterior={navAnterior} siguiente={navSiguiente}>
+                  <div className="space-y-2">
                     {esInfraestructura && (
                       <p className="text-[11px] text-gray-400 -mt-0.5 mb-1">
                         Iniciativas con la etiqueta <span className="font-semibold text-gray-500">{infraTag}</span> — no las &quot;en foco&quot; del gabinete.
@@ -1225,34 +1191,38 @@ export default function SesionModal(props: Props) {
                       onPick={agregarIniciativa}
                     />
                   </div>
-                </section>
+                </ZonaCard>
               )}
 
               {/* ── Zona 3 (comité): reporte por institución ── */}
-              {props.instancia === 'eje' && (
-                <ReporteInstitucionZona
-                  sesionId={sesion.id}
-                  regionCod={region.cod}
-                  catalogo={comiteCatalogo}
-                  valoresIniciales={comiteValores}
-                  valoresPrev={comiteValoresPrev}
-                  currentUserEmail={currentUserEmail}
-                  onCatalogoChange={reloadComiteCatalogo}
-                  instituciones={comiteInstituciones}
-                  onInstitucionesChange={reloadComiteInstituciones}
-                />
+              {props.instancia === 'eje' && muestra('reporte') && (
+                <ZonaCard numero={3} titulo={`Reporte por institución · ${institucionActivaLabel}`}
+                  descripcion="Métricas de la semana con su comparación contra la sesión anterior. Los cambios se guardan al salir de cada campo."
+                  anterior={navAnterior} siguiente={navSiguiente}>
+                  <ReporteInstitucionZona
+                    sesionId={sesion.id}
+                    regionCod={region.cod}
+                    catalogo={comiteCatalogo}
+                    valores={comiteValores}
+                    onValoresChange={setComiteValores}
+                    encolar={encolarComite}
+                    valoresPrev={comiteValoresPrev}
+                    institucion={institucionActiva}
+                    currentUserEmail={currentUserEmail}
+                    onCatalogoChange={reloadComiteCatalogo}
+                    instituciones={comiteInstituciones}
+                    onInstitucionesChange={reloadComiteInstituciones}
+                  />
+                </ZonaCard>
               )}
 
               {/* ── Zona 3b (comité): comentarios generales de la reunión (mig 077) ── */}
-              {props.instancia === 'eje' && sesion && (
-                <section className={zoneCls}>
-                  <div className={zoneHead}>
-                    <svg className="w-4 h-4 text-violet-700 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <h3 className="text-sm font-semibold text-gray-800">Comentarios generales de la reunión</h3>
-                  </div>
-                  <div className="p-3">
+              {props.instancia === 'eje' && sesion && muestra('comentarios') && (
+                <ZonaCard numero={null} titulo="Comentarios generales de la reunión"
+                  icono={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+                  descripcion="Lo transversal de la sesión: no atado a una institución ni a una métrica."
+                  anterior={navAnterior} siguiente={navSiguiente}>
+                  <div>
                     <textarea
                       key={`coment-${sesion.id}`}
                       defaultValue={sesion.comentarios ?? ''}
@@ -1263,34 +1233,23 @@ export default function SesionModal(props: Props) {
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-y disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
-                </section>
+                </ZonaCard>
               )}
 
               {/* ── Zona 4 (gabinete v2): captura en sala por punto de pauta ── */}
               {esV2 && sesion && (
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>4</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Desarrollo en sala</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{puntosV2.length} puntos</span>
-                </div>
-                <div className="p-3">
+              <ZonaCard numero={4} titulo="Desarrollo en sala" badge={`${puntosV2.length} puntos`}>
+                <div>
                   <CapturaSalaGabinete sesionId={sesion.id} canEdit={sesion.estado === 'borrador'} />
                 </div>
-              </section>
+              </ZonaCard>
               )}
 
               {/* ── Zona 4 (gabinete v1): apuntes por institución ── */}
               {esGabinete && !esV2 && (
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>4</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Apuntes por institución</h3>
-                  <button onClick={agregarInstitucion} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline ml-auto">
-                    + Institución
-                  </button>
-                </div>
-                <div className="p-3">
+              <ZonaCard numero={4} titulo="Apuntes por institución"
+                badge={<button onClick={agregarInstitucion} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline">+ Institución</button>}>
+                <div>
                   {instituciones.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-2">Agrega una institución para tomar apuntes.</p>
                   ) : (
@@ -1343,17 +1302,14 @@ export default function SesionModal(props: Props) {
                     </>
                   )}
                 </div>
-              </section>
+              </ZonaCard>
               )}
 
               {/* ── Zona compromisos nuevos (4 comité/infraestructura · 5 gabinete) ── */}
-              <section className={zoneCls}>
-                <div className={zoneHead}>
-                  <span className={zoneNum}>{esGabinete ? 5 : 4}</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Compromisos nuevos</h3>
-                  <span className="text-xs text-gray-400 ml-auto">{compNuevos.length}</span>
-                </div>
-                <div className="p-3 space-y-2">
+              {muestra('nuevos') && (
+              <ZonaCard numero={esGabinete ? 5 : 4} titulo="Compromisos nuevos" badge={compNuevos.length}
+                anterior={navAnterior} siguiente={navSiguiente ?? navTerminar} siguienteDestacado={!navSiguiente}>
+                <div className="space-y-2">
                   {compNuevos.map(c => {
                     const vinculada = usaIniciativas && c.prioridad_id != null
                       ? gabIniciativas.find(p => p.id === c.prioridad_id) ?? null
@@ -1502,38 +1458,11 @@ export default function SesionModal(props: Props) {
                     )}
                   </form>
                 </div>
-              </section>
-            </>
+              </ZonaCard>
+              )}
+            </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={cerrando}
-            className="text-sm px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-white disabled:opacity-50 whitespace-nowrap"
-          >
-            Guardar borrador
-          </button>
-          <button
-            onClick={handlePreviewActa}
-            disabled={cerrando || previewActa || !sesion}
-            title="Ver el acta con el estado actual, antes de cerrar (borrador)"
-            className="text-sm px-4 py-2 border border-violet-200 text-violet-700 font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 whitespace-nowrap"
-          >
-            {previewActa ? 'Generando…' : 'Previsualizar acta'}
-          </button>
-          <button
-            onClick={handleCerrar}
-            disabled={cerrando || !sesion}
-            className="text-sm px-4 py-2 bg-violet-700 text-white font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50 whitespace-nowrap"
-          >
-            {cerrando ? 'Cerrando sesión…' : 'Cerrar sesión y generar acta'}
-          </button>
-        </footer>
-      </div>
-    </div>
+    </ConsolaSesionShell>
   )
 }
 

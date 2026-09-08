@@ -1,5 +1,5 @@
 // Categorías estándar de "Estado actual" para la cartera de proyectos del
-// Comité Económico (comite_economico_proyecto, mig 086/087). El detalle
+// Comité Económico (comite_economico_proyecto, mig 093/094). El detalle
 // libre (N° de RCA, fechas, contexto) vive aparte en `notas` — no se mezcla
 // con la categoría, a diferencia de la carga inicial desde Excel.
 export const ESTADO_ACTUAL_ECONOMICO_OPCIONES = [
@@ -16,7 +16,7 @@ export type EstadoActualEconomico = typeof ESTADO_ACTUAL_ECONOMICO_OPCIONES[numb
 
 // ── Descarga Excel de la cartera de proyectos privados ──────────────────────
 // Toda la información del proyecto EXCEPTO el historial de avances completo
-// (mig 088 agregó permisos/avances) — de eso solo va el último avance
+// (mig 095 agregó permisos/avances) — de eso solo va el último avance
 // registrado, y los permisos del proyecto van en una sola columna separados
 // por ";". `xlsx` se importa recién acá (lazy), mismo criterio que el resto
 // de las descargas del sistema (lib/territorial/carrito.ts) — no se agrega

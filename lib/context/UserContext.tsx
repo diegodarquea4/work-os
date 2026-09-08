@@ -7,6 +7,8 @@ type UserCtxValue = {
   canEditRegion:      (regionNombreOrCod: string) => boolean
   canEditAny:         boolean  // true for admin/editor; gates "estructural" edits.
   canEditOperational: boolean  // true for any authenticated user; gates día-a-día.
+  /** Semáforo + % de avance: operativo completo O el cap angosto del SEREMI. */
+  canEditAvance:      boolean
   isAdmin:            boolean  // true only for admin (gates bulk import + proposal review)
   userEmail:          string   // email del usuario actual; auto-fill de autor/subido_por.
   /** Capas de usuarios (Fase 0): capacidades del usuario, base de `useCan`. */
@@ -17,6 +19,7 @@ const UserCtx = createContext<UserCtxValue>({
   canEditRegion:      () => true,
   canEditAny:         true,
   canEditOperational: true,
+  canEditAvance:      true,
   isAdmin:            true,
   userEmail:          '',
   capabilities:       [],
@@ -43,8 +46,12 @@ export function UserProvider({
   // que necesitan precisión por-región usan useCan(cap, cod) directamente.
   const canEditOperational = can(capabilities, 'iniciativa.editar_operativo')
   const canEditAny         = can(capabilities, 'iniciativa.editar_definicional')
+  // Un SEREMI no tiene editar_operativo (no toca responsable/etapa/hito), pero sí
+  // `iniciativa.editar_avance` para mover semáforo y % — la RLS/trigger (mig 087)
+  // acepta cualquiera de las dos para esos dos campos.
+  const canEditAvance      = canEditOperational || can(capabilities, 'iniciativa.editar_avance')
   return (
-    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, isAdmin, userEmail, capabilities }}>
+    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, canEditAvance, isAdmin, userEmail, capabilities }}>
       {children}
     </UserCtx.Provider>
   )
@@ -62,6 +69,12 @@ export function useCanEditAny() {
  *  seguimientos, documentos. true para cualquier usuario autenticado. */
 export function useCanEditOperational() {
   return useContext(UserCtx).canEditOperational
+}
+
+/** Gate de semáforo + % de avance. Más ancho que `useCanEditOperational`: lo
+ *  cumple también el SEREMI, que solo puede mover esos dos campos. */
+export function useCanEditAvance() {
+  return useContext(UserCtx).canEditAvance
 }
 
 export function useIsAdmin() {

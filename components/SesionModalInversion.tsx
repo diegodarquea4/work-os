@@ -306,7 +306,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // Alta de oficio nuevo (Seguimiento de la Inversión) — proyecto que
   // considera viene de la misma cartera (privado/público) que 4c, no del
-  // catálogo SEIA legado (mig 089).
+  // catálogo SEIA legado (mig 096).
   const [oficioOaeca, setOficioOaeca]                 = useState<Oaeca | null>(null)
   const [oficioProyectoTipo, setOficioProyectoTipo]   = useState<'privado' | 'publico'>('privado')
   const [oficioProyectoPrivado, setOficioProyectoPrivado] = useState<ComiteEconomicoProyecto | null>(null)
@@ -462,7 +462,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
     const proy = (proyRes.data ?? []) as SesionProyecto[]
     setProyectosSesion(proy)
-    // Solo filas legadas (previas a mig 086) siguen apuntando a proyecto_id;
+    // Solo filas legadas (previas a mig 093) siguen apuntando a proyecto_id;
     // las nuevas usan proyecto_privado_id/prioridad_id (resueltas contra
     // proyectosPrivados/iniciativas, sin query aparte).
     const idsLegado = proy.map(p => p.proyecto_id).filter((id): id is string => id != null)
@@ -715,7 +715,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // Abre la ficha completa de un item de la cartera (proyecto privado o
   // iniciativa pública) referenciado desde cualquier lado de la sesión —
   // proyectos tratados, oficios, compromisos: los tres comparten esta misma
-  // forma (proyecto_privado_id / prioridad_id) desde mig 086/087/089.
+  // forma (proyecto_privado_id / prioridad_id) desde mig 093/094/096.
   function abrirFichaCartera(row: { proyecto_privado_id?: number | null; prioridad_id?: number | null }) {
     if (row.proyecto_privado_id != null) { setFichaPrivadoId(row.proyecto_privado_id); return }
     if (row.prioridad_id != null) {
@@ -840,7 +840,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     if (!sesion) return
     const res = await fetch(`/api/sesiones/${sesion.id}/acta`)
     const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank')
+    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
     else window.alert(body.error ?? 'No se pudo obtener el acta')
   }
 
@@ -857,7 +857,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      window.open(url, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
       window.alert('Error de red generando la vista previa del acta.')

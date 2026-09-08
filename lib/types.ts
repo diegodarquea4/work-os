@@ -213,7 +213,7 @@ export type DesalojoCapa = {
 
 // ── Catastro MINVU (CNC 2026) ────────────────────────────────────────────────
 // Una entrada del catastro nacional de campamentos publicado por MINVU. Vive
-// en public/data/catastro-minvu-2026.json (bundled estático generado por
+// en private-data/catastro-minvu-2026.json (bundled estático generado por
 // scripts/build-catastro-minvu.mjs). Se vincula a una `DesalojoCapa` vía
 // `folio_minvu`; el mapa hereda lat/lng de aquí si la capa no tiene override.
 export type CatastroEntry = {
@@ -920,7 +920,7 @@ export type Oaeca = {
 }
 
 // Proyecto tratado en profundidad en una sesión — selección desde la
-// cartera del Comité Económico (mig 086): privado (comite_economico_proyecto)
+// cartera del Comité Económico (mig 093): privado (comite_economico_proyecto)
 // o público (iniciativa con tag 'CER'), exactamente uno de los tres no-NULL.
 // `proyecto_id` (TEXT → v2_proyectos_inversion) queda deprecado — ya no se
 // escribe, solo lectura para sesiones históricas previas a la 086.
@@ -934,7 +934,7 @@ export type SesionProyecto = {
   created_at: string
 }
 
-// Cartera de proyectos privados del Comité Económico (mig 086) — cargados a
+// Cartera de proyectos privados del Comité Económico (mig 093) — cargados a
 // mano por el responsable (no sincronizados, a diferencia de
 // v2_proyectos_inversion). Los públicos NO tienen tabla propia: son
 // iniciativas (Prioridad) con la etiqueta 'CER' en `tags`.
@@ -955,7 +955,7 @@ export type ComiteEconomicoProyecto = {
   meta_2026_2027: string | null
   estado_inicial: string | null
   estado_actual: string | null
-  // Detalle libre (N° de RCA, fechas, contexto) — mig 087. `estado_actual`
+  // Detalle libre (N° de RCA, fechas, contexto) — mig 094. `estado_actual`
   // se estandarizó a un puñado de categorías (ver lib/comiteEconomico.ts);
   // el resto de lo que antes vivía mezclado en ese campo va aquí.
   notas: string | null
@@ -976,10 +976,10 @@ export type ComiteEconomicoProyectoSeguimiento = {
   descripcion: string
   estado: 'pendiente' | 'en_curso' | 'completado' | 'bloqueado' | null
   autor: string | null
-  // Permiso del proyecto al que refiere este avance (mig 088) — opcional,
+  // Permiso del proyecto al que refiere este avance (mig 095) — opcional,
   // NULL = avance general del proyecto (no habla de un permiso puntual).
   permiso_id: number | null
-  // Estado del permiso que este avance dejó registrado al crearse (mig 090)
+  // Estado del permiso que este avance dejó registrado al crearse (mig 097)
   // — snapshot histórico, no el estado actual del permiso (ese vive en
   // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
   // el estado del permiso (o es un avance general, sin permiso).
@@ -987,7 +987,7 @@ export type ComiteEconomicoProyectoSeguimiento = {
   created_at: string
 }
 
-// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 088) — no
+// Catálogo GLOBAL de PAS (Permisos Ambientales Sectoriales, mig 095) — no
 // region-scoped, mismo espíritu que `oaeca` (mig 051): precargado y crece
 // cuando alguien escribe uno nuevo al asociarlo a un proyecto.
 export type PasCatalogo = {
@@ -1001,7 +1001,7 @@ export type PasCatalogo = {
 }
 
 // Qué permiso del catálogo necesita CADA proyecto privado, con su propio
-// estado tri-color (mig 088). NULL = sin estado (default al crearlo).
+// estado tri-color (mig 095). NULL = sin estado (default al crearlo).
 export type ComiteEconomicoProyectoPermiso = {
   id: number
   proyecto_id: number
@@ -1020,7 +1020,7 @@ export type SesionOficioTratado = {
   sesion_origen_id: number
   oaeca_id: number
   // Legado (v2_proyectos_inversion) — los oficios nuevos usan
-  // proyecto_privado_id (privado) o prioridad_id (público) — mig 089.
+  // proyecto_privado_id (privado) o prioridad_id (público) — mig 096.
   proyecto_id: string | null
   proyecto_privado_id: number | null
   prioridad_id: number | null

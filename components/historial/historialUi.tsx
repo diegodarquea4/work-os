@@ -44,7 +44,7 @@ export function useActaAcciones(reload: () => Promise<void> | void) {
     try {
       const res = await fetch(`/api/sesiones/${sesionId}/acta`)
       const body = await res.json().catch(() => ({}))
-      if (res.ok && body.url) window.open(body.url, '_blank')
+      if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
       else window.alert(body.error ?? 'No se pudo obtener el acta')
     } finally {
       setWorking(false)

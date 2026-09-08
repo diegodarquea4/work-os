@@ -3,21 +3,41 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
-const IDLE_MS   = 30 * 60 * 1000  // 30 minutes → logout
-const WARN_MS   = 25 * 60 * 1000  // 25 minutes → show warning
+/** Cierre por inactividad, por defecto. */
+export const IDLE_DEFECTO_MS = 30 * 60 * 1000  // 30 min
+
+/**
+ * Cierre por inactividad para una sesión con verificación en dos pasos.
+ *
+ * Más largo a propósito: quien completó un segundo factor demostró mucho más
+ * que quien solo tecleó una clave, y volver a pedir clave + código varias veces
+ * al día es la fricción que hizo abandonar el intento de agosto. Se activa
+ * cuando exista el 2FA (Tanda 3); hasta entonces todas las sesiones usan el
+ * valor por defecto.
+ */
+export const IDLE_CON_2FA_MS = 4 * 60 * 60 * 1000  // 4 h
+
+/** Aviso previo: siempre 5 minutos antes del cierre. */
+const AVISO_ANTES_MS = 5 * 60 * 1000
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
 
 /**
- * Logs out the user after IDLE_MS of inactivity.
- * Shows a warning at WARN_MS so the user can extend the session.
+ * Cierra la sesión tras `idleMs` sin actividad, avisando 5 minutos antes para
+ * que el usuario pueda extenderla.
+ *
+ * OJO: es solo del lado del navegador y por pestaña. El freno de verdad contra
+ * una cookie robada es el vencimiento de sesión del proyecto Supabase
+ * (Authentication → Sessions), que no depende de que la pestaña esté abierta.
  *
  * Returns:
- *   warning     — true when the warning banner should be visible
- *   secondsLeft — countdown seconds shown in the warning (0–300)
- *   extend      — call to reset the timer and dismiss the warning
+ *   warning     — true cuando debe verse el aviso
+ *   secondsLeft — cuenta regresiva del aviso
+ *   extend      — reinicia el contador y oculta el aviso
  */
-export function useInactivityLogout() {
+export function useInactivityLogout(idleMs: number = IDLE_DEFECTO_MS) {
+  const IDLE_MS = idleMs
+  const WARN_MS = Math.max(0, idleMs - AVISO_ANTES_MS)
   const [warning, setWarning]         = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(0)
 
@@ -57,7 +77,9 @@ export function useInactivityLogout() {
       await getSupabase().auth.signOut()
       window.location.href = '/login'
     }, IDLE_MS)
-  }, [])
+    // Depende de los umbrales: si cambian (p.ej. al subir a 4 h con 2FA), los
+    // temporizadores se rearman con el valor nuevo en vez de quedar pegados.
+  }, [IDLE_MS, WARN_MS])
 
   // Extend session: reset timers and dismiss warning
   const extend = useCallback(() => {

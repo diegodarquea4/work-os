@@ -71,7 +71,7 @@ export type ActaData = ActaBranding & {
     cupos: number
     pctAvance: number | null          // postulados/cupos, null si cupos=0
   } | null
-  // `tag` distingue la fuente (mig 086): Privado (comite_economico_proyecto)
+  // `tag` distingue la fuente (mig 093): Privado (comite_economico_proyecto)
   // vs. Público (iniciativa con etiqueta CER). null en filas legadas que aún
   // apuntan al catálogo SEIA v2_proyectos_inversion.
   proyectosTratados: { nombre: string; nota: string | null; tag: 'Privado' | 'Público' | null }[]

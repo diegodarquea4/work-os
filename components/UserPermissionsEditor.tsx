@@ -23,6 +23,7 @@ export type UserLite = {
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrador', editor: 'Editor', regional: 'Regional', viewer: 'Solo lectura',
+  seremi: 'SEREMI',
 }
 
 const SECCIONES_AREA = '__secciones__'
@@ -330,7 +331,7 @@ export default function UserPermissionsEditor({ user, onClose, onSaved }: {
         {/* Barra: aplicar tipo base */}
         <div className="flex-shrink-0 flex items-center gap-2 flex-wrap bg-white border-b border-gray-200 px-6 py-2.5">
           <span className="text-xs text-gray-500">Rellenar desde un tipo base:</span>
-          {(['admin', 'editor', 'regional', 'viewer'] as UserRole[]).map(r => (
+          {(['admin', 'editor', 'regional', 'seremi', 'viewer'] as UserRole[]).map(r => (
             <button
               key={r}
               type="button"

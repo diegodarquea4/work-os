@@ -59,9 +59,11 @@ type Props = {
   // Abrir la ficha de una iniciativa desde la sesión del gabinete — la maneja
   // VistaRegional con su ProjectTrackerModal.
   onAbrirIniciativa: (p: Iniciativa) => void
+  // Ir al Tablero → Preparación (armar la pauta del gabinete) — la resuelve WorkOSApp.
+  onIrAPreparacion: (regionNombre: string) => void
 }
 
-export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa }: Props) {
+export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa, onIrAPreparacion }: Props) {
   const [active, setActive] = useState<TabKey>('policial')
 
   // El Comité Policial se ancla al eje con sesiones habilitadas.
@@ -137,7 +139,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
           />
         )
       ) : active === 'gabinete' ? (
-        <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
+        <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onIrAPreparacion={onIrAPreparacion} />
       ) : (
         infraestructuraActivo ? (
           <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />

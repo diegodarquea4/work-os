@@ -231,7 +231,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
     // Oficios: verificados (resueltos en esta sesión o aún pendientes) +
     // nuevos (marcados "tratado" durante esta sesión) — mismo criterio.
-    // Mismo esquema privado/público/legado que sesion_proyectos (mig 089).
+    // Mismo esquema privado/público/legado que sesion_proyectos (mig 096).
     db.from('sesion_oficios_tratados').select('*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre), proyecto_privado:comite_economico_proyecto(nombre)')
       .eq('region_cod', sesion.region_cod)
       .neq('sesion_origen_id', sesionId)

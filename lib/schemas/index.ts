@@ -39,11 +39,6 @@ const regionCodSchema = z
   .max(10)
   .regex(/^[A-Z]+$/, 'cod de región debe ser solo letras mayúsculas')
 
-/** Fecha ISO YYYY-MM-DD — no valida calendario, solo forma. */
-const fechaISOSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'fecha en formato YYYY-MM-DD')
-
 /**
  * Fecha en formato display para el header del PDF (ej: "Julio 2026").
  * NO se parsea como Date — se pinta tal cual en el documento.
@@ -74,10 +69,14 @@ const regionFullSchema = z
 
 // ── /api/cartera-pdf POST ────────────────────────────────────────────────────
 
+// `fecha` es SOLO texto de portada ("Generado: 03-09-2026") — el PDF la pinta
+// tal cual, no la parsea. Por eso va con fechaDisplaySchema y no con ISO: el
+// cliente manda `toLocaleDateString('es-CL')` (dd-mm-yyyy) desde siempre, y
+// exigir YYYY-MM-DD acá dejó la descarga en 400 «Solicitud inválida».
 export const carteraPdfSchema = z.object({
   region:     regionMinSchema,
   soloEnFoco: z.boolean(),
-  fecha:      fechaISOSchema,
+  fecha:      fechaDisplaySchema,
 })
 
 export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
@@ -123,10 +122,11 @@ export type MinutaTipoZod  = z.infer<typeof minutaPostSchema>['tipo']
 export const adminUsersPostSchema = z.object({
   email:       emailSchema,
   full_name:   z.string().min(1).optional(),
-  role:        z.enum(['admin', 'editor', 'regional', 'viewer']),
+  role:        z.enum(['admin', 'editor', 'regional', 'viewer', 'seremi']),
   region_cods: z.array(z.string().min(1)).optional(),
-  // Ministerio del usuario (mig 088) — filtra los avances de proyectos del
-  // Comité Económico por el ministerio de quien los registró.
+  // Ministerio canónico del usuario (mig 087). Acota la cartera del rol
+  // seremi y, además, agrupa los avances del Comité Económico por el
+  // ministerio de quien los registró.
   ministerio:  z.string().min(1).nullable().optional(),
 })
 
@@ -135,13 +135,14 @@ export type AdminUsersPostBody = z.infer<typeof adminUsersPostSchema>
 // ── /api/admin/users/[id] PATCH ──────────────────────────────────────────────
 
 export const adminUsersPatchSchema = z.object({
-  role:          z.enum(['admin', 'editor', 'regional', 'viewer']).optional(),
+  role:          z.enum(['admin', 'editor', 'regional', 'viewer', 'seremi']).optional(),
   region_cods:   z.array(z.string().min(1)).optional(),
-  full_name:     z.string().min(1).optional(),
   ministerio:    z.string().min(1).nullable().optional(),
+  full_name:     z.string().min(1).optional(),
   // Reemplazan al viejo reset_password (que ponía DCI2026):
   recuperar:     z.boolean().optional(),  // emite código nuevo + bloquea la clave anterior + cierra sesiones
   forzar_cambio: z.boolean().optional(),  // marca debe_cambiar_clave + cierra sesiones (sin código)
+  resetear_2fa:  z.boolean().optional(),  // borra los factores 2FA + códigos de respaldo (re-configura al entrar)
 })
 
 export type AdminUsersPatchBody = z.infer<typeof adminUsersPatchSchema>
@@ -158,8 +159,14 @@ export type AccountActivateBody = z.infer<typeof accountActivateSchema>
 
 // ── /api/account/change-password (autenticada) ───────────────────────────────
 
+// `claveActual` es obligatoria: sin ella, quien se apodere de una sesión abierta
+// puede cambiar la contraseña y quedarse con la cuenta para siempre. Es el
+// mismo campo para el cambio voluntario y para el forzado (en el forzado el
+// usuario SÍ recuerda su clave — el flujo para quien la olvidó es Recuperación,
+// con código de un solo uso).
 export const accountChangePasswordSchema = z.object({
-  password: z.string().min(1),
+  claveActual: z.string().min(1),
+  password:    z.string().min(1),
 })
 
 export type AccountChangePasswordBody = z.infer<typeof accountChangePasswordSchema>

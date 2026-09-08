@@ -10,13 +10,46 @@
  * Ningún import de tiptap acá — mantenerlo así.
  */
 
+import DOMPurify from 'isomorphic-dompurify'
+
+/**
+ * Etiquetas y atributos permitidos: exactamente el schema que produce el editor
+ * (StarterKit con headings 1-2 + Link). Todo lo demás se descarta.
+ */
+const ALLOWED_TAGS = [
+  'p', 'br', 'strong', 'em', 's', 'code', 'pre',
+  'h1', 'h2', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr',
+]
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'class']
+
+/**
+ * Sanea HTML antes de inyectarlo con dangerouslySetInnerHTML.
+ *
+ * Por qué (auditoría 2026-09-04): `normalizeRichText` daba por bueno cualquier
+ * valor que EMPEZARA con una etiqueta del schema, y lo devolvía sin tocar. O
+ * sea, `<p></p><img src=x onerror=...>` guardado en la descripción de una fase
+ * de desalojo pasaba entero y se ejecutaba en el navegador de quien la leyera.
+ * El editor nunca genera eso, pero el campo se puede escribir por API o
+ * directamente en la base, y no hay CSP que sirva de segunda barrera.
+ *
+ * DOMPurify también neutraliza `href="javascript:..."`, que era el otro camino.
+ */
+export function sanitizeRichText(html: string): string {
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR })
+}
+
 /**
  * Vista read-only del contenido. Para usar en cards colapsadas o en lectura.
  * Renderea el mismo HTML constrained al schema de Tiptap.
  */
 export function RichTextView({ html, className = '' }: { html: string | null; className?: string }) {
   if (!html || isHtmlEmpty(html)) return null
-  return <div className={`rt-content ${className}`} dangerouslySetInnerHTML={{ __html: normalizeRichText(html) }} />
+  return (
+    <div
+      className={`rt-content ${className}`}
+      dangerouslySetInnerHTML={{ __html: sanitizeRichText(normalizeRichText(html)) }}
+    />
+  )
 }
 
 export function isHtmlEmpty(html: string | null | undefined): boolean {
@@ -51,10 +84,12 @@ export function normalizeRichText(value: string | null | undefined): string {
   if (!value) return ''
   // Detección estricta: Tiptap SIEMPRE arranca con un bloque del schema
   // (p, h1, h2, ul, ol, blockquote, pre). Si la string empieza con uno
-  // de esos, la dejamos pasar tal cual. Cualquier otro contenido se
-  // trata como texto plano y se escapa — evita que "<script>..." en una
-  // descripción legacy sea interpretado como HTML al renderse vía
-  // dangerouslySetInnerHTML (la mitigación principal contra XSS).
+  // de esos, la dejamos pasar tal cual; si no, se trata como texto plano
+  // y se escapa (así una descripción legacy conserva sus saltos de línea).
+  //
+  // OJO: esto es NORMALIZACIÓN, no saneamiento — mira solo la primera
+  // etiqueta. Quien inyecte con dangerouslySetInnerHTML debe pasar además
+  // por `sanitizeRichText`.
   if (/^\s*<(p|h[12]|ul|ol|blockquote|pre|code)\b/i.test(value)) return value
   const escaped = value
     .replace(/&/g, '&amp;')

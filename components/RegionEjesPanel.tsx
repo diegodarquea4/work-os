@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, DbWriteError } from '@/lib/dbWrite'
 import {
-  useCanEditAny,
+  useCan,
   useCurrentUserEmail,
 } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
@@ -14,13 +14,17 @@ import { Alert, EmptyState } from '@/components/ui'
 import ReasignarEjeModal from '@/components/ReasignarEjeModal'
 
 /**
- * Modal de gestión del catálogo de ejes de una región. Solo admin/editor DCI
- * puede agregar / editar / borrar (RLS de `region_ejes` lo refuerza
- * server-side; acá gateamos en cliente para UX).
+ * Modal de gestión del catálogo de ejes de una región: agregar, renombrar,
+ * reordenar y fusionar.
+ *
+ * Gateado por la capacidad `region.gestionar_ejes` EN ESTA REGIÓN (mig 092).
+ * Antes era admin/editor por rol; ahora se concede desde Usuarios → Permisos,
+ * típicamente a un regional acotado a la suya. La RLS de `region_ejes` lo
+ * refuerza server-side con la misma capacidad — acá gateamos para la UX.
  *
  * Borrar un eje en uso por iniciativas o métricas devuelve foreign key
  * violation (Postgres 23503) → mostramos mensaje claro. No hacemos
- * CASCADE porque queremos forzar que admin reasigne antes.
+ * CASCADE porque queremos forzar que se reasigne antes.
  */
 
 type Props = {
@@ -34,7 +38,7 @@ type Props = {
 }
 
 export default function RegionEjesPanel({ open, onClose, region, onSaved, onReasignado }: Props) {
-  const canEditAny = useCanEditAny()
+  const puedeGestionar = useCan('region.gestionar_ejes', region.cod)
   const userEmail  = useCurrentUserEmail()
 
   const [ejes, setEjes]                     = useState<RegionEje[]>([])
@@ -240,11 +244,11 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved, onReas
           ) : ejes.length === 0 ? (
             <EmptyState
               title="Sin ejes definidos"
-              description={canEditAny ? 'Usá "Agregar eje" abajo para crear el primero.' : 'Aún no hay ejes definidos para esta región.'}
+              description={puedeGestionar ? 'Usá "Agregar eje" abajo para crear el primero.' : 'Aún no hay ejes definidos para esta región.'}
             />
           ) : (
             <>
-            {canEditAny && ejes.length > 1 && (
+            {puedeGestionar && ejes.length > 1 && (
               <p className="text-[11px] text-slate-500 leading-snug mb-2 px-0.5">
                 Usa las flechas para reordenar. El orden define el número (Eje 1, 2, 3…) y las
                 iniciativas vinculadas se actualizan al nuevo número o nombre.
@@ -284,7 +288,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved, onReas
                       </span>
                     )}
 
-                    {!isEditing && canEditAny && (
+                    {!isEditing && puedeGestionar && (
                       <div className="flex items-center gap-0.5 flex-shrink-0">
                         <div className="flex flex-col -my-1 mr-0.5">
                           <button
@@ -340,7 +344,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved, onReas
           )}
 
           {/* Form para agregar */}
-          {canEditAny && !showAddForm && (
+          {puedeGestionar && !showAddForm && (
             <button
               onClick={() => {
                 setShowAddForm(true)
@@ -358,7 +362,7 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved, onReas
             </button>
           )}
 
-          {canEditAny && showAddForm && (
+          {puedeGestionar && showAddForm && (
             <form onSubmit={handleCreate} className="mt-3 p-3 bg-slate-50/70 border border-gray-200 rounded-lg space-y-2">
               <div className="flex gap-2">
                 <div className="w-16">
@@ -415,10 +419,11 @@ export default function RegionEjesPanel({ open, onClose, region, onSaved, onReas
         </div>
 
         {/* ── Footer info ── */}
-        {!canEditAny && (
+        {!puedeGestionar && (
           <div className="flex-shrink-0 px-5 py-2.5 bg-slate-50/70 border-t border-gray-100">
             <p className="text-xs text-gray-500 leading-snug">
-              Solo admin DCI puede modificar el catálogo. Pídelo al administrador.
+              No tienes permiso para modificar el catálogo de ejes de esta región.
+              Un administrador puede habilitártelo en Usuarios → Permisos.
             </p>
           </div>
         )}

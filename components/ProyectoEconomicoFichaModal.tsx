@@ -77,7 +77,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
 
   // Permisos del proyecto (join con el catálogo global) + catálogo completo
   // (para el picker "+ Agregar permiso") + padrón de usuarios con su
-  // ministerio (mig 088) — para el filtro de avances por ministerio.
+  // ministerio (mig 087) — para el filtro de avances por ministerio.
   const [permisos, setPermisos]       = useState<PermisoConCatalogo[]>([])
   const [pasCatalogo, setPasCatalogo] = useState<PasCatalogo[]>([])
   const [usuarios, setUsuarios]       = useState<Usuario[]>([])
@@ -155,8 +155,10 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
 
   useEffect(() => { cargar() }, [cargar])
 
-  // Padrón con ministerio (mig 088) — una sola vez, no depende del proyecto.
-  // Alimenta el filtro de avances por ministerio del autor.
+  // Padrón con ministerio (mig 087) — una sola vez, no depende del proyecto.
+  // Alimenta el filtro de avances por ministerio del autor. OJO: hoy el
+  // ministerio solo se puebla para el rol `seremi`, así que el filtro solo
+  // separa a esos autores (ver nota de integración con main).
   useEffect(() => {
     fetch('/api/users').then(r => r.ok ? r.json() : []).then(setUsuarios).catch(() => {})
   }, [])
@@ -263,7 +265,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
           descripcion: avanceDescripcion.trim(),
           permiso_id: avancePermisoId || null,
           // Snapshot histórico del cambio de estado que este avance deja
-          // registrado (mig 090) — la bitácora del permiso lo muestra junto
+          // registrado (mig 097) — la bitácora del permiso lo muestra junto
           // a este avance, no solo como el estado actual del permiso.
           estado_permiso_registrado: estadoRegistrado,
           autor: currentUserEmail || null,
