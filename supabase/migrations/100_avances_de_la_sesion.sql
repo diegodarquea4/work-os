@@ -26,11 +26,12 @@ CREATE INDEX IF NOT EXISTS idx_cep_seguimiento_sesion
   ON public.comite_economico_proyecto_seguimiento (sesion_id)
   WHERE sesion_id IS NOT NULL;
 
--- Misma columna en los seguimientos de iniciativas: la agenda de la sesión
--- mezcla proyectos privados con iniciativas públicas (tag CER), y el acta las
--- reporta juntas. Hoy solo la escribe el flujo del proyecto privado — la ficha
--- de una iniciativa es la compartida de todo el panel (ProjectTrackerModal) y
--- todavía no recibe el contexto de sesión.
+-- Misma columna en los seguimientos de iniciativas, anticipando que el acta
+-- reportara también los avances de las iniciativas públicas tratadas.
+-- REVERTIDA por la mig 101: la decisión fue que una iniciativa pública figure
+-- en el acta solo como tratada en la sesión, sin detalle de avances, con lo
+-- que esta columna quedaba sin nadie que la escribiera. Se deja el ALTER acá
+-- para que la 101 se lea como lo que es y el historial no mienta.
 ALTER TABLE public.seguimientos
   ADD COLUMN IF NOT EXISTS sesion_id BIGINT REFERENCES public.eje_sesiones(id) ON DELETE SET NULL;
 

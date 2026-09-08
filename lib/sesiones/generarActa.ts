@@ -287,26 +287,19 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
   // en el acta: es el registro de lo que se avanzó en la reunión. El vínculo
   // es la columna `sesion_id`, no la fecha — un borrador puede quedar abierto
   // varios días y un proyecto puede recibir avances por fuera de la sesión.
-  type AvanceActa = { fecha: string; descripcion: string; autor: string | null }
-  const [avPrivRes, avPubRes] = await Promise.all([
-    db.from('comite_economico_proyecto_seguimiento')
-      .select('proyecto_id, fecha, descripcion, autor')
-      .eq('sesion_id', sesionId).order('fecha'),
-    db.from('seguimientos')
-      .select('prioridad_id, fecha, descripcion, autor')
-      .eq('sesion_id', sesionId).order('fecha'),
-  ])
+  //
+  // Solo proyectos privados: una iniciativa pública figura en el acta como
+  // tratada en la sesión, sin detalle de avances (decisión de producto; ver
+  // mig 101, que por eso sacó la columna espejo de `seguimientos`).
+  type AvanceActa = { fecha: string; descripcion: string }
+  const avRes = await db.from('comite_economico_proyecto_seguimiento')
+    .select('proyecto_id, fecha, descripcion')
+    .eq('sesion_id', sesionId).order('fecha')
   const avancesPorPrivado = new Map<number, AvanceActa[]>()
-  for (const a of (avPrivRes.data ?? []) as ({ proyecto_id: number } & AvanceActa)[]) {
+  for (const a of (avRes.data ?? []) as ({ proyecto_id: number } & AvanceActa)[]) {
     const acc = avancesPorPrivado.get(a.proyecto_id) ?? []
-    acc.push({ fecha: a.fecha, descripcion: a.descripcion, autor: a.autor })
+    acc.push({ fecha: a.fecha, descripcion: a.descripcion })
     avancesPorPrivado.set(a.proyecto_id, acc)
-  }
-  const avancesPorPrioridad = new Map<number, AvanceActa[]>()
-  for (const a of (avPubRes.data ?? []) as ({ prioridad_id: number } & AvanceActa)[]) {
-    const acc = avancesPorPrioridad.get(a.prioridad_id) ?? []
-    acc.push({ fecha: a.fecha, descripcion: a.descripcion, autor: a.autor })
-    avancesPorPrioridad.set(a.prioridad_id, acc)
   }
 
   // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
@@ -354,9 +347,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
         : (p.proyecto?.nombre ?? '—')
       const avances = p.proyecto_privado_id != null
         ? (avancesPorPrivado.get(p.proyecto_privado_id) ?? [])
-        : p.prioridad_id != null
-          ? (avancesPorPrioridad.get(p.prioridad_id) ?? [])
-          : []
+        : []
       return { nombre, nota: p.nota, avances }
     }),
     oficiosTratados: oficios.map(o => ({

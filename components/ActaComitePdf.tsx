@@ -74,11 +74,14 @@ export type ActaData = ActaBranding & {
   // De dónde sale cada proyecto (cartera privada del comité vs. iniciativa con
   // etiqueta CER) es distinción interna: el acta lo omite a propósito, para
   // quien la lee son todos proyectos tratados por el comité.
-  // `avances`: lo que se registró con ESTA sesión abierta (mig 100).
+  // `avances`: lo que se registró con ESTA sesión abierta (mig 100). Solo
+  // aplica a los proyectos de la cartera privada; una iniciativa pública
+  // figura como tratada, sin detalle. Sin autor: el acta relata lo que hizo
+  // el comité, no quién tipeó cada línea (la ficha sí lo guarda).
   proyectosTratados: {
     nombre: string
     nota: string | null
-    avances: { fecha: string; descripcion: string; autor: string | null }[]
+    avances: { fecha: string; descripcion: string }[]
   }[]
   oficiosTratados: {
     nombreProyecto: string
@@ -286,9 +289,7 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
                 {(p.nota || p.avances.length === 0) && <Text style={s.blockText}>{p.nota || '—'}</Text>}
                 {/* Avances registrados con esta sesión abierta (mig 100). */}
                 {p.avances.map((a, j) => (
-                  <Text key={j} style={s.blockText}>
-                    · {fmtFecha(a.fecha)} — {a.descripcion}{a.autor ? ` (${a.autor})` : ''}
-                  </Text>
+                  <Text key={j} style={s.blockText}>· {fmtFecha(a.fecha)} — {a.descripcion}</Text>
                 ))}
               </View>
             ))}
