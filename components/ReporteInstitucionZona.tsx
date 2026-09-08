@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
-import { crearColaPorClave } from '@/lib/colaPorClave'
+import type { ColaPorClave } from '@/lib/colaPorClave'
 import type { ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
 import { deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
 import type { InstitucionComite } from '@/lib/hooks/useComiteMetricas'
@@ -21,14 +21,25 @@ import MetricasComiteModal from './MetricasComiteModal'
  * (defaultValue + onBlur, key estable) para no re-renderizar por tecla.
  * Desglose: controlado (lista dinámica). Cada handler se recrea por render con
  * el `valores` fresco del closure → sin ref ni staleness.
+ *
+ * COMPONENTE CONTROLADO: `valores`, la institución activa y la cola de
+ * guardados viven en el padre (SesionModal). Razón: en la consola a pantalla
+ * completa esta zona se DESMONTA al pasar a otra zona del riel y se vuelve a
+ * montar al volver. Si el estado fuera local, al remontar se partiría de los
+ * valores viejos y, peor, con una cola nueva podrían viajar dos guardados de
+ * la misma métrica en paralelo (lo que lib/colaPorClave.ts evita).
  */
 
 type Props = {
   sesionId: number
   regionCod: string
   catalogo: ComiteMetrica[]
-  valoresIniciales: SesionComiteValor[]
+  valores: SesionComiteValor[]                                    // estado del padre
+  onValoresChange: Dispatch<SetStateAction<SesionComiteValor[]>>  // setter del padre
+  encolar: ColaPorClave<number>                                   // cola por métrica, creada en el padre
   valoresPrev: Map<number, SesionComiteValor>   // WoW: sesión cerrada anterior
+  institucion: string                           // institución activa (la elige el riel / las tabs)
+  onInstitucionChange: (key: string) => void
   currentUserEmail: string
   onCatalogoChange: () => void                  // recarga el catálogo en el padre
   instituciones: InstitucionComite[]            // dinámicas por región (mig 078)
@@ -36,19 +47,16 @@ type Props = {
 }
 
 export default function ReporteInstitucionZona({
-  sesionId, regionCod, catalogo, valoresIniciales, valoresPrev, currentUserEmail, onCatalogoChange,
+  sesionId, regionCod, catalogo, valores, onValoresChange, encolar, valoresPrev,
+  institucion, onInstitucionChange, currentUserEmail, onCatalogoChange,
   instituciones, onInstitucionesChange,
 }: Props) {
-  const [valores, setValores] = useState<SesionComiteValor[]>(
-    () => valoresIniciales.map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] })),
-  )
-  const [inst, setInst] = useState<string>('carabineros')
   const [editModal, setEditModal] = useState<{ metrica: ComiteMetrica | null } | null>(null)
   const [metricasModal, setMetricasModal] = useState(false)
 
   // Institución seleccionada segura: si la elegida ya no está en la lista
   // (borrada), cae a la primera (las 4 base siempre están).
-  const instSel = instituciones.some(i => i.key === inst) ? inst : (instituciones[0]?.key ?? 'carabineros')
+  const instSel = instituciones.some(i => i.key === institucion) ? institucion : (instituciones[0]?.key ?? 'carabineros')
   const instLabel = instituciones.find(i => i.key === instSel)?.label ?? instSel
 
   const filas = catalogo
@@ -63,17 +71,12 @@ export default function ReporteInstitucionZona({
 
   // Actualiza SOLO el estado local (para inputs controlados / feedback WoW).
   function setLocal(next: SesionComiteValor) {
-    setValores(prev => {
+    onValoresChange(prev => {
       const idx = prev.findIndex(v => v.metrica_id === next.metrica_id)
       if (idx === -1) return [...prev, next]
       const out = [...prev]; out[idx] = next; return out
     })
   }
-
-  // Un guardado a la vez POR MÉTRICA: cada campo se guarda al salir de él, así
-  // que tabular entre el número, el texto y las observaciones dispara varios
-  // guardados de la misma fila casi juntos (ver lib/colaPorClave.ts).
-  const encolar = useRef(crearColaPorClave<number>()).current
 
   // Persiste `next` (optimistic local + write). Guarda / borra según quede con
   // dato o vacía. Revert por alert (patrón dbWrite).
@@ -100,7 +103,7 @@ export default function ReporteInstitucionZona({
             .eq('sesion_id', sesionId).eq('metrica_id', next.metrica_id),
           `sesion_comite_valor delete metrica=${next.metrica_id}`,
         )
-        setValores(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
+        onValoresChange(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
         return
       }
       // UPSERT, no «insertar o actualizar según el id local». La llave real es
@@ -118,7 +121,7 @@ export default function ReporteInstitucionZona({
         `sesion_comite_valor upsert metrica=${next.metrica_id}`,
       )
       const guardada = rows[0] as SesionComiteValor
-      setValores(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: guardada.id } : v))
+      onValoresChange(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: guardada.id } : v))
     } catch (err) {
       window.alert((err as Error).message)
     }
@@ -148,7 +151,7 @@ export default function ReporteInstitucionZona({
           return (
             <button
               key={i.key}
-              onClick={() => setInst(i.key)}
+              onClick={() => onInstitucionChange(i.key)}
               className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
                 activa ? 'bg-violet-700 text-white'
                   : conDato ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'

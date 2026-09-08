@@ -170,6 +170,11 @@ export default function SesionModal(props: Props) {
   const [comiteCatalogo, setComiteCatalogo]     = useState<ComiteMetrica[]>([])
   const [comiteValores, setComiteValores]       = useState<SesionComiteValor[]>([])
   const [comiteValoresPrev, setComiteValoresPrev] = useState<Map<number, SesionComiteValor>>(new Map())
+  // Institución activa del reporte y cola de guardados por métrica: viven acá
+  // (no en ReporteInstitucionZona) para sobrevivir al desmontaje de la zona
+  // cuando la consola muestra otra. Ver el JSDoc de ReporteInstitucionZona.
+  const [institucionActiva, setInstitucionActiva] = useState<string>('carabineros')
+  const encolarComite = useRef(crearColaPorClave<number>()).current
   // Instituciones que reportan (mig 078) — dinámicas por región (4 base + propias).
   const { instituciones: comiteInstituciones, refresh: reloadComiteInstituciones } =
     useInstitucionesComite(region.cod, props.instancia === 'eje')
@@ -377,7 +382,9 @@ export default function SesionModal(props: Props) {
           .order('fecha', { ascending: false }).limit(1),
       ])
       setComiteCatalogo((catRes.data ?? []) as ComiteMetrica[])
-      setComiteValores((valRes.data ?? []) as SesionComiteValor[])
+      // `desglose` es JSONB: se normaliza a arreglo acá, una vez, y no en la zona.
+      setComiteValores(((valRes.data ?? []) as SesionComiteValor[])
+        .map(v => ({ ...v, desglose: Array.isArray(v.desglose) ? v.desglose : [] })))
       const prevId = prevSesRes.data?.[0]?.id
       if (prevId) {
         const { data: prevVals } = await sb.from('sesion_comite_valor').select('*').eq('sesion_id', prevId)
@@ -1241,8 +1248,12 @@ export default function SesionModal(props: Props) {
                   sesionId={sesion.id}
                   regionCod={region.cod}
                   catalogo={comiteCatalogo}
-                  valoresIniciales={comiteValores}
+                  valores={comiteValores}
+                  onValoresChange={setComiteValores}
+                  encolar={encolarComite}
                   valoresPrev={comiteValoresPrev}
+                  institucion={institucionActiva}
+                  onInstitucionChange={setInstitucionActiva}
                   currentUserEmail={currentUserEmail}
                   onCatalogoChange={reloadComiteCatalogo}
                   instituciones={comiteInstituciones}
