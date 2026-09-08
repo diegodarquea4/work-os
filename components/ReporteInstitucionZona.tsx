@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { crearColaPorClave } from '@/lib/colaPorClave'
 import type { ComiteMetrica, SesionComiteValor, ComiteDesglose } from '@/lib/types'
 import { deltaPulso, tieneValorComite } from '@/lib/sesiones/helpers'
 import type { InstitucionComite } from '@/lib/hooks/useComiteMetricas'
@@ -69,11 +70,22 @@ export default function ReporteInstitucionZona({
     })
   }
 
-  // Persiste `next` (optimistic local + write). Inserta / actualiza / borra
-  // según quede con dato o vacía. Revert por alert (patrón dbWrite).
+  // Un guardado a la vez POR MÉTRICA: cada campo se guarda al salir de él, así
+  // que tabular entre el número, el texto y las observaciones dispara varios
+  // guardados de la misma fila casi juntos (ver lib/colaPorClave.ts).
+  const encolar = useRef(crearColaPorClave<number>()).current
+
+  // Persiste `next` (optimistic local + write). Guarda / borra según quede con
+  // dato o vacía. Revert por alert (patrón dbWrite).
   async function commit(next: SesionComiteValor) {
-    const existente = valores.find(v => v.metrica_id === next.metrica_id) ?? null
+    // Se mira ANTES del setLocal: dice si hay algo que borrar cuando la fila
+    // queda vacía.
+    const habiaFila = valores.some(v => v.metrica_id === next.metrica_id)
     setLocal(next)
+    await encolar(next.metrica_id, () => guardar(next, habiaFila))
+  }
+
+  async function guardar(next: SesionComiteValor, habiaFila: boolean) {
     const payload = {
       valor_num: next.valor_num,
       valor_texto: next.valor_texto,
@@ -82,28 +94,31 @@ export default function ReporteInstitucionZona({
     }
     try {
       if (!tieneValorComite(next)) {
-        if (existente?.id) {
-          await safeDelete(
-            getSupabase().from('sesion_comite_valor').delete().eq('id', existente.id),
-            `sesion_comite_valor delete id=${existente.id}`,
-          )
-          setValores(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
-        }
+        if (!habiaFila) return
+        await safeDelete(
+          getSupabase().from('sesion_comite_valor').delete()
+            .eq('sesion_id', sesionId).eq('metrica_id', next.metrica_id),
+          `sesion_comite_valor delete metrica=${next.metrica_id}`,
+        )
+        setValores(prev => prev.filter(v => v.metrica_id !== next.metrica_id))
         return
       }
-      if (existente?.id) {
-        await safeWrite(
-          getSupabase().from('sesion_comite_valor').update(payload).eq('id', existente.id),
-          `sesion_comite_valor update id=${existente.id}`,
-        )
-      } else {
-        const rows = await safeWrite(
-          getSupabase().from('sesion_comite_valor').insert({ sesion_id: sesionId, metrica_id: next.metrica_id, ...payload }),
-          `sesion_comite_valor insert metrica=${next.metrica_id}`,
-        )
-        const creada = rows[0] as SesionComiteValor
-        setValores(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: creada.id } : v))
-      }
+      // UPSERT, no «insertar o actualizar según el id local». La llave real es
+      // (sesion_id, metrica_id) y la conoce la base; el componente no. Antes se
+      // decidía mirando `existente.id`, que vale 0 en la fila provisoria que
+      // arma `valorDe()` mientras el primer guardado va en vuelo — así que un
+      // segundo campo de la misma métrica volvía a INSERTAR y reventaba con
+      // «duplicate key ... sesion_comite_valor_sesion_id_metrica_id_key».
+      const rows = await safeWrite(
+        getSupabase().from('sesion_comite_valor')
+          .upsert(
+            { sesion_id: sesionId, metrica_id: next.metrica_id, ...payload },
+            { onConflict: 'sesion_id,metrica_id' },
+          ),
+        `sesion_comite_valor upsert metrica=${next.metrica_id}`,
+      )
+      const guardada = rows[0] as SesionComiteValor
+      setValores(prev => prev.map(v => v.metrica_id === next.metrica_id ? { ...next, id: guardada.id } : v))
     } catch (err) {
       window.alert((err as Error).message)
     }

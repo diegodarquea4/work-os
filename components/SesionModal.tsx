@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { createPortal } from 'react-dom'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { crearColaPorClave } from '@/lib/colaPorClave'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -179,6 +180,7 @@ export default function SesionModal(props: Props) {
     useInstitucionesComite(region.cod, props.instancia === 'eje')
   // Zona 4 gabinete: apuntes por institución (el comité ya no usa esta zona).
   const [apuntes, setApuntes]               = useState<SesionApunte[]>([])
+  const encolarApunte = useRef(crearColaPorClave<string>()).current
   const [instituciones, setInstituciones]   = useState<string[]>([])
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
   // Zona 3 gabinete: agenda de iniciativas de la sesión (la ficha completa se
@@ -622,22 +624,32 @@ export default function SesionModal(props: Props) {
     const existente = apuntes.find(a => a.institucion === institucion)
     if (existente && existente.texto === texto) return
     if (!existente && !texto.trim()) return
+    // Un guardado a la vez por institución: dos en vuelo pueden llegar
+    // desordenados y dejar escrito el texto viejo (lib/colaPorClave.ts).
+    await encolarApunte(institucion, () => guardarApunte(institucion, texto))
+  }
+
+  async function guardarApunte(institucion: string, texto: string) {
+    if (!sesion) return
     try {
-      if (existente) {
-        await safeWrite(
-          getSupabase().from('sesion_apuntes').update({ texto }).eq('id', existente.id),
-          `sesion_apuntes update id=${existente.id}`,
-        )
-        setApuntes(prev => prev.map(a => a.id === existente.id ? { ...a, texto } : a))
-      } else {
-        const rows = await safeWrite(
-          getSupabase().from('sesion_apuntes').insert({
-            sesion_id: sesion.id, institucion, texto,
-          }),
-          `sesion_apuntes insert ${institucion}`,
-        )
-        setApuntes(prev => [...prev, rows[0] as SesionApunte])
-      }
+      // UPSERT sobre la llave real (sesion_id, institucion) en vez de decidir
+      // INSERT o UPDATE según si la fila ya está en el estado local. `apuntes`
+      // recién se actualiza cuando el guardado contesta, así que dos guardados
+      // seguidos de la misma institución (escribir, salir, volver a entrar y
+      // salir antes de que conteste el primero) veían los dos `existente ===
+      // undefined` y los dos INSERTABAN → «duplicate key ...
+      // sesion_apuntes_sesion_id_institucion_key».
+      const rows = await safeWrite(
+        getSupabase().from('sesion_apuntes').upsert(
+          { sesion_id: sesion.id, institucion, texto },
+          { onConflict: 'sesion_id,institucion' },
+        ),
+        `sesion_apuntes upsert ${institucion}`,
+      )
+      const guardado = rows[0] as SesionApunte
+      setApuntes(prev => prev.some(a => a.institucion === institucion)
+        ? prev.map(a => a.institucion === institucion ? guardado : a)
+        : [...prev, guardado])
     } catch (err) {
       window.alert((err as Error).message)
     }
