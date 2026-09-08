@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { crearColaPorClave } from '@/lib/colaPorClave'
+import { ESTADO_COMPROMISO } from '@/lib/sesiones/consola'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -98,12 +99,6 @@ type Props = PropsBase & (
 const SIN_INICIATIVAS: Iniciativa[] = []
 const SIN_EJES: RegionEje[] = []
 const SIN_MEGAPROYECTOS: string[] = []
-
-const ESTADO_COMPROMISO = {
-  pendiente: { label: 'Pendiente', on: 'bg-gray-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-  en_curso:  { label: 'En curso',  on: 'bg-blue-600 text-white',   off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-  cumplido:  { label: 'Cumplido',  on: 'bg-green-600 text-white',  off: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-} as const
 
 function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
