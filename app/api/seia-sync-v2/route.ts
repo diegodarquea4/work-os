@@ -44,6 +44,15 @@
  * mano de obra y vida útil viven dentro del EIA/DIA como documento, y el
  * estado de EJECUCIÓN (construcción / operación) no existe en el SEIA — su
  * vocabulario termina en la calificación ambiental. Eso se responde con SNIFA.
+ *
+ * UNA CORRIDA NO ALCANZA, y es por diseño. Medido contra el SEIA real: el
+ * universo filtrado son ~1.350 expedientes en 10 regiones y tarda 383s, sobre
+ * un presupuesto de 240s. Además el SEIA corta la conexión alrededor de los 40
+ * requests seguidos. Por eso TODO corte —tiempo agotado, HTTP != ok o
+ * conexión caída— guarda el cursor y devuelve `partial:true`: quien dispara
+ * esta ruta debe reinvocarla hasta recibir `partial:false`. Un fallo de red
+ * NUNCA debe dejar una pasada por terminada: era justamente así como el sync
+ * cerraba 'ok' con regiones a medias.
  */
 
 import { NextRequest } from 'next/server'
@@ -67,6 +76,47 @@ const TIME_BUDGET  = 240_000  // 240s (80% del maxDuration 300s)
 // 10 unidades más allá.
 const OFFSET_ROWS  = 10
 const OFFSET_STEP  = PAGE_SIZE / OFFSET_ROWS   // 10
+
+// ── Universo que se sigue ────────────────────────────────────────────────────
+// El espejo NO trae los ~30.000 expedientes del SEIA: trae solo los que el
+// comité puede seguir. Dos recortes, ambos aplicados EN EL ORIGEN (el buscador
+// los soporta), que dejan la corrida en ~1 página por región en vez de 9:
+//
+//   · Por estado — `projectStatus` (códigos del formulario del SEIA). Quedan
+//     fuera Caducado, Abandonado, Revocado, Renuncia RCA, Rechazado,
+//     Desistido, No Admitido y No calificado: ninguno va a ejecutarse.
+//   · Por antigüedad de la RCA — `CalificaMin` a 5 años. Una RCA caduca si el
+//     proyecto no se inicia en ese plazo (art. 25 ter Ley 19.300), así que un
+//     aprobado más viejo ya venció.
+//
+// El corte por fecha NO aplica a lo que sigue en evaluación: todavía no tiene
+// RCA, y `CalificaMin` justamente los excluye. Por eso son pasadas separadas.
+const ESTADO_APROBADO       = '4'
+const ESTADO_EN_CALIFICACION = '3'
+const ESTADO_EN_ADMISION     = '2'
+const ANIOS_VIGENCIA_RCA     = 5
+
+/** dd/mm/aaaa — formato que espera el buscador en CalificaMin. */
+function fechaCorteRca(): string {
+  const h = new Date()
+  const c = new Date(h.getFullYear() - ANIOS_VIGENCIA_RCA, h.getMonth(), h.getDate())
+  return `${String(c.getDate()).padStart(2, '0')}/${String(c.getMonth() + 1).padStart(2, '0')}/${c.getFullYear()}`
+}
+
+/**
+ * Las pasadas por región. Cada una es una búsqueda distinta contra el SEIA y
+ * se pagina por separado.
+ */
+function pasadas(): { nombre: string; projectStatus: string; calificaMin: string }[] {
+  const corte = fechaCorteRca()
+  return [
+    // Con RCA vigente: aprobados calificados dentro de la ventana.
+    { nombre: 'aprobado-vigente', projectStatus: ESTADO_APROBADO, calificaMin: corte },
+    // Sin RCA todavía: siguen en evaluación, no tienen fecha de calificación.
+    { nombre: 'en-calificacion',  projectStatus: ESTADO_EN_CALIFICACION, calificaMin: '' },
+    { nombre: 'en-admision',      projectStatus: ESTADO_EN_ADMISION,     calificaMin: '' },
+  ]
+}
 // Tope duro de páginas por región (~5.000 expedientes). La región más grande
 // ronda los 1.000, así que nunca debería alcanzarse: está para que un SEIA
 // que devuelva páginas llenas para siempre no deje el loop girando.
@@ -74,11 +124,15 @@ const MAX_PAGES    = 50
 
 // ── Cursor ────────────────────────────────────────────────────────────────────
 // Persistido en sync_status.notes como JSON. Forma:
-//   { region_idx: number, offset: number }
+//   { region_idx: number, pasada_idx: number, offset: number }
 // region_idx = índice 0..15 en REGIONS (no es region_id ni cod).
-// offset = página de SEIA pendiente (1-based, como en la API original).
+// pasada_idx = índice en pasadas() — cada región se recorre 3 veces.
+// offset = offset del buscador pendiente (1-based; avanza de a OFFSET_STEP).
+// Los cursores viejos {region_idx, offset} se leen igual: pasada_idx cae en 0.
 
-type Cursor = { region_idx: number; offset: number }
+type Cursor = { region_idx: number; pasada_idx: number; offset: number }
+
+const CURSOR_INICIAL: Cursor = { region_idx: 0, pasada_idx: 0, offset: 1 }
 
 async function readCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Cursor> {
   const { data } = await db
@@ -86,17 +140,42 @@ async function readCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Curs
     .select('notes')
     .eq('name', SYNC_NAME)
     .maybeSingle()
-  if (!data?.notes) return { region_idx: 0, offset: 1 }
+  if (!data?.notes) return { ...CURSOR_INICIAL }
   try {
-    const parsed = JSON.parse(data.notes as string) as Cursor
+    const parsed = JSON.parse(data.notes as string) as Partial<Cursor>
     if (typeof parsed.region_idx === 'number' && typeof parsed.offset === 'number') {
-      return parsed
+      return {
+        region_idx: parsed.region_idx,
+        pasada_idx: typeof parsed.pasada_idx === 'number' ? parsed.pasada_idx : 0,
+        offset:     parsed.offset,
+      }
     }
   } catch { /* fall-through */ }
-  return { region_idx: 0, offset: 1 }
+  return { ...CURSOR_INICIAL }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Una consulta al buscador, con un reintento ante corte de conexión. La espera
+ * es corta a propósito: el presupuesto de tiempo del sync es de 240s y lo que
+ * no alcance queda en el cursor para la reinvocación, así que no vale la pena
+ * insistir mucho acá.
+ */
+async function fetchConReintento(body: string): Promise<Response> {
+  const pedir = () => fetch(SEIA_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+    signal:  AbortSignal.timeout(20_000),
+  })
+  try {
+    return await pedir()
+  } catch {
+    await new Promise(r => setTimeout(r, 3_000))
+    return pedir()   // si vuelve a fallar, propaga: lo toma el catch de la pasada
+  }
+}
 
 function parseSeiaDate(raw: string | undefined | null): string | null {
   if (!raw) return null
@@ -132,25 +211,35 @@ async function runSync(): Promise<Response> {
   // 1. Leer cursor.
   const cursor = await readCursor(supabase)
   const startRegion = cursor.region_idx
-  let startOffset   = cursor.offset
+  const PASADAS = pasadas()
+  // Marca de esta corrida: las filas que la ventana móvil de 5 años deja de
+  // devolver conservan la marca vieja, y por ahí se detectan las RCA vencidas
+  // sin necesidad de guardar la fecha de calificación (que el SEIA no expone).
+  const vistoEnVentanaAt = new Date().toISOString()
 
   let exhaustedByBudget = false
   let finalRegionIdx = startRegion
-  let finalOffset    = startOffset
+  let finalPasadaIdx = cursor.pasada_idx
+  let finalOffset    = cursor.offset
 
+  regiones:
   for (let r = startRegion; r < REGIONS.length; r++) {
     const region   = REGIONS[r]
     const regionId = INE_CODE[region.cod]
     if (regionId === undefined) {
       errors.push(`No INE_CODE for region ${region.cod}`)
-      // Avanzamos la región igual — no se queda atascada.
-      startOffset = 1
       continue
     }
 
-    let offset = r === startRegion ? startOffset : 1
-    let totalRecs = Infinity
-    let paginas = 0
+    // Al reanudar, la primera región retoma en su pasada; las siguientes en 0.
+    const desdePasada = r === startRegion ? cursor.pasada_idx : 0
+
+    for (let q = desdePasada; q < PASADAS.length; q++) {
+      const pasada = PASADAS[q]
+      // Solo la pasada donde quedó el cursor retoma su offset.
+      let offset = (r === startRegion && q === cursor.pasada_idx) ? cursor.offset : 1
+      let totalRecs = Infinity
+      let paginas = 0
 
     try {
       // Filas ya consumidas antes de esta página = (offset - 1) * OFFSET_ROWS.
@@ -160,16 +249,19 @@ async function runSync(): Promise<Response> {
         if (Date.now() - startedAt > TIME_BUDGET) {
           exhaustedByBudget = true
           finalRegionIdx = r
+          finalPasadaIdx = q
           finalOffset    = offset
-          break
+          break regiones
         }
 
         const body = new URLSearchParams({
           nombre: '', titular: '', folio: '',
           selectRegion:    String(regionId),
-          selectComuna:    '', tipoPresentacion: '', projectStatus: '',
+          selectComuna:    '', tipoPresentacion: '',
+          // Recorte por estado y por vigencia de la RCA, en el origen.
+          projectStatus:   pasada.projectStatus,
           PresentacionMin: '', PresentacionMax: '',
-          CalificaMin:     '', CalificaMax:     '',
+          CalificaMin:     pasada.calificaMin, CalificaMax: '',
           sectores_economicos: '', razoningreso: '', id_tipoexpediente: '',
           offset:      String(offset),
           limit:       String(PAGE_SIZE),
@@ -177,16 +269,22 @@ async function runSync(): Promise<Response> {
           orderDir:    'desc',
         })
 
-        const res = await fetch(SEIA_URL, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body:    body.toString(),
-          signal:  AbortSignal.timeout(20_000),
-        })
+        // El SEIA corta la conexión cuando recibe muchas consultas seguidas
+        // (medido: alrededor de los 40 requests). Un reintento con espera
+        // recupera la mayoría de esos cortes; si igual falla, el catch de más
+        // abajo guarda el cursor y la reinvocación retoma en esta página.
+        const res = await fetchConReintento(body.toString())
 
         if (!res.ok) {
-          errors.push(`${region.cod} offset=${offset}: HTTP ${res.status}`)
-          break
+          // NO seguir de largo: una pasada que se corta por HTTP quedaría
+          // incompleta y el sync la daría por buena. Se guarda el cursor acá
+          // y la próxima invocación la retoma desde esta misma página.
+          errors.push(`${region.cod}/${pasada.nombre} offset=${offset}: HTTP ${res.status}`)
+          exhaustedByBudget = true
+          finalRegionIdx = r
+          finalPasadaIdx = q
+          finalOffset    = offset
+          break regiones
         }
 
         const buf  = await res.arrayBuffer()
@@ -233,6 +331,7 @@ async function runSync(): Promise<Response> {
             url_mapa:           p.LINK_MAPA?.SHOW && p.LINK_MAPA.URL
               ? new URL(p.LINK_MAPA.URL, 'https://seia.sea.gob.cl').toString()
               : null,
+            visto_en_ventana_at: vistoEnVentanaAt,
             synced_at:          new Date().toISOString(),
           }
         })
@@ -280,21 +379,25 @@ async function runSync(): Promise<Response> {
         if ((json.data ?? []).length < PAGE_SIZE) break  // última página
       }
     } catch (err) {
-      errors.push(`${region.cod}: ${err instanceof Error ? err.message : String(err)}`)
+      // Igual que el HTTP != ok: el SEIA corta la conexión cuando se le hacen
+      // muchas consultas seguidas (medido: ~40 requests). Sin esto, la pasada
+      // se daba por terminada y el sync cerraba 'ok' con la región a medias.
+      errors.push(`${region.cod}/${pasada.nombre} offset=${offset}: ${err instanceof Error ? err.message : String(err)}`)
+      exhaustedByBudget = true
+      finalRegionIdx = r
+      finalPasadaIdx = q
+      finalOffset    = offset
+      break regiones
     }
-
-    if (exhaustedByBudget) break
-
-    // Región completa — al avanzar a la siguiente, offset arranca en 1.
-    startOffset = 1
-  }
+    }  // fin pasada
+  }  // fin región
 
   const durationMs = Date.now() - startedAt
 
   // 2. Persistir resultado + cursor.
   if (exhaustedByBudget) {
     // Quedamos a medias. Guardamos cursor para reanudar en próxima invocación.
-    const nextCursor: Cursor = { region_idx: finalRegionIdx, offset: finalOffset }
+    const nextCursor: Cursor = { region_idx: finalRegionIdx, pasada_idx: finalPasadaIdx, offset: finalOffset }
     await recordSyncStatus(SYNC_NAME, {
       status:   'partial',
       durationMs,
@@ -311,7 +414,9 @@ async function runSync(): Promise<Response> {
       upserted:    totalUpserted,
       duration_ms: durationMs,
       errors:      errors.length > 0 ? errors : undefined,
-      note:        'Presupuesto agotado, reinvocar para continuar.',
+      note:        errors.length > 0
+        ? 'Corte por error del SEIA (corta la conexión ante muchas consultas seguidas). Reinvocar para continuar desde el cursor.'
+        : 'Presupuesto de tiempo agotado, reinvocar para continuar.',
     })
   }
 
@@ -393,5 +498,6 @@ type UpsertRow = {
   dias_legales:       number | null
   url_detalle:        string | null
   url_mapa:           string | null
+  visto_en_ventana_at: string
   synced_at:          string
 }
