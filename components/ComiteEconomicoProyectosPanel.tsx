@@ -49,10 +49,18 @@ type Props = {
   onClose?: () => void
   /** 'completo': saltar directo a la consola de sesión (ida y vuelta). */
   onIrASesion?: () => void
+  /**
+   * Puede sumar y sacar proyectos de la cartera (mig 110). Falso para un SEREMI
+   * de otro ministerio: entra a la cartera a editar el detalle de los proyectos
+   * y a registrar avances y permisos —que es lo que él sabe y la delegación
+   * no—, pero quién entra y quién sale lo decide quien conduce el comité.
+   */
+  puedeGestionarCartera?: boolean
 }
 
 export default function ComiteEconomicoProyectosPanel({
   region, iniciativas, onAbrirIniciativa, modo = 'completo', onVerTodos, onClose, onIrASesion,
+  puedeGestionarCartera = true,
 }: Props) {
   const puedeOperar = useCan('comite.economico.operar', region.cod)
   const userEmail = useCurrentUserEmail()
@@ -334,6 +342,7 @@ export default function ComiteEconomicoProyectosPanel({
             >
               {exportando ? 'Generando…' : '↓ Descargar Excel'}
             </button>
+            {puedeGestionarCartera && (
             <button
               onClick={() => setNuevoOpen(true)}
               className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
@@ -341,6 +350,7 @@ export default function ComiteEconomicoProyectosPanel({
             >
               + Nuevo proyecto
             </button>
+            )}
           </div>
         )}
       </div>
