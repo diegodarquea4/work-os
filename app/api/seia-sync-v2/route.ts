@@ -61,6 +61,7 @@ import { REGIONS, INE_CODE } from '@/lib/regions'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import { isCronAuthorized } from '@/lib/cronAuth'
 import { requireAuth, requireCan } from '@/lib/apiAuth'
+import { reconciliarCartera } from '@/lib/sesiones/reconciliarCartera'
 
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
@@ -471,10 +472,15 @@ async function runSync(soloRegionCod: string | null = null): Promise<Response> {
   if (exhaustedByBudget) {
     const nextCursor: Cursor = { region_idx: finalRegionIdx, pasada_idx: finalPasadaIdx, offset: finalOffset, ventana_at: vistoEnVentanaAt }
     if (soloRegionCod) {
+      // Se reconcilia igual aunque la región haya quedado a medias: lo que sí
+      // se alcanzó a refrescar del catálogo ya puede haber cambiado, y no
+      // avisarlo hasta la próxima corrida completa sería esconderlo.
+      const rec = await reconciliarCartera(supabase, soloRegionCod)
       return Response.json({
         ok:          true,
         partial:     true,
         region:      soloRegionCod,
+        cartera:     rec,
         synced_at:   new Date().toISOString(),
         upserted:    totalUpserted,
         duration_ms: durationMs,
@@ -523,10 +529,18 @@ async function runSync(soloRegionCod: string | null = null): Promise<Response> {
 
   if (finalStatus === 'error') return Response.json({ ok: false, errors })
 
+  // Catálogo al día → contrastar la cartera contra él y dejar rastro de lo que
+  // cambió. Una corrida nacional reconcilia las 16 regiones; una de región,
+  // solo la suya. Si esto falla, el sync ya hizo lo suyo: se reporta el error
+  // en la respuesta y no se aborta.
+  const rec = await reconciliarCartera(supabase, soloRegionCod ?? undefined)
+  if (rec.errores.length > 0) errors.push(...rec.errores.map(e => `cartera: ${e}`))
+
   return Response.json({
     ok:          true,
     partial:     false,
     region:      soloRegionCod ?? undefined,
+    cartera:     rec,
     synced_at:   new Date().toISOString(),
     upserted:    totalUpserted,
     regions:     soloRegionCod ? 1 : REGIONS.length,

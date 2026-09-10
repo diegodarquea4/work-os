@@ -1201,16 +1201,31 @@ function AvanceRow({
   const [draft, setDraft]     = useState(avance.descripcion)
   useEffect(() => { setDraft(avance.descripcion) }, [avance.descripcion])
 
+  // Lo escribió la reconciliación con el catálogo, no una persona (mig 109).
+  // No se edita ni se borra: es el registro de qué cambió en la fuente, y
+  // reescribirlo lo volvería inútil. La base lo impide también, por RLS.
+  const esAutomatico = avance.automatico === true
+  const editable = puedeEditar && !esAutomatico
+
   return (
     <div className="group">
       <div className="flex items-center gap-2 mb-1 flex-wrap">
         {generalLabel && <span className="text-xs text-gray-400">{generalLabel}</span>}
+        {esAutomatico && (
+          <span
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 inline-flex items-center gap-1"
+            title="Registrado automáticamente al actualizar el catálogo del SEIA"
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 11-3-6.7M21 3v6h-6"/></svg>
+            Desde el SEIA
+          </span>
+        )}
         {estadoRegistrado && (
           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ESTADO_PERMISO[estadoRegistrado].cls}`}>
             → {ESTADO_PERMISO[estadoRegistrado].label}
           </span>
         )}
-        {puedeEditar ? (
+        {editable ? (
           <input
             type="date"
             value={avance.fecha}
@@ -1220,7 +1235,7 @@ function AvanceRow({
         ) : (
           <span className="text-xs text-gray-400 ml-auto">{fmtFecha(avance.fecha)}</span>
         )}
-        {puedeEditar && !editing && (
+        {editable && !editing && (
           <button
             onClick={() => setEditing(true)}
             className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-violet-600 rounded hover:bg-violet-50 transition-colors"
@@ -1231,7 +1246,7 @@ function AvanceRow({
             </svg>
           </button>
         )}
-        {puedeEditar && (
+        {editable && (
           <button
             onClick={() => onBorrar(avance)}
             className="p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded hover:bg-red-50 transition-colors"

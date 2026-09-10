@@ -1,16 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import type { RegionMetaEmpleo, RegionSubsidioEmpleo } from '@/lib/types'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
-import { getSupabase } from '@/lib/supabase'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalInversion from './SesionModalInversion'
 import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
 import NominaInversionModal from './NominaInversionModal'
+import MetaEmpleoModal from './MetaEmpleoModal'
 import OaecaModal from './OaecaModal'
 import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
 
@@ -41,28 +40,15 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [proyectosOpen, setProyectosOpen] = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
   const [nominaOpen, setNominaOpen]       = useState(false)
+  const [metaEmpleoOpen, setMetaEmpleoOpen] = useState(false)
   const [oaecaOpen, setOaecaOpen]         = useState(false)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
 
-  const [metaEmpleo, setMetaEmpleo] = useState<RegionMetaEmpleo | null>(null)
-  const [subsidio, setSubsidio] = useState<RegionSubsidioEmpleo | null>(null)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, puedeOperar)
 
-  const cargarMetaEmpleo = useCallback(async () => {
-    const [{ data: meta }, { data: sub }] = await Promise.all([
-      getSupabase().from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
-      getSupabase().from('region_subsidio_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
-    ])
-    setMetaEmpleo((meta as RegionMetaEmpleo | null) ?? null)
-    setSubsidio((sub as RegionSubsidioEmpleo | null) ?? null)
-  }, [region.cod])
-
-  useEffect(() => {
-    if (puedeOperar && MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
-  }, [puedeOperar, cargarMetaEmpleo])
 
   function fmtFechaCorta(fecha: string): string {
     return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
@@ -104,30 +90,6 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           )}
         </div>
 
-        {puedeOperar && MESA_EMPLEO_HABILITADA && (
-          <div className="px-4 pb-2 space-y-1.5">
-            {metaEmpleo && (
-              <div className="flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
-                <span className="font-semibold">Meta Empleo</span>
-                <span>{metaEmpleo.valor_actual.toLocaleString('es-CL')}{metaEmpleo.objetivo > 0 ? ` de ${metaEmpleo.objetivo.toLocaleString('es-CL')}` : ''}</span>
-                {metaEmpleo.objetivo > 0 && (
-                  <span className="text-amber-500">({Math.round((metaEmpleo.valor_actual / metaEmpleo.objetivo) * 100)}% de la meta)</span>
-                )}
-              </div>
-            )}
-            {MESA_EMPLEO_HABILITADA && subsidio && (
-              <div className="flex items-center gap-1.5 text-[11px] text-sky-900 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-1.5 flex-wrap">
-                <span className="font-semibold">Subsidios</span>
-                <span>{subsidio.postulados.toLocaleString('es-CL')}{subsidio.cupos > 0 ? ` de ${subsidio.cupos.toLocaleString('es-CL')} cupos` : ''} postulados</span>
-                <span className="text-sky-300">·</span>
-                <span>{subsidio.entregados.toLocaleString('es-CL')} entregados</span>
-                <span className="text-sky-300">·</span>
-                <span>{subsidio.empresas_postulantes.toLocaleString('es-CL')} empresas</span>
-              </div>
-            )}
-          </div>
-        )}
-
         {!puedeOperar && (
           <div className="py-10 text-center text-sm text-gray-500 px-4">
             No tienes permiso para operar el módulo de sesiones de este comité.
@@ -156,6 +118,18 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
               >
                 Nómina
               </button>
+              {MESA_EMPLEO_HABILITADA && (
+                <>
+                  <span className="text-violet-200">|</span>
+                  <button
+                    onClick={() => setMetaEmpleoOpen(true)}
+                    className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                    title="Objetivo de empleos, foco productivo y cupos de subsidios de la región"
+                  >
+                    Meta Empleo
+                  </button>
+                </>
+              )}
               <span className="text-violet-200">|</span>
               <button
                 onClick={() => setOaecaOpen(true)}
@@ -221,7 +195,6 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
             setSesionOpen(false)
             refreshResumen()
             setCarteraVersion(v => v + 1)
-            if (MESA_EMPLEO_HABILITADA) cargarMetaEmpleo()
           }}
         />
       )}
@@ -230,6 +203,14 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       )}
       {nominaOpen && (
         <NominaInversionModal region={region} onClose={() => setNominaOpen(false)} />
+      )}
+      {metaEmpleoOpen && (
+        <MetaEmpleoModal
+          region={region}
+          currentUserEmail={userEmail}
+          puedeEditar={puedeOperar}
+          onClose={() => setMetaEmpleoOpen(false)}
+        />
       )}
       {oaecaOpen && (
         <OaecaModal currentUserEmail={userEmail} onClose={() => setOaecaOpen(false)} />
