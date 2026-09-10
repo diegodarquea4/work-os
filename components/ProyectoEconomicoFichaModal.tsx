@@ -7,7 +7,7 @@ import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEconomicoProyectoSeguimiento, PasCatalogo } from '@/lib/types'
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
-import { catalogoAvanzo } from '@/lib/carteraOrigen'
+import { catalogoAvanzo, camposPendientes } from '@/lib/carteraOrigen'
 import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
@@ -52,6 +52,13 @@ type Props = {
    * proyecto. NULL/ausente = avance normal de cartera, fuera de toda acta.
    */
   sesionId?: number | null
+  /**
+   * La ficha se abrió justo después de traer el proyecto del catálogo. Fuerza
+   * la tarjeta de detalle abierta, ignorando la preferencia guardada: quien
+   * acaba de agregar viene a llenar lo que falta, y ese es el único momento en
+   * que el detalle importa más que la bitácora.
+   */
+  reciénImportado?: boolean
 }
 
 // El estado que se puede cambiar al registrar un avance es el del PERMISO
@@ -78,7 +85,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null, reciénImportado = false }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [estadoEnCatalogo, setEstadoEnCatalogo] = useState<string | null>(null)
   const [urlOrigen, setUrlOrigen] = useState<string | null>(null)
@@ -159,6 +166,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   // Tarjeta de detalle (los otros 14 campos) — colapsable, preferencia
   // persistida igual que el detalle de la ficha de iniciativa.
   const [detailCollapsed, setDetailCollapsed] = useState<boolean>(() => {
+    if (reciénImportado) return false
     try { return typeof window !== 'undefined' && localStorage.getItem(DETAIL_COLLAPSED_KEY) === '1' } catch { return false }
   })
   function toggleDetail() {
@@ -195,6 +203,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   // hace útil volver a correr el sync más allá de sumar expedientes nuevos:
   // avisa que uno que ya se sigue avanzó. No se toca nada — solo se avisa; la
   // ficha es de las personas y el estado lo cambian ellas.
+  const pendientes = useMemo(
+    () => camposPendientes(proyecto as unknown as Record<string, unknown> | null),
+    [proyecto],
+  )
+
   const origenId = proyecto?.origen_id ?? null
   useEffect(() => {
     if (!origenId) { setEstadoEnCatalogo(null); setUrlOrigen(null); return }
@@ -620,6 +633,22 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 {/* El catálogo cambió de estado desde que se importó. Solo se
                     avisa: cambiar el estado de la ficha es decisión de quien
                     la lleva, no del sync. */}
+                {/* Recién traído del catálogo: llega con lo que la fuente sabe y
+                    el resto en blanco. En vez de dejar que la persona recorra la
+                    tarjeta de detalle adivinando qué falta, se le dice. */}
+                {proyecto.origen_id && pendientes.length > 0 && (
+                  <div className="mb-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-[11px] text-violet-900">
+                    <p className="font-semibold mb-1">
+                      Falta{pendientes.length === 1 ? '' : 'n'} {pendientes.length} dato{pendientes.length === 1 ? '' : 's'} que el catálogo no sabe:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {pendientes.map(p => (
+                        <span key={p} className="px-1.5 py-0.5 rounded-full bg-white border border-violet-200 font-medium">{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {catalogoAvanzo(proyecto.origen_estado_al_importar, estadoEnCatalogo) && (
                   <div className="mb-2 flex items-start gap-2 text-[11px] rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-900">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 mt-px"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg>

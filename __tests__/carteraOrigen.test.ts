@@ -5,6 +5,8 @@ import {
   filaDesdeCandidato,
   catalogoAvanzo,
   extenderSeleccion,
+  camposPendientes,
+  CAMPOS_DEL_COMITE,
   type CandidatoCatalogo,
 } from '@/lib/carteraOrigen'
 
@@ -171,5 +173,47 @@ describe('extenderSeleccion (Shift + click)', () => {
     const antes = new Set(['a'])
     extenderSeleccion(antes, visibles, 1, 3, new Set())
     expect([...antes]).toEqual(['a'])
+  })
+})
+
+describe('camposPendientes', () => {
+  // Lo que se importa del catálogo llega exactamente con estos vacíos: son las
+  // decisiones del comité, que la fuente no puede responder.
+  it('marca como pendiente todo lo que el catálogo no sabe', () => {
+    const recienImportado = filaDesdeCandidato(candidato(), 'I', null)
+    expect(camposPendientes(recienImportado as unknown as Record<string, unknown>))
+      .toEqual(CAMPOS_DEL_COMITE.map(c => c.etiqueta))
+  })
+
+  it('no reclama lo que ya está lleno', () => {
+    const p = { plazo: 'CP', seremi_lider: 'Ministerio de Energía', kpi: 'MW instalados' }
+    const faltan = camposPendientes(p)
+    expect(faltan).not.toContain('Plazo')
+    expect(faltan).not.toContain('SEREMI líder')
+    expect(faltan).not.toContain('KPI')
+    expect(faltan).toContain('Vida útil')
+  })
+
+  it('trata el texto en blanco como vacío', () => {
+    expect(camposPendientes({ kpi: '   ' })).toContain('KPI')
+  })
+
+  // `priorizado` y `riesgo` son booleanos con default false, y false es una
+  // respuesta legítima: pedirlos haría imposible completar un proyecto.
+  it('no exige los booleanos, que ya tienen respuesta por defecto', () => {
+    const faltan = camposPendientes({})
+    expect(faltan).not.toContain('Priorizado')
+    expect(faltan).not.toContain('Riesgo')
+  })
+
+  it('un proyecto completo no tiene pendientes', () => {
+    const lleno: Record<string, unknown> = {}
+    for (const { campo } of CAMPOS_DEL_COMITE) lleno[campo] = 'algo'
+    expect(camposPendientes(lleno)).toEqual([])
+  })
+
+  it('aguanta que no haya proyecto', () => {
+    expect(camposPendientes(null)).toEqual([])
+    expect(camposPendientes(undefined)).toEqual([])
   })
 })

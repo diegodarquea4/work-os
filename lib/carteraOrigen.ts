@@ -158,3 +158,37 @@ export function catalogoAvanzo(
   if (!origenEstadoAlImportar || !estadoEnCatalogo) return false
   return origenEstadoAlImportar.trim().toLowerCase() !== estadoEnCatalogo.trim().toLowerCase()
 }
+
+/**
+ * Qué le falta a un proyecto de la cartera para estar completo.
+ *
+ * Son exactamente los campos que el catálogo NO puede responder — las
+ * decisiones del comité. Un proyecto recién traído del catálogo llega con
+ * todos estos vacíos, y esta lista es lo que la ficha muestra al abrirse para
+ * que la persona sepa qué le toca a ella, en vez de tener que recorrer la
+ * tarjeta de detalle campo por campo adivinando.
+ *
+ * `priorizado` y `riesgo` no entran: son booleanos con default `false`, y
+ * "false" es una respuesta legítima, no un vacío. Pedirlos sería no poder
+ * marcar nunca un proyecto como completo.
+ */
+export const CAMPOS_DEL_COMITE = [
+  { campo: 'plazo',               etiqueta: 'Plazo' },
+  { campo: 'seremi_lider',        etiqueta: 'SEREMI líder' },
+  { campo: 'mano_obra_directa',   etiqueta: 'Mano de obra directa' },
+  { campo: 'mano_obra_indirecta', etiqueta: 'Mano de obra indirecta' },
+  { campo: 'kpi',                 etiqueta: 'KPI' },
+  { campo: 'meta_2026_2027',      etiqueta: 'Meta 2026-2027' },
+  { campo: 'estado_inicial',      etiqueta: 'Estado inicial' },
+  { campo: 'vida_util_anios',     etiqueta: 'Vida útil' },
+] as const
+
+export function camposPendientes(proyecto: Record<string, unknown> | null | undefined): string[] {
+  if (!proyecto) return []
+  return CAMPOS_DEL_COMITE
+    .filter(({ campo }) => {
+      const v = proyecto[campo]
+      return v == null || (typeof v === 'string' && v.trim() === '')
+    })
+    .map(({ etiqueta }) => etiqueta)
+}

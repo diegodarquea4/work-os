@@ -60,6 +60,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import { isCronAuthorized } from '@/lib/cronAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 
 export const dynamic     = 'force-dynamic'
 export const runtime     = 'nodejs'
@@ -186,31 +187,76 @@ function parseSeiaDate(raw: string | undefined | null): string | null {
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
-  if (!isCronAuthorized(request)) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+/**
+ * Dos formas de entrar, y la diferencia importa:
+ *
+ *   · Sin `?region=` — la corrida nacional del cron. Recorre las 16 regiones
+ *     con cursor reanudable y exige el CRON_SECRET.
+ *   · Con `?region=<cod>` — el botón "Actualizar" del catálogo. Recorre UNA
+ *     región completa, cabe de sobra en el presupuesto de tiempo, y lo puede
+ *     disparar una persona con `comite.economico.operar` en esa región.
+ *
+ * La corrida por región **no toca el cursor nacional**: si lo hiciera, alguien
+ * apretando el botón en Tarapacá le borraría al cron el avance de las otras
+ * quince, y el sync volvería a mentir sobre lo que alcanzó a traer.
+ */
+async function autorizar(request: NextRequest): Promise<
+  { ok: true; regionCod: string | null } | { ok: false; status: number; error: string }
+> {
+  const regionCod = new URL(request.url).searchParams.get('region')
+
+  if (!regionCod) {
+    return isCronAuthorized(request)
+      ? { ok: true, regionCod: null }
+      : { ok: false, status: 401, error: 'Unauthorized' }
   }
-  return runSync()
+
+  if (!REGIONS.some(r => r.cod === regionCod)) {
+    return { ok: false, status: 400, error: `Región desconocida: ${regionCod}` }
+  }
+
+  // El cron también puede pedir una región puntual (útil para reparar una sola).
+  if (isCronAuthorized(request)) return { ok: true, regionCod }
+
+  const profile = await requireAuth()
+  if (!profile) return { ok: false, status: 401, error: 'Unauthorized' }
+  if (!(await requireCan(profile, 'comite.economico.operar', regionCod))) {
+    return { ok: false, status: 403, error: 'Forbidden' }
+  }
+  return { ok: true, regionCod }
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await autorizar(request)
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+  return runSync(auth.regionCod)
 }
 
 export async function POST(request: NextRequest) {
-  if (!isCronAuthorized(request)) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  return runSync()
+  const auth = await autorizar(request)
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+  return runSync(auth.regionCod)
 }
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 
-async function runSync(): Promise<Response> {
+async function runSync(soloRegionCod: string | null = null): Promise<Response> {
   const supabase  = getSupabaseAdmin()
   const startedAt = Date.now()
   let   totalUpserted = 0
   const errors: string[] = []
 
-  // 1. Leer cursor.
-  const cursor = await readCursor(supabase)
+  // 1. Leer cursor — solo en la corrida nacional. Una corrida de una región no
+  // lee ni escribe el cursor: es un recorrido completo y acotado, y pisarlo le
+  // borraría al cron el avance de las otras quince.
+  const soloRegionIdx = soloRegionCod
+    ? REGIONS.findIndex(r => r.cod === soloRegionCod)
+    : -1
+  const cursor = soloRegionCod
+    ? { region_idx: soloRegionIdx, pasada_idx: 0, offset: 1 }
+    : await readCursor(supabase)
   const startRegion = cursor.region_idx
+  const finRegion   = soloRegionCod ? soloRegionIdx + 1 : REGIONS.length
   const PASADAS = pasadas()
   // Marca de esta corrida: las filas que la ventana móvil de 5 años deja de
   // devolver conservan la marca vieja, y por ahí se detectan las RCA vencidas
@@ -223,7 +269,7 @@ async function runSync(): Promise<Response> {
   let finalOffset    = cursor.offset
 
   regiones:
-  for (let r = startRegion; r < REGIONS.length; r++) {
+  for (let r = startRegion; r < finRegion; r++) {
     const region   = REGIONS[r]
     const regionId = INE_CODE[region.cod]
     if (regionId === undefined) {
@@ -395,9 +441,27 @@ async function runSync(): Promise<Response> {
   const durationMs = Date.now() - startedAt
 
   // 2. Persistir resultado + cursor.
+  //
+  // Una corrida de una sola región NO escribe `sync_status`: ese registro y su
+  // cursor son de la corrida nacional. Guardar acá un cursor apuntando a la
+  // región de quien apretó el botón haría que el cron siguiente arrancara desde
+  // ahí y diera por hechas las anteriores — el mismo silencio que este endpoint
+  // dejó de tener. El resultado se le informa a quien apretó, y nada más.
   if (exhaustedByBudget) {
-    // Quedamos a medias. Guardamos cursor para reanudar en próxima invocación.
     const nextCursor: Cursor = { region_idx: finalRegionIdx, pasada_idx: finalPasadaIdx, offset: finalOffset }
+    if (soloRegionCod) {
+      return Response.json({
+        ok:          true,
+        partial:     true,
+        region:      soloRegionCod,
+        synced_at:   new Date().toISOString(),
+        upserted:    totalUpserted,
+        duration_ms: durationMs,
+        errors:      errors.length > 0 ? errors : undefined,
+        note:        'El SEIA cortó antes de terminar la región. Volver a apretar Actualizar retoma desde cero, sin perder lo ya guardado.',
+      })
+    }
+    // Quedamos a medias. Guardamos cursor para reanudar en próxima invocación.
     await recordSyncStatus(SYNC_NAME, {
       status:   'partial',
       durationMs,
@@ -426,22 +490,25 @@ async function runSync(): Promise<Response> {
     : errors.length > 0 ? 'partial'
     : 'ok'
 
-  await recordSyncStatus(SYNC_NAME, {
-    status:   finalStatus,
-    durationMs,
-    rows:     totalUpserted,
-    errors:   errors.length > 0 ? errors : undefined,
-    notes:    '',  // limpiar cursor — terminó.
-  })
+  if (!soloRegionCod) {
+    await recordSyncStatus(SYNC_NAME, {
+      status:   finalStatus,
+      durationMs,
+      rows:     totalUpserted,
+      errors:   errors.length > 0 ? errors : undefined,
+      notes:    '',  // limpiar cursor — terminó.
+    })
+  }
 
   if (finalStatus === 'error') return Response.json({ ok: false, errors })
 
   return Response.json({
     ok:          true,
     partial:     false,
+    region:      soloRegionCod ?? undefined,
     synced_at:   new Date().toISOString(),
     upserted:    totalUpserted,
-    regions:     REGIONS.length,
+    regions:     soloRegionCod ? 1 : REGIONS.length,
     duration_ms: durationMs,
     errors:      errors.length > 0 ? errors : undefined,
   })
