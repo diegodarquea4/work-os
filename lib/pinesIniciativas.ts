@@ -24,6 +24,11 @@ import type { SemaforoKey } from '@/lib/config'
  *   `comuna_cods` está seleccionada (multi-comuna cuenta en cada una, igual
  *   que `computeComunaStats`). Con el filtro activo las de alcance regional
  *   quedan fuera también: no pertenecen a ninguna comuna.
+ * - Filtro por etiqueta (opcional): entra si CUALQUIERA de sus `tags` está
+ *   seleccionada (mismo criterio OR que el Dashboard y la Bandeja). A
+ *   diferencia del de comuna, este SÍ aplica a las de alcance regional — una
+ *   iniciativa regional tiene etiquetas igual — así que las filtra en vez de
+ *   sacarlas todas.
  */
 
 export type PinIniciativa = {
@@ -94,18 +99,41 @@ export function comunasConPin(
   return out
 }
 
+/**
+ * Etiquetas que hoy tienen al menos un pin (iniciativa con coordenada), con su
+ * conteo — alimenta el selector de etiquetas del control de pines. Mismo
+ * criterio que `comunasConPin`: respeta el filtro de capas y una iniciativa con
+ * N etiquetas suma en cada una. Las de alcance regional no cuentan (no son pin).
+ */
+export function etiquetasConPin(
+  iniciativas: Iniciativa[],
+  capas: ReadonlySet<Capa>,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const p of iniciativas) {
+    if (!capas.has(p.capa)) continue
+    if (p.alcance_regional) continue
+    if (!tieneCoordenada(p)) continue
+    for (const t of p.tags ?? []) out.set(t, (out.get(t) ?? 0) + 1)
+  }
+  return out
+}
+
 export function construirPines(
   iniciativas: Iniciativa[],
   capas: ReadonlySet<Capa>,
   comunas?: ReadonlySet<number> | null,
+  tags?: ReadonlySet<string> | null,
 ): PinesResultado {
   const regionales: Iniciativa[] = []
   const base: PinIniciativa[] = []
   let sinUbicacion = 0
   const filtraComuna = comunas != null && comunas.size > 0
+  const filtraTag = tags != null && tags.size > 0
 
   for (const p of iniciativas) {
     if (!capas.has(p.capa)) continue
+    if (filtraTag && !(p.tags ?? []).some(t => tags.has(t))) continue
     // Alcance regional no pertenece a ninguna comuna: con el filtro activo
     // queda fuera (del mapa y de la lista lateral).
     if (p.alcance_regional) { if (!filtraComuna) regionales.push(p); continue }
