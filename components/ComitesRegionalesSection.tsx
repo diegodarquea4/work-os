@@ -37,10 +37,18 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
-// Comité Económico en marcha blanca: activo solo en estas regiones (Manuel
-// prueba sus cambios en Tarapacá); en el resto se muestra "Pronto". El
-// desarrollo completo sigue vivo — solo se gatea su visibilidad por región.
-const ECONOMICO_ACTIVO: readonly string[] = ['I'] // Tarapacá
+// Comité Económico: activo en estas regiones; en el resto se muestra "Pronto".
+// Tarapacá fue la marcha blanca; las otras cinco se sumaron cuando el módulo
+// quedó listo para usarse de verdad. El desarrollo completo siempre estuvo
+// vivo — esto solo gatea su visibilidad por región.
+const ECONOMICO_ACTIVO: readonly string[] = [
+  'I',     // Tarapacá
+  'V',     // Valparaíso
+  'VII',   // Maule
+  'VIII',  // Biobío
+  'IX',    // La Araucanía
+  'X',     // Los Lagos
+]
 
 // Comité de Infraestructura en marcha blanca: visible solo en estas regiones;
 // en el resto se muestra "Pronto" (mismo trato que Económico). El desarrollo
