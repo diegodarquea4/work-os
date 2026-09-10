@@ -62,9 +62,6 @@ export default function ComiteEconomicoProyectosPanel({
   const [loading, setLoading] = useState(true)
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [fichaId, setFichaId] = useState<number | null>(null)
-  const [fichaReciénImportada, setFichaReciénImportada] = useState(false)
-  // La tanda recién traída del SEIA, para poder recorrerla con flechas.
-  const [colaImportada, setColaImportada] = useState<number[]>([])
   const [catalogoOpen, setCatalogoOpen] = useState(false)
 
   const [fPlazo, setFPlazo]           = useState<Set<string>>(new Set())
@@ -449,19 +446,7 @@ export default function ComiteEconomicoProyectosPanel({
           currentUserEmail={userEmail}
           yaImportados={yaImportados}
           onClose={() => setNuevoOpen(false)}
-          onCreated={(ids, desdeCatalogo) => {
-            setNuevoOpen(false)
-            cargar()
-            // Lo traído del catálogo llega a medio llenar: se abre la ficha del
-            // primero para completar ahí mismo. Lo cargado a mano ya viene con
-            // lo que la persona quiso poner — abrirle la ficha sería repetirle
-            // el formulario que acaba de enviar.
-            if (desdeCatalogo && ids.length > 0) {
-              setFichaId(ids[0])
-              setFichaReciénImportada(true)
-              setColaImportada(ids)
-            }
-          }}
+          onCreated={() => { setNuevoOpen(false); cargar() }}
         />
       )}
       {fichaId != null && (
@@ -469,10 +454,7 @@ export default function ComiteEconomicoProyectosPanel({
           proyectoId={fichaId}
           puedeOperar={puedeOperar}
           currentUserEmail={userEmail}
-          reciénImportado={fichaReciénImportada}
-          cola={colaImportada}
-          onIrA={id => setFichaId(id)}
-          onClose={() => { setFichaId(null); setFichaReciénImportada(false); setColaImportada([]) }}
+          onClose={() => setFichaId(null)}
           onChanged={cargar}
         />
       )}

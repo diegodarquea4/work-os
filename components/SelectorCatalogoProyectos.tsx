@@ -6,6 +6,8 @@ import { safeWrite } from '@/lib/dbWrite'
 import { INE_CODE, type Region } from '@/lib/regions'
 import { filaDesdeCandidato, extenderSeleccion, montoEnMillones, type CandidatoCatalogo } from '@/lib/carteraOrigen'
 import FilterPopover, { type FilterOption } from './FilterPopover'
+import { LISTA_CANONICA } from '@/lib/ministerios'
+import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 
 /**
  * Elegir proyectos del catálogo para sumarlos a la cartera del Comité
@@ -41,6 +43,34 @@ type Props = {
  */
 const MAX_FILAS = 2000
 
+/**
+ * Los campos que el SEIA no puede responder y que el comité llena en el paso de
+ * revisión, ANTES de guardar. Todos opcionales: exigirlos volvería imposible
+ * traer diez proyectos de una, que es justamente para lo que sirve el selector.
+ */
+type Borrador = {
+  plazo: '' | 'CP' | 'MP' | 'LP'
+  seremi_lider: string
+  mano_obra_directa: string
+  mano_obra_indirecta: string
+  kpi: string
+  meta_2026_2027: string
+  estado_inicial: string
+  vida_util_anios: string
+  estado_actual: string
+  priorizado: boolean
+  riesgo: boolean
+}
+
+const BORRADOR_VACIO: Borrador = {
+  plazo: '', seremi_lider: '', mano_obra_directa: '', mano_obra_indirecta: '',
+  kpi: '', meta_2026_2027: '', estado_inicial: '', vida_util_anios: '',
+  estado_actual: '', priorizado: false, riesgo: false,
+}
+
+const inputCls = 'px-2 py-1.5 border border-slate-200 rounded-lg text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 w-full'
+const labelCls = 'text-[10px] text-gray-500 font-medium'
+
 export default function SelectorCatalogoProyectos({
   region, currentUserEmail, yaImportados, onCancel, onImported,
 }: Props) {
@@ -60,6 +90,10 @@ export default function SelectorCatalogoProyectos({
   // Agregar es en dos pasos: primero se ve qué va a quedar guardado, después se
   // confirma. Insertar de una hacía imposible revisar antes de escribir.
   const [confirmando, setConfirmando]     = useState(false)
+  // Lo que la persona escribe en el paso de revisión, por candidato. Vive acá y
+  // no en la base: hasta que confirme, nada de esto existe.
+  const [borradores, setBorradores]       = useState<Record<string, Borrador>>({})
+  const [revisando, setRevisando]         = useState(0)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -214,14 +248,61 @@ export default function SelectorCatalogoProyectos({
     [candidatos, seleccion, yaImportados, region.cod, currentUserEmail],
   )
 
+  /** Abre el paso de revisión con un borrador limpio por candidato. */
+  function irARevisar() {
+    setBorradores(Object.fromEntries(aGuardar.map(({ candidato }) => [candidato.id, { ...BORRADOR_VACIO }])))
+    setRevisando(0)
+    setConfirmando(true)
+  }
+
+  function editarBorrador(id: string, cambio: Partial<Borrador>) {
+    setBorradores(prev => ({ ...prev, [id]: { ...(prev[id] ?? BORRADOR_VACIO), ...cambio } }))
+  }
+
+  /**
+   * Copiar un campo del proyecto que se está revisando a todos los demás. Con
+   * diez proyectos de la misma cartera, el plazo y la SEREMI líder suelen ser
+   * los mismos: sin esto habría que escribirlos diez veces.
+   */
+  function aplicarATodos(campo: 'plazo' | 'seremi_lider' | 'estado_actual') {
+    const valor = borradores[aGuardar[revisando]?.candidato.id]?.[campo]
+    if (valor == null) return
+    setBorradores(prev => {
+      const next = { ...prev }
+      for (const { candidato } of aGuardar) {
+        next[candidato.id] = { ...(next[candidato.id] ?? BORRADOR_VACIO), [campo]: valor }
+      }
+      return next
+    })
+  }
+
+  const num = (v: string) => (v.trim() === '' ? null : Number(v))
+
   async function handleImportar() {
     if (seleccion.size === 0) return
     setImportando(true)
     try {
       const ahora = new Date().toISOString()
-      const filas = candidatos
-        .filter(c => seleccion.has(c.id) && !yaImportados.has(c.id))
-        .map(c => filaDesdeCandidato(c, region.cod, currentUserEmail || null, ahora))
+      const filas = aGuardar.map(({ candidato, fila }) => {
+        const b = borradores[candidato.id] ?? BORRADOR_VACIO
+        return {
+          ...fila,
+          origen_importado_at: ahora,
+          plazo:                 b.plazo || null,
+          seremi_lider:          b.seremi_lider || null,
+          mano_obra_directa:     num(b.mano_obra_directa),
+          mano_obra_indirecta:   num(b.mano_obra_indirecta),
+          kpi:                   b.kpi.trim() || null,
+          meta_2026_2027:        b.meta_2026_2027.trim() || null,
+          estado_inicial:        b.estado_inicial.trim() || null,
+          vida_util_anios:       num(b.vida_util_anios),
+          // Lo que el SEIA tradujo es el punto de partida; si la persona lo
+          // corrigió en la revisión, manda lo que ella puso.
+          estado_actual:         b.estado_actual || fila.estado_actual,
+          priorizado:            b.priorizado,
+          riesgo:                b.riesgo,
+        }
+      })
       if (filas.length === 0) { onCancel(); return }
       const creados = await safeWrite(
         getSupabase().from('comite_economico_proyecto').insert(filas),
@@ -284,58 +365,159 @@ export default function SelectorCatalogoProyectos({
       )}
 
       <div className="flex-1 overflow-y-auto px-5 py-3">
-        {confirmando ? (
-          <div className="space-y-2">
-            <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
-              <p className="text-xs font-semibold text-violet-900">
-                Así van a quedar guardados {aGuardar.length} proyecto{aGuardar.length === 1 ? '' : 's'}
-              </p>
-              <p className="text-[11px] text-violet-800 mt-0.5">
-                Todo esto es editable después en la ficha. Lo que el SEIA no sabe
-                —plazo, SEREMI líder, mano de obra, KPI, meta, vida útil— queda en
-                blanco a propósito.
-              </p>
-            </div>
-            {aGuardar.map(({ candidato: c, fila }) => (
-              <div key={c.id} className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-xs font-semibold text-gray-800">{fila.nombre}</p>
-                <dl className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
-                  <div>
-                    <dt className="text-gray-400">Inversión</dt>
-                    <dd className="text-gray-700 font-medium tabular-nums">
-                      {fila.inversion_monto != null
-                        ? `${fila.inversion_monto.toLocaleString('es-CL')} ${fila.inversion_moneda}`
-                        : '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-400">Estado actual</dt>
-                    <dd className={fila.estado_actual ? 'text-gray-700 font-medium' : 'text-gray-400'}>
-                      {fila.estado_actual ?? 'sin traducir'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-400">Financia</dt>
-                    <dd className="text-gray-700 font-medium truncate" title={fila.fuente_financiamiento ?? ''}>
-                      {fila.fuente_financiamiento ?? '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-400">Opera</dt>
-                    <dd className="text-gray-700 font-medium truncate" title={fila.responsable_operativo ?? ''}>
-                      {fila.responsable_operativo ?? '—'}
-                    </dd>
-                  </div>
-                </dl>
-                {fila.notas && (
-                  <p className="mt-1.5 text-[10px] text-gray-500 whitespace-pre-line border-t border-gray-100 pt-1.5">
-                    {fila.notas}
-                  </p>
+        {confirmando ? (() => {
+          const actual = aGuardar[revisando]
+          if (!actual) return null
+          const { candidato: c, fila } = actual
+          const b = borradores[c.id] ?? BORRADOR_VACIO
+          const botonTodos = (campo: 'plazo' | 'seremi_lider' | 'estado_actual') =>
+            aGuardar.length > 1 && b[campo] ? (
+              <button
+                type="button"
+                onClick={() => aplicarATodos(campo)}
+                className="text-[10px] text-violet-700 font-semibold hover:underline"
+              >
+                aplicar a los {aGuardar.length}
+              </button>
+            ) : null
+
+          return (
+            <div className="space-y-3">
+              {/* Navegación de la tanda. Se llena uno y se pasa al siguiente:
+                  diez formularios apilados no se revisan, se scrollean. */}
+              <div className="flex items-center gap-2">
+                {aGuardar.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setRevisando(i => Math.max(0, i - 1))}
+                      disabled={revisando === 0}
+                      aria-label="Proyecto anterior"
+                      className="p-1 rounded-md text-gray-400 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <span className="text-[11px] font-semibold text-gray-500 tabular-nums">
+                      {revisando + 1} de {aGuardar.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRevisando(i => Math.min(aGuardar.length - 1, i + 1))}
+                      disabled={revisando === aGuardar.length - 1}
+                      aria-label="Siguiente proyecto"
+                      className="p-1 rounded-md text-gray-400 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                  </>
                 )}
+                <span className="text-[11px] text-gray-400 ml-auto">
+                  Todo es opcional &mdash; se puede completar después en la ficha.
+                </span>
               </div>
-            ))}
-          </div>
-        ) : loading ? (
+
+              <p className="text-sm font-semibold text-gray-900 leading-snug">{fila.nombre}</p>
+
+              {/* Lo que trae el SEIA: se muestra, no se pide de nuevo. */}
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-[11px] rounded-lg bg-slate-50 border border-gray-200 px-3 py-2">
+                <div>
+                  <dt className="text-gray-400">Inversión</dt>
+                  <dd className="text-gray-700 font-medium tabular-nums">
+                    {fila.inversion_monto != null ? `${fila.inversion_monto.toLocaleString('es-CL')} ${fila.inversion_moneda}` : '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-400">Comuna</dt>
+                  <dd className="text-gray-700 font-medium">{c.comuna_nombre ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-400">Financia</dt>
+                  <dd className="text-gray-700 font-medium truncate" title={fila.fuente_financiamiento ?? ''}>{fila.fuente_financiamiento ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-400">Opera</dt>
+                  <dd className="text-gray-700 font-medium truncate" title={fila.responsable_operativo ?? ''}>{fila.responsable_operativo ?? '—'}</dd>
+                </div>
+              </dl>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>Plazo {botonTodos('plazo')}</span>
+                  <select value={b.plazo} onChange={e => editarBorrador(c.id, { plazo: e.target.value as Borrador['plazo'] })} className={inputCls}>
+                    <option value="">—</option>
+                    <option value="CP">Corto plazo</option>
+                    <option value="MP">Mediano plazo</option>
+                    <option value="LP">Largo plazo</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-0.5 col-span-2">
+                  <span className={labelCls}>SEREMI líder {botonTodos('seremi_lider')}</span>
+                  <select value={b.seremi_lider} onChange={e => editarBorrador(c.id, { seremi_lider: e.target.value })} className={inputCls}>
+                    <option value="">—</option>
+                    {LISTA_CANONICA.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>M. de obra directa</span>
+                  <input type="number" value={b.mano_obra_directa} onChange={e => editarBorrador(c.id, { mano_obra_directa: e.target.value })} placeholder="0" className={inputCls} />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>M. de obra indirecta</span>
+                  <input type="number" value={b.mano_obra_indirecta} onChange={e => editarBorrador(c.id, { mano_obra_indirecta: e.target.value })} placeholder="0" className={inputCls} />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>Vida útil (años)</span>
+                  <input type="number" value={b.vida_util_anios} onChange={e => editarBorrador(c.id, { vida_util_anios: e.target.value })} className={inputCls} />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>KPI</span>
+                  <input type="text" value={b.kpi} onChange={e => editarBorrador(c.id, { kpi: e.target.value })} placeholder="MW, m² construidos…" className={inputCls} />
+                </label>
+                <label className="flex flex-col gap-0.5 col-span-2">
+                  <span className={labelCls}>
+                    Estado actual {botonTodos('estado_actual')}
+                    {!b.estado_actual && fila.estado_actual && (
+                      <span className="text-gray-400 font-normal"> &middot; el SEIA dice &quot;{fila.estado_actual}&quot;</span>
+                    )}
+                  </span>
+                  <select value={b.estado_actual} onChange={e => editarBorrador(c.id, { estado_actual: e.target.value })} className={inputCls}>
+                    <option value="">{fila.estado_actual ? `Dejar: ${fila.estado_actual}` : '—'}</option>
+                    {ESTADO_ACTUAL_ECONOMICO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>Meta 2026 - 2027</span>
+                  <textarea value={b.meta_2026_2027} onChange={e => editarBorrador(c.id, { meta_2026_2027: e.target.value })} rows={2} className={`${inputCls} resize-y`} />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className={labelCls}>Estado inicial</span>
+                  <textarea value={b.estado_inicial} onChange={e => editarBorrador(c.id, { estado_inicial: e.target.value })} rows={2} className={`${inputCls} resize-y`} />
+                </label>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={b.priorizado} onChange={e => editarBorrador(c.id, { priorizado: e.target.checked })} className="rounded border-gray-300 text-violet-700 focus:ring-violet-400" />
+                  <span className="text-[13px] text-gray-700">Priorizado</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={b.riesgo} onChange={e => editarBorrador(c.id, { riesgo: e.target.checked })} className="rounded border-gray-300 text-red-600 focus:ring-red-400" />
+                  <span className="text-[13px] text-gray-700">En riesgo</span>
+                </label>
+              </div>
+
+              {fila.notas && (
+                <p className="text-[10px] text-gray-500 whitespace-pre-line border-t border-gray-100 pt-2">
+                  {fila.notas}
+                </p>
+              )}
+            </div>
+          )
+        })() : loading ? (
+
           <p className="text-center text-sm text-gray-400 py-10">Cargando el catálogo…</p>
         ) : error ? (
           <p className="text-center text-sm text-red-600 py-10">{error}</p>
@@ -433,7 +615,7 @@ export default function SelectorCatalogoProyectos({
       <footer className="flex-shrink-0 px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
         <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
           {confirmando ? (
-            <span>Revisa antes de guardar. Nada se escribe hasta que confirmes.</span>
+            <span>Completa lo que falte. Nada se escribe hasta que confirmes.</span>
           ) : seleccion.size > 0 ? (
             <>
               <span>{seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'}</span>
@@ -478,7 +660,7 @@ export default function SelectorCatalogoProyectos({
                 Cancelar
               </button>
               <button
-                onClick={() => setConfirmando(true)}
+                onClick={irARevisar}
                 disabled={seleccion.size === 0}
                 className="text-sm px-4 py-2 bg-violet-700 text-white font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-50"
               >
