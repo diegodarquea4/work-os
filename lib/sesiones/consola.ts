@@ -25,10 +25,8 @@ export type InstanciaConsola = 'eje' | 'infraestructura' | 'economico'
 
 export type ZonaKey =
   | 'anteriores' | 'asistencia' | 'reporte' | 'comentarios' | 'iniciativas' | 'nuevos'
-  /** Solo Económico: Seguimiento de la inversión (proyectos + oficios). */
+  /** Solo Económico: Seguimiento de la inversión (▸ proyectos, oficios, mesa empleo). */
   | 'seguimiento'
-  /** Solo Económico: Mesa Empleo (meta de empleo + subsidios). */
-  | 'mesa_empleo'
 
 /** Dónde está parado el usuario. `inst` solo tiene sentido con zona='reporte'. */
 export type ZonaRef = { zona: ZonaKey; inst?: string }
@@ -156,7 +154,7 @@ function estadoSeguimiento(proyectos: number, oficiosTotal: number, oficiosPendi
  *
  *   eje:             1 Anteriores · 2 Asistencia · 3 Reporte (▸ instituciones) · (ícono) Comentarios · 4 Nuevos
  *   infraestructura: 1 Anteriores · 2 Asistencia · 3 Iniciativas · 4 Nuevos
- *   economico:       1 Integrantes · 2 Anteriores · 3 Seguimiento (▸ proyectos, oficios) · 4 Mesa Empleo · 5 Nuevos
+ *   economico:       1 Integrantes · 2 Anteriores · 3 Seguimiento (▸ proyectos, oficios, meta mesa empleo) · 4 Nuevos
  */
 export function railParaSesion(e: EntradaConsola): RailItem[] {
   // El Económico entra por Integrantes y deja los compromisos anteriores en 2;
@@ -186,10 +184,15 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
     const oficiosTotal = oficiosAnteriores.length + oficiosNuevos
     const oficiosPendientes = oficiosAnteriores.filter(o => o.estado === 'pendiente').length
 
+    const me = e.mesaEmpleo
+    const digitadosMesa = (me?.metaDigitada ? 1 : 0) + (me?.subsidiosDigitados ? 1 : 0)
+
     items.push({
       key: 'seguimiento', numero: 3, label: 'Seguimiento de la inversión',
       // Cuántas cosas hay sobre la mesa (proyectos + oficios), mismo criterio
-      // que el badge de «Iniciativas contempladas» en Infraestructura.
+      // que el badge de «Iniciativas contempladas» en Infraestructura. La meta
+      // de empleo no suma acá: son dos casilleros que se llenan, no ítems que
+      // se agreguen a una agenda.
       badge: String(proyectos + oficiosTotal),
       estado: estadoSeguimiento(proyectos, oficiosTotal, oficiosPendientes),
       subitems: [
@@ -203,17 +206,12 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
           key: 'oficios', label: 'Oficios', badge: String(oficiosTotal),
           estado: estadoOficios(oficiosAnteriores, oficiosNuevos),
         },
+        {
+          key: 'mesa_empleo', label: 'Meta mesa empleo', badge: `${digitadosMesa}/2`,
+          // Dos números que se anotan en la reunión: lista con ambos.
+          estado: digitadosMesa === 2 ? 'listo' : digitadosMesa > 0 ? 'con-actividad' : 'vacio',
+        },
       ],
-    })
-    // Mesa Empleo va DESPUÉS de Seguimiento y ANTES de los compromisos nuevos,
-    // para que un compromiso levantado en la mesa se pueda anotar recién visto
-    // lo que la mesa arrojó — que es el orden en que ocurre la reunión.
-    const me = e.mesaEmpleo
-    const digitados = (me?.metaDigitada ? 1 : 0) + (me?.subsidiosDigitados ? 1 : 0)
-    items.push({
-      key: 'mesa_empleo', numero: 4, label: 'Mesa Empleo',
-      badge: `${digitados}/2`,
-      estado: digitados === 2 ? 'listo' : digitados > 0 ? 'con-actividad' : 'vacio',
     })
   } else if (e.instancia === 'eje') {
     const catalogo = e.catalogo ?? []
@@ -248,8 +246,7 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
   }
 
   items.push({
-    // 5 en el Económico, que ahora tiene Mesa Empleo en el 4.
-    key: 'nuevos', numero: esEconomico ? 5 : 4, label: 'Compromisos nuevos',
+    key: 'nuevos', numero: 4, label: 'Compromisos nuevos',
     badge: String(e.compNuevos.length),
     estado: e.compNuevos.length > 0 ? 'con-actividad' : 'vacio',
   })

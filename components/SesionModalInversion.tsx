@@ -48,13 +48,10 @@ import CierreSesionComite from './sesiones/CierreSesionComite'
  *          SOLO allá: la sesión no guarda copia de nada.
  *      3b. Oficios — anteriores (verificación) y nuevos (alta directa:
  *          OAECA + fecha límite + proyecto; no hay import de Excel)
- *   4. Mesa Empleo — meta de empleo de la región y corte de subsidios
- *      (mig 052/055/056). Va antes de los compromisos para que lo que la mesa
- *      arroje se pueda dejar comprometido en la zona siguiente, que es el
- *      orden en que ocurre la reunión.
- *   5. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
- *      seguimiento_inversion / general) y genera el tag al listar;
- *      el proyecto asociado es opcional en cualquier sección.
+ *      Meta mesa empleo (mig 052/055/056) es el tercer sub-ítem de esta zona.
+ *   4. Compromisos nuevos — `seccion` es obligatoria y genera el tag al
+ *      listar: general, seguimiento_inversion, proyectos_tratados, oficios o
+ *      mesa_empleo (mig 107). El proyecto asociado es opcional en cualquiera.
  *
  * A diferencia de SesionModal, este comité NO tiene eje: las queries de
  * sesion_nomina/sesion_compromisos/eje_sesiones filtran por
@@ -113,14 +110,18 @@ const ESTADO_OFICIO = {
 } as const
 
 const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
-  mesa_empleo:            'Mesa Empleo',
-  seguimiento_inversion:  'Seguimiento Inversión',
   general:                'General',
+  seguimiento_inversion:  'Seguimiento Inversión',
+  proyectos_tratados:     'Proyectos tratados',
+  oficios:                'Oficios',
+  mesa_empleo:            'Mesa Empleo',
 }
 const SECCION_TAG_CLS: Record<SeccionComiteEconomico, string> = {
-  mesa_empleo:            'bg-amber-50 text-amber-700 border-amber-200',
-  seguimiento_inversion:  'bg-violet-50 text-violet-700 border-violet-200',
   general:                'bg-gray-100 text-gray-600 border-gray-200',
+  seguimiento_inversion:  'bg-violet-50 text-violet-700 border-violet-200',
+  proyectos_tratados:     'bg-sky-50 text-sky-700 border-sky-200',
+  oficios:                'bg-teal-50 text-teal-700 border-teal-200',
+  mesa_empleo:            'bg-amber-50 text-amber-700 border-amber-200',
 }
 
 function SeccionTag({ seccion }: { seccion: SeccionComiteEconomico | null }) {
@@ -874,7 +875,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   const muestra = (z: ZonaKey) => activa.zona === z
   // Sub-zona de Seguimiento en pantalla. Si el riel no eligió una, Proyectos.
-  const subSeguimiento = activa.zona === 'seguimiento' && activa.inst === 'oficios' ? 'oficios' : 'proyectos'
+  const subSeguimiento = activa.zona === 'seguimiento'
+    ? (activa.inst === 'oficios' ? 'oficios' : activa.inst === 'mesa_empleo' ? 'mesa_empleo' : 'proyectos')
+    : 'proyectos'
 
   const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
   const navTerminar = { label: 'Terminar sesión', onClick: abrirCierre }
@@ -1170,11 +1173,11 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               </ZonaCard>
               )}
 
-              {/* ── Zona 4: Mesa Empleo ── */}
-              {MESA_EMPLEO_HABILITADA && muestra('mesa_empleo') && (
-              <ZonaCard numero={4} titulo="Mesa Empleo"
+              {/* ── Zona 3c: meta mesa empleo ── */}
+              {MESA_EMPLEO_HABILITADA && muestra('seguimiento') && subSeguimiento === 'mesa_empleo' && (
+              <ZonaCard numero={3} titulo="Seguimiento de la inversión · Meta mesa empleo"
                 badge={`${(metaEmpleoSesion != null ? 1 : 0) + (subsidioSesion != null ? 1 : 0)}/2`}
-                descripcion="El avance de la meta de empleo de la región y el corte de subsidios. Lo que salga de acá se puede dejar comprometido en la zona siguiente."
+                descripcion="El avance de la meta de empleo de la región y el corte de subsidios."
                 anterior={navAnterior} siguiente={navSiguiente}>
                   <div className="space-y-4">
                     {/* Meta Empleo */}
@@ -1607,9 +1610,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                   </ZonaCard>
               )}
 
-              {/* ── Zona 5: compromisos nuevos ── */}
+              {/* ── Zona 4: compromisos nuevos ── */}
               {muestra('nuevos') && (
-              <ZonaCard numero={5} titulo="Compromisos nuevos" badge={compNuevos.length}
+              <ZonaCard numero={4} titulo="Compromisos nuevos" badge={compNuevos.length}
                 descripcion="Lo que queda comprometido hoy. Reaparece para verificarlo en la próxima sesión."
                 anterior={navAnterior} siguiente={navTerminar} siguienteDestacado>
                 <div className="space-y-2">
@@ -1657,9 +1660,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           className={`${inputCls} w-full text-xs py-1.5`}
                         >
                           <option value="" disabled>Selecciona sección…</option>
-                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">Mesa Empleo</option>}
+                          <option value="general">General</option>
+                          {/* Seguimiento de la Inversión abarca la zona entera; los
+                              tres de abajo son sus frentes (mig 107). Un compromiso
+                              que cruza los tres se etiqueta con el padre. */}
                           <option value="seguimiento_inversion">Seguimiento de la Inversión</option>
-                          <option value="general">General{MESA_EMPLEO_HABILITADA ? ' (fuera de ambas)' : ''}</option>
+                          <option value="proyectos_tratados">&nbsp;&nbsp;· Proyectos tratados</option>
+                          <option value="oficios">&nbsp;&nbsp;· Oficios</option>
+                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">&nbsp;&nbsp;· Mesa Empleo</option>}
                         </select>
                       </label>
                       <div className="flex-1 min-w-[220px]">

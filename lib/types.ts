@@ -923,7 +923,17 @@ export type SesionVoceria = {
 
 // Sección de un compromiso del Comité Económico — genera el tag al listar
 // compromisos. NULL para compromisos de Comité Policial/Gabinete.
-export type SeccionComiteEconomico = 'mesa_empleo' | 'seguimiento_inversion' | 'general'
+//
+// `seguimiento_inversion` es la zona entera; `proyectos_tratados`, `oficios` y
+// `mesa_empleo` son sus tres frentes (mig 107). El padre se usa para el
+// compromiso que los cruza, y es además lo que tienen guardado los compromisos
+// anteriores a esa migración.
+export type SeccionComiteEconomico =
+  | 'general'
+  | 'seguimiento_inversion'
+  | 'proyectos_tratados'
+  | 'oficios'
+  | 'mesa_empleo'
 
 // Catálogo de organismos (OAECA) — autoincremental: precargado y crece
 // cuando alguien escribe uno nuevo al cargar un oficio en sesión.

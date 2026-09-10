@@ -1,4 +1,5 @@
 import { Document, Page, Text, View } from '@react-pdf/renderer'
+import type { SeccionComiteEconomico } from '@/lib/types'
 import {
   s, C, fmtFecha, fmtFechaCorta, fmtNum,
   PageChrome, TitleBlock, SH, SubHead, MetaRow, EstadoChip, SeccionChip, Vacio,
@@ -100,14 +101,14 @@ export type ActaData = ActaBranding & {
     nombre: string | null
     plazo: string | null
     estado: 'pendiente' | 'en_curso' | 'cumplido'
-    seccion: 'mesa_empleo' | 'seguimiento_inversion' | 'general' | null
+    seccion: SeccionComiteEconomico | null
   }[]
   compNuevos: {
     descripcion: string
     institucion: string
     nombre: string | null
     plazo: string | null
-    seccion: 'mesa_empleo' | 'seguimiento_inversion' | 'general' | null
+    seccion: SeccionComiteEconomico | null
   }[]
   generadoPor: string | null
   generadoEn: string                  // display, ya formateado
@@ -115,7 +116,13 @@ export type ActaData = ActaBranding & {
 
 const ESTADO_LABEL = { pendiente: 'Pendiente', en_curso: 'En curso', cumplido: 'Cumplido' } as const
 const ESTADO_COLOR = { pendiente: C.gris, en_curso: C.azul, cumplido: C.verde } as const
-const SECCION_LABEL = { mesa_empleo: 'Mesa Empleo', seguimiento_inversion: 'Seguimiento Inversión', general: 'General' } as const
+const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
+  general:               'General',
+  seguimiento_inversion: 'Seguimiento Inversión',
+  proyectos_tratados:    'Proyectos tratados',
+  oficios:               'Oficios',
+  mesa_empleo:           'Mesa Empleo',
+}
 
 export default function ActaComitePdf({ data }: { data: ActaData }) {
   const presentes = data.asistencia.filter(a => a.presente)
