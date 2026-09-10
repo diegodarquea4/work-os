@@ -374,17 +374,19 @@ export default function ComiteEconomicoProyectosPanel({
           ) : (
             <div className="overflow-x-auto overflow-y-auto max-h-[65vh] -mx-4 px-4">
               <table className="w-full text-xs border-collapse min-w-[820px]">
-                <thead className="sticky top-0 bg-white z-[1]">
-                  <tr className="border-b border-gray-200 text-gray-500">
-                    <th className="text-left font-semibold py-1.5 pr-3">Nombre</th>
-                    <th className="text-left font-semibold py-1.5 pr-3">Plazo</th>
-                    <th className="text-left font-semibold py-1.5 pr-3">Priorizado</th>
-                    <th className="text-left font-semibold py-1.5 pr-3">SEREMI líder</th>
+                {/* Fondo y línea por celda, no en el `thead` — ver el mismo
+                    encabezado en SelectorCatalogoProyectos. */}
+                <thead className="sticky top-0 z-10 text-gray-500 [&_th]:bg-white [&_th]:py-1.5 [&_th]:shadow-[0_1px_0_0_var(--color-gray-200)]">
+                  <tr>
+                    <th className="text-left font-semibold pr-3">Nombre</th>
+                    <th className="text-left font-semibold pr-3">Plazo</th>
+                    <th className="text-left font-semibold pr-3">Priorizado</th>
+                    <th className="text-left font-semibold pr-3">SEREMI líder</th>
                     <SortableHeader label="Inversión (MM$)" active={sortCol === 'inversion_monto'} dir={sortDir} onClick={() => handleSort('inversion_monto')} />
                     <SortableHeader label="M.O. directa" active={sortCol === 'mano_obra_directa'} dir={sortDir} onClick={() => handleSort('mano_obra_directa')} />
                     <SortableHeader label="M.O. indirecta" active={sortCol === 'mano_obra_indirecta'} dir={sortDir} onClick={() => handleSort('mano_obra_indirecta')} />
-                    <th className="text-left font-semibold py-1.5 pr-3">Estado actual</th>
-                    <th className="text-left font-semibold py-1.5">Riesgo</th>
+                    <th className="text-left font-semibold pr-3">Estado actual</th>
+                    <th className="text-left font-semibold">Riesgo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -468,7 +470,7 @@ export default function ComiteEconomicoProyectosPanel({
 
 function SortableHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void }) {
   return (
-    <th className="text-right font-semibold py-1.5 pr-3">
+    <th className="text-right font-semibold pr-3">
       <button onClick={onClick} className={`inline-flex items-center gap-1 hover:text-violet-700 ${active ? 'text-violet-700' : ''}`}>
         {label}
         <span className="text-[9px]">{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span>

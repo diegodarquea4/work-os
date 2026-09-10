@@ -397,7 +397,11 @@ export default function SelectorCatalogoProyectos({
         </p>
       )}
 
-      <div className="flex-1 overflow-y-auto px-5 py-3">
+      {/* Sin padding ARRIBA: `position: sticky` frena en el borde del viewport
+          de scroll, así que un padding-top deja una franja por la que las filas
+          asoman POR ENCIMA del encabezado al scrollear. Las ramas que no son la
+          tabla traen su propio espaciado. */}
+      <div className="flex-1 overflow-y-auto px-5 pb-3">
         {confirmando ? (() => {
           const actual = aGuardar[revisando]
           if (!actual) return null
@@ -415,7 +419,7 @@ export default function SelectorCatalogoProyectos({
             ) : null
 
           return (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-3">
               {/* Navegación de la tanda. Se llena uno y se pasa al siguiente:
                   diez formularios apilados no se revisan, se scrollean. */}
               <div className="flex items-center gap-2">
@@ -567,9 +571,14 @@ export default function SelectorCatalogoProyectos({
           </p>
         ) : (
           <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0 bg-white z-[1]">
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="w-8 py-1.5">
+            {/* El fondo opaco y la línea van en cada `th`, no en el `thead`:
+                una fila con `opacity` abre su propio contexto de apilado y con
+                un z bajo se dibujaba por encima del encabezado. La línea es
+                sombra y no `border` porque en `border-collapse: collapse` el
+                borde de una celda sticky se pierde al scrollear. */}
+            <thead className="sticky top-0 z-10 text-gray-500 [&_th]:bg-white [&_th]:pt-3 [&_th]:pb-1.5 [&_th]:shadow-[0_1px_0_0_var(--color-gray-200)]">
+              <tr>
+                <th className="w-8">
                   <input
                     type="checkbox"
                     checked={todosSeleccionados}
@@ -580,12 +589,12 @@ export default function SelectorCatalogoProyectos({
                     className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
                   />
                 </th>
-                <th className="text-left font-semibold py-1.5 pr-3">Proyecto</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Titular</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Comuna</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Estado</th>
-                <th className="text-right font-semibold py-1.5 pr-3">Inversión (MM$)</th>
-                <th className="w-8 py-1.5"></th>
+                <th className="text-left font-semibold pr-3">Proyecto</th>
+                <th className="text-left font-semibold pr-3">Titular</th>
+                <th className="text-left font-semibold pr-3">Comuna</th>
+                <th className="text-left font-semibold pr-3">Estado</th>
+                <th className="text-right font-semibold pr-3">Inversión (MM$)</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
