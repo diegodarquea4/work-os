@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import type { Region } from '@/lib/regions'
@@ -12,10 +12,10 @@ import SelectorCatalogoProyectos from './SelectorCatalogoProyectos'
  * Alta de un proyecto en la cartera del Comité Económico (mig 094), por las
  * dos vías que existen, en un solo lugar:
  *
- *   · Desde el catálogo — elegirlo de `v2_proyectos_inversion` (lo que
+ *   · Desde el SEIA — elegirlo del catálogo (`v2_proyectos_inversion`, que
  *     alimentan el sync del SEIA y los demás) y que llegue con lo que la
  *     fuente ya sabe. Es la vía normal y por eso abre primero.
- *   · A mano — los 16 campos del spec, para lo que el catálogo no conoce.
+ *   · Nuevo proyecto — los 16 campos del spec, para lo que el SEIA no conoce.
  *
  * Son dos pestañas y no dos botones porque agregar un proyecto es UNA
  * intención; de dónde salen los datos es un detalle de esa intención, no otra
@@ -44,6 +44,13 @@ export default function NuevoProyectoEconomicoModal({
   region, currentUserEmail, yaImportados, onClose, onCreated,
 }: Props) {
   const [via, setVia] = useState<'catalogo' | 'manual'>('catalogo')
+
+  // Con las dos pestañas montadas, dos `autoFocus` se pelean el cursor y gana
+  // el que monte último. El foco se pone a mano, según la pestaña visible.
+  const nombreRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (via === 'manual') nombreRef.current?.focus()
+  }, [via])
 
   const [nombre, setNombre]                     = useState('')
   const [plazo, setPlazo]                       = useState<'' | 'CP' | 'MP' | 'LP'>('')
@@ -127,15 +134,19 @@ export default function NuevoProyectoEconomicoModal({
           </div>
           <div className="flex items-center gap-2 mt-3">
             <button type="button" onClick={() => setVia('catalogo')} className={tabCls(via === 'catalogo')}>
-              Desde el catálogo
+              Desde el SEIA
             </button>
             <button type="button" onClick={() => setVia('manual')} className={tabCls(via === 'manual')}>
-              Cargar a mano
+              Nuevo proyecto
             </button>
           </div>
         </header>
 
-        {via === 'catalogo' ? (
+        {/* Las dos pestañas quedan MONTADAS y se alternan con `hidden`, en vez de
+            desmontarse. Volver al SEIA después de pasar por el formulario tenía
+            que recargar el catálogo entero y perdía los filtros, la búsqueda y
+            lo que ya estaba marcado. Alternar es gratis; recargar no. */}
+        <div className={`flex-1 flex flex-col min-h-0 ${via === 'catalogo' ? '' : 'hidden'}`}>
           <SelectorCatalogoProyectos
             region={region}
             currentUserEmail={currentUserEmail}
@@ -143,12 +154,14 @@ export default function NuevoProyectoEconomicoModal({
             onCancel={onClose}
             onImported={ids => onCreated(ids, true)}
           />
-        ) : (
+        </div>
+
+        <div className={`flex-1 flex flex-col min-h-0 ${via === 'manual' ? '' : 'hidden'}`}>
           <>
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               <label className="flex flex-col gap-0.5">
                 <span className={labelCls}>Nombre del proyecto *</span>
-                <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls} autoFocus required />
+                <input ref={nombreRef} type="text" value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls} required />
               </label>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -256,7 +269,7 @@ export default function NuevoProyectoEconomicoModal({
               </button>
             </footer>
           </>
-        )}
+        </div>
       </div>
     </div>
   )

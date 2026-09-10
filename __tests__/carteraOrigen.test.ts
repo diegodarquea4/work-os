@@ -6,6 +6,7 @@ import {
   catalogoAvanzo,
   extenderSeleccion,
   camposPendientes,
+  montoEnMillones,
   CAMPOS_DEL_COMITE,
   type CandidatoCatalogo,
 } from '@/lib/carteraOrigen'
@@ -19,7 +20,7 @@ function candidato(over: Partial<CandidatoCatalogo> = {}): CandidatoCatalogo {
     estado: 'Aprobado',
     tipo: 'Proyectos de desarrollo o explotación energética',
     comuna_nombre: 'Pozo Almonte',
-    inversion: 120.5,
+    inversion: 120_500_000,
     moneda: 'USD_MM',
     fecha_presentacion: '2023-04-18',
     via_ingreso: 'DIA',
@@ -82,7 +83,7 @@ describe('filaDesdeCandidato', () => {
     expect(f.nombre).toBe('Parque Fotovoltaico Tamarugal')
     expect(f.region_cod).toBe('I')
     expect(f.inversion_monto).toBe(120.5)
-    expect(f.inversion_moneda).toBe('USD_MM')
+    expect(f.inversion_moneda).toBe('MM$')
     expect(f.estado_actual).toBe('Aprobado ambientalmente')
     expect(f.created_by_email).toBe('ana@interior.gob.cl')
   })
@@ -215,5 +216,31 @@ describe('camposPendientes', () => {
   it('aguanta que no haya proyecto', () => {
     expect(camposPendientes(null)).toEqual([])
     expect(camposPendientes(undefined)).toEqual([])
+  })
+})
+
+describe('montoEnMillones', () => {
+  // El campo del SEIA se llama INVERSION_MM pero viene en unidades. Verificado
+  // contra proyectos presentes en las dos tablas: guardar el crudo infla la
+  // cifra por un millón y arruina cualquier suma o total de la cartera.
+  it('lleva el bruto del SEIA a la escala de la cartera', () => {
+    expect(montoEnMillones(3_000_000_000)).toBe(3000)     // QB2
+    expect(montoEnMillones(2_789_146_600)).toBe(2789.1)   // GHUNGNAM KCS
+    expect(montoEnMillones(120_500_000)).toBe(120.5)
+  })
+
+  it('redondea a un decimal, que es lo que la tabla muestra', () => {
+    expect(montoEnMillones(1_234_567)).toBe(1.2)
+  })
+
+  it('no inventa un monto cuando no lo hay', () => {
+    expect(montoEnMillones(null)).toBeNull()
+    expect(montoEnMillones(undefined)).toBeNull()
+    expect(montoEnMillones(NaN)).toBeNull()
+    expect(montoEnMillones(Infinity)).toBeNull()
+  })
+
+  it('el cero sigue siendo cero, no null', () => {
+    expect(montoEnMillones(0)).toBe(0)
   })
 })

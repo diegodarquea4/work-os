@@ -59,6 +59,15 @@ type Props = {
    * que el detalle importa más que la bitácora.
    */
   reciénImportado?: boolean
+  /**
+   * Los proyectos que se acaban de traer del SEIA, en el orden en que se
+   * agregaron. Cuando son varios, la ficha muestra flechas para recorrerlos:
+   * llenas uno, pasas al siguiente. Sin esto habría que cerrar, buscar el
+   * proyecto en la tabla y abrirlo, por cada uno.
+   */
+  cola?: number[]
+  /** Saltar a otro proyecto de la cola sin cerrar la ficha. */
+  onIrA?: (id: number) => void
 }
 
 // El estado que se puede cambiar al registrar un avance es el del PERMISO
@@ -85,7 +94,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null, reciénImportado = false }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null, reciénImportado = false, cola = [], onIrA }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [estadoEnCatalogo, setEstadoEnCatalogo] = useState<string | null>(null)
   const [urlOrigen, setUrlOrigen] = useState<string | null>(null)
@@ -207,6 +216,12 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     () => camposPendientes(proyecto as unknown as Record<string, unknown> | null),
     [proyecto],
   )
+
+  // Posición dentro de la tanda recién agregada, si viene de ahí.
+  const posEnCola  = cola.indexOf(proyectoId)
+  const hayCola    = cola.length > 1 && posEnCola >= 0
+  const anterior   = hayCola && posEnCola > 0 ? cola[posEnCola - 1] : null
+  const siguiente  = hayCola && posEnCola < cola.length - 1 ? cola[posEnCola + 1] : null
 
   const origenId = proyecto?.origen_id ?? null
   useEffect(() => {
@@ -718,11 +733,38 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                   </div>
                 )}
               </div>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0 mt-0.5" title="Cerrar">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4l12 12M16 4L4 16"/>
-                </svg>
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                {hayCola && onIrA && (
+                  <div className="flex items-center gap-1 mr-1">
+                    <button
+                      onClick={() => anterior != null && onIrA(anterior)}
+                      disabled={anterior == null}
+                      title="Proyecto anterior de los recién agregados"
+                      aria-label="Proyecto anterior"
+                      className="p-1 rounded-md text-gray-400 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <span className="text-[11px] font-medium text-gray-500 tabular-nums whitespace-nowrap">
+                      {posEnCola + 1} de {cola.length}
+                    </span>
+                    <button
+                      onClick={() => siguiente != null && onIrA(siguiente)}
+                      disabled={siguiente == null}
+                      title="Siguiente proyecto de los recién agregados"
+                      aria-label="Siguiente proyecto"
+                      className="p-1 rounded-md text-gray-400 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                  </div>
+                )}
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600" title="Cerrar">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4l12 12M16 4L4 16"/>
+                  </svg>
+                </button>
+              </div>
             </header>
 
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">

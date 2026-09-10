@@ -63,6 +63,8 @@ export default function ComiteEconomicoProyectosPanel({
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [fichaId, setFichaId] = useState<number | null>(null)
   const [fichaReciénImportada, setFichaReciénImportada] = useState(false)
+  // La tanda recién traída del SEIA, para poder recorrerla con flechas.
+  const [colaImportada, setColaImportada] = useState<number[]>([])
   const [catalogoOpen, setCatalogoOpen] = useState(false)
 
   const [fPlazo, setFPlazo]           = useState<Set<string>>(new Set())
@@ -457,6 +459,7 @@ export default function ComiteEconomicoProyectosPanel({
             if (desdeCatalogo && ids.length > 0) {
               setFichaId(ids[0])
               setFichaReciénImportada(true)
+              setColaImportada(ids)
             }
           }}
         />
@@ -467,7 +470,9 @@ export default function ComiteEconomicoProyectosPanel({
           puedeOperar={puedeOperar}
           currentUserEmail={userEmail}
           reciénImportado={fichaReciénImportada}
-          onClose={() => { setFichaId(null); setFichaReciénImportada(false) }}
+          cola={colaImportada}
+          onIrA={id => setFichaId(id)}
+          onClose={() => { setFichaId(null); setFichaReciénImportada(false); setColaImportada([]) }}
           onChanged={cargar}
         />
       )}

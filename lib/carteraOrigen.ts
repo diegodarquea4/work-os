@@ -62,6 +62,25 @@ export function notasDesdeCatalogo(c: CandidatoCatalogo): string | null {
   return lineas.length > 0 ? lineas.join('\n') : null
 }
 
+/**
+ * La cartera anota la inversión en millones — así están cargados a mano los
+ * proyectos que ya existen, y así la muestra la tabla.
+ *
+ * El SEIA la entrega **en unidades**, pese a que su campo se llame
+ * `INVERSION_MM`. Verificado contra proyectos que están en las dos tablas:
+ * "Aumento de Capacidad de Molienda QB2" llega como 3.000.000.000 y son
+ * 3.000 millones; GHUNGNAM KCS llega como 2.789.146.600 y son 2.789,1.
+ * Guardar el número crudo lo infla por un millón y arruina cualquier suma,
+ * orden o total de la cartera.
+ */
+const FACTOR_A_MILLONES = 1_000_000
+const MONEDA_CARTERA = 'MM$'
+
+export function montoEnMillones(bruto: number | null | undefined): number | null {
+  if (bruto == null || !Number.isFinite(bruto)) return null
+  return Math.round((bruto / FACTOR_A_MILLONES) * 10) / 10
+}
+
 /** Lo que se inserta en `comite_economico_proyecto` al importar un candidato. */
 export type FilaCarteraImportada = {
   region_cod: string
@@ -103,8 +122,8 @@ export function filaDesdeCandidato(
     nombre: c.nombre,
     priorizado: false,
     riesgo: false,
-    inversion_monto: c.inversion,
-    inversion_moneda: c.inversion != null ? (c.moneda ?? null) : null,
+    inversion_monto: montoEnMillones(c.inversion),
+    inversion_moneda: c.inversion != null ? MONEDA_CARTERA : null,
     fuente_financiamiento: c.titular,
     responsable_operativo: c.titular,
     estado_actual: estadoCarteraDesdeCatalogo(c.estado),
