@@ -118,6 +118,32 @@ export function filaDesdeCandidato(
 }
 
 /**
+ * Shift+click: extiende la selección desde el último candidato tocado hasta
+ * este, sobre la lista que la persona está VIENDO (ya filtrada) — nunca sobre
+ * filas que un filtro escondió.
+ *
+ * Un rango siempre SUMA, nunca quita. Es lo que espera quien lo usa para
+ * juntar muchos de una vez, y evita que un Shift+click descuidado borre una
+ * selección larga que costó armar. Los ya importados se saltan: no son
+ * seleccionables ni aunque caigan dentro del rango.
+ */
+export function extenderSeleccion(
+  seleccionActual: Set<string>,
+  visibles: { id: string }[],
+  desdeIndice: number,
+  hastaIndice: number,
+  noSeleccionables: Set<string>,
+): Set<string> {
+  const desde = Math.min(desdeIndice, hastaIndice)
+  const hasta = Math.max(desdeIndice, hastaIndice)
+  const next = new Set(seleccionActual)
+  for (const c of visibles.slice(desde, hasta + 1)) {
+    if (!noSeleccionables.has(c.id)) next.add(c.id)
+  }
+  return next
+}
+
+/**
  * ¿El catálogo avanzó desde que se importó este proyecto? Es la pregunta que
  * hace útil volver a correr el sync: no solo sumar expedientes nuevos, sino
  * avisar que uno que ya se sigue cambió de estado en la fuente.

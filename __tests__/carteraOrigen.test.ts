@@ -4,6 +4,7 @@ import {
   notasDesdeCatalogo,
   filaDesdeCandidato,
   catalogoAvanzo,
+  extenderSeleccion,
   type CandidatoCatalogo,
 } from '@/lib/carteraOrigen'
 
@@ -132,5 +133,43 @@ describe('catalogoAvanzo', () => {
     expect(catalogoAvanzo(null, 'Aprobado')).toBe(false)
     expect(catalogoAvanzo('Aprobado', null)).toBe(false)
     expect(catalogoAvanzo(null, null)).toBe(false)
+  })
+})
+
+describe('extenderSeleccion (Shift + click)', () => {
+  const visibles = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
+
+  it('toma todo lo que hay entre los dos extremos, inclusive', () => {
+    const r = extenderSeleccion(new Set(), visibles, 1, 3, new Set())
+    expect([...r].sort()).toEqual(['b', 'c', 'd'])
+  })
+
+  it('funciona hacia arriba igual que hacia abajo', () => {
+    const r = extenderSeleccion(new Set(), visibles, 3, 1, new Set())
+    expect([...r].sort()).toEqual(['b', 'c', 'd'])
+  })
+
+  // Un Shift+click descuidado no puede borrar una selección larga que costó
+  // armar: el rango suma, y lo que ya estaba marcado sigue marcado.
+  it('siempre suma — nunca quita lo que ya estaba seleccionado', () => {
+    const r = extenderSeleccion(new Set(['z']), visibles, 0, 1, new Set())
+    expect(r.has('z')).toBe(true)
+    expect([...r].sort()).toEqual(['a', 'b', 'z'])
+  })
+
+  it('se salta los que ya están en la cartera aunque caigan en el rango', () => {
+    const r = extenderSeleccion(new Set(), visibles, 0, 4, new Set(['b', 'd']))
+    expect([...r].sort()).toEqual(['a', 'c', 'e'])
+  })
+
+  it('un rango de un solo elemento marca ese elemento', () => {
+    const r = extenderSeleccion(new Set(), visibles, 2, 2, new Set())
+    expect([...r]).toEqual(['c'])
+  })
+
+  it('no muta la selección que recibe', () => {
+    const antes = new Set(['a'])
+    extenderSeleccion(antes, visibles, 1, 3, new Set())
+    expect([...antes]).toEqual(['a'])
   })
 })

@@ -1,10 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite } from '@/lib/dbWrite'
 import { INE_CODE, type Region } from '@/lib/regions'
-import { filaDesdeCandidato, type CandidatoCatalogo } from '@/lib/carteraOrigen'
+import { filaDesdeCandidato, extenderSeleccion, type CandidatoCatalogo } from '@/lib/carteraOrigen'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 
 /**
@@ -118,7 +118,23 @@ export default function ImportarDesdeCatalogoModal({
   const todosSeleccionados = seleccionables.length > 0
     && seleccionables.every(c => seleccion.has(c.id))
 
-  function toggle(id: string) {
+  /**
+   * Marcar de a uno, o un rango entero con Shift. Con cientos de proyectos en
+   * pantalla, marcar uno por uno no es una forma razonable de armar una
+   * cartera: el gesto de Shift+click es el mismo de cualquier lista de
+   * archivos. La regla del rango vive en `extenderSeleccion` y tiene test.
+   */
+  const ultimoTocado = useRef<number | null>(null)
+
+  function toggle(id: string, indice: number, extenderRango = false) {
+    if (yaImportados.has(id)) return
+    if (extenderRango && ultimoTocado.current != null) {
+      const desde = ultimoTocado.current
+      setSeleccion(prev => extenderSeleccion(prev, filtrados, desde, indice, yaImportados))
+      ultimoTocado.current = indice
+      return
+    }
+    ultimoTocado.current = indice
     setSeleccion(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -127,13 +143,29 @@ export default function ImportarDesdeCatalogoModal({
     })
   }
 
-  function toggleTodos() {
+  function seleccionarTodosLosFiltrados() {
     setSeleccion(prev => {
       const next = new Set(prev)
-      if (todosSeleccionados) for (const c of seleccionables) next.delete(c.id)
-      else for (const c of seleccionables) next.add(c.id)
+      for (const c of seleccionables) next.add(c.id)
       return next
     })
+  }
+
+  function limpiarSeleccion() {
+    setSeleccion(new Set())
+    ultimoTocado.current = null
+  }
+
+  function toggleTodos() {
+    if (todosSeleccionados) {
+      setSeleccion(prev => {
+        const next = new Set(prev)
+        for (const c of seleccionables) next.delete(c.id)
+        return next
+      })
+    } else {
+      seleccionarTodosLosFiltrados()
+    }
   }
 
   async function handleImportar() {
@@ -210,6 +242,32 @@ export default function ImportarDesdeCatalogoModal({
           </label>
         </div>
 
+        {/* Barra de selección masiva. El checkbox de la cabecera hace lo mismo,
+            pero es chico y no se ve: armar una cartera de decenas de proyectos
+            tiene que ser un gesto explícito, no un descubrimiento. */}
+        {!loading && !error && seleccionables.length > 0 && (
+          <div className="flex-shrink-0 px-5 py-2 border-b border-gray-100 bg-slate-50/70 flex items-center gap-3 flex-wrap">
+            <button
+              onClick={seleccionarTodosLosFiltrados}
+              disabled={todosSeleccionados}
+              className="text-xs font-semibold px-2.5 py-1 rounded-md border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Seleccionar los {seleccionables.length.toLocaleString('es-CL')} en pantalla
+            </button>
+            {seleccion.size > 0 && (
+              <button
+                onClick={limpiarSeleccion}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-white"
+              >
+                Quitar selección ({seleccion.size.toLocaleString('es-CL')})
+              </button>
+            )}
+            <span className="text-[11px] text-gray-500 ml-auto">
+              Consejo: <kbd className="px-1 py-0.5 rounded border border-gray-300 bg-white font-sans text-[10px]">Shift</kbd> + click marca todo el rango.
+            </span>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-5 py-3">
           {loading ? (
             <p className="text-center text-sm text-gray-400 py-10">Cargando el catálogo…</p>
@@ -250,21 +308,21 @@ export default function ImportarDesdeCatalogoModal({
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map(c => {
+                {filtrados.map((c, i) => {
                   const yaEsta = yaImportados.has(c.id)
                   return (
                     <tr
                       key={c.id}
-                      onClick={() => { if (!yaEsta) toggle(c.id) }}
-                      className={`border-b border-gray-100 ${yaEsta ? 'opacity-45' : 'cursor-pointer hover:bg-violet-50/50'}`}
+                      onClick={e => toggle(c.id, i, e.shiftKey)}
+                      className={`border-b border-gray-100 select-none ${yaEsta ? 'opacity-45' : 'cursor-pointer hover:bg-violet-50/50'} ${seleccion.has(c.id) ? 'bg-violet-50' : ''}`}
                     >
                       <td className="py-2 text-center">
                         <input
                           type="checkbox"
                           checked={yaEsta || seleccion.has(c.id)}
                           disabled={yaEsta}
-                          onChange={() => toggle(c.id)}
-                          onClick={e => e.stopPropagation()}
+                          onChange={() => { /* el click de abajo hace el trabajo: necesita saber si venía con Shift */ }}
+                          onClick={e => { e.stopPropagation(); toggle(c.id, i, e.shiftKey) }}
                           aria-label={`Seleccionar ${c.nombre}`}
                           className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
                         />
