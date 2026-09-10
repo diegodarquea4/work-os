@@ -130,9 +130,13 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
   // Mesa Empleo (mig 055/056) puede venir null mientras no está confirmada
   // (MESA_EMPLEO_HABILITADA en lib/sesiones/helpers.ts) — la numeración de
   // 'inversion' se corre un número cuando esa sección no se muestra.
+  // Meta mesa empleo va DESPUÉS de proyectos y oficios, como en la sesión: es el
+  // tercer frente del Seguimiento de la Inversión, no un tema previo. Y solo
+  // ocupa un número si la sesión registró algo — cuando no, Compromisos sube.
   const mesaEmpleoVisible = Boolean(data.metaEmpleo || data.subsidios)
-  const nProyectos    = mesaEmpleoVisible ? 'IV' : 'III'
-  const nOficios      = mesaEmpleoVisible ? 'V' : 'IV'
+  const nProyectos    = 'III'
+  const nOficios      = 'IV'
+  const nMesaEmpleo   = 'V'
   const nCompromisos  = data.variante === 'inversion' ? (mesaEmpleoVisible ? 'VI' : 'V') : 'IV'
 
   return (
@@ -249,44 +253,6 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
           </>
         ) : (
           <>
-            {/* Mesa Empleo — Meta Empleo + Subsidios */}
-            {(data.metaEmpleo || data.subsidios) && <SH>III. Mesa Empleo</SH>}
-            {data.metaEmpleo && (
-              <>
-                <Text style={[s.blockName, { marginTop: 2 }]}>Meta Empleo</Text>
-                <MetaRow
-                  k="Empleos generados"
-                  v={`${fmtNum(data.metaEmpleo.acumulado)}${data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}${data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% de la meta)` : ''}`}
-                />
-                {data.metaEmpleo.objetivo > 0 && (
-                  <View style={s.barTrack}>
-                    <View style={[s.barFill, { width: `${Math.min(100, data.metaEmpleo.pctAvance ?? 0)}%` }]} />
-                  </View>
-                )}
-                {data.metaEmpleo.focoProductivo && (
-                  <Text style={{ fontSize: 8.5, color: C.muted, fontStyle: 'italic', marginBottom: 8 }}>
-                    Foco productivo: {data.metaEmpleo.focoProductivo}
-                  </Text>
-                )}
-              </>
-            )}
-            {data.subsidios && (
-              <>
-                <Text style={[s.blockName, { marginTop: 6 }]}>Subsidios</Text>
-                <MetaRow
-                  k="Postulados"
-                  v={`${fmtNum(data.subsidios.postulados)}${data.subsidios.cupos > 0 ? ` de ${fmtNum(data.subsidios.cupos)} cupos` : ''}${data.subsidios.pctAvance != null ? ` (${data.subsidios.pctAvance}%)` : ''}`}
-                />
-                {data.subsidios.cupos > 0 && (
-                  <View style={s.barTrack}>
-                    <View style={[s.barFill, { width: `${Math.min(100, data.subsidios.pctAvance ?? 0)}%` }]} />
-                  </View>
-                )}
-                <MetaRow k="Entregados" v={fmtNum(data.subsidios.entregados)} />
-                <MetaRow k="Empresas postulantes" v={fmtNum(data.subsidios.empresasPostulantes)} />
-              </>
-            )}
-
             {/* Proyectos tratados */}
             <SH>{`${nProyectos}. Proyectos tratados en profundidad`}</SH>
             {data.proyectosTratados.length === 0 ? (
@@ -326,10 +292,50 @@ export default function ActaComitePdf({ data }: { data: ActaData }) {
               </View>
             ))}
             {data.oficiosTratados.length === 0 && <Vacio>Sin oficios tratados en esta sesión.</Vacio>}
+
+            {/* Meta mesa empleo — tercer frente del Seguimiento de la Inversión,
+                igual que en la sesión. Solo aparece si ESTA sesión digitó algo:
+                generarActa deja metaEmpleo/subsidios en null si no. */}
+            {mesaEmpleoVisible && <SH>{`${nMesaEmpleo}. Meta mesa empleo`}</SH>}
+            {data.metaEmpleo && (
+              <>
+                <Text style={[s.blockName, { marginTop: 2 }]}>Meta Empleo</Text>
+                <MetaRow
+                  k="Empleos generados"
+                  v={`${fmtNum(data.metaEmpleo.acumulado)}${data.metaEmpleo.objetivo > 0 ? ` de ${fmtNum(data.metaEmpleo.objetivo)}` : ''}${data.metaEmpleo.pctAvance != null ? ` (${data.metaEmpleo.pctAvance}% de la meta)` : ''}`}
+                />
+                {data.metaEmpleo.objetivo > 0 && (
+                  <View style={s.barTrack}>
+                    <View style={[s.barFill, { width: `${Math.min(100, data.metaEmpleo.pctAvance ?? 0)}%` }]} />
+                  </View>
+                )}
+                {data.metaEmpleo.focoProductivo && (
+                  <Text style={{ fontSize: 8.5, color: C.muted, fontStyle: 'italic', marginBottom: 8 }}>
+                    Foco productivo: {data.metaEmpleo.focoProductivo}
+                  </Text>
+                )}
+              </>
+            )}
+            {data.subsidios && (
+              <>
+                <Text style={[s.blockName, { marginTop: 6 }]}>Subsidios</Text>
+                <MetaRow
+                  k="Postulados"
+                  v={`${fmtNum(data.subsidios.postulados)}${data.subsidios.cupos > 0 ? ` de ${fmtNum(data.subsidios.cupos)} cupos` : ''}${data.subsidios.pctAvance != null ? ` (${data.subsidios.pctAvance}%)` : ''}`}
+                />
+                {data.subsidios.cupos > 0 && (
+                  <View style={s.barTrack}>
+                    <View style={[s.barFill, { width: `${Math.min(100, data.subsidios.pctAvance ?? 0)}%` }]} />
+                  </View>
+                )}
+                <MetaRow k="Entregados" v={fmtNum(data.subsidios.entregados)} />
+                <MetaRow k="Empresas postulantes" v={fmtNum(data.subsidios.empresasPostulantes)} />
+              </>
+            )}
           </>
         )}
 
-        {/* Compromisos — numeración corrida si Mesa Empleo no se muestra (ver arriba) */}
+        {/* Compromisos — sube a V cuando la sesión no registró meta mesa empleo. */}
         <SH>{`${nCompromisos}. Compromisos`}</SH>
         <SubHead>a) Verificación de compromisos de sesiones anteriores</SubHead>
         {data.compVerificados.length === 0 ? (

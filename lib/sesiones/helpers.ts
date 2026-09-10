@@ -25,6 +25,29 @@ import type {
 // volver a esconderla, pero ya no es un flag de trabajo a medias.
 export const MESA_EMPLEO_HABILITADA = true
 
+/**
+ * Qué bloques de «Meta mesa empleo» entran al acta.
+ *
+ * El acta narra lo que pasó en la reunión, no el estado permanente de la
+ * región. La meta y los subsidios tienen un acumulado regional que existe
+ * apenas alguien lo configuró: si la sección se decidiera por ese dato, saldría
+ * impresa en TODAS las actas —con las mismas cifras— aunque en la sesión nadie
+ * la haya tocado, y quien la lea creería que el tema se trató.
+ *
+ * Por eso manda lo que la sesión digitó, y cada mitad se decide por separado:
+ * una reunión que solo anotó el avance de la meta no debe imprimir un bloque de
+ * subsidios que nadie miró.
+ */
+export function bloquesMesaEmpleoEnActa(
+  seDigitoMeta: boolean,
+  seDigitoSubsidios: boolean,
+  habilitada: boolean = MESA_EMPLEO_HABILITADA,
+): { meta: boolean; subsidios: boolean; seccion: boolean } {
+  const meta      = habilitada && seDigitoMeta
+  const subsidios = habilitada && seDigitoSubsidios
+  return { meta, subsidios, seccion: meta || subsidios }
+}
+
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
 /**
