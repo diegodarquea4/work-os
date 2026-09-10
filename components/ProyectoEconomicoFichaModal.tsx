@@ -89,6 +89,9 @@ const inputCls = 'px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-
 // `${inputCls} w-32` no sirve: w-full siempre gana en el CSS generado.
 const inputFixedCls = 'px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-300'
 const DETAIL_COLLAPSED_KEY = 'workos:proyectoEconomicoDetailCollapsed'
+// El salto de línea del confirm() del navegador, aparte para no pelear con
+// el escapado al editar este archivo.
+const SALTO = String.fromCharCode(10)
 
 function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
@@ -96,6 +99,7 @@ function hoyISO(): string {
 
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null, reciénImportado = false, cola = [], onIrA }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
+  const [borrando, setBorrando] = useState(false)
   const [estadoEnCatalogo, setEstadoEnCatalogo] = useState<string | null>(null)
   const [urlOrigen, setUrlOrigen] = useState<string | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
@@ -374,6 +378,42 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       window.alert((err as Error).message)
     } finally {
       setAvanceSaving(false)
+    }
+  }
+
+  /**
+   * Sacar el proyecto de la cartera. Arrastra sus avances y permisos (ON DELETE
+   * CASCADE, mig 094/096), así que la confirmación los cuenta: borrar un
+   * proyecto con bitácora no es lo mismo que borrar uno recién agregado, y
+   * quien aprieta tiene que ver la diferencia antes.
+   *
+   * Un proyecto traído del SEIA se puede volver a agregar desde el catálogo;
+   * uno cargado a mano no se recupera. La confirmación también lo dice.
+   */
+  async function borrarProyecto() {
+    if (!proyecto) return
+    const arrastra: string[] = []
+    if (avances.length)  arrastra.push(`${avances.length} avance${avances.length === 1 ? '' : 's'}`)
+    if (permisos.length) arrastra.push(`${permisos.length} permiso${permisos.length === 1 ? '' : 's'}`)
+    const detalle = arrastra.length
+      ? SALTO + SALTO + `Se borran también ${arrastra.join(' y ')}.`
+      : ''
+    const rescate = proyecto.origen_id
+      ? SALTO + SALTO + 'Viene del SEIA: si te arrepientes, se puede volver a agregar desde el catálogo.'
+      : SALTO + SALTO + 'Se cargó a mano: esto no se puede deshacer.'
+    if (!confirm(`¿Sacar "${proyecto.nombre}" de la cartera?${detalle}${rescate}`)) return
+
+    setBorrando(true)
+    try {
+      await safeDelete(
+        getSupabase().from('comite_economico_proyecto').delete().eq('id', proyectoId),
+        `comite_economico_proyecto delete id=${proyectoId}`,
+      )
+      onChanged?.()
+      onClose()
+    } catch (err) {
+      window.alert((err as Error).message)
+      setBorrando(false)
     }
   }
 
@@ -758,6 +798,19 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
                   </div>
+                )}
+                {editable && (
+                  <button
+                    onClick={borrarProyecto}
+                    disabled={borrando}
+                    title="Sacar este proyecto de la cartera"
+                    aria-label="Eliminar proyecto"
+                    className="p-1 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"/>
+                    </svg>
+                  </button>
                 )}
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600" title="Cerrar">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
