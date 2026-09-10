@@ -122,4 +122,16 @@ describe('mapRow', () => {
     expect(out.comuna_cods).toEqual([5101, 5109])
     expect(out.alcance_regional).toBe(true)
   })
+
+  it('defaultea ubicacion_lat/lng a null si faltan (pre-migración 104)', () => {
+    const out = mapRow(makeRow({ ubicacion_lat: undefined, ubicacion_lng: undefined }))
+    expect(out.ubicacion_lat).toBeNull()
+    expect(out.ubicacion_lng).toBeNull()
+  })
+
+  it('normaliza ubicacion NUMERIC que llega como string a number', () => {
+    const out = mapRow(makeRow({ ubicacion_lat: '-33.4489', ubicacion_lng: '-70.6693' }))
+    expect(out.ubicacion_lat).toBe(-33.4489)
+    expect(out.ubicacion_lng).toBe(-70.6693)
+  })
 })

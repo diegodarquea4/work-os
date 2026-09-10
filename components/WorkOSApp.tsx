@@ -4,14 +4,16 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import type { GeoJsonObject } from 'geojson'
-import type { Iniciativa } from '@/lib/projects'
+import type { Iniciativa, Capa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { ministerioCalza } from '@/lib/ministerios'
+import { construirPines } from '@/lib/pinesIniciativas'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
 import MapaDrillBreadcrumb from './MapaDrillBreadcrumb'
+import MapaPinesControl from './MapaPinesControl'
 import MapaModoToggle, { type MapaCapa } from './territorial/MapaModoToggle'
 import { TerritorialProvider, useTerritorialMode } from './territorial/TerritorialProvider'
 import AutoridadesSidebar from './territorial/AutoridadesSidebar'
@@ -32,6 +34,8 @@ import MfaBanner from './MfaBanner'
 import { mfaRequirement, mfaRazon, fechaLimiteLegible, type MfaRequirement } from '@/lib/mfaPolicy'
 
 const ChileMap         = dynamic(() => import('./ChileMap'),         { ssr: false })
+// Ficha abierta desde un pin del mapa (mig 104). Las otras vistas montan la suya.
+const ProjectTrackerModal = dynamic(() => import('./ProjectTrackerModal'))
 const NationalDashboard = dynamic(() => import('./NationalDashboard'))
 const KanbanView       = dynamic(() => import('./KanbanView'))
 const DesalojosView    = dynamic(() => import('./DesalojosView'))
@@ -323,6 +327,23 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   type MapDrill = { region: Region; comuna: { cut: number; nombre: string } | null }
   const [mapDrill, setMapDrill] = useState<MapDrill | null>(null)
 
+  // ── Mapa: pines por iniciativa (mig 104) ───────────────────────────────────
+  // Capas visibles en los pines (todas por defecto; sesión, no se persiste),
+  // la ficha abierta desde un pin (por id — n no es único) y si el lateral
+  // debe mostrar desplegada la lista de alcance regional. Solo van como pin
+  // las iniciativas con `ubicacion_lat/lng` cargada — no hay aproximación por
+  // centroide de comuna (Diego, 2026-09-11).
+  const [pinCapas, setPinCapas] = useState<Set<Capa>>(() => new Set<Capa>(['l', 'll', 'lll']))
+  const [mapIniciativaId, setMapIniciativaId] = useState<number | null>(null)
+  const [regionalesAbierto, setRegionalesAbierto] = useState(false)
+  const togglePinCapa = useCallback((capa: Capa) => {
+    setPinCapas(prev => {
+      const next = new Set(prev)
+      if (next.has(capa)) next.delete(capa); else next.add(capa)
+      return next
+    })
+  }, [])
+
   // Región que la cámara del mapa debe enfocar (click en una fila del lateral
   // → el mapa vuela a esa región). null = visual de todo Chile. Ortogonal al
   // drill: al entrar al drill se limpia (ComunasLayer encuadra) y al salir la
@@ -525,6 +546,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setSelectedRegion(null)
     setMapFocusCod(null)
     setActiveRegionName(region.nombre)
+    // Pines: el filtro de capas y la lista regional arrancan limpios en cada región.
+    setPinCapas(new Set<Capa>(['l', 'll', 'lll']))
+    setRegionalesAbierto(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
 
@@ -549,7 +573,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }, [enterDrill, selectComuna, territorial.setSelectedTerritorio])
 
   // Cierra el detalle y vuelve a la vista país: X del lateral (Autoridades) o
-  // clic en el mapa fuera de una región.
+  // clic en el mapa fuera de una región (sin drill activo — ver handleBackgroundClick).
   const clearMapSelection = useCallback(() => {
     setSelectedRegion(null)
     setMapDrill(null)
@@ -563,10 +587,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setMapDrill(d => (d?.comuna ? { ...d, comuna: null } : null))
   }, [])
 
+  // Clic fuera de una comuna/región (fondo del mapa, océano). Con el drill
+  // comunal activo retrocede UN nivel a la vez (comuna → lista comunal →
+  // mapa país), igual que Esc — pedido de Diego 2026-09-10: antes un solo
+  // clic afuera cerraba todo de un salto, perdiendo el nivel comunal.
+  const handleBackgroundClick = useCallback(() => {
+    if (mapDrill) { drillBack(); return }
+    clearMapSelection()
+  }, [mapDrill, drillBack, clearMapSelection])
+
   // Esc retrocede un nivel del drill. Solo activo en el mapa con drill
   // abierto; respeta inputs con foco (patrón del atajo `?`).
   useEffect(() => {
-    if (view !== 'mapa' || !mapDrill) return
+    // Con la ficha de un pin abierta, Esc es de la ficha (ella se cierra sola).
+    if (view !== 'mapa' || !mapDrill || mapIniciativaId != null) return
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
       const el = document.activeElement as HTMLElement | null
@@ -576,7 +610,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view, mapDrill, drillBack])
+  }, [view, mapDrill, drillBack, mapIniciativaId])
 
   // Conteos del nivel comunal — derivados client-side de lo ya cargado
   // (comuna_cods + inversion_mm), sin endpoint nuevo. Keyed por la región
@@ -586,6 +620,23 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     () => drillRegion ? computeComunaStats(projectsByRegion[drillRegion.nombre] ?? [], drillRegion.cod) : null,
     [drillRegion, projectsByRegion],
   )
+
+  // Pines del drill (mig 104): del mismo set que el lateral (projectsByRegion,
+  // post filtros globales). Solo entran las que tienen `ubicacion_lat/lng`
+  // cargada — sin coordenada, la iniciativa no aparece como pin (Diego,
+  // 2026-09-11). Se recalcula cuando cambian iniciativas, región o el filtro
+  // de capas — un cambio de semáforo/ubicación desde la ficha llega por
+  // handleUpdatePrioridad → localIniciativas → acá.
+  const pinesData = useMemo(
+    () => (drillRegion && mapaCapa === 'psg')
+      ? construirPines(projectsByRegion[drillRegion.nombre] ?? [], pinCapas)
+      : null,
+    [drillRegion, projectsByRegion, pinCapas, mapaCapa],
+  )
+  // La ficha lee de localIniciativas para ver los patches en vivo (no un snapshot).
+  const mapIniciativa = mapIniciativaId != null
+    ? localIniciativas.find(p => p.id === mapIniciativaId) ?? null
+    : null
 
   // ¿Hay un panel PSG (preview regional / comuna) abierto que ceda ancho al mapa?
   // Solo en modo PSG; en Autoridades el lateral es fijo (no achica el mapa).
@@ -874,6 +925,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                   onBack={drillBack}
                 />
               )}
+              {mapDrill && mapaCapa === 'psg' && pinesData && (
+                <MapaPinesControl
+                  capas={pinCapas}
+                  onToggleCapa={togglePinCapa}
+                  conUbicacion={pinesData.pines.length}
+                  sinUbicacion={pinesData.sinUbicacion}
+                  regionales={pinesData.regionales.length}
+                  onVerRegionales={() => { setMapDrill(d => d ? { ...d, comuna: null } : d); setRegionalesAbierto(true) }}
+                />
+              )}
             </div>
             {mapaCapa === 'autoridades' && (
               <AutoridadesStatBar
@@ -887,7 +948,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               projectCounts={projectCounts}
               onSelect={handleSelectRegion}
               onRegionDoubleClick={handleRegionDoubleClick}
-              onBackgroundClick={clearMapSelection}
+              onBackgroundClick={handleBackgroundClick}
               focusCod={mapFocusCod}
               drill={mapDrill && comunaStats ? {
                 regionIne:      INE_CODE[mapDrill.region.cod],
@@ -896,6 +957,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 selectedCut:    mapDrill.comuna?.cut ?? null,
                 statsByCut:     comunaStats.statsByCut,
                 onSelectComuna: selectComuna,
+                pines:          pinesData?.pines ?? null,
+                onSelectPin:    setMapIniciativaId,
               } : null}
               lockedRegions={mapaCapa === 'autoridades' ? [] : lockedRegions}
               overlay={mapaCapa === 'autoridades' ? territorial.overlay : null}
@@ -914,6 +977,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               onSelectComuna={selectComuna}
               onBack={drillBack}
               width={summarySidebarWidth}
+              regionales={pinesData?.regionales ?? []}
+              onSelectIniciativa={setMapIniciativaId}
+              regionalesAbierto={regionalesAbierto}
             />
           )}
           {mapaCapa === 'psg' && mapDrill?.comuna && (
@@ -983,6 +1049,20 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             />
           )}
         </div>
+        {/* Ficha abierta desde un pin (o desde la lista de alcance regional).
+            El wrapper con z propio la deja sobre el chrome del mapa (z-1000) y
+            el panel lateral (z-1100): la ficha es `fixed`, pero su stacking se
+            resuelve dentro del contexto de este wrapper. */}
+        {mapIniciativa && (
+          <div className="relative z-[1200]">
+            <ProjectTrackerModal
+              prioridad={mapIniciativa}
+              onClose={() => setMapIniciativaId(null)}
+              onUpdatePrioridad={handleUpdatePrioridad}
+              onDeletePrioridad={(n) => { handleDeletePrioridad(n); setMapIniciativaId(null) }}
+            />
+          </div>
+        )}
        </TerritorialProvider>
       )}
       {/* Inactivity warning */}

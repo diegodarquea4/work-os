@@ -53,6 +53,10 @@ export function mapRow(row: Prioridad): Iniciativa {
     // alcance_regional. Ambas con NOT NULL DEFAULT en BD.
     comuna_cods:            row.comuna_cods ?? [],
     alcance_regional:       row.alcance_regional ?? false,
+    // Defensive: pre-migración 104 las filas vienen sin ubicación. NUMERIC
+    // puede llegar como string según el cliente → Number() si no es null.
+    ubicacion_lat:          row.ubicacion_lat != null ? Number(row.ubicacion_lat) : null,
+    ubicacion_lng:          row.ubicacion_lng != null ? Number(row.ubicacion_lng) : null,
   }
 }
 
@@ -63,7 +67,8 @@ const PRIORIDAD_COLS =
   'id,n,region,cod,capital,zona,eje,eje_id,eje_gobierno,nombre,descripcion,ministerio,' +
   'etapa_actual,estado_termino_gobierno,proximo_hito,fecha_proximo_hito,' +
   'fuente_financiamiento,codigo_bip,inversion_mm,comuna,rat,estado_semaforo,pct_avance,' +
-  'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa,comuna_cods,alcance_regional'
+  'responsable,codigo_iniciativa,origen,en_foco,tags,es_desalojo,capa,comuna_cods,alcance_regional,' +
+  'ubicacion_lat,ubicacion_lng'
 
 /**
  * All iniciativas — used for the initial page load.

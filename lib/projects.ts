@@ -52,6 +52,11 @@ export type Iniciativa = {
   // true si `comuna` es "Regional/Varias/..." o viene vacía — buckets del
   // nivel comunal ("Alcance regional" / "Sin comuna").
   alcance_regional: boolean
+  // Coordenada exacta WGS84 (migración 104). Ambas o ninguna (CHECK en BD).
+  // NULL = sin georreferenciar: la iniciativa NO aparece como pin en el Mapa
+  // (sin aproximación por centroide de comuna — Diego, 2026-09-11).
+  ubicacion_lat: number | null
+  ubicacion_lng: number | null
 }
 
 export type Capa = 'l' | 'll' | 'lll'
@@ -140,5 +145,7 @@ function parseCSV(content: string): Iniciativa[] {
     capa: 'lll' as const,
     comuna_cods: [],
     alcance_regional: false,
+    ubicacion_lat: null,
+    ubicacion_lng: null,
   }))
 }

@@ -23,6 +23,7 @@ import { parseEjeString, composeEjeLabel } from './ejes'
 import { TEMPLATE_COLS } from './templateExcel'
 import { canonizeMinisterio } from './ministeriosCanon'
 import { matchComunas, sugerirComuna } from './comunas'
+import { parseDecimal, coordenadaValida, pareceInvertida } from './coordenadas'
 
 // ── Enums permitidos (espejo del template) ────────────────────────────────────
 // Definidos en lib/enums.ts (módulo liviano) para que la UI los reuse sin
@@ -371,6 +372,36 @@ export function parseImportWorkbook(
       const num = Number(String(inversionStr).replace(',', '.'))
       if (isNaN(num)) rowErrors.push(`Inversión ($MM) «${inversionStr}»: debe ser un número (ej: 1250 o 1250,5).`)
       else target.inversion_mm = num
+    }
+    // ── Ubicación exacta (mig 104): Latitud + Longitud viajan JUNTAS ────────
+    // Ambas vacías → no se toca (UPDATE) / queda sin ubicación (INSERT, default
+    // NULL). Una sola → error de fila. Fuera de la caja de Chile → error (con
+    // pista si parecen invertidas — el error más común al copiar de Google).
+    {
+      const latStr = col(row, 'Latitud')
+      const lngStr = col(row, 'Longitud')
+      const latVacia = latStr === undefined || latStr === ''
+      const lngVacia = lngStr === undefined || lngStr === ''
+      if (!latVacia || !lngVacia) {
+        if (latVacia || lngVacia) {
+          rowErrors.push('Latitud y Longitud van juntas: llena las dos o deja las dos vacías.')
+        } else {
+          const lat = parseDecimal(latStr)
+          const lng = parseDecimal(lngStr)
+          if (lat == null || lng == null) {
+            rowErrors.push(`Latitud/Longitud «${latStr}» / «${lngStr}»: deben ser números decimales (ej: -33.4489 y -70.6693).`)
+          } else if (!coordenadaValida(lat, lng)) {
+            rowErrors.push(
+              pareceInvertida(lat, lng)
+                ? `Latitud/Longitud «${latStr}» / «${lngStr}»: parecen invertidas — en Chile la latitud va entre -17 y -56 y la longitud entre -66 y -113.`
+                : `Latitud/Longitud «${latStr}» / «${lngStr}»: el punto queda fuera de Chile.`,
+            )
+          } else {
+            target.ubicacion_lat = lat
+            target.ubicacion_lng = lng
+          }
+        }
+      }
     }
     // ── Campos operativos (semáforo, % avance, en foco) ─────────────────────
     const semaforo = col(row, 'Semáforo')

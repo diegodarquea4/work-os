@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import type { Iniciativa, Capa } from '@/lib/projects'
+import { formatoCoordenada, type Coordenada } from '@/lib/coordenadas'
 import type { Seguimiento, SeguimientoCompromiso, Documento, SemaforoLog, Tarea, EjeSesion } from '@/lib/types'
 import { REGIONS } from '@/lib/regions'
 import { getSupabase } from '@/lib/supabase'
@@ -20,10 +22,13 @@ import CalendarioTab  from './modal/CalendarioTab'
 import DocumentosTab  from './modal/DocumentosTab'
 import TareasTab      from './modal/TareasTab'
 import HistorialSesionesModal from './HistorialSesionesModal'
-import { useCanEdit, useCanEditAny, useCanEditOperational, useCanEditAvance, useCurrentUserEmail, useIsAdmin } from '@/lib/context/UserContext'
+import { useCanEdit, useCanEditAny, useCanEditOperational, useCanEditAvance, useCurrentUserEmail, useIsAdmin, useCan } from '@/lib/context/UserContext'
 import { FlagIcon } from './icons/FlagIcon'
 import { HomeIcon } from './icons/HomeIcon'
 import { CapaBadge } from './CapaBadge'
+
+// Popover de Ubicación (mig 104): monta Leaflet → solo en el cliente.
+const UbicacionPopover = dynamic(() => import('./UbicacionPopover'), { ssr: false })
 
 type Tab = 'seguimiento' | 'historial' | 'calendario' | 'documentos' | 'tareas'
 
@@ -46,6 +51,51 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
   // canEdit = estructural (admin/editor). Operativo (semáforo, %avance,
   // responsable, seguimientos, docs) usa canEditOperational en su lugar.
   const canEdit = canEditRegion(prioridad.region)
+
+  // Ubicación exacta (mig 104). Mismo gate que impone el trigger en BD:
+  // iniciativa.editar_operativo en la región — los regionales georreferencian.
+  // `ubicacionOverride`: undefined = mostrar lo que trae la prioridad (el padre
+  // la refresca vía onUpdatePrioridad); un valor = optimista mientras se guarda.
+  const canEditUbicacion = useCan('iniciativa.editar_operativo', prioridad.cod)
+  const [editingUbicacion, setEditingUbicacion] = useState(false)
+  const [savingUbicacion, setSavingUbicacion]   = useState(false)
+  const [ubicacionOverride, setUbicacionOverride] = useState<Coordenada | null | undefined>(undefined)
+  const ubicacionPopoverRef = useRef<HTMLDivElement>(null)
+  const ubicacion: Coordenada | null = ubicacionOverride !== undefined
+    ? ubicacionOverride
+    : (prioridad.ubicacion_lat != null && prioridad.ubicacion_lng != null
+        ? { lat: prioridad.ubicacion_lat, lng: prioridad.ubicacion_lng }
+        : null)
+  useEffect(() => {
+    if (!editingUbicacion) return
+    function onDocClick(e: MouseEvent) {
+      if (ubicacionPopoverRef.current && !ubicacionPopoverRef.current.contains(e.target as Node)) setEditingUbicacion(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [editingUbicacion])
+
+  async function saveUbicacion(next: Coordenada | null) {
+    const prev = ubicacion
+    setSavingUbicacion(true)
+    setUbicacionOverride(next)
+    try {
+      await safeWrite(
+        getSupabase().from('prioridades_territoriales').update({
+          ubicacion_lat: next?.lat ?? null,
+          ubicacion_lng: next?.lng ?? null,
+        }).eq('id', prioridad.id),
+        `ubicacion n=${prioridad.n}`,
+      )
+      onUpdatePrioridad(prioridad.n, { ubicacion_lat: next?.lat ?? null, ubicacion_lng: next?.lng ?? null })
+      setEditingUbicacion(false)
+    } catch (err) {
+      setUbicacionOverride(prev)
+      window.alert((err as Error).message)
+    } finally {
+      setSavingUbicacion(false)
+    }
+  }
 
   const [tab, setTab]               = useState<Tab>('seguimiento')
   // Detalle (ministerio, etiquetas, semáforo/avance y la grilla de metadatos)
@@ -761,6 +811,35 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                         )
                       })()}
                     </div>
+                  )}
+                </div>
+                {/* Ubicación exacta (mig 104): "lat, lng" si hay; si no, invita a
+                    fijarla. Popover con texto pegable + mini mapa. */}
+                <span>·</span>
+                <div className="relative" ref={ubicacionPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => canEditUbicacion && setEditingUbicacion(v => !v)}
+                    title={canEditUbicacion
+                      ? (ubicacion ? 'Click para mover o quitar la ubicación' : 'Click para fijar la ubicación en el mapa')
+                      : (ubicacion ? 'Ubicación exacta de la iniciativa' : 'Sin ubicación exacta (se muestra en el centro de su comuna)')}
+                    className={`inline-flex items-center gap-1 ${canEditUbicacion ? 'hover:text-slate-700 hover:underline underline-offset-2' : ''} ${ubicacion ? '' : 'text-gray-400'}`}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                      <path d="M12 21s-7-7.1-7-12a7 7 0 0 1 14 0c0 4.9-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>
+                    </svg>
+                    {ubicacion ? formatoCoordenada(ubicacion.lat, ubicacion.lng) : 'Sin ubicación'}
+                  </button>
+                  {canEditUbicacion && editingUbicacion && (
+                    <UbicacionPopover
+                      regionCod={prioridad.cod}
+                      comunaCods={comunaCodsLocal}
+                      valor={ubicacion}
+                      saving={savingUbicacion}
+                      onSave={saveUbicacion}
+                      onClear={() => saveUbicacion(null)}
+                      onClose={() => setEditingUbicacion(false)}
+                    />
                   )}
                 </div>
               </div>

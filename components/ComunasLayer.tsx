@@ -25,6 +25,51 @@ import { fmtMM } from '@/lib/comunaStats'
 
 const comunaGeoCache = new Map<number, FeatureCollection>()
 
+/** Centroides por CUT de una región — usados por `UbicacionPopover` para centrar
+ * el mini mapa de captura en la comuna de la iniciativa (mig 104). Los pines
+ * del drill ya NO se aproximan por centroide (Diego, 2026-09-11). */
+export type CentroidesComuna = Record<number, [number, number]>
+const centroideCache = new Map<number, CentroidesComuna>()
+
+/**
+ * Centroide (centro del bounding box) de cada comuna de la región, a partir
+ * del geojson YA cacheado. Los polígonos son simplificados (pocos vértices),
+ * así que `getBounds().getCenter()` es barato y suficiente para ubicar el
+ * pin de una iniciativa sin coordenada exacta. null si el geojson aún no bajó.
+ */
+export function centroidesDeRegion(regionIne: number): CentroidesComuna | null {
+  const hit = centroideCache.get(regionIne)
+  if (hit) return hit
+  const fc = comunaGeoCache.get(regionIne)
+  if (!fc) return null
+  const out: CentroidesComuna = {}
+  for (const f of fc.features) {
+    const cut = getCut(f)
+    if (!cut) continue
+    const c = L.geoJSON(f).getBounds().getCenter()
+    out[cut] = [c.lat, c.lng]
+  }
+  centroideCache.set(regionIne, out)
+  return out
+}
+
+/**
+ * Igual que `centroidesDeRegion` pero baja el geojson si aún no está en caché
+ * (la ficha puede abrirse desde el Dashboard, sin haber pasado por el mapa).
+ */
+export async function cargarCentroidesRegion(regionIne: number): Promise<CentroidesComuna | null> {
+  if (!comunaGeoCache.has(regionIne)) {
+    try {
+      const r = await fetch(`/comunas/${regionIne}.geojson`)
+      if (!r.ok) return null
+      comunaGeoCache.set(regionIne, await r.json() as FeatureCollection)
+    } catch {
+      return null
+    }
+  }
+  return centroidesDeRegion(regionIne)
+}
+
 // Encuadre del drill: excluye del cálculo los territorios lejanos que
 // arruinan el flyToBounds — Rapa Nui/Juan Fernández en Valparaíso (lon < -75)
 // y la Antártica (cut 12202). Esas comunas IGUAL se listan en el lateral

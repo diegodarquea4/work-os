@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import type { ComunaStats } from '@/lib/comunaStats'
 import { fmtMM } from '@/lib/comunaStats'
+import type { Iniciativa } from '@/lib/projects'
+import { SEMAFORO_CONFIG } from '@/lib/config'
 
 /**
  * Panel lateral del nivel comunal del Mapa (drill-down). Reemplaza al
@@ -23,6 +26,11 @@ type Props = {
   onSelectComuna: (cut: number, nombre: string) => void
   onBack: () => void
   width: number
+  /** Iniciativas de alcance regional (sin pin en el mapa, mig 104) — se listan al desplegar el bucket. */
+  regionales?: Iniciativa[]
+  onSelectIniciativa?: (id: number) => void
+  /** Abre el bucket "Alcance regional" desplegado (desde el chip del control de pines). */
+  regionalesAbierto?: boolean
 }
 
 const NOTA_ENCUADRE: Record<string, string> = {
@@ -30,9 +38,15 @@ const NOTA_ENCUADRE: Record<string, string> = {
   XII: 'El territorio antártico queda fuera del encuadre del mapa.',
 }
 
-export default function ComunasSidebar({ regionNombre, regionCod, stats, selectedCut, onSelectComuna, onBack, width }: Props) {
+export default function ComunasSidebar({
+  regionNombre, regionCod, stats, selectedCut, onSelectComuna, onBack, width,
+  regionales = [], onSelectIniciativa, regionalesAbierto = false,
+}: Props) {
   const totalListado = stats.rows.reduce((s, r) => s + r.n, 0)
   const nota = NOTA_ENCUADRE[regionCod]
+  // Desplegable local; el padre puede forzarlo abierto (chip "+N de alcance regional").
+  const [abiertoLocal, setAbiertoLocal] = useState(false)
+  const mostrarRegionales = (regionalesAbierto || abiertoLocal) && regionales.length > 0
 
   return (
     <aside
@@ -95,13 +109,38 @@ export default function ComunasSidebar({ regionNombre, regionCod, stats, selecte
               Fuera del nivel comunal
             </div>
             {stats.alcanceRegional.n > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50/60 border-b border-gray-50">
-                <span className="text-[9px] font-bold tracking-wide text-gray-500 border border-gray-200 rounded px-1.5 py-px shrink-0">REGIONAL</span>
-                <span className="text-[13px] font-semibold text-gray-700 flex-1 min-w-0 truncate">Alcance regional</span>
-                <span className="text-xs text-gray-500 tabular-nums shrink-0">
-                  {stats.alcanceRegional.n} · {fmtMM(stats.alcanceRegional.mm)}
-                </span>
-              </div>
+              <>
+                <button
+                  type="button"
+                  onClick={() => regionales.length > 0 && setAbiertoLocal(v => !v)}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 bg-gray-50/60 border-b border-gray-50 text-left ${regionales.length > 0 ? 'hover:bg-gray-100' : 'cursor-default'}`}
+                  title={regionales.length > 0 ? 'Ver las iniciativas de alcance regional (no tienen pin en el mapa)' : undefined}
+                >
+                  <span className="text-[9px] font-bold tracking-wide text-gray-500 border border-gray-200 rounded px-1.5 py-px shrink-0">REGIONAL</span>
+                  <span className="text-[13px] font-semibold text-gray-700 flex-1 min-w-0 truncate">Alcance regional</span>
+                  <span className="text-xs text-gray-500 tabular-nums shrink-0">
+                    {stats.alcanceRegional.n} · {fmtMM(stats.alcanceRegional.mm)}
+                  </span>
+                  {regionales.length > 0 && (
+                    <span className="text-gray-400 text-[10px] shrink-0">{mostrarRegionales ? '▾' : '▸'}</span>
+                  )}
+                </button>
+                {mostrarRegionales && regionales.map(p => {
+                  const sem = SEMAFORO_CONFIG[p.estado_semaforo] ?? SEMAFORO_CONFIG.gris
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onSelectIniciativa?.(p.id)}
+                      className="w-full flex items-center gap-2 pl-7 pr-4 py-2 text-left border-b border-gray-50 hover:bg-gray-50"
+                      title="Abrir la ficha"
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${sem.dot}`} title={sem.label} />
+                      <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{p.nombre}</span>
+                    </button>
+                  )
+                })}
+              </>
             )}
             {stats.sinComuna.n > 0 && (
               <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50/60 border-b border-gray-50">

@@ -69,6 +69,8 @@ function makeIniciativa(overrides: Partial<Iniciativa> = {}): Iniciativa {
     capa:               'lll',
     comuna_cods:        [],
     alcance_regional:   false,
+    ubicacion_lat:      null,
+    ubicacion_lng:      null,
     ...overrides,
   }
 }

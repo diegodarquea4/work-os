@@ -9,8 +9,10 @@ import 'leaflet/dist/leaflet.css'
 import { getRegionColor } from '@/lib/regionColors'
 import { INE_CODE } from '@/lib/regions'
 import ComunasLayer from './ComunasLayer'
+import PinesIniciativasLayer from './PinesIniciativasLayer'
 import TerritoriosLayer from './territorial/TerritoriosLayer'
 import type { MapaAutoridadesOverlay } from './territorial/TerritorialProvider'
+import type { PinIniciativa } from '@/lib/pinesIniciativas'
 
 // Bounding box de Chile continental + extremos (Arica al norte, Cabo de Hornos al sur)
 const CHILE_BOUNDS: [[number, number], [number, number]] = [[-56, -76], [-17, -66]]
@@ -122,6 +124,10 @@ export type MapDrillProps = {
   selectedCut: number | null
   statsByCut: ReadonlyMap<number, { n: number; mm: number }>
   onSelectComuna: (cut: number, nombre: string) => void
+  // Pines de iniciativas (mig 104), ya calculados por WorkOSApp con
+  // construirPines. undefined/null = sin pines (modo Autoridades).
+  pines?: PinIniciativa[] | null
+  onSelectPin?: (id: number) => void
 }
 
 type Props = {
@@ -358,16 +364,26 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
           onSelectTerritorio={onSelectTerritorio}
         />
       ) : drill && (
-        <ComunasLayer
-          key={drill.regionIne}
-          regionIne={drill.regionIne}
-          regionColor={getRegionColor(drill.regionNombre)}
-          selectedCut={drill.selectedCut}
-          statsByCut={drill.statsByCut}
-          onSelectComuna={drill.onSelectComuna}
-          comunaFill={overlay?.comunaFill}
-          autoridades={!!overlay}
-        />
+        <>
+          <ComunasLayer
+            key={drill.regionIne}
+            regionIne={drill.regionIne}
+            regionColor={getRegionColor(drill.regionNombre)}
+            selectedCut={drill.selectedCut}
+            statsByCut={drill.statsByCut}
+            onSelectComuna={drill.onSelectComuna}
+            comunaFill={overlay?.comunaFill}
+            autoridades={!!overlay}
+          />
+          {/* Pines por iniciativa (mig 104) — solo PSG; Autoridades no los pasa. */}
+          {drill.pines && drill.pines.length > 0 && drill.onSelectPin && (
+            <PinesIniciativasLayer
+              pines={drill.pines}
+              onSelect={drill.onSelectPin}
+              regionColor={getRegionColor(drill.regionNombre)}
+            />
+          )}
+        </>
       )}
     </MapContainer>
   )

@@ -22,6 +22,7 @@ import { CapaBadge } from './CapaBadge'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip, type ActiveChip } from './ActiveFiltersBar'
 import { formatResponsableDisplay } from '@/lib/responsable'
+import { formatoCoordenada } from '@/lib/coordenadas'
 import { normalizeMinisterio, splitMinisterio } from '@/lib/ministerios'
 import ImportErrorReport from './ImportErrorReport'
 
@@ -41,7 +42,7 @@ const SEMAFORO_ORDER = { rojo: 0, ambar: 1, verde: 2, gris: 3 }
 type SemaforoKey = keyof typeof SEMAFORO_CONFIG
 type SortCol = 'n' | 'region' | 'eje' | 'ejeGobierno' | 'semaforo' | 'avance' | 'actividad'
 type SortDir = 'asc' | 'desc'
-type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'capa' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
+type ColId = 'n' | 'estado' | 'iniciativa' | 'region' | 'comuna' | 'ubicacion' | 'ministerio' | 'ejeRegional' | 'ejeGobierno' | 'avance' | 'etapaActual' | 'proximoHito' | 'fechaProximoHito' | 'estadoTermino' | 'inversion' | 'codigoBip' | 'rat' | 'fuente' | 'enFoco' | 'capa' | 'origen' | 'descripcion' | 'responsable' | 'actividad' | 'tags'
 
 const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'n',                label: '#',                     defaultVisible: false },
@@ -49,6 +50,7 @@ const ALL_COLS: { id: ColId; label: string; defaultVisible: boolean }[] = [
   { id: 'iniciativa',       label: 'Iniciativa',            defaultVisible: true  },
   { id: 'region',           label: 'Región',                defaultVisible: true  },
   { id: 'comuna',           label: 'Comuna',                defaultVisible: false },
+  { id: 'ubicacion',        label: 'Ubicación',             defaultVisible: false },
   { id: 'ministerio',       label: 'Ministerio',            defaultVisible: false },
   { id: 'ejeRegional',      label: 'Eje Regional',          defaultVisible: false },
   { id: 'ejeGobierno',      label: 'Eje Gobierno',          defaultVisible: false },
@@ -1168,6 +1170,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               {visibleCols.has('iniciativa')    && <th className={`sticky ${canBulk ? 'left-10' : 'left-0'} z-20 bg-gray-50 px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[2px_0_0_0_rgba(0,0,0,0.04)]`}>Iniciativa</th>}
               {visibleCols.has('region')        && <ColHeader col="region" label="Región" />}
               {visibleCols.has('comuna')        && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Comuna</th>}
+              {visibleCols.has('ubicacion')     && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Ubicación</th>}
               {visibleCols.has('ministerio')    && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Ministerio</th>}
               {visibleCols.has('ejeRegional')   && <ColHeader col="eje" label="Eje Regional" />}
               {visibleCols.has('ejeGobierno')   && <ColHeader col="ejeGobierno" label="Eje Gobierno" />}
@@ -1616,6 +1619,13 @@ const DataRow = memo(function DataRow({ p, visibleCols, actividad, actividadLoad
           {p.comuna
             ? <span className="line-clamp-2 block">{p.comuna.replace(/;/g, ' · ')}</span>
             : <span className="text-gray-300">—</span>}
+        </td>
+      )}
+      {visibleCols.has('ubicacion') && (
+        <td className="px-3 py-3.5 text-xs whitespace-nowrap">
+          {p.ubicacion_lat != null && p.ubicacion_lng != null
+            ? <span className="text-gray-600 tabular-nums">{formatoCoordenada(p.ubicacion_lat, p.ubicacion_lng)}</span>
+            : <span className="text-gray-300" title="Se puede fijar desde la ficha (Ubicación) o subiendo Latitud/Longitud por Excel">Sin ubicación</span>}
         </td>
       )}
       {visibleCols.has('ministerio') && (

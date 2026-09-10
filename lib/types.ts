@@ -51,6 +51,10 @@ export type Prioridad = {
   // para regional en el trigger. Opcionales para tolerar lecturas pre-ALTER.
   comuna_cods?: number[]
   alcance_regional?: boolean
+  // Coordenada exacta (migración 104). NUMERIC en BD — puede llegar como
+  // string según el cliente; mapRow normaliza a number. Opcionales por lo mismo.
+  ubicacion_lat?: number | string | null
+  ubicacion_lng?: number | string | null
 }
 
 // ── Desalojos (migración 017) ────────────────────────────────────────────────
