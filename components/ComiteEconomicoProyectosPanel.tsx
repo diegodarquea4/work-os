@@ -116,6 +116,14 @@ export default function ComiteEconomicoProyectosPanel({
     [iniciativas],
   )
 
+  // Lo que esta región ya trajo del catálogo (mig 106). El importador los
+  // esconde: agregar dos veces el mismo expediente es el error obvio de una
+  // pantalla que ofrece cientos de proyectos.
+  const yaImportados = useMemo(
+    () => new Set(proyectos.map(p => p.origen_id).filter((x): x is string => !!x)),
+    [proyectos],
+  )
+
   const opcionesSeremi = useMemo((): FilterOption[] => {
     const vistos = new Set<string>()
     for (const p of proyectos) if (p.seremi_lider) vistos.add(p.seremi_lider)
@@ -329,6 +337,7 @@ export default function ComiteEconomicoProyectosPanel({
             <button
               onClick={() => setNuevoOpen(true)}
               className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
+              title="Elegirlo del catálogo del SEIA o cargarlo a mano"
             >
               + Nuevo proyecto
             </button>
@@ -435,6 +444,7 @@ export default function ComiteEconomicoProyectosPanel({
         <NuevoProyectoEconomicoModal
           region={region}
           currentUserEmail={userEmail}
+          yaImportados={yaImportados}
           onClose={() => setNuevoOpen(false)}
           onCreated={() => { setNuevoOpen(false); cargar() }}
         />

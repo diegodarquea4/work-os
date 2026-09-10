@@ -9,7 +9,7 @@ import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { renderActaGabineteBuffer } from './generarActaGabinete'
 import { renderActaGabineteV2Buffer } from './generarActaGabineteV2'
 import { renderActaInfraestructuraBuffer } from './generarActaInfraestructura'
-import { agruparPorInstitucion, formatoValorComite, MESA_EMPLEO_HABILITADA, COMITE_INSTITUCIONES } from './helpers'
+import { agruparPorInstitucion, formatoValorComite, bloquesMesaEmpleoEnActa, COMITE_INSTITUCIONES } from './helpers'
 import { resolvePreside } from './preside'
 import { subirActa } from './actaUpload'
 
@@ -208,7 +208,7 @@ async function armarActaPolicial(db: Db, sesion: EjeSesion, sesionId: number, re
 async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, regionNombre: string, opts: ActaOpts): Promise<ActaData> {
   const [
     numRes, asisRes, proyRes, verifRes, nuevosRes, oficVerifRes, oficNuevosRes,
-    metaRegionRes, subRegionRes, preside,
+    metaRegionRes, subRegionRes, metaSesionRes, subSesionRes, preside,
   ] = await Promise.all([
     db.from('eje_sesiones').select('id, fecha')
       .eq('region_cod', sesion.region_cod).eq('instancia', 'inversion').eq('estado', 'cerrada'),
@@ -247,6 +247,12 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     // Subsidios (mig 055): mismo criterio — se lee post-cierre.
     db.from('region_subsidio_empleo').select('cupos, postulados, entregados, empresas_postulantes')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
+    // Lo que ESTA sesión digitó. Las dos consultas de arriba traen el acumulado
+    // de la región, que existe apenas alguien configuró la meta — con eso solo,
+    // la sección aparecía en todas las actas aunque en la reunión no se hubiera
+    // tocado. Estas dos filas son la prueba de que sí se registró algo.
+    db.from('sesion_meta_empleo_valor').select('sesion_id').eq('sesion_id', sesionId).maybeSingle(),
+    db.from('sesion_subsidio_empleo_valor').select('sesion_id').eq('sesion_id', sesionId).maybeSingle(),
     resolvePreside(db, sesion, opts),
   ])
 
@@ -319,10 +325,14 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     avancesPorPrivado.set(a.proyecto_id, acc)
   }
 
-  // Mesa Empleo aún no está confirmada (ver MESA_EMPLEO_HABILITADA) — la
-  // sección no se muestra en el acta mientras esté escondida en la sesión.
+  // Meta mesa empleo: va al acta SOLO si en esta sesión se digitó algo. El acta
+  // narra lo que pasó en la reunión; una sección con el acumulado regional
+  // intacto, sin que nadie la haya tocado, es ruido que además hace parecer que
+  // el tema se trató.
+  const bloques = bloquesMesaEmpleoEnActa(metaSesionRes.data != null, subSesionRes.data != null)
+
   const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
-  const metaEmpleo = (MESA_EMPLEO_HABILITADA && metaRegion) ? {
+  const metaEmpleo = (bloques.meta && metaRegion) ? {
     acumulado:       Number(metaRegion.valor_actual),
     objetivo:        Number(metaRegion.objetivo),
     pctAvance:       metaRegion.objetivo > 0 ? Math.round((Number(metaRegion.valor_actual) / Number(metaRegion.objetivo)) * 100) : null,
@@ -330,7 +340,7 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
   } : null
 
   const subRegion = subRegionRes.data as { cupos: number; postulados: number; entregados: number; empresas_postulantes: number } | null
-  const subsidios = (MESA_EMPLEO_HABILITADA && subRegion) ? {
+  const subsidios = (bloques.subsidios && subRegion) ? {
     postulados:           Number(subRegion.postulados),
     entregados:           Number(subRegion.entregados),
     empresasPostulantes:  Number(subRegion.empresas_postulantes),

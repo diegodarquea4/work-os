@@ -917,14 +917,23 @@ export type SesionVoceria = {
 // Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
 // Etiqueta visible "Comité Económico"; el valor de instancia en BD sigue
 // siendo 'inversion' (no se tocó — solo cambió el nombre de cara al usuario).
-// Agrupa dos frentes dentro de la misma sesión: Mesa Empleo (indicador Meta
-// Empleo, más adelante Proyectos de Inversión Pública) y Seguimiento de la
-// Inversión (lo que ya existía: oficios + proyectos tratados). `Compromiso.
+// Agrupa dos frentes dentro de la misma sesión: Seguimiento de la Inversión
+// (oficios + proyectos tratados) y Mesa Empleo (meta de empleo + subsidios). `Compromiso.
 // seccion` (abajo) marca a cuál de los dos pertenece cada compromiso.
 
 // Sección de un compromiso del Comité Económico — genera el tag al listar
 // compromisos. NULL para compromisos de Comité Policial/Gabinete.
-export type SeccionComiteEconomico = 'mesa_empleo' | 'seguimiento_inversion' | 'general'
+//
+// `seguimiento_inversion` es la zona entera; `proyectos_tratados`, `oficios` y
+// `mesa_empleo` son sus tres frentes (mig 107). El padre se usa para el
+// compromiso que los cruza, y es además lo que tienen guardado los compromisos
+// anteriores a esa migración.
+export type SeccionComiteEconomico =
+  | 'general'
+  | 'seguimiento_inversion'
+  | 'proyectos_tratados'
+  | 'oficios'
+  | 'mesa_empleo'
 
 // Catálogo de organismos (OAECA) — autoincremental: precargado y crece
 // cuando alguien escribe uno nuevo al cargar un oficio en sesión.
@@ -980,6 +989,15 @@ export type ComiteEconomicoProyecto = {
   created_at: string
   created_by_email: string | null
   updated_at: string
+  // De dónde salió, si se importó del catálogo unificado (mig 106). NULL en
+  // los cuatro = cargado a mano. Referencia blanda, sin FK: una vez importado
+  // el proyecto es del comité y se sostiene solo. `origen_estado_al_importar`
+  // congela el estado de la fuente en ese momento, para poder notar después
+  // que el expediente avanzó (ver lib/carteraOrigen.ts).
+  origen_sistema: string | null
+  origen_id: string | null
+  origen_importado_at: string | null
+  origen_estado_al_importar: string | null
 }
 
 // Avance registrado por una SEREMI en un proyecto privado del Comité

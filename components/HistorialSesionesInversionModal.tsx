@@ -42,9 +42,11 @@ const TAG_PROYECTO_CLASS = {
 } as const
 
 const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
-  mesa_empleo:            'Mesa Empleo',
-  seguimiento_inversion:  'Seguimiento Inversión',
-  general:                'General',
+  general:               'General',
+  seguimiento_inversion: 'Seguimiento Inversión',
+  proyectos_tratados:    'Proyectos tratados',
+  oficios:               'Oficios',
+  mesa_empleo:           'Mesa Empleo',
 }
 
 export default function HistorialSesionesInversionModal({ region, onClose, initialSesionId = null }: Props) {

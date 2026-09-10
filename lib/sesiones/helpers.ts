@@ -18,10 +18,35 @@ import type {
   ComiteInstitucion, ComiteMetrica, SesionComiteValor, ComiteDesglose,
 } from '@/lib/types'
 
-// Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
-// sin confirmar. Flag temporal para esconderla de la sesión, el panel y el
-// acta sin borrar el trabajo ya hecho; sacar cuando se confirme.
-export const MESA_EMPLEO_HABILITADA = false
+// Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056). Estuvo apagada
+// mientras la funcionalidad no estaba confirmada; ya lo está, y la sección
+// volvió a la sesión del Económico como zona 4 del riel, con los compromisos
+// nuevos corridos al 5. La constante se queda como punto único por si hay que
+// volver a esconderla, pero ya no es un flag de trabajo a medias.
+export const MESA_EMPLEO_HABILITADA = true
+
+/**
+ * Qué bloques de «Meta mesa empleo» entran al acta.
+ *
+ * El acta narra lo que pasó en la reunión, no el estado permanente de la
+ * región. La meta y los subsidios tienen un acumulado regional que existe
+ * apenas alguien lo configuró: si la sección se decidiera por ese dato, saldría
+ * impresa en TODAS las actas —con las mismas cifras— aunque en la sesión nadie
+ * la haya tocado, y quien la lea creería que el tema se trató.
+ *
+ * Por eso manda lo que la sesión digitó, y cada mitad se decide por separado:
+ * una reunión que solo anotó el avance de la meta no debe imprimir un bloque de
+ * subsidios que nadie miró.
+ */
+export function bloquesMesaEmpleoEnActa(
+  seDigitoMeta: boolean,
+  seDigitoSubsidios: boolean,
+  habilitada: boolean = MESA_EMPLEO_HABILITADA,
+): { meta: boolean; subsidios: boolean; seccion: boolean } {
+  const meta      = habilitada && seDigitoMeta
+  const subsidios = habilitada && seDigitoSubsidios
+  return { meta, subsidios, seccion: meta || subsidios }
+}
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 
