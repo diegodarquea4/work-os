@@ -108,6 +108,16 @@ export default function SelectorCatalogoProyectos({
       .from('v2_proyectos_inversion')
       .select('id, sistema_origen, nombre, titular, estado, tipo, comuna_nombre, inversion, moneda, fecha_presentacion, via_ingreso, url_ficha, synced_at')
       .eq('region_id', regionId)
+      // SOLO SEIA — el catálogo es multi-fuente y multi-moneda: hoy conviven
+      // 1.736 filas del SEIA (`USD_MM`) con 847 del MOP (`CLP_MILES`), todas
+      // con region_id. `montoEnMillones` divide siempre por un millón (correcto
+      // para el SEIA, que entrega unidades pese al nombre INVERSION_MM), así
+      // que una fila del MOP entraría a la cartera 1.000 veces más chica. Sin
+      // este filtro la pestaña además mostraba proyectos MOP sin titular, sin
+      // estado y sin comuna — el sync del MOP no escribe esos campos —
+      // contradiciendo su propio rótulo «Desde el SEIA». Sumar el MOP al
+      // importador requiere antes decidir la conversión de moneda.
+      .eq('sistema_origen', 'seia')
       .order('inversion', { ascending: false, nullsFirst: false })
       .limit(MAX_FILAS)
     if (dbErr) {
@@ -222,7 +232,13 @@ export default function SelectorCatalogoProyectos({
       const res = await fetch(`/api/seia-sync-v2?region=${encodeURIComponent(region.cod)}`, { method: 'POST' })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || json.ok === false) {
-        setAvisoSync(json.error ?? `No se pudo actualizar (HTTP ${res.status}).`)
+        // El endpoint devuelve `errors` (array) con HTTP 200 cuando el SEIA
+        // falla; leer solo `json.error` dejaba al usuario con un inútil
+        // "No se pudo actualizar (HTTP 200)" en vez del motivo real.
+        const detalle = Array.isArray(json.errors) && json.errors.length > 0
+          ? json.errors.slice(0, 2).join(' · ')
+          : json.error
+        setAvisoSync(detalle ?? `No se pudo actualizar (HTTP ${res.status}).`)
         return
       }
       await cargar()

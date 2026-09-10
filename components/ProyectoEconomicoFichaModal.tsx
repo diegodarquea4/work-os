@@ -366,9 +366,41 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
    *
    * Un proyecto traído del SEIA se puede volver a agregar desde el catálogo;
    * uno cargado a mano no se recupera. La confirmación también lo dice.
+   *
+   * Lo que NO arrastra es el historial de sesiones: se chequea antes y, si el
+   * proyecto está ahí, no se borra (ver comentario adentro).
    */
   async function borrarProyecto() {
     if (!proyecto) return
+
+    // El historial de sesiones NO cae en cascada: `sesion_proyectos`,
+    // `sesion_compromisos` y `sesion_oficios_tratados` apuntan al proyecto con
+    // ON DELETE NO ACTION (migs 094/095/097). Sin este chequeo, cualquier
+    // proyecto que alguna vez se trató en una sesión —el caso normal del
+    // comité— hacía fallar el DELETE y el usuario veía el error crudo de
+    // Postgres ("violates foreign key constraint..."), después de que la
+    // confirmación le prometiera que se podía. Se explica y se corta acá.
+    setBorrando(true)
+    const db = getSupabase()
+    const [tratados, compromisos, oficios] = await Promise.all([
+      db.from('sesion_proyectos').select('id', { count: 'exact', head: true }).eq('proyecto_privado_id', proyectoId),
+      db.from('sesion_compromisos').select('id', { count: 'exact', head: true }).eq('proyecto_privado_id', proyectoId),
+      db.from('sesion_oficios_tratados').select('id', { count: 'exact', head: true }).eq('proyecto_privado_id', proyectoId),
+    ])
+    const vinculos: string[] = []
+    if (tratados.count)    vinculos.push(`${tratados.count} vez${tratados.count === 1 ? '' : 'es'} tratado en sesión`)
+    if (compromisos.count) vinculos.push(`${compromisos.count} compromiso${compromisos.count === 1 ? '' : 's'}`)
+    if (oficios.count)     vinculos.push(`${oficios.count} oficio${oficios.count === 1 ? '' : 's'}`)
+    if (vinculos.length > 0) {
+      setBorrando(false)
+      window.alert(
+        `"${proyecto.nombre}" no se puede sacar de la cartera: quedó en el historial de sesiones (${vinculos.join(', ')}).` +
+        SALTO + SALTO +
+        'Borrarlo dejaría actas ya cerradas apuntando a un proyecto que no existe. Si igual hay que retirarlo, cámbiale el estado o pídelo por soporte.',
+      )
+      return
+    }
+
     const arrastra: string[] = []
     if (avances.length)  arrastra.push(`${avances.length} avance${avances.length === 1 ? '' : 's'}`)
     if (permisos.length) arrastra.push(`${permisos.length} permiso${permisos.length === 1 ? '' : 's'}`)
@@ -378,9 +410,11 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     const rescate = proyecto.origen_id
       ? SALTO + SALTO + 'Viene del SEIA: si te arrepientes, se puede volver a agregar desde el catálogo.'
       : SALTO + SALTO + 'Se cargó a mano: esto no se puede deshacer.'
-    if (!confirm(`¿Sacar "${proyecto.nombre}" de la cartera?${detalle}${rescate}`)) return
+    if (!confirm(`¿Sacar "${proyecto.nombre}" de la cartera?${detalle}${rescate}`)) {
+      setBorrando(false)
+      return
+    }
 
-    setBorrando(true)
     try {
       await safeDelete(
         getSupabase().from('comite_economico_proyecto').delete().eq('id', proyectoId),

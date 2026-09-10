@@ -14,7 +14,7 @@
  * dos por Compromisos anteriores, tal como venían.
  */
 
-import { tieneValorComite } from './helpers'
+import { tieneValorComite, MESA_EMPLEO_HABILITADA } from './helpers'
 import type {
   ComiteMetrica, SesionAsistencia, SesionComiteValor, SesionCompromiso, SesionOficioTratado,
 } from '@/lib/types'
@@ -206,11 +206,16 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
           key: 'oficios', label: 'Oficios', badge: String(oficiosTotal),
           estado: estadoOficios(oficiosAnteriores, oficiosNuevos),
         },
-        {
+        // Mesa Empleo entra al riel solo si está habilitada: la card que la
+        // renderiza está gateada por la misma constante (SesionModalInversion),
+        // así que con el flag apagado este subítem quedaba en el riel llevando
+        // a un panel en blanco — y `vecinos()` camina el riel, o sea que
+        // "Siguiente" desde Oficios también caía ahí.
+        ...(MESA_EMPLEO_HABILITADA ? [{
           key: 'mesa_empleo', label: 'Meta mesa empleo', badge: `${digitadosMesa}/2`,
           // Dos números que se anotan en la reunión: lista con ambos.
-          estado: digitadosMesa === 2 ? 'listo' : digitadosMesa > 0 ? 'con-actividad' : 'vacio',
-        },
+          estado: (digitadosMesa === 2 ? 'listo' : digitadosMesa > 0 ? 'con-actividad' : 'vacio') as RailSubitem['estado'],
+        }] : []),
       ],
     })
   } else if (e.instancia === 'eje') {
