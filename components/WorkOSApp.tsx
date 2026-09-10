@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import type { GeoJsonObject } from 'geojson'
@@ -913,7 +913,16 @@ export default function WorkOSApp({ projects, geoData }: Props) {
          anima 48% → 100% antes del setView). */}
       {view === 'mapa' && (
        <TerritorialProvider value={territorial}>
-        <div className="flex flex-1 overflow-hidden">
+        {/* `isolate`: encierra los z altos de esta vista (chrome del mapa
+            z-1000, paneles laterales z-1100) en su propio contexto de apilado.
+            Sin esto competían contra TODA la página y la ficha abierta desde un
+            pin necesitaba un z-[1200] propio para taparlos — lo que a su vez la
+            dejaba por ENCIMA de los modales anidados, que van por portal a
+            document.body con z-50 (el "agregar seguimiento" se abría por
+            detrás de la ficha). Con la fila aislada, la ficha se monta pelada
+            igual que en el resto de las vistas y el orden vuelve a ser el
+            natural: ficha z-50 sobre el mapa, modal anidado sobre la ficha. */}
+        <div className="flex flex-1 overflow-hidden isolate">
           {/* Mapa. Layout: con preview abierto el mapa cede el ancho del
               panel; en summary y en el drill comunal crece a full. */}
           <div
@@ -1072,18 +1081,30 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           )}
         </div>
         {/* Ficha abierta desde un pin (o desde la lista de alcance regional).
-            El wrapper con z propio la deja sobre el chrome del mapa (z-1000) y
-            el panel lateral (z-1100): la ficha es `fixed`, pero su stacking se
-            resuelve dentro del contexto de este wrapper. */}
+            Se monta PELADA, igual que en VistaRegional y en el Dashboard: sus
+            modales anidados (seguimiento, documentos) salen por portal a
+            document.body en z-50 y necesitan que la ficha NO esté metida en un
+            contexto de apilado más alto. El mapa ya no compite: su fila está
+            aislada (ver `isolate` arriba). */}
+        {/* El <Suspense> propio NO es decorativo: `ProjectTrackerModal` se carga
+            diferido (dynamic) y la PRIMERA vez que se abre desde un pin, su
+            chunk todavía no está en el bundle. Sin un límite acá, esa
+            suspensión sube hasta el boundary de la ruta, que esconde y vuelve a
+            montar TODO el árbol — incluido el mapa. Leaflet entonces se
+            reinicializa sobre un contenedor que ya tenía instancia y revienta
+            con "Map container is being reused by another instance" (pantalla
+            "Algo salió mal"); a la segunda funcionaba porque el chunk ya estaba
+            en caché. Con el límite acá, la suspensión se contiene en la ficha y
+            el mapa ni se entera. */}
         {mapIniciativa && (
-          <div className="relative z-[1200]">
+          <Suspense fallback={null}>
             <ProjectTrackerModal
               prioridad={mapIniciativa}
               onClose={() => setMapIniciativaId(null)}
               onUpdatePrioridad={handleUpdatePrioridad}
               onDeletePrioridad={(n) => { handleDeletePrioridad(n); setMapIniciativaId(null) }}
             />
-          </div>
+          </Suspense>
         )}
        </TerritorialProvider>
       )}

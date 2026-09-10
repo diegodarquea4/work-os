@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import type { Iniciativa, Capa } from '@/lib/projects'
 import { formatoCoordenada, type Coordenada } from '@/lib/coordenadas'
@@ -830,16 +830,24 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                     </svg>
                     {ubicacion ? formatoCoordenada(ubicacion.lat, ubicacion.lng) : 'Sin ubicación'}
                   </button>
+                  {/* Suspense propio: el popover se carga diferido y monta su
+                      PROPIO mapa Leaflet. Sin este límite, la primera apertura
+                      suspende y hace parpadear (o remontar) todo lo que esté
+                      arriba — que es justo donde vive el mapa grande cuando la
+                      ficha se abrió desde un pin. Contenido acá, no molesta a
+                      nadie. */}
                   {canEditUbicacion && editingUbicacion && (
-                    <UbicacionPopover
-                      regionCod={prioridad.cod}
-                      comunaCods={comunaCodsLocal}
-                      valor={ubicacion}
-                      saving={savingUbicacion}
-                      onSave={saveUbicacion}
-                      onClear={() => saveUbicacion(null)}
-                      onClose={() => setEditingUbicacion(false)}
-                    />
+                    <Suspense fallback={null}>
+                      <UbicacionPopover
+                        regionCod={prioridad.cod}
+                        comunaCods={comunaCodsLocal}
+                        valor={ubicacion}
+                        saving={savingUbicacion}
+                        onSave={saveUbicacion}
+                        onClear={() => saveUbicacion(null)}
+                        onClose={() => setEditingUbicacion(false)}
+                      />
+                    </Suspense>
                   )}
                 </div>
               </div>
