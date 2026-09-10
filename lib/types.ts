@@ -1022,6 +1022,10 @@ export type ComiteEconomicoProyectoSeguimiento = {
   // ComiteEconomicoProyectoPermiso.estado). NULL = este avance no cambió
   // el estado del permiso (o es un avance general, sin permiso).
   estado_permiso_registrado: 'pendiente' | 'otorgado' | 'frenado' | null
+  // Lo escribió la reconciliación con el catálogo (mig 109), no una persona.
+  // No editable ni borrable desde la app: es el registro de qué cambió en la
+  // fuente, y reescribirlo lo volvería inútil.
+  automatico: boolean
   // Sesión en la que se escribió este avance (mig 101). NULL = avance normal
   // de cartera; con valor, el acta de esa sesión lo reporta bajo su proyecto.
   sesion_id: number | null
