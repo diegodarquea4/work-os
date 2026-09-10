@@ -20,6 +20,10 @@ import type { SemaforoKey } from '@/lib/config'
  * - Varias EXACTAS que comparten coordenada (duplicado real o copiado del
  *   mismo punto) se DESPARRAMAN alrededor en espiral de girasol, en metros,
  *   independiente del zoom — si no, una taparía a la otra.
+ * - Filtro por comuna (opcional): una iniciativa entra si CUALQUIERA de sus
+ *   `comuna_cods` está seleccionada (multi-comuna cuenta en cada una, igual
+ *   que `computeComunaStats`). Con el filtro activo las de alcance regional
+ *   quedan fuera también: no pertenecen a ninguna comuna.
  */
 
 export type PinIniciativa = {
@@ -70,17 +74,42 @@ function tieneCoordenada(p: Iniciativa): p is Iniciativa & { ubicacion_lat: numb
     && Number.isFinite(p.ubicacion_lat) && Number.isFinite(p.ubicacion_lng)
 }
 
+/**
+ * Comunas que hoy tienen al menos un pin (iniciativa con coordenada), con su
+ * conteo — alimenta el selector de comunas del control de pines. Respeta el
+ * filtro de capas vigente para no ofrecer comunas que quedarían vacías.
+ * Multi-comuna suma en cada una de sus comunas.
+ */
+export function comunasConPin(
+  iniciativas: Iniciativa[],
+  capas: ReadonlySet<Capa>,
+): Map<number, number> {
+  const out = new Map<number, number>()
+  for (const p of iniciativas) {
+    if (!capas.has(p.capa)) continue
+    if (p.alcance_regional) continue
+    if (!tieneCoordenada(p)) continue
+    for (const cut of p.comuna_cods) out.set(cut, (out.get(cut) ?? 0) + 1)
+  }
+  return out
+}
+
 export function construirPines(
   iniciativas: Iniciativa[],
   capas: ReadonlySet<Capa>,
+  comunas?: ReadonlySet<number> | null,
 ): PinesResultado {
   const regionales: Iniciativa[] = []
   const base: PinIniciativa[] = []
   let sinUbicacion = 0
+  const filtraComuna = comunas != null && comunas.size > 0
 
   for (const p of iniciativas) {
     if (!capas.has(p.capa)) continue
-    if (p.alcance_regional) { regionales.push(p); continue }
+    // Alcance regional no pertenece a ninguna comuna: con el filtro activo
+    // queda fuera (del mapa y de la lista lateral).
+    if (p.alcance_regional) { if (!filtraComuna) regionales.push(p); continue }
+    if (filtraComuna && !p.comuna_cods.some(cut => comunas.has(cut))) continue
     if (!tieneCoordenada(p)) { sinUbicacion++; continue }
     base.push({
       id: p.id, n: p.n, semaforo: p.estado_semaforo, capa: p.capa, nombre: p.nombre,

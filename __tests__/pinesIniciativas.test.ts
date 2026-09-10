@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { construirPines, distanciaM, offsetGirasol, radioDesparrame } from '@/lib/pinesIniciativas'
+import { construirPines, comunasConPin, distanciaM, offsetGirasol, radioDesparrame } from '@/lib/pinesIniciativas'
 import type { Iniciativa } from '@/lib/projects'
 
 /**
@@ -64,6 +64,29 @@ describe('construirPines', () => {
     expect(r.regionales.map(p => p.id)).toEqual([1])
   })
 
+  it('filtra por comuna: entra si CUALQUIERA de sus comuna_cods está seleccionada', () => {
+    const COORD = { ubicacion_lat: -39.83, ubicacion_lng: -73.25 }
+    const lista = [
+      ini({ id: 1, comuna_cods: [14101], ...COORD }),
+      ini({ id: 2, comuna_cods: [14102], ...COORD, ubicacion_lat: -39.88 }),
+      ini({ id: 3, comuna_cods: [14103, 14101], ...COORD, ubicacion_lat: -39.9 }),
+    ]
+    expect(construirPines(lista, TODAS, new Set([14101])).pines.map(p => p.id)).toEqual([1, 3])
+    expect(construirPines(lista, TODAS, new Set([14102])).pines.map(p => p.id)).toEqual([2])
+    // Set vacío o ausente = todas las comunas.
+    expect(construirPines(lista, TODAS, new Set()).pines).toHaveLength(3)
+    expect(construirPines(lista, TODAS).pines).toHaveLength(3)
+  })
+
+  it('con filtro de comuna activo, alcance regional queda fuera (no tiene comuna)', () => {
+    const lista = [
+      ini({ id: 1, comuna_cods: [14101], ubicacion_lat: -39.83, ubicacion_lng: -73.25 }),
+      ini({ id: 2, alcance_regional: true, comuna_cods: [] }),
+    ]
+    expect(construirPines(lista, TODAS).regionales.map(p => p.id)).toEqual([2])
+    expect(construirPines(lista, TODAS, new Set([14101])).regionales).toEqual([])
+  })
+
   it('filtra por capa (y sin capas activas no hay pines ni regionales)', () => {
     const lista = [
       ini({ id: 1, capa: 'l', ubicacion_lat: -39.83, ubicacion_lng: -73.25 }),
@@ -74,6 +97,21 @@ describe('construirPines', () => {
     const vacio = construirPines(lista, new Set())
     expect(vacio.pines).toEqual([])
     expect(vacio.regionales).toEqual([])
+  })
+})
+
+describe('comunasConPin', () => {
+  it('solo cuenta las que tienen coordenada; multi-comuna suma en cada una; respeta el filtro de capa', () => {
+    const COORD = { ubicacion_lat: -39.83, ubicacion_lng: -73.25 }
+    const lista = [
+      ini({ id: 1, capa: 'l', comuna_cods: [14101], ...COORD }),
+      ini({ id: 2, capa: 'l', comuna_cods: [14101, 14102], ...COORD }),
+      ini({ id: 3, capa: 'l', comuna_cods: [14102] }),                      // sin coordenada
+      ini({ id: 4, capa: 'lll', comuna_cods: [14103], ...COORD }),
+      ini({ id: 5, capa: 'l', alcance_regional: true, comuna_cods: [] }),
+    ]
+    expect(comunasConPin(lista, TODAS)).toEqual(new Map([[14101, 2], [14102, 1], [14103, 1]]))
+    expect(comunasConPin(lista, new Set(['l']))).toEqual(new Map([[14101, 2], [14102, 1]]))
   })
 })
 
