@@ -1,5 +1,12 @@
 -- ============================================================================
--- 104_ubicacion_iniciativa.sql — Georreferenciación por iniciativa (2026-09-10)
+-- 108_ubicacion_iniciativa.sql — Georreferenciación por iniciativa (2026-09-10)
+--
+-- OJO: se aplicó a prod como `104_ubicacion_iniciativa` (así quedó registrada
+-- en supabase_migrations.schema_migrations, 2026-09-10 15:16). El archivo se
+-- renumeró a 108 al mergear las PR #14/#15 de Manuel, que traían un 104 propio
+-- (`104_seia_campos_completos`, aplicado más temprano ese mismo día). El
+-- número del archivo es una etiqueta informal; el orden real lo da el
+-- timestamp del registro.
 --
 -- Diego pidió ver un pin por iniciativa al hacer zoom en una región del Mapa
 -- (drill comunal), con filtro por capa y clic → ficha. Hoy ninguna iniciativa
