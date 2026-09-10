@@ -22,7 +22,6 @@ import type { RegionMetaEmpleo, RegionSubsidioEmpleo } from '@/lib/types'
 
 type Props = {
   region: Region
-  currentUserEmail: string
   puedeEditar: boolean
   onClose: () => void
   onSaved?: () => void
@@ -31,7 +30,7 @@ type Props = {
 const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 w-full'
 const labelCls = 'text-[10px] text-gray-500 font-medium'
 
-export default function MetaEmpleoModal({ region, currentUserEmail, puedeEditar, onClose, onSaved }: Props) {
+export default function MetaEmpleoModal({ region, puedeEditar, onClose, onSaved }: Props) {
   const [meta, setMeta]         = useState<RegionMetaEmpleo | null>(null)
   const [subsidio, setSubsidio] = useState<RegionSubsidioEmpleo | null>(null)
   const [loading, setLoading]   = useState(true)
@@ -70,14 +69,17 @@ export default function MetaEmpleoModal({ region, currentUserEmail, puedeEditar,
     setSaving(true)
     try {
       const sb = getSupabase()
-      const ahora = new Date().toISOString()
+      // `valor_updated_by_email` / `valor_updated_at` NO se tocan acá: son la
+      // firma de quien movió el ACUMULADO, y eso lo escribe el cierre de sesión
+      // con el email de quien cerró. Estamparlos al editar la configuración
+      // haría que la columna dijera que alguien reportó empleos cuando solo
+      // cambió el objetivo. Las tablas no tienen un par de auditoría propio
+      // para la configuración; si hace falta, sale en una migración aparte.
       await safeWrite(
         sb.from('region_meta_empleo').upsert({
           region_cod: region.cod,
           objetivo: objetivo.trim() === '' ? 0 : Number(objetivo),
           foco_productivo: foco.trim() || null,
-          valor_updated_by_email: currentUserEmail || null,
-          valor_updated_at: ahora,
         }, { onConflict: 'region_cod' }),
         `region_meta_empleo upsert ${region.cod}`,
       )
@@ -85,8 +87,6 @@ export default function MetaEmpleoModal({ region, currentUserEmail, puedeEditar,
         sb.from('region_subsidio_empleo').upsert({
           region_cod: region.cod,
           cupos: cupos.trim() === '' ? 0 : Number(cupos),
-          valor_updated_by_email: currentUserEmail || null,
-          valor_updated_at: ahora,
         }, { onConflict: 'region_cod' }),
         `region_subsidio_empleo upsert ${region.cod}`,
       )
