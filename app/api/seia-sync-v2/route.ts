@@ -131,7 +131,24 @@ const MAX_PAGES    = 50
 // offset = offset del buscador pendiente (1-based; avanza de a OFFSET_STEP).
 // Los cursores viejos {region_idx, offset} se leen igual: pasada_idx cae en 0.
 
-type Cursor = { region_idx: number; pasada_idx: number; offset: number }
+type Cursor = {
+  region_idx: number
+  pasada_idx: number
+  offset: number
+  /**
+   * Marca de la PASADA, no de la invocación. Una corrida nacional se trocea en
+   * varias invocaciones por presupuesto de tiempo; si cada una estampara su
+   * propio timestamp, las filas de la primera quedarían "viejas" frente a las
+   * de la última y la detección de RCA vencidas —que compara contra la marca
+   * más reciente— las daría por salidas de la ventana estando vigentes.
+   * Medido: una corrida de dos invocaciones dejó 1.179 filas con una marca y
+   * 848 con otra, cuatro minutos después.
+   *
+   * Viaja en el cursor para que todas las invocaciones de una misma pasada
+   * escriban la misma. Ausente en cursores viejos: se acuña una nueva.
+   */
+  ventana_at?: string
+}
 
 const CURSOR_INICIAL: Cursor = { region_idx: 0, pasada_idx: 0, offset: 1 }
 
@@ -149,6 +166,7 @@ async function readCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Curs
         region_idx: parsed.region_idx,
         pasada_idx: typeof parsed.pasada_idx === 'number' ? parsed.pasada_idx : 0,
         offset:     parsed.offset,
+        ventana_at: typeof parsed.ventana_at === 'string' ? parsed.ventana_at : undefined,
       }
     }
   } catch { /* fall-through */ }
@@ -261,7 +279,10 @@ async function runSync(soloRegionCod: string | null = null): Promise<Response> {
   // Marca de esta corrida: las filas que la ventana móvil de 5 años deja de
   // devolver conservan la marca vieja, y por ahí se detectan las RCA vencidas
   // sin necesidad de guardar la fecha de calificación (que el SEIA no expone).
-  const vistoEnVentanaAt = new Date().toISOString()
+  // Se reutiliza la de la pasada si venimos reanudando; solo una corrida que
+  // arranca de cero acuña una nueva. Una corrida de UNA región es siempre un
+  // recorrido completo, así que también acuña la suya.
+  const vistoEnVentanaAt = (!soloRegionCod && cursor.ventana_at) || new Date().toISOString()
 
   let exhaustedByBudget = false
   let finalRegionIdx = startRegion
@@ -448,7 +469,7 @@ async function runSync(soloRegionCod: string | null = null): Promise<Response> {
   // ahí y diera por hechas las anteriores — el mismo silencio que este endpoint
   // dejó de tener. El resultado se le informa a quien apretó, y nada más.
   if (exhaustedByBudget) {
-    const nextCursor: Cursor = { region_idx: finalRegionIdx, pasada_idx: finalPasadaIdx, offset: finalOffset }
+    const nextCursor: Cursor = { region_idx: finalRegionIdx, pasada_idx: finalPasadaIdx, offset: finalOffset, ventana_at: vistoEnVentanaAt }
     if (soloRegionCod) {
       return Response.json({
         ok:          true,

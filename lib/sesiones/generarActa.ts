@@ -9,7 +9,7 @@ import ActaComitePdf, { type ActaData } from '@/components/ActaComitePdf'
 import { renderActaGabineteBuffer } from './generarActaGabinete'
 import { renderActaGabineteV2Buffer } from './generarActaGabineteV2'
 import { renderActaInfraestructuraBuffer } from './generarActaInfraestructura'
-import { agruparPorInstitucion, formatoValorComite, bloquesMesaEmpleoEnActa, COMITE_INSTITUCIONES } from './helpers'
+import { agruparPorInstitucion, formatoValorComite, bloquesMesaEmpleoEnActa, acumuladoMesaEmpleoEnActa, COMITE_INSTITUCIONES } from './helpers'
 import { resolvePreside } from './preside'
 import { subirActa } from './actaUpload'
 
@@ -251,8 +251,9 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
     // de la región, que existe apenas alguien configuró la meta — con eso solo,
     // la sección aparecía en todas las actas aunque en la reunión no se hubiera
     // tocado. Estas dos filas son la prueba de que sí se registró algo.
-    db.from('sesion_meta_empleo_valor').select('sesion_id').eq('sesion_id', sesionId).maybeSingle(),
-    db.from('sesion_subsidio_empleo_valor').select('sesion_id').eq('sesion_id', sesionId).maybeSingle(),
+    db.from('sesion_meta_empleo_valor').select('empleos_generados').eq('sesion_id', sesionId).maybeSingle(),
+    db.from('sesion_subsidio_empleo_valor').select('postulados, entregados, empresas_postulantes')
+      .eq('sesion_id', sesionId).maybeSingle(),
     resolvePreside(db, sesion, opts),
   ])
 
@@ -329,23 +330,34 @@ async function armarActaInversion(db: Db, sesion: EjeSesion, sesionId: number, r
   // narra lo que pasó en la reunión; una sección con el acumulado regional
   // intacto, sin que nadie la haya tocado, es ruido que además hace parecer que
   // el tema se trató.
-  const bloques = bloquesMesaEmpleoEnActa(metaSesionRes.data != null, subSesionRes.data != null)
+  const metaSesion = metaSesionRes.data as { empleos_generados: number } | null
+  const subSesion  = subSesionRes.data as { postulados: number; entregados: number; empresas_postulantes: number } | null
+  const bloques = bloquesMesaEmpleoEnActa(metaSesion != null, subSesion != null)
+
+  // Los acumulados regionales los actualiza el CIERRE. En borrador ese aporte
+  // todavía no está escrito, así que se adelanta acá: el preview tiene que
+  // decir lo mismo que va a decir el acta definitiva, no la cifra previa a la
+  // reunión. Ver `acumuladoMesaEmpleoEnActa`.
+  const acum = (regional: number | null | undefined, sesion: number | null | undefined) =>
+    acumuladoMesaEmpleoEnActa(regional, sesion, opts.preview)
 
   const metaRegion = metaRegionRes.data as { objetivo: number; valor_actual: number; foco_productivo: string | null } | null
+  const metaAcumulado = metaRegion ? acum(metaRegion.valor_actual, metaSesion?.empleos_generados) : 0
   const metaEmpleo = (bloques.meta && metaRegion) ? {
-    acumulado:       Number(metaRegion.valor_actual),
+    acumulado:       metaAcumulado,
     objetivo:        Number(metaRegion.objetivo),
-    pctAvance:       metaRegion.objetivo > 0 ? Math.round((Number(metaRegion.valor_actual) / Number(metaRegion.objetivo)) * 100) : null,
+    pctAvance:       metaRegion.objetivo > 0 ? Math.round((metaAcumulado / Number(metaRegion.objetivo)) * 100) : null,
     focoProductivo:  metaRegion.foco_productivo,
   } : null
 
   const subRegion = subRegionRes.data as { cupos: number; postulados: number; entregados: number; empresas_postulantes: number } | null
+  const subPostulados = subRegion ? acum(subRegion.postulados, subSesion?.postulados) : 0
   const subsidios = (bloques.subsidios && subRegion) ? {
-    postulados:           Number(subRegion.postulados),
-    entregados:           Number(subRegion.entregados),
-    empresasPostulantes:  Number(subRegion.empresas_postulantes),
+    postulados:           subPostulados,
+    entregados:           acum(subRegion.entregados, subSesion?.entregados),
+    empresasPostulantes:  acum(subRegion.empresas_postulantes, subSesion?.empresas_postulantes),
     cupos:                Number(subRegion.cupos),
-    pctAvance:            subRegion.cupos > 0 ? Math.round((Number(subRegion.postulados) / Number(subRegion.cupos)) * 100) : null,
+    pctAvance:            subRegion.cupos > 0 ? Math.round((subPostulados / Number(subRegion.cupos)) * 100) : null,
   } : null
 
   return {
