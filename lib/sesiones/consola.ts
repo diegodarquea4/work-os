@@ -27,6 +27,8 @@ export type ZonaKey =
   | 'anteriores' | 'asistencia' | 'reporte' | 'comentarios' | 'iniciativas' | 'nuevos'
   /** Solo Económico: Seguimiento de la inversión (proyectos + oficios). */
   | 'seguimiento'
+  /** Solo Económico: Mesa Empleo (meta de empleo + subsidios). */
+  | 'mesa_empleo'
 
 /** Dónde está parado el usuario. `inst` solo tiene sentido con zona='reporte'. */
 export type ZonaRef = { zona: ZonaKey; inst?: string }
@@ -80,6 +82,12 @@ export type EntradaConsola = {
   // nuevos (recién levantados, siempre pendientes por definición).
   proyectos?: number
   oficios?: { anteriores: Pick<SesionOficioTratado, 'estado'>[]; nuevos: number }
+  /**
+   * Solo Económico: si esta sesión digitó los dos datos de Mesa Empleo (el
+   * avance de la meta y el corte de subsidios). Son dos números que se anotan
+   * en la reunión, así que la zona está lista cuando ambos existen.
+   */
+  mesaEmpleo?: { metaDigitada: boolean; subsidiosDigitados: boolean }
 }
 
 /**
@@ -148,7 +156,7 @@ function estadoSeguimiento(proyectos: number, oficiosTotal: number, oficiosPendi
  *
  *   eje:             1 Anteriores · 2 Asistencia · 3 Reporte (▸ instituciones) · (ícono) Comentarios · 4 Nuevos
  *   infraestructura: 1 Anteriores · 2 Asistencia · 3 Iniciativas · 4 Nuevos
- *   economico:       1 Integrantes · 2 Anteriores · 3 Seguimiento (▸ proyectos, oficios) · 4 Nuevos
+ *   economico:       1 Integrantes · 2 Anteriores · 3 Seguimiento (▸ proyectos, oficios) · 4 Mesa Empleo · 5 Nuevos
  */
 export function railParaSesion(e: EntradaConsola): RailItem[] {
   // El Económico entra por Integrantes y deja los compromisos anteriores en 2;
@@ -197,6 +205,16 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
         },
       ],
     })
+    // Mesa Empleo va DESPUÉS de Seguimiento y ANTES de los compromisos nuevos,
+    // para que un compromiso levantado en la mesa se pueda anotar recién visto
+    // lo que la mesa arrojó — que es el orden en que ocurre la reunión.
+    const me = e.mesaEmpleo
+    const digitados = (me?.metaDigitada ? 1 : 0) + (me?.subsidiosDigitados ? 1 : 0)
+    items.push({
+      key: 'mesa_empleo', numero: 4, label: 'Mesa Empleo',
+      badge: `${digitados}/2`,
+      estado: digitados === 2 ? 'listo' : digitados > 0 ? 'con-actividad' : 'vacio',
+    })
   } else if (e.instancia === 'eje') {
     const catalogo = e.catalogo ?? []
     const porMetrica = new Map((e.valores ?? []).map(v => [v.metrica_id, v]))
@@ -230,7 +248,8 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
   }
 
   items.push({
-    key: 'nuevos', numero: 4, label: 'Compromisos nuevos',
+    // 5 en el Económico, que ahora tiene Mesa Empleo en el 4.
+    key: 'nuevos', numero: esEconomico ? 5 : 4, label: 'Compromisos nuevos',
     badge: String(e.compNuevos.length),
     estado: e.compNuevos.length > 0 ? 'con-actividad' : 'vacio',
   })

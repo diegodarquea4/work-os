@@ -917,9 +917,8 @@ export type SesionVoceria = {
 // Sin eje (mismo mecanismo que Gabinete) — scoped por region_cod/instancia='inversion'.
 // Etiqueta visible "Comité Económico"; el valor de instancia en BD sigue
 // siendo 'inversion' (no se tocó — solo cambió el nombre de cara al usuario).
-// Agrupa dos frentes dentro de la misma sesión: Mesa Empleo (indicador Meta
-// Empleo, más adelante Proyectos de Inversión Pública) y Seguimiento de la
-// Inversión (lo que ya existía: oficios + proyectos tratados). `Compromiso.
+// Agrupa dos frentes dentro de la misma sesión: Seguimiento de la Inversión
+// (oficios + proyectos tratados) y Mesa Empleo (meta de empleo + subsidios). `Compromiso.
 // seccion` (abajo) marca a cuál de los dos pertenece cada compromiso.
 
 // Sección de un compromiso del Comité Económico — genera el tag al listar

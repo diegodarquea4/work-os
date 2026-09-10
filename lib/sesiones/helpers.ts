@@ -18,10 +18,12 @@ import type {
   ComiteInstitucion, ComiteMetrica, SesionComiteValor, ComiteDesglose,
 } from '@/lib/types'
 
-// Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056) — funcionalidad aún
-// sin confirmar. Flag temporal para esconderla de la sesión, el panel y el
-// acta sin borrar el trabajo ya hecho; sacar cuando se confirme.
-export const MESA_EMPLEO_HABILITADA = false
+// Mesa Empleo (Meta Empleo + Subsidios, mig 052/055/056). Estuvo apagada
+// mientras la funcionalidad no estaba confirmada; ya lo está, y la sección
+// volvió a la sesión del Económico como zona 4 del riel, con los compromisos
+// nuevos corridos al 5. La constante se queda como punto único por si hay que
+// volver a esconderla, pero ya no es un flag de trabajo a medias.
+export const MESA_EMPLEO_HABILITADA = true
 
 // ── Agregación suma/pulso ────────────────────────────────────────────────────
 

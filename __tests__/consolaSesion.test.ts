@@ -160,13 +160,43 @@ describe('railParaSesion — Infraestructura', () => {
 // ── resumenAsistencia ────────────────────────────────────────────────────────
 
 describe('railParaSesion — Económico', () => {
-  it('abre por Integrantes: 1 Integrantes · 2 Anteriores · 3 Seguimiento · 4 Nuevos', () => {
+  it('abre por Integrantes: 1 Integrantes · 2 Anteriores · 3 Seguimiento · 4 Mesa Empleo · 5 Nuevos', () => {
     const rail = railParaSesion(entradaEconomico())
-    expect(rail.map(i => i.key)).toEqual(['asistencia', 'anteriores', 'seguimiento', 'nuevos'])
-    expect(rail.map(i => i.numero)).toEqual([1, 2, 3, 4])
+    expect(rail.map(i => i.key)).toEqual(['asistencia', 'anteriores', 'seguimiento', 'mesa_empleo', 'nuevos'])
+    expect(rail.map(i => i.numero)).toEqual([1, 2, 3, 4, 5])
     // El orden invertido respecto al Policial es deliberado: cada comité
     // conserva el que ya tenía en su modal.
     expect(railParaSesion(entradaEje()).map(i => i.key).slice(0, 2)).toEqual(['anteriores', 'asistencia'])
+  })
+
+  // Mesa Empleo va entre Seguimiento y los compromisos: lo que la mesa arroja
+  // se deja comprometido en la zona siguiente, que es el orden de la reunión.
+  it('Mesa Empleo queda antes de los compromisos nuevos', () => {
+    const rail = railParaSesion(entradaEconomico())
+    const keys = rail.map(i => i.key)
+    expect(keys.indexOf('mesa_empleo')).toBeLessThan(keys.indexOf('nuevos'))
+    expect(keys.indexOf('seguimiento')).toBeLessThan(keys.indexOf('mesa_empleo'))
+  })
+
+  it('Mesa Empleo cuenta sus dos datos y solo queda lista con ambos', () => {
+    const zona = (e: Parameters<typeof railParaSesion>[0]) =>
+      railParaSesion(e).find(i => i.key === 'mesa_empleo')!
+    expect(zona(entradaEconomico()).estado).toBe('vacio')
+    expect(zona(entradaEconomico()).badge).toBe('0/2')
+    const media = zona(entradaEconomico({ mesaEmpleo: { metaDigitada: true, subsidiosDigitados: false } }))
+    expect(media.estado).toBe('con-actividad')
+    expect(media.badge).toBe('1/2')
+    const completa = zona(entradaEconomico({ mesaEmpleo: { metaDigitada: true, subsidiosDigitados: true } }))
+    expect(completa.estado).toBe('listo')
+    expect(completa.badge).toBe('2/2')
+  })
+
+  // Los otros dos comités no tienen mesa: sus compromisos siguen en el 4.
+  it('Mesa Empleo es solo del Económico', () => {
+    for (const otro of [railParaSesion(entradaEje()), railParaSesion(entradaInfra())]) {
+      expect(otro.map(i => i.key)).not.toContain('mesa_empleo')
+      expect(otro.find(i => i.key === 'nuevos')!.numero).toBe(4)
+    }
   })
 
   it('la zona 2 se llama Integrantes, no Asistencia', () => {
@@ -237,11 +267,12 @@ describe('railParaSesion — Económico', () => {
       { zona: 'anteriores' },
       { zona: 'seguimiento', inst: 'proyectos' },
       { zona: 'seguimiento', inst: 'oficios' },
+      { zona: 'mesa_empleo' },
       { zona: 'nuevos' },
     ])
-    // Desde Anteriores el siguiente es Proyectos; desde Oficios, Compromisos nuevos.
+    // Desde Anteriores el siguiente es Proyectos; desde Oficios, Mesa Empleo.
     expect(vecinos(rail, { zona: 'anteriores' }).siguiente).toEqual({ zona: 'seguimiento', inst: 'proyectos' })
-    expect(vecinos(rail, { zona: 'seguimiento', inst: 'oficios' }).siguiente).toEqual({ zona: 'nuevos' })
+    expect(vecinos(rail, { zona: 'seguimiento', inst: 'oficios' }).siguiente).toEqual({ zona: 'mesa_empleo' })
     expect(etiquetaZona(rail, { zona: 'seguimiento', inst: 'oficios' })).toBe('Seguimiento · Oficios')
   })
 })
