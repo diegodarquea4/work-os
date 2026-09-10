@@ -13,6 +13,7 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import NuevoProyectoEconomicoModal from './NuevoProyectoEconomicoModal'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 import PasCatalogoModal from './PasCatalogoModal'
+import ImportarDesdeCatalogoModal from './ImportarDesdeCatalogoModal'
 import ConsolaSesionShell from './sesiones/ConsolaSesionShell'
 
 /**
@@ -63,6 +64,7 @@ export default function ComiteEconomicoProyectosPanel({
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [fichaId, setFichaId] = useState<number | null>(null)
   const [catalogoOpen, setCatalogoOpen] = useState(false)
+  const [importarOpen, setImportarOpen] = useState(false)
 
   const [fPlazo, setFPlazo]           = useState<Set<string>>(new Set())
   const [fPriorizado, setFPriorizado] = useState<Set<string>>(new Set())
@@ -114,6 +116,14 @@ export default function ComiteEconomicoProyectosPanel({
   const iniciativasCER = useMemo(
     () => iniciativas.filter(p => (p.tags ?? []).includes(TAG_ECONOMICO)),
     [iniciativas],
+  )
+
+  // Lo que esta región ya trajo del catálogo (mig 106). El importador los
+  // esconde: agregar dos veces el mismo expediente es el error obvio de una
+  // pantalla que ofrece cientos de proyectos.
+  const yaImportados = useMemo(
+    () => new Set(proyectos.map(p => p.origen_id).filter((x): x is string => !!x)),
+    [proyectos],
   )
 
   const opcionesSeremi = useMemo((): FilterOption[] => {
@@ -327,8 +337,16 @@ export default function ComiteEconomicoProyectosPanel({
               {exportando ? 'Generando…' : '↓ Descargar Excel'}
             </button>
             <button
+              onClick={() => setImportarOpen(true)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700 font-medium hover:bg-violet-50"
+              title="Elegir proyectos del catálogo (SEIA y otras fuentes) para sumarlos a la cartera"
+            >
+              + Desde el catálogo
+            </button>
+            <button
               onClick={() => setNuevoOpen(true)}
               className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
+              title="Cargar un proyecto a mano, campo por campo"
             >
               + Nuevo proyecto
             </button>
@@ -450,6 +468,15 @@ export default function ComiteEconomicoProyectosPanel({
       )}
       {catalogoOpen && (
         <PasCatalogoModal currentUserEmail={userEmail} onClose={() => setCatalogoOpen(false)} />
+      )}
+      {importarOpen && (
+        <ImportarDesdeCatalogoModal
+          region={region}
+          currentUserEmail={userEmail}
+          yaImportados={yaImportados}
+          onClose={() => setImportarOpen(false)}
+          onImported={() => { setImportarOpen(false); cargar() }}
+        />
       )}
     </div>
     </ConsolaSesionShell>

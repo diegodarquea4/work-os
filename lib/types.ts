@@ -980,6 +980,15 @@ export type ComiteEconomicoProyecto = {
   created_at: string
   created_by_email: string | null
   updated_at: string
+  // De dónde salió, si se importó del catálogo unificado (mig 106). NULL en
+  // los cuatro = cargado a mano. Referencia blanda, sin FK: una vez importado
+  // el proyecto es del comité y se sostiene solo. `origen_estado_al_importar`
+  // congela el estado de la fuente en ese momento, para poder notar después
+  // que el expediente avanzó (ver lib/carteraOrigen.ts).
+  origen_sistema: string | null
+  origen_id: string | null
+  origen_importado_at: string | null
+  origen_estado_al_importar: string | null
 }
 
 // Avance registrado por una SEREMI en un proyecto privado del Comité

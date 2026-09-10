@@ -7,6 +7,7 @@ import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEconomicoProyectoSeguimiento, PasCatalogo } from '@/lib/types'
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
+import { catalogoAvanzo } from '@/lib/carteraOrigen'
 import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
@@ -79,6 +80,8 @@ function hoyISO(): string {
 
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
+  const [estadoEnCatalogo, setEstadoEnCatalogo] = useState<string | null>(null)
+  const [urlOrigen, setUrlOrigen] = useState<string | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
 
@@ -186,6 +189,28 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   }, [proyectoId])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Si el proyecto se importó del catálogo (mig 106), se contrasta el estado
+  // que tenía la fuente al importarlo contra el que tiene ahora. Es lo que
+  // hace útil volver a correr el sync más allá de sumar expedientes nuevos:
+  // avisa que uno que ya se sigue avanzó. No se toca nada — solo se avisa; la
+  // ficha es de las personas y el estado lo cambian ellas.
+  const origenId = proyecto?.origen_id ?? null
+  useEffect(() => {
+    if (!origenId) { setEstadoEnCatalogo(null); setUrlOrigen(null); return }
+    let vivo = true
+    getSupabase()
+      .from('v2_proyectos_inversion')
+      .select('estado, url_ficha')
+      .eq('id', origenId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!vivo) return
+        setEstadoEnCatalogo((data as { estado: string | null } | null)?.estado ?? null)
+        setUrlOrigen((data as { url_ficha: string | null } | null)?.url_ficha ?? null)
+      })
+    return () => { vivo = false }
+  }, [origenId])
 
   // Padrón con ministerio (mig 087) — una sola vez, no depende del proyecto.
   // Alimenta el filtro de avances por ministerio del autor. `ministerio` solo
@@ -582,7 +607,30 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Proyecto privado — Comité Económico</span>
+                  {proyecto.origen_sistema && (
+                    <span
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase tracking-wide"
+                      title={`Agregado desde el catálogo${proyecto.origen_importado_at ? ` el ${new Date(proyecto.origen_importado_at).toLocaleDateString('es-CL')}` : ''}`}
+                    >
+                      {proyecto.origen_sistema}
+                    </span>
+                  )}
                 </div>
+
+                {/* El catálogo cambió de estado desde que se importó. Solo se
+                    avisa: cambiar el estado de la ficha es decisión de quien
+                    la lleva, no del sync. */}
+                {catalogoAvanzo(proyecto.origen_estado_al_importar, estadoEnCatalogo) && (
+                  <div className="mb-2 flex items-start gap-2 text-[11px] rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-900">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 mt-px"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                    <span>
+                      En la fuente pasó de <strong>{proyecto.origen_estado_al_importar}</strong> a <strong>{estadoEnCatalogo}</strong> desde que se agregó.
+                      {urlOrigen && (
+                        <> <a href={urlOrigen} target="_blank" rel="noreferrer" className="underline font-semibold hover:text-amber-950">Ver expediente</a></>
+                      )}
+                    </span>
+                  </div>
+                )}
 
                 {editingNombre && editable ? (
                   <input
