@@ -31,6 +31,7 @@ const NIVEL_LABEL: Record<NivelAutoridad, string> = {
 const LADO_LABEL: Record<ClaveLado, string> = { lado_abierto: 'Abierta', lado_cerrado: 'Cerrada' }
 const COLOREO_LABEL: Record<'comuna' | 'distrito', string> = { comuna: 'Por comuna', distrito: 'Por distrito' }
 const PERIODO_OPC = [
+  { value: 'José Antonio Kast Rist', short: 'Kast', full: 'Kast (2026-2030)' },
   { value: 'Gabriel Boric Font', short: 'Boric', full: 'Boric (2022-2026)' },
   { value: 'Sebastián Piñera Echenique', short: 'Piñera', full: 'Piñera (2018-2022)' },
   { value: 'Michelle Bachelet Jeria', short: 'Bachelet', full: 'Bachelet (2014-2018)' },

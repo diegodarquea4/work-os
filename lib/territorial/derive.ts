@@ -171,6 +171,22 @@ export function periodoTextoAlcalde(props: ComunaProps): string | null {
   return '1er período'
 }
 
+/**
+ * Texto del período del gobernador regional para la ficha de reelección.
+ * A diferencia del alcalde (con historial largo y excepciones de conteo), el
+ * cargo de gobernador regional recién existe desde la elección de 2021 — como
+ * mucho hay 2 períodos, sin excepciones que resolver. null si tbd / sin dato.
+ */
+export function periodoTextoGobernador(props: ComunaProps): string | null {
+  const r = props.gobernador_reeleccion_2028
+  if (!r || r.estado_confianza === 'tbd') return null
+  const g21 = props.gobernador_2021
+  const g24 = props.gobernador_2024
+  const reelecto = !!(g21 && g24 && normComunaKey(g21.nombre) === normComunaKey(g24.nombre))
+  if (!r.puede_repostular) return `${reelecto ? '2do' : '1er'} período (no puede repostular)`
+  return reelecto ? '2do período' : '1er período'
+}
+
 /** Año de la próxima elección de una circunscripción senatorial (2033 si votó en 2025, si no 2029). */
 export function proximaEleccionSenador(data: TerritorialData, territorio: string): number {
   const lista2025 = (data.SENADORES.porTerritorioAnio[territorio] || {})['2025']

@@ -59,7 +59,11 @@ const DEFAULT_STATE: TerrState = {
   nivel: 'alcalde',
   congresoAnio: '2025',
   coloreoCongreso: 'comuna',
-  periodoDelegado: 'Gabriel Boric Font',
+  // Administración vigente — se actualiza cuando cambia el presidente (ver
+  // PERIODO_OPC en AutoridadesToolbar.tsx, que además debe listar la opción
+  // nueva; si no está ahí, no hay forma de seleccionarla desde el selector
+  // aunque los datos ya estén en el snapshot).
+  periodoDelegado: 'José Antonio Kast Rist',
 }
 
 const STATE_KEY = 'workos:autoridadesState'

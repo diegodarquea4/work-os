@@ -13,7 +13,7 @@ import {
 } from '@/lib/territorial/politica'
 import {
   fillForComuna, fillForRegion, fillForTerritorioCongreso, activeLadoForComuna,
-  computeStats, periodoTextoAlcalde, proximaEleccionSenador, procesarCongreso,
+  computeStats, periodoTextoAlcalde, periodoTextoGobernador, proximaEleccionSenador, procesarCongreso,
 } from '@/lib/territorial/derive'
 import { obtenerFilasCarrito } from '@/lib/territorial/carrito'
 import type { TerritorialData, TerrState, ComunaProps, CongresoRow } from '@/lib/territorial/types'
@@ -208,6 +208,35 @@ describe('periodoTextoAlcalde', () => {
   it('tbd → null', () => {
     const p = comuna({ codigo_comuna: '01109', codigo_region: '01', reeleccion_2028: { puede_repostular: true, estado_confianza: 'tbd' } })
     expect(periodoTextoAlcalde(p)).toBeNull()
+  })
+})
+
+// Gobernador regional: cargo desde 2021, máximo 2 períodos — sin excepciones
+// de conteo como el alcalde (bug real: el modal de reelección lo confundía
+// con alcaldes hasta que se le dio su propio árbol, ver ReeleccionModal.tsx).
+describe('periodoTextoGobernador', () => {
+  const gob2021 = { nombre: 'ANA SOTO', partido: 'PS', lista: null, pct: 45, votos: 400, lado_cerrado: 'IZQ' as const, lado_abierto: 'IZQ' as const, voto_obligatorio: true, contrincantes: null }
+  const gob2024Reelecto = { ...gob2021, pct: 48 }
+  const gob2024Nuevo = { nombre: 'OTRO NOMBRE', partido: 'RN', lista: null, pct: 52, votos: 500, lado_cerrado: 'DER' as const, lado_abierto: 'DER' as const, voto_obligatorio: true, contrincantes: null }
+
+  it('mismo nombre 2021→2024 + puede repostular → 2do período', () => {
+    const p = comuna({ codigo_comuna: '01101', codigo_region: '01', gobernador_2021: gob2021, gobernador_2024: gob2024Reelecto,
+      gobernador_reeleccion_2028: { puede_repostular: true, estado_confianza: 'verificado' } })
+    expect(periodoTextoGobernador(p)).toBe('2do período')
+  })
+  it('reelecto pero tope de 2 períodos → no puede repostular', () => {
+    const p = comuna({ codigo_comuna: '01101', codigo_region: '01', gobernador_2021: gob2021, gobernador_2024: gob2024Reelecto,
+      gobernador_reeleccion_2028: { puede_repostular: false, estado_confianza: 'verificado' } })
+    expect(periodoTextoGobernador(p)).toBe('2do período (no puede repostular)')
+  })
+  it('nombre distinto 2021→2024 → 1er período del titular actual', () => {
+    const p = comuna({ codigo_comuna: '01101', codigo_region: '01', gobernador_2021: gob2021, gobernador_2024: gob2024Nuevo,
+      gobernador_reeleccion_2028: { puede_repostular: true, estado_confianza: 'verificado' } })
+    expect(periodoTextoGobernador(p)).toBe('1er período')
+  })
+  it('tbd → null', () => {
+    const p = comuna({ codigo_comuna: '01101', codigo_region: '01', gobernador_reeleccion_2028: { puede_repostular: true, estado_confianza: 'tbd' } })
+    expect(periodoTextoGobernador(p)).toBeNull()
   })
 })
 

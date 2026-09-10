@@ -1,10 +1,12 @@
 'use client'
 
 /**
- * Modal «Reelección 2028». Para alcalde/gobernador lista las comunas que sí/no
- * pueden repostular (excluye tbd), agrupadas por región o en lista plana. Para
- * diputado/senador lista las personas de CONGRESO_REELECCION por territorio.
- * Click en una fila navega a esa comuna/territorio. Espejo del PTS.
+ * Modal «Reelección 2028». Para alcalde lista las comunas que sí/no pueden
+ * repostular (excluye tbd), agrupadas por región o en lista plana. Para
+ * gobernador lista las 16 regiones (un gobernador por región, sin agrupar).
+ * Para diputado/senador lista las personas de CONGRESO_REELECCION por
+ * territorio. Click en una fila navega a esa comuna/región/territorio.
+ * Espejo del PTS.
  */
 
 import { useMemo, useState } from 'react'
@@ -12,7 +14,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
 import { INE_INVERSE } from '@/lib/regions'
 import { COLOR_HEX, titleCase, ladoDePartido } from '@/lib/territorial/politica'
-import { periodoTextoAlcalde, personasPartido, esNivelCongreso } from '@/lib/territorial/derive'
+import { periodoTextoAlcalde, periodoTextoGobernador, personasPartido, esNivelCongreso } from '@/lib/territorial/derive'
 import { useTerritorialCtx } from './TerritorialProvider'
 import type { ComunaProps, CongresoReeleccionRow } from '@/lib/territorial/types'
 
@@ -53,26 +55,42 @@ export default function ReeleccionModal({ onClose, onNavigateComuna }: Props) {
   const [estado, setEstado] = useState<'si' | 'no'>('si')
   const [vista, setVista] = useState<'agrupada' | 'plana'>('agrupada')
   const esCongreso = esNivelCongreso(state.nivel)
+  const esGobernador = state.nivel === 'gobernador'
 
   const title = esCongreso
     ? `Reelección de ${state.nivel === 'diputado' ? 'diputados' : 'senadores'}`
-    : 'Reelección de alcaldes 2028'
+    : esGobernador
+      ? 'Reelección de gobernadores 2028'
+      : 'Reelección de alcaldes 2028'
 
   return (
     <Modal open onClose={onClose} title={title} size="lg">
       <div className="mb-3 flex flex-wrap gap-2">
         <Tabs variant="segmented" ariaLabel="Estado" value={estado} onChange={(k) => setEstado(k as 'si' | 'no')} items={ESTADO_ITEMS} />
-        <Tabs variant="segmented" ariaLabel="Vista" value={vista} onChange={(k) => setVista(k as 'agrupada' | 'plana')} items={VISTA_ITEMS} />
+        {/* Un gobernador por región: "agrupada" y "plana" serían la misma lista. */}
+        {!esGobernador && (
+          <Tabs variant="segmented" ariaLabel="Vista" value={vista} onChange={(k) => setVista(k as 'agrupada' | 'plana')} items={VISTA_ITEMS} />
+        )}
       </div>
-      {esCongreso
-        ? <CongresoTree estado={estado} vista={vista} onPick={(terr) => { setSelectedTerritorio(terr); onClose() }} />
-        : <AlcaldeTree estado={estado} vista={vista} onPick={(p) => {
-            const regionCodWorkos = INE_INVERSE[parseInt(p.codigo_region, 10)]
-            if (!regionCodWorkos) return
-            setState({ nivel: 'alcalde' })
-            onNavigateComuna(regionCodWorkos, parseInt(p.codigo_comuna, 10), p.comuna)
-            onClose()
-          }} />}
+      {esCongreso ? (
+        <CongresoTree estado={estado} vista={vista} onPick={(terr) => { setSelectedTerritorio(terr); onClose() }} />
+      ) : esGobernador ? (
+        <GobernadorTree estado={estado} onPick={(p) => {
+          const regionCodWorkos = INE_INVERSE[parseInt(p.codigo_region, 10)]
+          if (!regionCodWorkos) return
+          setState({ nivel: 'gobernador' })
+          onNavigateComuna(regionCodWorkos, parseInt(p.codigo_comuna, 10), p.comuna)
+          onClose()
+        }} />
+      ) : (
+        <AlcaldeTree estado={estado} vista={vista} onPick={(p) => {
+          const regionCodWorkos = INE_INVERSE[parseInt(p.codigo_region, 10)]
+          if (!regionCodWorkos) return
+          setState({ nivel: 'alcalde' })
+          onNavigateComuna(regionCodWorkos, parseInt(p.codigo_comuna, 10), p.comuna)
+          onClose()
+        }} />
+      )}
     </Modal>
   )
 }
@@ -119,6 +137,38 @@ function AlcaldeTree({ estado, vista, onPick }: { estado: 'si' | 'no'; vista: 'a
       })}
     </div>
   )
+}
+
+// ── Árbol de gobernadores ──────────────────────────────────────────────────
+// Un gobernador por región: se deriva de la MISMA data por comuna (denormalizada,
+// igual que fillForRegion), tomando una comuna representativa por región — no
+// hay tabla propia "por región" para esto.
+function GobernadorTree({ estado, onPick }: { estado: 'si' | 'no'; onPick: (p: ComunaProps) => void }) {
+  const { data, state } = useTerritorialCtx()
+  const porRegion = useMemo(() => {
+    if (!data) return []
+    return data.regionOrder
+      .map((cod) => (data.comunasByRegion[cod] || [])[0])
+      .filter((p): p is ComunaProps => {
+        if (!p) return false
+        const r = p.gobernador_reeleccion_2028
+        return !!r && r.estado_confianza !== 'tbd' && r.puede_repostular === (estado === 'si')
+      })
+  }, [data, estado])
+
+  if (!porRegion.length) return <Empty texto="No hay regiones en esta categoría." />
+
+  const dotDe = (p: ComunaProps) => {
+    const lado = p.gobernador_2024 ? p.gobernador_2024[state.lado] : null
+    return lado ? COLOR_HEX[lado] : COLOR_HEX.NULL
+  }
+  const detalleDe = (p: ComunaProps) => {
+    const periodo = periodoTextoGobernador(p)
+    return `${p.gobernador_2024 ? titleCase(p.gobernador_2024.nombre) : 'Sin dato'}${periodo ? ` · ${periodo}` : ''}`
+  }
+
+  const ordenadas = [...porRegion].sort((a, b) => a.region.localeCompare(b.region))
+  return <div>{ordenadas.map((p) => <Row key={p.codigo_region} dot={dotDe(p)} name={p.region} detail={detalleDe(p)} onClick={() => onPick(p)} />)}</div>
 }
 
 // ── Árbol de congreso ──────────────────────────────────────────────────────
