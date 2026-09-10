@@ -7,6 +7,7 @@ import {
   institucionesSugeridas,
   puedeCerrar,
   puedeRegenerarActa,
+  bloquesMesaEmpleoEnActa,
   serieGraficoComite,
   alinearConTimeline,
   desgloseInicial,
@@ -261,5 +262,30 @@ describe('agruparPorMegaproyecto', () => {
     const items = [{ id: 1, tags: undefined as unknown as string[] }]
     const r = agruparPorMegaproyecto(items, tagsDe, ['Puerto de Arica'])
     expect(r.sinMegaproyecto.map(i => i.id)).toEqual([1])
+  })
+})
+
+describe('bloquesMesaEmpleoEnActa', () => {
+  // El acta narra la reunión, no el estado permanente de la región. El
+  // acumulado regional existe apenas alguien configuró la meta: si mandara ese
+  // dato, la sección saldría en TODAS las actas con las mismas cifras y quien
+  // la leyera creería que el tema se trató.
+  it('sin nada digitado en la sesión, la sección no va al acta', () => {
+    expect(bloquesMesaEmpleoEnActa(false, false)).toEqual({ meta: false, subsidios: false, seccion: false })
+  })
+
+  // Cada mitad se decide sola: una reunión que solo anotó el avance de la meta
+  // no debe imprimir un bloque de subsidios que nadie miró.
+  it('imprime solo la mitad que se digitó', () => {
+    expect(bloquesMesaEmpleoEnActa(true, false)).toEqual({ meta: true, subsidios: false, seccion: true })
+    expect(bloquesMesaEmpleoEnActa(false, true)).toEqual({ meta: false, subsidios: true, seccion: true })
+  })
+
+  it('con ambos digitados va la sección completa', () => {
+    expect(bloquesMesaEmpleoEnActa(true, true)).toEqual({ meta: true, subsidios: true, seccion: true })
+  })
+
+  it('apagar la funcionalidad la saca del acta aunque haya datos', () => {
+    expect(bloquesMesaEmpleoEnActa(true, true, false)).toEqual({ meta: false, subsidios: false, seccion: false })
   })
 })

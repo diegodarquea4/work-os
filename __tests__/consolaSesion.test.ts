@@ -169,18 +169,56 @@ describe('railParaSesion — Económico', () => {
     expect(railParaSesion(entradaEje()).map(i => i.key).slice(0, 2)).toEqual(['anteriores', 'asistencia'])
   })
 
+  // Meta mesa empleo es el TERCER frente de Seguimiento, no una zona aparte:
+  // pertenece al seguimiento de la inversión igual que proyectos y oficios.
+  it('Meta mesa empleo es el tercer sub-ítem de Seguimiento', () => {
+    const seg = railParaSesion(entradaEconomico()).find(i => i.key === 'seguimiento')!
+    expect(seg.subitems?.map(x => x.key)).toEqual(['proyectos', 'oficios', 'mesa_empleo'])
+    expect(seg.subitems?.[2].label).toBe('Meta mesa empleo')
+  })
+
+  it('Meta mesa empleo cuenta sus dos datos y solo queda lista con ambos', () => {
+    const sub = (e: Parameters<typeof railParaSesion>[0]) =>
+      railParaSesion(e).find(i => i.key === 'seguimiento')!.subitems!.find(x => x.key === 'mesa_empleo')!
+    expect(sub(entradaEconomico()).estado).toBe('vacio')
+    expect(sub(entradaEconomico()).badge).toBe('0/2')
+    const media = sub(entradaEconomico({ mesaEmpleo: { metaDigitada: true, subsidiosDigitados: false } }))
+    expect(media.estado).toBe('con-actividad')
+    expect(media.badge).toBe('1/2')
+    const completa = sub(entradaEconomico({ mesaEmpleo: { metaDigitada: true, subsidiosDigitados: true } }))
+    expect(completa.estado).toBe('listo')
+    expect(completa.badge).toBe('2/2')
+  })
+
+  // El badge del padre cuenta lo que hay sobre la mesa (proyectos + oficios).
+  // La meta son dos casilleros que se llenan, no ítems de una agenda.
+  it('la meta de empleo no infla el badge de Seguimiento', () => {
+    const con = railParaSesion(entradaEconomico({ mesaEmpleo: { metaDigitada: true, subsidiosDigitados: true } }))
+    const sin = railParaSesion(entradaEconomico())
+    const badge = (r: ReturnType<typeof railParaSesion>) => r.find(i => i.key === 'seguimiento')!.badge
+    expect(badge(con)).toBe(badge(sin))
+  })
+
+  // Los otros dos comités no tienen mesa, y nadie renumera sus compromisos.
+  it('Meta mesa empleo es solo del Económico', () => {
+    for (const otro of [railParaSesion(entradaEje()), railParaSesion(entradaInfra())]) {
+      expect(otro.flatMap(i => i.subitems ?? []).map(x => x.key)).not.toContain('mesa_empleo')
+      expect(otro.find(i => i.key === 'nuevos')!.numero).toBe(4)
+    }
+  })
+
   it('la zona 2 se llama Integrantes, no Asistencia', () => {
     expect(railParaSesion(entradaEconomico())[0].label).toBe('Integrantes')
     expect(railParaSesion(entradaEje())[1].label).toBe('Asistencia')
   })
 
-  it('Seguimiento lleva dos sub-ítems: proyectos y oficios', () => {
+  it('Seguimiento lleva tres sub-ítems: proyectos, oficios y meta mesa empleo', () => {
     const seg = railParaSesion(entradaEconomico({
       proyectos: 3,
       oficios: { anteriores: [{ estado: 'pendiente' }, { estado: 'resuelto' }], nuevos: 1 },
     })).find(i => i.key === 'seguimiento')!
-    expect(seg.subitems?.map(s => s.key)).toEqual(['proyectos', 'oficios'])
-    expect(seg.subitems?.map(s => s.badge)).toEqual(['3', '3'])
+    expect(seg.subitems?.map(s => s.key)).toEqual(['proyectos', 'oficios', 'mesa_empleo'])
+    expect(seg.subitems?.map(s => s.badge)).toEqual(['3', '3', '0/2'])
     // Badge del padre = todo lo que hay sobre la mesa (3 proyectos + 3 oficios).
     expect(seg.badge).toBe('6')
   })
@@ -219,7 +257,7 @@ describe('railParaSesion — Económico', () => {
   it('sesión sin nada tratado: zona y sub-ítems vacíos', () => {
     const seg = railParaSesion(entradaEconomico()).find(i => i.key === 'seguimiento')!
     expect(seg.estado).toBe('vacio')
-    expect(seg.subitems?.map(s => s.estado)).toEqual(['vacio', 'vacio'])
+    expect(seg.subitems?.map(s => s.estado)).toEqual(['vacio', 'vacio', 'vacio'])
     expect(seg.badge).toBe('0')
   })
 
@@ -237,11 +275,12 @@ describe('railParaSesion — Económico', () => {
       { zona: 'anteriores' },
       { zona: 'seguimiento', inst: 'proyectos' },
       { zona: 'seguimiento', inst: 'oficios' },
+      { zona: 'seguimiento', inst: 'mesa_empleo' },
       { zona: 'nuevos' },
     ])
-    // Desde Anteriores el siguiente es Proyectos; desde Oficios, Compromisos nuevos.
+    // Desde Anteriores el siguiente es Proyectos; desde Oficios, Meta mesa empleo.
     expect(vecinos(rail, { zona: 'anteriores' }).siguiente).toEqual({ zona: 'seguimiento', inst: 'proyectos' })
-    expect(vecinos(rail, { zona: 'seguimiento', inst: 'oficios' }).siguiente).toEqual({ zona: 'nuevos' })
+    expect(vecinos(rail, { zona: 'seguimiento', inst: 'oficios' }).siguiente).toEqual({ zona: 'seguimiento', inst: 'mesa_empleo' })
     expect(etiquetaZona(rail, { zona: 'seguimiento', inst: 'oficios' })).toBe('Seguimiento · Oficios')
   })
 })

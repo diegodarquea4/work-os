@@ -48,14 +48,10 @@ import CierreSesionComite from './sesiones/CierreSesionComite'
  *          SOLO allá: la sesión no guarda copia de nada.
  *      3b. Oficios — anteriores (verificación) y nuevos (alta directa:
  *          OAECA + fecha límite + proyecto; no hay import de Excel)
- *   4. Compromisos nuevos — `seccion` es obligatoria (mesa_empleo /
- *      seguimiento_inversion / general) y genera el tag al listar;
- *      el proyecto asociado es opcional en cualquier sección.
- *
- * Mesa Empleo (Meta Empleo + subsidios, mig 052) sigue escondida tras
- * MESA_EMPLEO_HABILITADA. Cuando se encienda necesita SU zona en el riel
- * (`lib/sesiones/consola.ts`): hoy cuelga de Integrantes para no inventar una
- * entrada que nadie ve.
+ *      Meta mesa empleo (mig 052/055/056) es el tercer sub-ítem de esta zona.
+ *   4. Compromisos nuevos — `seccion` es obligatoria y genera el tag al
+ *      listar: general, seguimiento_inversion, proyectos_tratados, oficios o
+ *      mesa_empleo (mig 107). El proyecto asociado es opcional en cualquiera.
  *
  * A diferencia de SesionModal, este comité NO tiene eje: las queries de
  * sesion_nomina/sesion_compromisos/eje_sesiones filtran por
@@ -114,14 +110,18 @@ const ESTADO_OFICIO = {
 } as const
 
 const SECCION_LABEL: Record<SeccionComiteEconomico, string> = {
-  mesa_empleo:            'Mesa Empleo',
-  seguimiento_inversion:  'Seguimiento Inversión',
   general:                'General',
+  seguimiento_inversion:  'Seguimiento Inversión',
+  proyectos_tratados:     'Proyectos tratados',
+  oficios:                'Oficios',
+  mesa_empleo:            'Mesa Empleo',
 }
 const SECCION_TAG_CLS: Record<SeccionComiteEconomico, string> = {
-  mesa_empleo:            'bg-amber-50 text-amber-700 border-amber-200',
-  seguimiento_inversion:  'bg-violet-50 text-violet-700 border-violet-200',
   general:                'bg-gray-100 text-gray-600 border-gray-200',
+  seguimiento_inversion:  'bg-violet-50 text-violet-700 border-violet-200',
+  proyectos_tratados:     'bg-sky-50 text-sky-700 border-sky-200',
+  oficios:                'bg-teal-50 text-teal-700 border-teal-200',
+  mesa_empleo:            'bg-amber-50 text-amber-700 border-amber-200',
 }
 
 function SeccionTag({ seccion }: { seccion: SeccionComiteEconomico | null }) {
@@ -133,19 +133,8 @@ function SeccionTag({ seccion }: { seccion: SeccionComiteEconomico | null }) {
   )
 }
 
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"
-      className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>
-      <path d="M2.5 4.5L6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
 
 const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
-const zoneCls  = 'border border-gray-200 rounded-xl overflow-hidden'
-const zoneHead = 'px-4 py-2.5 bg-violet-50/70 border-b border-violet-100 flex items-center gap-2'
-const zoneNum  = 'w-5 h-5 rounded-full bg-violet-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0'
 
 function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
@@ -354,9 +343,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [subEmpresasInput, setSubEmpresasInput]     = useState('')
   const [subsidioSaving, setSubsidioSaving]     = useState(false)
 
-  // Colapso de Mesa Empleo (la sección dormida tras el flag). El resto de las
-  // zonas ya no se colapsa: el riel muestra una a la vez.
-  const [mesaEmpleoOpen, setMesaEmpleoOpen]     = useState(true)
 
   // Invitado form
   const [invNombre, setInvNombre]           = useState('')
@@ -872,7 +858,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     compNuevos,
     proyectos: proyectosSesion.length,
     oficios: { anteriores: oficiosAnteriores, nuevos: oficiosTratadosSesion.length },
-  }), [compAnteriores, asist, compNuevos, proyectosSesion.length, oficiosAnteriores, oficiosTratadosSesion.length])
+    mesaEmpleo: {
+      metaDigitada:       metaEmpleoSesion != null,
+      subsidiosDigitados: subsidioSesion != null,
+    },
+  }), [compAnteriores, asist, compNuevos, proyectosSesion.length, oficiosAnteriores,
+       oficiosTratadosSesion.length, metaEmpleoSesion, subsidioSesion])
 
   // Cambiar de zona vacía primero un onBlur pendiente: hay campos que guardan
   // al salir (nota del oficio, lugar) y el enfocado se va a desmontar.
@@ -884,7 +875,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   const muestra = (z: ZonaKey) => activa.zona === z
   // Sub-zona de Seguimiento en pantalla. Si el riel no eligió una, Proyectos.
-  const subSeguimiento = activa.zona === 'seguimiento' && activa.inst === 'oficios' ? 'oficios' : 'proyectos'
+  const subSeguimiento = activa.zona === 'seguimiento'
+    ? (activa.inst === 'oficios' ? 'oficios' : activa.inst === 'mesa_empleo' ? 'mesa_empleo' : 'proyectos')
+    : 'proyectos'
 
   const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
   const navTerminar = { label: 'Terminar sesión', onClick: abrirCierre }
@@ -1180,18 +1173,13 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               </ZonaCard>
               )}
 
-              {/* ── Mesa Empleo — dormida tras el flag (ver cabecera del archivo).
-                     Queda tal cual estaba en el modal: no tiene zona en el riel
-                     porque hoy no se renderiza nunca. ── */}
-              {MESA_EMPLEO_HABILITADA && (
-              <section className={zoneCls}>
-                <button type="button" onClick={() => setMesaEmpleoOpen(o => !o)} className={`${zoneHead} w-full text-left`}>
-                  <span className={zoneNum}>3</span>
-                  <h3 className="text-sm font-semibold text-gray-800">Mesa Empleo</h3>
-                  <Chevron open={mesaEmpleoOpen} />
-                </button>
-                {mesaEmpleoOpen && (
-                  <div className="p-3 space-y-4">
+              {/* ── Zona 3c: meta mesa empleo ── */}
+              {MESA_EMPLEO_HABILITADA && muestra('seguimiento') && subSeguimiento === 'mesa_empleo' && (
+              <ZonaCard numero={3} titulo="Seguimiento de la inversión · Meta mesa empleo"
+                badge={`${(metaEmpleoSesion != null ? 1 : 0) + (subsidioSesion != null ? 1 : 0)}/2`}
+                descripcion="El avance de la meta de empleo de la región y el corte de subsidios."
+                anterior={navAnterior} siguiente={navSiguiente}>
+                  <div className="space-y-4">
                     {/* Meta Empleo */}
                     <div>
                       <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Meta Empleo</h4>
@@ -1292,16 +1280,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       {subsidioSaving && <p className="text-[10px] text-gray-400 mt-1">Guardando…</p>}
                     </div>
 
-                    {/* Proyectos de Inversión Pública — placeholder */}
-                    <div className="pt-3 border-t border-gray-100">
-                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Proyectos de Inversión Pública</h4>
-                      <p className="text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-lg px-3 py-3 text-center">
-                        Próximamente — revisión de los proyectos de inversión pública vigentes.
-                      </p>
-                    </div>
                   </div>
-                )}
-              </section>
+              </ZonaCard>
               )}
 
               {/* ── Zona 3a: proyectos tratados en profundidad ── */}
@@ -1680,9 +1660,14 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           className={`${inputCls} w-full text-xs py-1.5`}
                         >
                           <option value="" disabled>Selecciona sección…</option>
-                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">Mesa Empleo</option>}
+                          <option value="general">General</option>
+                          {/* Seguimiento de la Inversión abarca la zona entera; los
+                              tres de abajo son sus frentes (mig 107). Un compromiso
+                              que cruza los tres se etiqueta con el padre. */}
                           <option value="seguimiento_inversion">Seguimiento de la Inversión</option>
-                          <option value="general">General{MESA_EMPLEO_HABILITADA ? ' (fuera de ambas)' : ''}</option>
+                          <option value="proyectos_tratados">&nbsp;&nbsp;· Proyectos tratados</option>
+                          <option value="oficios">&nbsp;&nbsp;· Oficios</option>
+                          {MESA_EMPLEO_HABILITADA && <option value="mesa_empleo">&nbsp;&nbsp;· Mesa Empleo</option>}
                         </select>
                       </label>
                       <div className="flex-1 min-w-[220px]">
