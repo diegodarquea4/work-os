@@ -74,8 +74,8 @@ type Props = {
 
 export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa, onIrAPreparacion }: Props) {
   // Un SEREMI llega acá porque le asignaron la capacidad de ALGÚN comité
-  // (mig 110), no porque le toquen todos: ve solo las pestañas que puede
-  // operar. Para la delegación no cambia nada — sigue viendo las cuatro, con
+  // (mig 112), no porque le toquen todos: ve solo las pestañas que puede
+  // operar. Para la delegación no cambia nada — sigue viendo las cinco, con
   // su aviso de permiso adentro si le falta alguna.
   const esSeremi = useIsSeremi()
   const puede: Record<TabKey, boolean> = {
@@ -87,9 +87,19 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   }
   const tabsVisibles = esSeremi ? TABS.filter(t => puede[t.key]) : TABS
 
-  const [active, setActive] = useState<TabKey>(
-    () => (esSeremi ? (TABS.find(t => puede[t.key])?.key ?? 'policial') : 'policial'),
-  )
+  const [active, setActive] = useState<TabKey>('policial')
+
+  // La pestaña abierta se DERIVA, no se corrige con un effect: el perfil y las
+  // capacidades llegan juntos de /api/me DESPUÉS del primer render, así que en
+  // ese primer paso `esSeremi` todavía es false y este componente ya se montó
+  // (VistaRegional lo abre porque `profile` aún es null). Cuando la respuesta
+  // llega, `tabsVisibles` se achica a lo que el SEREMI puede operar pero el
+  // estado ya quedó en 'policial' — una pestaña que no está en la lista. Sin
+  // esto, el SEREMI de Economía veía su única pestaña sin marcar y debajo el
+  // panel del Comité Policial, que no le corresponde.
+  const activa = tabsVisibles.some(t => t.key === active)
+    ? active
+    : (tabsVisibles[0]?.key ?? 'policial')
 
   // El Comité Policial se ancla al eje con sesiones habilitadas.
   const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
@@ -112,7 +122,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
         {tabsVisibles.map(t => {
-          const isActive = active === t.key
+          const isActive = activa === t.key
           // Económico e Infraestructura heredan su estado "listo" de la región
           // (marcha blanca); el resto es fijo.
           const ready =
@@ -141,7 +151,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       </div>
 
       {/* Panel activo */}
-      {active === 'policial' ? (
+      {activa === 'policial' ? (
         comitePolicialEje ? (
           <ComitePolicialTab region={region} eje={comitePolicialEje} />
         ) : ejesLoading ? (
@@ -152,9 +162,9 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta región aún no tiene un eje de seguridad con el Comité Policial habilitado. Habilítalo desde el catálogo de ejes."
           />
         )
-      ) : active === 'politico' ? (
+      ) : activa === 'politico' ? (
         <ComitePoliticoPanel region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
-      ) : active === 'inversion' ? (
+      ) : activa === 'inversion' ? (
         economicoActivo ? (
           <ComiteInversionPanel region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
         ) : (
@@ -163,7 +173,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
             texto="Esta instancia estará disponible próximamente."
           />
         )
-      ) : active === 'gabinete' ? (
+      ) : activa === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onIrAPreparacion={onIrAPreparacion} />
       ) : (
         infraestructuraActivo ? (

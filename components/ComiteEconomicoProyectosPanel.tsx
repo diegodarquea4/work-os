@@ -50,7 +50,7 @@ type Props = {
   /** 'completo': saltar directo a la consola de sesión (ida y vuelta). */
   onIrASesion?: () => void
   /**
-   * Puede sumar y sacar proyectos de la cartera (mig 110). Falso para un SEREMI
+   * Puede sumar y sacar proyectos de la cartera (mig 112). Falso para un SEREMI
    * de otro ministerio: entra a la cartera a editar el detalle de los proyectos
    * y a registrar avances y permisos —que es lo que él sabe y la delegación
    * no—, pero quién entra y quién sale lo decide quien conduce el comité.

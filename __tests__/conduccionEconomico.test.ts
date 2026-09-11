@@ -3,7 +3,7 @@ import { conduceComiteEconomico, MINISTERIO_CONDUCTOR_ECONOMICO } from '@/lib/co
 import { LISTA_CANONICA } from '@/lib/ministerios'
 
 /**
- * Espejo en TypeScript de `es_seremi_ajeno_al_economico()` (mig 110). Acá se
+ * Espejo en TypeScript de `es_seremi_ajeno_al_economico()` (mig 112). Acá se
  * decide qué se MUESTRA; la autorización real la hace la RLS. Si los dos se
  * separan, la UI ofrece algo que la base después rechaza — por eso estos casos.
  */

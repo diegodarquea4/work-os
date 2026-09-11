@@ -157,12 +157,17 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // alguno en esta región. Se pregunta por cada comité y no por una capacidad
   // de sección: `sec.*` no existe para comités, y crear una obligaría a
   // asignar dos permisos para el mismo acceso.
+  // Van las CINCO de `ComitesRegionalesSection.TABS`: si acá falta una, el
+  // SEREMI a quien le asignaron solo esa no ve la sección y la pestaña que sí
+  // podría operar queda inalcanzable. Cualquier comité nuevo se suma en los dos
+  // lugares o no se llega a él.
   const puedeEconomico       = useCan('comite.economico.operar', region?.cod)
   const puedeInfraestructura = useCan('comite.infraestructura.operar', region?.cod)
   const puedePolicial        = useCan('comite.policial.operar', region?.cod)
+  const puedePolitico        = useCan('comite.politico.operar', region?.cod)
   const puedeGabinete        = useCan('comite.gabinete.operar', region?.cod)
   const verComitesPorCapacidad =
-    puedeEconomico || puedeInfraestructura || puedePolicial || puedeGabinete
+    puedeEconomico || puedeInfraestructura || puedePolicial || puedePolitico || puedeGabinete
 
   // Gestionar el catálogo de ejes ya no va por rol sino por capacidad, acotada
   // a ESTA región (mig 092): se concede desde Usuarios → Permisos.
@@ -805,7 +810,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             defecto. Pero el corte era por ROL, delante de toda capacidad: al
             SEREMI de Economía se le podía asignar «Operar Comité Económico» y
             seguía sin ver nada, que es exactamente el caso que el comité pidió
-            resolver (mig 110). Ahora la puerta la abre la capacidad, y adentro
+            resolver (mig 112). Ahora la puerta la abre la capacidad, y adentro
             cada comité decide qué muestra: el Económico distingue conducir de
             aportar (ver `conduceComiteEconomico`). */}
         {region && (profile?.role !== 'seremi' || verComitesPorCapacidad) && (

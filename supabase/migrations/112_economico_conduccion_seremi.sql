@@ -1,5 +1,5 @@
 -- ============================================================================
--- 110_economico_conduccion_seremi.sql
+-- 112_economico_conduccion_seremi.sql
 --
 -- El SEREMI de Economía no podía entrar al Comité Económico: la sección de
 -- comités estaba cerrada al rol `seremi` completo, por delante de cualquier

@@ -36,7 +36,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const puedeOperar = useCan('comite.economico.operar', region.cod)
   // Conducir = abrir/cerrar sesiones y definir la meta. Aportar = la cartera.
   // Un SEREMI de otro ministerio con la capacidad entra a la cartera pero no a
-  // las sesiones (mig 110); la RLS lo enforcea igual si alguien salta la UI.
+  // las sesiones (mig 112); la RLS lo enforcea igual si alguien salta la UI.
   const conduce = useConduceEconomico()
   const userEmail          = useCurrentUserEmail()
 

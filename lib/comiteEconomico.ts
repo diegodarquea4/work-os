@@ -14,7 +14,7 @@ export const ESTADO_ACTUAL_ECONOMICO_OPCIONES = [
 
 export type EstadoActualEconomico = typeof ESTADO_ACTUAL_ECONOMICO_OPCIONES[number]
 
-// ── Quién conduce el comité y quién aporta (mig 110) ────────────────────────
+// ── Quién conduce el comité y quién aporta (mig 112) ────────────────────────
 //
 // `comite.economico.operar` se lee en dos niveles, según quién la tenga:
 //
@@ -28,7 +28,7 @@ export type EstadoActualEconomico = typeof ESTADO_ACTUAL_ECONOMICO_OPCIONES[numb
 // No son dos capacidades: es la misma leída junto al ministerio del SEREMI,
 // porque así se pidió — se asigna un permiso y el sistema sabe quién conduce.
 //
-// Esto es el ESPEJO de `es_seremi_ajeno_al_economico()` en la base (mig 110).
+// Esto es el ESPEJO de `es_seremi_ajeno_al_economico()` en la base (mig 112).
 // La autorización real la hace la RLS; esto solo decide qué se muestra. Si los
 // dos se separan, manda la base y la UI ofrece algo que después falla — por eso
 // el nombre del ministerio vive en una sola constante a cada lado.

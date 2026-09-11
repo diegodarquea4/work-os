@@ -15,7 +15,7 @@ type UserCtxValue = {
   /** Capas de usuarios (Fase 0): capacidades del usuario, base de `useCan`. */
   capabilities:       UserCapability[]
   /** Rol y ministerio: los necesita el corte de conducción del Comité
-   *  Económico (mig 110), que no se puede expresar solo con capacidades
+   *  Económico (mig 112), que no se puede expresar solo con capacidades
    *  porque su eje es (clave, región) y acá hace falta el ministerio. */
   role:               string | null
   ministerio:         string | null
@@ -115,7 +115,7 @@ export function useCan(key: CapabilityKey, region?: string): boolean {
  * de la cartera, configurar la meta de empleo. Presupone la capacidad: úsese
  * junto a `useCan('comite.economico.operar', region)`.
  *
- * Solo decide qué se MUESTRA. La autorización la hace la RLS (mig 110); si
+ * Solo decide qué se MUESTRA. La autorización la hace la RLS (mig 112); si
  * alguien saltara la UI, la base rechaza igual.
  */
 export function useConduceEconomico(): boolean {

@@ -85,7 +85,7 @@ function hoyISO(): string {
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [borrando, setBorrando] = useState(false)
-  // Sacar un proyecto de la cartera es conducción, no aporte (mig 110): un
+  // Sacar un proyecto de la cartera es conducción, no aporte (mig 112): un
   // SEREMI sectorial edita el detalle y registra avances, pero no decide quién
   // sale. La RLS lo rechaza igual si el botón se mostrara por error.
   const conduce = useConduceEconomico()
