@@ -8,6 +8,7 @@ import {
   puedeCerrar,
   puedeRegenerarActa,
   bloquesMesaEmpleoEnActa,
+  acumuladoMesaEmpleoEnActa,
   serieGraficoComite,
   alinearConTimeline,
   desgloseInicial,
@@ -287,5 +288,30 @@ describe('bloquesMesaEmpleoEnActa', () => {
 
   it('apagar la funcionalidad la saca del acta aunque haya datos', () => {
     expect(bloquesMesaEmpleoEnActa(true, true, false)).toEqual({ meta: false, subsidios: false, seccion: false })
+  })
+})
+
+describe('acumuladoMesaEmpleoEnActa', () => {
+  // El cierre suma lo digitado al acumulado regional. El acta definitiva lee
+  // ese acumulado ya actualizado; la previsualización se pide ANTES, así que
+  // leer el mismo campo mostraba la cifra previa a la reunión — un borrador que
+  // no dice lo que va a decir el documento final.
+  it('en borrador adelanta la suma que el cierre todavía no escribió', () => {
+    expect(acumuladoMesaEmpleoEnActa(1200, 340, true)).toBe(1540)
+  })
+
+  it('en el acta definitiva no vuelve a sumar: el cierre ya lo hizo', () => {
+    expect(acumuladoMesaEmpleoEnActa(1540, 340, false)).toBe(1540)
+  })
+
+  it('sin nada digitado el borrador muestra el acumulado tal cual', () => {
+    expect(acumuladoMesaEmpleoEnActa(1200, null, true)).toBe(1200)
+    expect(acumuladoMesaEmpleoEnActa(1200, undefined, true)).toBe(1200)
+  })
+
+  it('una región sin acumulado arranca del valor de la sesión, no de NaN', () => {
+    expect(acumuladoMesaEmpleoEnActa(null, 340, true)).toBe(340)
+    expect(acumuladoMesaEmpleoEnActa(null, null, true)).toBe(0)
+    expect(acumuladoMesaEmpleoEnActa(undefined, undefined, false)).toBe(0)
   })
 })

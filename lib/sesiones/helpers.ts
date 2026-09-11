@@ -38,6 +38,30 @@ export const MESA_EMPLEO_HABILITADA = true
  * una reunión que solo anotó el avance de la meta no debe imprimir un bloque de
  * subsidios que nadie miró.
  */
+/**
+ * El acumulado de Mesa Empleo que corresponde mostrar en el acta.
+ *
+ * `region_meta_empleo.valor_actual` y `region_subsidio_empleo` son acumulados
+ * que el CIERRE actualiza: recién ahí se les suma lo digitado en la sesión
+ * (ver app/api/sesiones/[id]/cerrar). Leerlos tal cual funciona para el acta
+ * definitiva, pero en la PREVISUALIZACIÓN —que se pide antes de cerrar— muestra
+ * el acumulado previo a la reunión, o sea una cifra que ya no será cierta
+ * cuando el acta se emita.
+ *
+ * Acá se adelanta esa suma solo en preview. No se toca la base: es el mismo
+ * número que el cierre va a escribir, calculado antes para que el borrador diga
+ * lo que va a decir el documento final.
+ */
+export function acumuladoMesaEmpleoEnActa(
+  acumuladoRegional: number | null | undefined,
+  digitadoEnSesion: number | null | undefined,
+  esPreview: boolean,
+): number {
+  const base = Number(acumuladoRegional ?? 0)
+  if (!esPreview) return base
+  return base + Number(digitadoEnSesion ?? 0)
+}
+
 export function bloquesMesaEmpleoEnActa(
   seDigitoMeta: boolean,
   seDigitoSubsidios: boolean,

@@ -13,11 +13,12 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
  *     centroide, Diego 2026-09-11) y el chip "+N de alcance regional" (esas
  *     no tienen pin) → abre la lista en el lateral.
  *
- *   fila 2 — selector de comunas (Diego, 2026-09-11): deja ver solo los pines
- *     de las comunas elegidas. Vacío = todas. Reusa `FilterPopover` (mismo
- *     multi-select con búsqueda del Dashboard) en vez de una fila de chips:
- *     una región puede tener 50+ comunas y no caben, además de que la UI del
- *     mapa se mantiene limpia (detalle bajo demanda).
+ *   fila 2 — selectores de comuna y de etiqueta (Diego, 2026-09-11): dejan ver
+ *     solo los pines que calzan. Vacío = todos. Reusan `FilterPopover` (mismo
+ *     multi-select con búsqueda del Dashboard) en vez de filas de chips: una
+ *     región puede tener 50+ comunas y decenas de etiquetas, y la UI del mapa
+ *     se mantiene limpia (detalle bajo demanda). Se combinan con Y entre sí y
+ *     con O dentro de cada uno.
  */
 
 const CAPAS: { key: Capa; label: string; title: string }[] = [
@@ -27,6 +28,7 @@ const CAPAS: { key: Capa; label: string; title: string }[] = [
 ]
 
 type ComunaOpcion = { cut: number; nombre: string; pines: number }
+type EtiquetaOpcion = { tag: string; pines: number }
 
 type Props = {
   capas: ReadonlySet<Capa>
@@ -40,11 +42,17 @@ type Props = {
   /** CUT seleccionados. Vacío = todas las comunas. */
   comunasSel: ReadonlySet<number>
   onChangeComunas: (next: Set<number>) => void
+  /** Etiquetas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). */
+  etiquetasOpciones: EtiquetaOpcion[]
+  /** Etiquetas seleccionadas. Vacío = todas. */
+  etiquetasSel: ReadonlySet<string>
+  onChangeEtiquetas: (next: Set<string>) => void
 }
 
 export default function MapaPinesControl({
   capas, onToggleCapa, conUbicacion, sinUbicacion, regionales, onVerRegionales,
   comunasOpciones, comunasSel, onChangeComunas,
+  etiquetasOpciones, etiquetasSel, onChangeEtiquetas,
 }: Props) {
   const total = conUbicacion + sinUbicacion
 
@@ -55,6 +63,12 @@ export default function MapaPinesControl({
     count: c.pines,
   }))
   const seleccionadas = new Set(Array.from(comunasSel, cut => String(cut)))
+
+  const opcionesTag: FilterOption[] = etiquetasOpciones.map(e => ({
+    value: e.tag,
+    label: e.tag,
+    count: e.pines,
+  }))
 
   return (
     <div className="pointer-events-auto flex flex-col gap-1.5 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
@@ -95,25 +109,27 @@ export default function MapaPinesControl({
         )}
       </div>
 
-      <div className="flex items-center gap-2">
-        <FilterPopover
-          label="Comunas"
-          options={opciones}
-          selected={seleccionadas}
-          onChange={next => onChangeComunas(new Set(Array.from(next, v => Number(v))))}
-          disabled={opciones.length === 0}
-          searchPlaceholder="Buscar comuna..."
-        />
-        <span
-          className="text-[11px] text-gray-400"
-          title={comunasSel.size === 0
-            ? undefined
-            : 'Con comunas elegidas, las iniciativas de alcance regional quedan fuera: no pertenecen a ninguna comuna.'}
-        >
-          {comunasSel.size === 0
-            ? 'Todas'
-            : `${comunasSel.size} de ${comunasOpciones.length}`}
-        </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div title="Muestra solo los pines de las comunas elegidas. Las de alcance regional quedan fuera al filtrar acá: no pertenecen a ninguna comuna.">
+          <FilterPopover
+            label="Comunas"
+            options={opciones}
+            selected={seleccionadas}
+            onChange={next => onChangeComunas(new Set(Array.from(next, v => Number(v))))}
+            disabled={opciones.length === 0}
+            searchPlaceholder="Buscar comuna..."
+          />
+        </div>
+        <div title="Muestra solo los pines de las iniciativas que tengan alguna de las etiquetas elegidas.">
+          <FilterPopover
+            label="Etiquetas"
+            options={opcionesTag}
+            selected={new Set(etiquetasSel)}
+            onChange={onChangeEtiquetas}
+            disabled={opcionesTag.length === 0}
+            searchPlaceholder="Buscar etiqueta..."
+          />
+        </div>
       </div>
     </div>
   )

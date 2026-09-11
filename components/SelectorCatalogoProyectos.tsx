@@ -77,6 +77,8 @@ export default function SelectorCatalogoProyectos({
   const [candidatos, setCandidatos] = useState<CandidatoCatalogo[]>([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState<string | null>(null)
+  /** Total real en el catálogo cuando el tope dejó filas afuera. */
+  const [truncado, setTruncado]     = useState<number | null>(null)
   const [importando, setImportando] = useState(false)
 
   const [busqueda, setBusqueda]           = useState('')
@@ -104,9 +106,9 @@ export default function SelectorCatalogoProyectos({
       setLoading(false)
       return
     }
-    const { data, error: dbErr } = await getSupabase()
+    const { data, error: dbErr, count } = await getSupabase()
       .from('v2_proyectos_inversion')
-      .select('id, sistema_origen, nombre, titular, estado, tipo, comuna_nombre, inversion, moneda, fecha_presentacion, via_ingreso, url_ficha, synced_at')
+      .select('id, sistema_origen, nombre, titular, estado, tipo, comuna_nombre, inversion, moneda, fecha_presentacion, via_ingreso, url_ficha, synced_at', { count: 'exact' })
       .eq('region_id', regionId)
       // SOLO SEIA — el catálogo es multi-fuente y multi-moneda: hoy conviven
       // 1.736 filas del SEIA (`USD_MM`) con 847 del MOP (`CLP_MILES`), todas
@@ -120,11 +122,17 @@ export default function SelectorCatalogoProyectos({
       .eq('sistema_origen', 'seia')
       .order('inversion', { ascending: false, nullsFirst: false })
       .limit(MAX_FILAS)
+      // `count: 'exact'` para saber si el tope dejó filas afuera: cortar en
+      // silencio hace creer que el catálogo no tiene más, y el proyecto que se
+      // busca simplemente no aparece.
+
     if (dbErr) {
       setError(dbErr.message)
       setCandidatos([])
     } else {
-      setCandidatos((data ?? []) as CandidatoCatalogo[])
+      const filas = (data ?? []) as CandidatoCatalogo[]
+      setCandidatos(filas)
+      setTruncado(count != null && count > filas.length ? count : null)
     }
     setLoading(false)
   }, [region.cod])
@@ -380,7 +388,20 @@ export default function SelectorCatalogoProyectos({
         </p>
       )}
 
-      <div className="flex-1 overflow-y-auto px-5 py-3">
+      {/* El tope de filas dejó proyectos afuera. Decirlo importa: sin el aviso,
+          buscar uno que no aparece se lee como "el catálogo no lo tiene". */}
+      {truncado != null && !confirmando && (
+        <p className="flex-shrink-0 px-5 py-2 text-[11px] text-amber-900 bg-amber-50 border-b border-amber-200">
+          Se están mostrando {candidatos.length.toLocaleString('es-CL')} de {truncado.toLocaleString('es-CL')} proyectos
+          del catálogo, los de mayor inversión. Si no encuentras uno, acota con los filtros de comuna o estado.
+        </p>
+      )}
+
+      {/* Sin padding ARRIBA: `position: sticky` frena en el borde del viewport
+          de scroll, así que un padding-top deja una franja por la que las filas
+          asoman POR ENCIMA del encabezado al scrollear. Las ramas que no son la
+          tabla traen su propio espaciado. */}
+      <div className="flex-1 overflow-y-auto px-5 pb-3">
         {confirmando ? (() => {
           const actual = aGuardar[revisando]
           if (!actual) return null
@@ -398,7 +419,7 @@ export default function SelectorCatalogoProyectos({
             ) : null
 
           return (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-3">
               {/* Navegación de la tanda. Se llena uno y se pasa al siguiente:
                   diez formularios apilados no se revisan, se scrollean. */}
               <div className="flex items-center gap-2">
@@ -550,9 +571,14 @@ export default function SelectorCatalogoProyectos({
           </p>
         ) : (
           <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0 bg-white z-[1]">
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="w-8 py-1.5">
+            {/* El fondo opaco y la línea van en cada `th`, no en el `thead`:
+                una fila con `opacity` abre su propio contexto de apilado y con
+                un z bajo se dibujaba por encima del encabezado. La línea es
+                sombra y no `border` porque en `border-collapse: collapse` el
+                borde de una celda sticky se pierde al scrollear. */}
+            <thead className="sticky top-0 z-10 text-gray-500 [&_th]:bg-white [&_th]:pt-3 [&_th]:pb-1.5 [&_th]:shadow-[0_1px_0_0_var(--color-gray-200)]">
+              <tr>
+                <th className="w-8">
                   <input
                     type="checkbox"
                     checked={todosSeleccionados}
@@ -563,12 +589,12 @@ export default function SelectorCatalogoProyectos({
                     className="rounded border-gray-300 text-violet-700 focus:ring-violet-400"
                   />
                 </th>
-                <th className="text-left font-semibold py-1.5 pr-3">Proyecto</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Titular</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Comuna</th>
-                <th className="text-left font-semibold py-1.5 pr-3">Estado</th>
-                <th className="text-right font-semibold py-1.5 pr-3">Inversión (MM$)</th>
-                <th className="w-8 py-1.5"></th>
+                <th className="text-left font-semibold pr-3">Proyecto</th>
+                <th className="text-left font-semibold pr-3">Titular</th>
+                <th className="text-left font-semibold pr-3">Comuna</th>
+                <th className="text-left font-semibold pr-3">Estado</th>
+                <th className="text-right font-semibold pr-3">Inversión (MM$)</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>

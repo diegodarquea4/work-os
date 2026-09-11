@@ -8,7 +8,7 @@ import type { Iniciativa, Capa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { ministerioCalza } from '@/lib/ministerios'
-import { construirPines, comunasConPin } from '@/lib/pinesIniciativas'
+import { construirPines, comunasConPin, etiquetasConPin } from '@/lib/pinesIniciativas'
 import { comunasDeRegion } from '@/lib/comunas'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
@@ -337,6 +337,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const [pinCapas, setPinCapas] = useState<Set<Capa>>(() => new Set<Capa>(['l', 'll', 'lll']))
   // CUT seleccionados; vacío = todas las comunas.
   const [pinComunas, setPinComunas] = useState<Set<number>>(() => new Set<number>())
+  // Etiquetas seleccionadas; vacío = todas.
+  const [pinTags, setPinTags] = useState<Set<string>>(() => new Set<string>())
   const [mapIniciativaId, setMapIniciativaId] = useState<number | null>(null)
   const [regionalesAbierto, setRegionalesAbierto] = useState(false)
   const togglePinCapa = useCallback((capa: Capa) => {
@@ -549,10 +551,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setSelectedRegion(null)
     setMapFocusCod(null)
     setActiveRegionName(region.nombre)
-    // Pines: los filtros (capas, comunas) y la lista regional arrancan limpios
-    // en cada región — los CUT de la anterior no aplican acá.
+    // Pines: los filtros (capas, comunas, etiquetas) y la lista regional
+    // arrancan limpios en cada región — los CUT de la anterior no aplican acá,
+    // y las etiquetas de una región rara vez son las de la siguiente.
     setPinCapas(new Set<Capa>(['l', 'll', 'lll']))
     setPinComunas(new Set<number>())
+    setPinTags(new Set<string>())
     setRegionalesAbierto(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
@@ -634,16 +638,18 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // handleUpdatePrioridad → localIniciativas → acá.
   const pinesData = useMemo(
     () => (drillRegion && mapaCapa === 'psg')
-      ? construirPines(projectsByRegion[drillRegion.nombre] ?? [], pinCapas, pinComunas)
+      ? construirPines(projectsByRegion[drillRegion.nombre] ?? [], pinCapas, pinComunas, pinTags)
       : null,
-    [drillRegion, projectsByRegion, pinCapas, pinComunas, mapaCapa],
+    [drillRegion, projectsByRegion, pinCapas, pinComunas, pinTags, mapaCapa],
   )
 
-  // Opciones del selector de comunas: solo las que hoy tienen algún pin con el
-  // filtro de capas vigente (elegir una comuna vacía no serviría de nada). El
-  // nombre sale del mismo catálogo que usa el lateral. NO depende de
-  // `pinComunas` — si dependiera, al filtrar se irían las no seleccionadas y
-  // no habría cómo volver a agregarlas.
+  // Opciones de los selectores de comuna y etiqueta: solo las que hoy tienen
+  // algún pin con el filtro de capas vigente (elegir una opción vacía no
+  // serviría de nada). El nombre de comuna sale del mismo catálogo que usa el
+  // lateral. Ninguno de los dos depende del OTRO filtro ni del propio — si
+  // dependiera del propio, al filtrar se irían las no seleccionadas y no
+  // habría cómo volver a agregarlas; cruzarlos entre sí haría que la lista
+  // bailara al tocar el de al lado.
   const comunasOpciones = useMemo(() => {
     if (!drillRegion || mapaCapa !== 'psg') return []
     const conteo = comunasConPin(projectsByRegion[drillRegion.nombre] ?? [], pinCapas)
@@ -651,6 +657,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     return Array.from(conteo.entries())
       .map(([cut, pines]) => ({ cut, nombre: nombrePor.get(cut) ?? `Comuna ${cut}`, pines }))
       .sort((a, b) => b.pines - a.pines || a.nombre.localeCompare(b.nombre, 'es'))
+  }, [drillRegion, projectsByRegion, pinCapas, mapaCapa])
+
+  const etiquetasOpciones = useMemo(() => {
+    if (!drillRegion || mapaCapa !== 'psg') return []
+    const conteo = etiquetasConPin(projectsByRegion[drillRegion.nombre] ?? [], pinCapas)
+    return Array.from(conteo.entries())
+      .map(([tag, pines]) => ({ tag, pines }))
+      .sort((a, b) => b.pines - a.pines || a.tag.localeCompare(b.tag, 'es'))
   }, [drillRegion, projectsByRegion, pinCapas, mapaCapa])
   // La ficha lee de localIniciativas para ver los patches en vivo (no un snapshot).
   const mapIniciativa = mapIniciativaId != null
@@ -966,6 +980,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                   comunasOpciones={comunasOpciones}
                   comunasSel={pinComunas}
                   onChangeComunas={setPinComunas}
+                  etiquetasOpciones={etiquetasOpciones}
+                  etiquetasSel={pinTags}
+                  onChangeEtiquetas={setPinTags}
                 />
               )}
             </div>

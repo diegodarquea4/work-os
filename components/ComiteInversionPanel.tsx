@@ -218,7 +218,6 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       {metaEmpleoOpen && (
         <MetaEmpleoModal
           region={region}
-          currentUserEmail={userEmail}
           puedeEditar={puedeOperar}
           onClose={() => setMetaEmpleoOpen(false)}
         />

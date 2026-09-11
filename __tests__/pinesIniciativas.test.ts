@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { construirPines, comunasConPin, distanciaM, offsetGirasol, radioDesparrame } from '@/lib/pinesIniciativas'
+import { construirPines, comunasConPin, etiquetasConPin, distanciaM, offsetGirasol, radioDesparrame } from '@/lib/pinesIniciativas'
 import type { Iniciativa } from '@/lib/projects'
 
 /**
@@ -87,6 +87,49 @@ describe('construirPines', () => {
     expect(construirPines(lista, TODAS, new Set([14101])).regionales).toEqual([])
   })
 
+  it('filtra por etiqueta: entra si tiene CUALQUIERA de las elegidas', () => {
+    const COORD = { ubicacion_lat: -39.83, ubicacion_lng: -73.25 }
+    const lista = [
+      ini({ id: 1, tags: ['Vivienda'], ...COORD }),
+      ini({ id: 2, tags: ['Seguridad', 'Vivienda'], ...COORD, ubicacion_lat: -39.88 }),
+      ini({ id: 3, tags: [], ...COORD, ubicacion_lat: -39.9 }),
+    ]
+    expect(construirPines(lista, TODAS, null, new Set(['Vivienda'])).pines.map(p => p.id)).toEqual([1, 2])
+    expect(construirPines(lista, TODAS, null, new Set(['Seguridad'])).pines.map(p => p.id)).toEqual([2])
+    // Set vacío o ausente = todas las etiquetas (incluidas las sin ninguna).
+    expect(construirPines(lista, TODAS, null, new Set()).pines).toHaveLength(3)
+    expect(construirPines(lista, TODAS).pines).toHaveLength(3)
+  })
+
+  it('el filtro de etiqueta SÍ aplica a las de alcance regional (a diferencia del de comuna)', () => {
+    const lista = [
+      ini({ id: 1, alcance_regional: true, comuna_cods: [], tags: ['Vivienda'] }),
+      ini({ id: 2, alcance_regional: true, comuna_cods: [], tags: ['Seguridad'] }),
+    ]
+    expect(construirPines(lista, TODAS, null, new Set(['Vivienda'])).regionales.map(p => p.id)).toEqual([1])
+  })
+
+  it('etiqueta y comuna se combinan con Y', () => {
+    const COORD = { ubicacion_lat: -39.83, ubicacion_lng: -73.25 }
+    const lista = [
+      ini({ id: 1, comuna_cods: [14101], tags: ['Vivienda'], ...COORD }),
+      ini({ id: 2, comuna_cods: [14102], tags: ['Vivienda'], ...COORD, ubicacion_lat: -39.88 }),
+      ini({ id: 3, comuna_cods: [14101], tags: ['Seguridad'], ...COORD, ubicacion_lat: -39.9 }),
+    ]
+    expect(construirPines(lista, TODAS, new Set([14101]), new Set(['Vivienda'])).pines.map(p => p.id)).toEqual([1])
+  })
+
+  it('la etiqueta filtra ANTES de contar sinUbicacion: el contador es el de la etiqueta elegida', () => {
+    const lista = [
+      ini({ id: 1, tags: ['Vivienda'] }),                                              // sin coordenada
+      ini({ id: 2, tags: ['Seguridad'] }),                                             // sin coordenada, otra etiqueta
+      ini({ id: 3, tags: ['Vivienda'], ubicacion_lat: -39.83, ubicacion_lng: -73.25 }),
+    ]
+    const r = construirPines(lista, TODAS, null, new Set(['Vivienda']))
+    expect(r.pines.map(p => p.id)).toEqual([3])
+    expect(r.sinUbicacion).toBe(1)
+  })
+
   it('filtra por capa (y sin capas activas no hay pines ni regionales)', () => {
     const lista = [
       ini({ id: 1, capa: 'l', ubicacion_lat: -39.83, ubicacion_lng: -73.25 }),
@@ -112,6 +155,21 @@ describe('comunasConPin', () => {
     ]
     expect(comunasConPin(lista, TODAS)).toEqual(new Map([[14101, 2], [14102, 1], [14103, 1]]))
     expect(comunasConPin(lista, new Set(['l']))).toEqual(new Map([[14101, 2], [14102, 1]]))
+  })
+})
+
+describe('etiquetasConPin', () => {
+  it('solo cuenta las que tienen coordenada; multi-etiqueta suma en cada una; respeta el filtro de capa', () => {
+    const COORD = { ubicacion_lat: -39.83, ubicacion_lng: -73.25 }
+    const lista = [
+      ini({ id: 1, capa: 'l', tags: ['Vivienda'], ...COORD }),
+      ini({ id: 2, capa: 'l', tags: ['Vivienda', 'Seguridad'], ...COORD }),
+      ini({ id: 3, capa: 'l', tags: ['Seguridad'] }),                        // sin coordenada
+      ini({ id: 4, capa: 'lll', tags: ['Salud'], ...COORD }),
+      ini({ id: 5, capa: 'l', tags: ['Salud'], alcance_regional: true, comuna_cods: [] }),
+    ]
+    expect(etiquetasConPin(lista, TODAS)).toEqual(new Map([['Vivienda', 2], ['Seguridad', 1], ['Salud', 1]]))
+    expect(etiquetasConPin(lista, new Set(['l']))).toEqual(new Map([['Vivienda', 2], ['Seguridad', 1]]))
   })
 })
 
