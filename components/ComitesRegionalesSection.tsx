@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useCan, useIsSeremi } from '@/lib/context/UserContext'
 import { EmptyState } from '@/components/ui'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
@@ -72,7 +73,23 @@ type Props = {
 }
 
 export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa, onIrAPreparacion }: Props) {
-  const [active, setActive] = useState<TabKey>('policial')
+  // Un SEREMI llega acá porque le asignaron la capacidad de ALGÚN comité
+  // (mig 110), no porque le toquen todos: ve solo las pestañas que puede
+  // operar. Para la delegación no cambia nada — sigue viendo las cuatro, con
+  // su aviso de permiso adentro si le falta alguna.
+  const esSeremi = useIsSeremi()
+  const puede: Record<TabKey, boolean> = {
+    policial:        useCan('comite.policial.operar', region.cod),
+    politico:        useCan('comite.politico.operar', region.cod),
+    inversion:       useCan('comite.economico.operar', region.cod),
+    infraestructura: useCan('comite.infraestructura.operar', region.cod),
+    gabinete:        useCan('comite.gabinete.operar', region.cod),
+  }
+  const tabsVisibles = esSeremi ? TABS.filter(t => puede[t.key]) : TABS
+
+  const [active, setActive] = useState<TabKey>(
+    () => (esSeremi ? (TABS.find(t => puede[t.key])?.key ?? 'policial') : 'policial'),
+  )
 
   // El Comité Policial se ancla al eje con sesiones habilitadas.
   const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
@@ -94,7 +111,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
-        {TABS.map(t => {
+        {tabsVisibles.map(t => {
           const isActive = active === t.key
           // Económico e Infraestructura heredan su estado "listo" de la región
           // (marcha blanca); el resto es fijo.

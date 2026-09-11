@@ -721,6 +721,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       isAdmin={profile?.role === 'admin'}
       userEmail={profile?.email ?? ''}
       capabilities={capabilities}
+      role={profile?.role ?? null}
+      ministerio={profile?.ministerio ?? null}
     >
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Aviso previo del 2FA: los días anteriores a que sea obligatorio para

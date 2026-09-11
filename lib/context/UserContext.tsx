@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react'
 import { can, type CapabilityKey, type UserCapability } from '@/lib/permissions'
+import { conduceComiteEconomico } from '@/lib/comiteEconomico'
 
 type UserCtxValue = {
   canEditRegion:      (regionNombreOrCod: string) => boolean
@@ -13,6 +14,11 @@ type UserCtxValue = {
   userEmail:          string   // email del usuario actual; auto-fill de autor/subido_por.
   /** Capas de usuarios (Fase 0): capacidades del usuario, base de `useCan`. */
   capabilities:       UserCapability[]
+  /** Rol y ministerio: los necesita el corte de conducción del Comité
+   *  Económico (mig 110), que no se puede expresar solo con capacidades
+   *  porque su eje es (clave, región) y acá hace falta el ministerio. */
+  role:               string | null
+  ministerio:         string | null
 }
 
 const UserCtx = createContext<UserCtxValue>({
@@ -23,6 +29,8 @@ const UserCtx = createContext<UserCtxValue>({
   isAdmin:            true,
   userEmail:          '',
   capabilities:       [],
+  role:               null,
+  ministerio:         null,
 })
 
 export function UserProvider({
@@ -30,12 +38,16 @@ export function UserProvider({
   isAdmin,
   userEmail,
   capabilities = [],
+  role = null,
+  ministerio = null,
   children,
 }: {
   canEditRegion:      (r: string) => boolean
   isAdmin:            boolean
   userEmail:          string
   capabilities?:      UserCapability[]
+  role?:              string | null
+  ministerio?:        string | null
   children:           React.ReactNode
 }) {
   // Fase 2: los gates de edición se DERIVAN de las capacidades (no del rol), así
@@ -51,7 +63,7 @@ export function UserProvider({
   // acepta cualquiera de las dos para esos dos campos.
   const canEditAvance      = canEditOperational || can(capabilities, 'iniciativa.editar_avance')
   return (
-    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, canEditAvance, isAdmin, userEmail, capabilities }}>
+    <UserCtx.Provider value={{ canEditRegion, canEditAny, canEditOperational, canEditAvance, isAdmin, userEmail, capabilities, role, ministerio }}>
       {children}
     </UserCtx.Provider>
   )
@@ -96,4 +108,22 @@ export function useCurrentUserEmail() {
  */
 export function useCan(key: CapabilityKey, region?: string): boolean {
   return can(useContext(UserCtx).capabilities, key, region)
+}
+
+/**
+ * ¿Conduce el Comité Económico? Abrir/cerrar sesiones, sumar y sacar proyectos
+ * de la cartera, configurar la meta de empleo. Presupone la capacidad: úsese
+ * junto a `useCan('comite.economico.operar', region)`.
+ *
+ * Solo decide qué se MUESTRA. La autorización la hace la RLS (mig 110); si
+ * alguien saltara la UI, la base rechaza igual.
+ */
+export function useConduceEconomico(): boolean {
+  const { role, ministerio } = useContext(UserCtx)
+  return conduceComiteEconomico(role, ministerio)
+}
+
+/** El usuario es un SEREMI sectorial (no la delegación). */
+export function useIsSeremi(): boolean {
+  return useContext(UserCtx).role === 'seremi'
 }

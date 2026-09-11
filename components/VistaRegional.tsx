@@ -153,6 +153,17 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
 
   const region: Region | null = REGIONS.find(r => r.cod === selectedCod) ?? null
 
+  // Un SEREMI ve la sección de comités solo si le asignaron la capacidad de
+  // alguno en esta región. Se pregunta por cada comité y no por una capacidad
+  // de sección: `sec.*` no existe para comités, y crear una obligaría a
+  // asignar dos permisos para el mismo acceso.
+  const puedeEconomico       = useCan('comite.economico.operar', region?.cod)
+  const puedeInfraestructura = useCan('comite.infraestructura.operar', region?.cod)
+  const puedePolicial        = useCan('comite.policial.operar', region?.cod)
+  const puedeGabinete        = useCan('comite.gabinete.operar', region?.cod)
+  const verComitesPorCapacidad =
+    puedeEconomico || puedeInfraestructura || puedePolicial || puedeGabinete
+
   // Gestionar el catálogo de ejes ya no va por rol sino por capacidad, acotada
   // a ESTA región (mig 092): se concede desde Usuarios → Permisos.
   const puedeGestionarEjes = useCan('region.gestionar_ejes', region?.cod)
@@ -790,10 +801,14 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             (sesiones + acta) migró acá desde el drawer de «Ejes estratégicos»;
             los otros tres comités son placeholders anunciados.
 
-            El rol SEREMI NO ve esta sección: los comités y el gabinete son de la
-            delegación. (Fase 2: abrir por ministerio el comité que corresponda —
-            Seguridad→Policial, MOP→Infraestructura+Económico, resto→Económico.) */}
-        {region && profile?.role !== 'seremi' && (
+            Los comités son de la delegación, así que un SEREMI no los ve por
+            defecto. Pero el corte era por ROL, delante de toda capacidad: al
+            SEREMI de Economía se le podía asignar «Operar Comité Económico» y
+            seguía sin ver nada, que es exactamente el caso que el comité pidió
+            resolver (mig 110). Ahora la puerta la abre la capacidad, y adentro
+            cada comité decide qué muestra: el Económico distingue conducir de
+            aportar (ver `conduceComiteEconomico`). */}
+        {region && (profile?.role !== 'seremi' || verComitesPorCapacidad) && (
           <ComitesRegionalesSection
             region={region}
             regionEjes={regionEjes}

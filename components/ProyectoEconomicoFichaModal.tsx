@@ -8,6 +8,7 @@ import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEco
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 import { catalogoAvanzo, camposPendientes } from '@/lib/carteraOrigen'
+import { useConduceEconomico } from '@/lib/context/UserContext'
 import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
@@ -84,6 +85,10 @@ function hoyISO(): string {
 export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [borrando, setBorrando] = useState(false)
+  // Sacar un proyecto de la cartera es conducción, no aporte (mig 110): un
+  // SEREMI sectorial edita el detalle y registra avances, pero no decide quién
+  // sale. La RLS lo rechaza igual si el botón se mostrara por error.
+  const conduce = useConduceEconomico()
   const [estadoEnCatalogo, setEstadoEnCatalogo] = useState<string | null>(null)
   const [urlOrigen, setUrlOrigen] = useState<string | null>(null)
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
@@ -785,7 +790,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-                {editable && (
+                {editable && conduce && (
                   <button
                     onClick={borrarProyecto}
                     disabled={borrando}

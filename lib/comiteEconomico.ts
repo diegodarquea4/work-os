@@ -14,6 +14,46 @@ export const ESTADO_ACTUAL_ECONOMICO_OPCIONES = [
 
 export type EstadoActualEconomico = typeof ESTADO_ACTUAL_ECONOMICO_OPCIONES[number]
 
+// ── Quién conduce el comité y quién aporta (mig 110) ────────────────────────
+//
+// `comite.economico.operar` se lee en dos niveles, según quién la tenga:
+//
+//   · CONDUCIR — abrir, manipular y cerrar sesiones; sumar y sacar proyectos de
+//     la cartera; configurar la meta de empleo. El SEREMI de Economía y quien
+//     lleva el comité por la delegación (regional, editor, admin).
+//   · APORTAR — ver la cartera, editar el detalle de un proyecto, registrar
+//     avances y permisos. Cualquier SEREMI con la capacidad: son quienes hacen
+//     avanzar los proyectos y saben de ellos lo que la delegación no.
+//
+// No son dos capacidades: es la misma leída junto al ministerio del SEREMI,
+// porque así se pidió — se asigna un permiso y el sistema sabe quién conduce.
+//
+// Esto es el ESPEJO de `es_seremi_ajeno_al_economico()` en la base (mig 110).
+// La autorización real la hace la RLS; esto solo decide qué se muestra. Si los
+// dos se separan, manda la base y la UI ofrece algo que después falla — por eso
+// el nombre del ministerio vive en una sola constante a cada lado.
+
+import { normalizeMinisterio } from '@/lib/ministerios'
+
+export const MINISTERIO_CONDUCTOR_ECONOMICO = 'Ministerio de Economía, Fomento y Turismo'
+
+/**
+ * ¿Este usuario conduce el Comité Económico? Presupone que ya tiene la
+ * capacidad: acá solo se resuelve el corte por ministerio.
+ *
+ * Un rol que no sea `seremi` conduce siempre — regional, editor y admin llevan
+ * el comité por la delegación. Un SEREMI sin ministerio declarado NO conduce:
+ * ante el dato faltante se elige el permiso menor, que es recuperable pidiendo
+ * que completen el perfil, a diferencia de dejar abrir sesiones por accidente.
+ */
+export function conduceComiteEconomico(
+  role: string | null | undefined,
+  ministerio: string | null | undefined,
+): boolean {
+  if (role !== 'seremi') return true
+  return normalizeMinisterio(ministerio) === normalizeMinisterio(MINISTERIO_CONDUCTOR_ECONOMICO)
+}
+
 // ── Descarga Excel de la cartera de proyectos privados ──────────────────────
 // Toda la información del proyecto EXCEPTO el historial de avances completo
 // (mig 096 agregó permisos/avances) — de eso solo va el último avance

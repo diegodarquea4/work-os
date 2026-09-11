@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
+import { useCan, useConduceEconomico, useCurrentUserEmail } from '@/lib/context/UserContext'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
@@ -34,6 +34,10 @@ const NOMBRE_COMITE = 'Comité Económico'
 export default function ComiteInversionPanel({ region, iniciativas, onAbrirIniciativa }: Props) {
   // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
   const puedeOperar = useCan('comite.economico.operar', region.cod)
+  // Conducir = abrir/cerrar sesiones y definir la meta. Aportar = la cartera.
+  // Un SEREMI de otro ministerio con la capacidad entra a la cartera pero no a
+  // las sesiones (mig 110); la RLS lo enforcea igual si alguien salta la UI.
+  const conduce = useConduceEconomico()
   const userEmail          = useCurrentUserEmail()
 
   const [sesionOpen, setSesionOpen]       = useState(false)
@@ -65,6 +69,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
         <div className="px-4 pt-3 pb-2 flex items-stretch gap-2">
           {puedeOperar && (
             <>
+              {conduce && (
               <button
                 onClick={() => setSesionOpen(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
@@ -76,6 +81,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 </svg>
                 {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
               </button>
+              )}
               <button
                 onClick={() => setProyectosOpen(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
@@ -96,7 +102,10 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           </div>
         )}
 
-        {puedeOperar && (
+        {/* Todo lo de sesiones —la nómina, los OAECA, la meta de empleo y el
+            historial— es conducción. Un SEREMI sectorial con la capacidad entra
+            a aportar en la cartera; esta franja no le habla a él. */}
+        {puedeOperar && conduce && (
           <div className="border-t border-violet-100 bg-violet-50/50 px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700 inline-flex items-center gap-1.5 flex-wrap">
               Sesiones de {NOMBRE_COMITE}
@@ -152,6 +161,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
 
       {puedeOperar && (
         <ComiteEconomicoProyectosPanel
+          puedeGestionarCartera={conduce}
           key={`preview-${carteraVersion}`}
           region={region}
           iniciativas={iniciativas}
@@ -166,6 +176,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           cierra la de origen (el borrador de la sesión se guarda solo). */}
       {proyectosOpen && puedeOperar && (
         <ComiteEconomicoProyectosPanel
+          puedeGestionarCartera={conduce}
           region={region}
           iniciativas={iniciativas}
           onAbrirIniciativa={onAbrirIniciativa}
