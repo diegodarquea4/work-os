@@ -130,6 +130,17 @@ describe('construirPines', () => {
     expect(r.sinUbicacion).toBe(1)
   })
 
+  it('cada pin lleva su región: el mapa país mezcla varias y las pinta por separado', () => {
+    // Una etiqueta transversal, dos regiones. Diego, 2026-09-14: verla entera y
+    // no recortada a la región abierta es justamente el punto.
+    const r = construirPines([
+      ini({ id: 1, region: 'Biobío',   tags: ['Turismo'], ubicacion_lat: -37.0, ubicacion_lng: -73.0 }),
+      ini({ id: 2, region: 'Atacama',  tags: ['Turismo'], ubicacion_lat: -27.3, ubicacion_lng: -70.4 }),
+      ini({ id: 3, region: 'Atacama',  tags: ['Minería'], ubicacion_lat: -27.5, ubicacion_lng: -70.2 }),
+    ], TODAS, null, new Set(['Turismo']))
+    expect(r.pines.map(p => [p.id, p.region])).toEqual([[1, 'Biobío'], [2, 'Atacama']])
+  })
+
   it('filtra por capa (y sin capas activas no hay pines ni regionales)', () => {
     const lista = [
       ini({ id: 1, capa: 'l', ubicacion_lat: -39.83, ubicacion_lng: -73.25 }),

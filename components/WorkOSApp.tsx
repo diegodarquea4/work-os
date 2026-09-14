@@ -551,12 +551,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setSelectedRegion(null)
     setMapFocusCod(null)
     setActiveRegionName(region.nombre)
-    // Pines: los filtros (capas, comunas, etiquetas) y la lista regional
-    // arrancan limpios en cada región — los CUT de la anterior no aplican acá,
-    // y las etiquetas de una región rara vez son las de la siguiente.
+    // Pines: los filtros de capa y comuna y la lista regional arrancan limpios
+    // en cada región — los CUT de la anterior no aplican acá. La ETIQUETA no se
+    // resetea: es justamente lo que atraviesa regiones, y borrarla al entrar
+    // obligaría a re-elegirla en cada una (Diego, 2026-09-14).
     setPinCapas(new Set<Capa>(['l', 'll', 'lll']))
     setPinComunas(new Set<number>())
-    setPinTags(new Set<string>())
     setRegionalesAbierto(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
@@ -659,13 +659,29 @@ export default function WorkOSApp({ projects, geoData }: Props) {
       .sort((a, b) => b.pines - a.pines || a.nombre.localeCompare(b.nombre, 'es'))
   }, [drillRegion, projectsByRegion, pinCapas, mapaCapa])
 
+  // Dentro de un drill las etiquetas que se ofrecen son las de ESA región; en
+  // el mapa país, las de todas — que es de lo que se trata elegir una etiqueta
+  // transversal (Diego, 2026-09-14).
   const etiquetasOpciones = useMemo(() => {
-    if (!drillRegion || mapaCapa !== 'psg') return []
-    const conteo = etiquetasConPin(projectsByRegion[drillRegion.nombre] ?? [], pinCapas)
+    if (mapaCapa !== 'psg') return []
+    const universo = drillRegion ? (projectsByRegion[drillRegion.nombre] ?? []) : visibleIniciativas
+    const conteo = etiquetasConPin(universo, pinCapas)
     return Array.from(conteo.entries())
       .map(([tag, pines]) => ({ tag, pines }))
       .sort((a, b) => b.pines - a.pines || a.tag.localeCompare(b.tag, 'es'))
-  }, [drillRegion, projectsByRegion, pinCapas, mapaCapa])
+  }, [drillRegion, projectsByRegion, visibleIniciativas, pinCapas, mapaCapa])
+
+  // Pines del mapa PAÍS. Aparecen SOLO con una etiqueta elegida: sin filtro
+  // serían miles de gotas encima de Chile entero, ilegibles y lentas. Con una
+  // etiqueta, en cambio, el mapa responde la pregunta que la motiva — dónde
+  // está esto — sin recortarla a la región abierta. El filtro de comuna no
+  // entra acá: sus CUT son de una región.
+  const pinesPais = useMemo(
+    () => (!drillRegion && mapaCapa === 'psg' && pinTags.size > 0)
+      ? construirPines(visibleIniciativas, pinCapas, null, pinTags)
+      : null,
+    [drillRegion, visibleIniciativas, pinCapas, pinTags, mapaCapa],
+  )
   // La ficha lee de localIniciativas para ver los patches en vivo (no un snapshot).
   const mapIniciativa = mapIniciativaId != null
     ? localIniciativas.find(p => p.id === mapIniciativaId) ?? null
@@ -985,6 +1001,21 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                   onChangeEtiquetas={setPinTags}
                 />
               )}
+              {/* Mapa país: el selector de etiquetas para ver una transversal
+                  en todo Chile. Solo si hay alguna etiqueta que ofrecer. */}
+              {!mapDrill && mapaCapa === 'psg' && etiquetasOpciones.length > 0 && (
+                <MapaPinesControl
+                  alcance="pais"
+                  capas={pinCapas}
+                  onToggleCapa={togglePinCapa}
+                  conUbicacion={pinesPais?.pines.length ?? 0}
+                  sinUbicacion={pinesPais?.sinUbicacion ?? 0}
+                  regionales={0}
+                  etiquetasOpciones={etiquetasOpciones}
+                  etiquetasSel={pinTags}
+                  onChangeEtiquetas={setPinTags}
+                />
+              )}
             </div>
             {mapaCapa === 'autoridades' && (
               <AutoridadesStatBar
@@ -1010,6 +1041,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 pines:          pinesData?.pines ?? null,
                 onSelectPin:    setMapIniciativaId,
               } : null}
+              pinesPais={pinesPais?.pines ?? null}
+              onSelectPin={setMapIniciativaId}
               lockedRegions={mapaCapa === 'autoridades' ? [] : lockedRegions}
               overlay={mapaCapa === 'autoridades' ? territorial.overlay : null}
               onSelectTerritorio={territorial.setSelectedTerritorio}

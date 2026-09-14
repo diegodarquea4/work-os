@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { PinIniciativa } from '@/lib/pinesIniciativas'
 import { SEMAFORO_CONFIG } from '@/lib/config'
+import { getRegionColor } from '@/lib/regionColors'
 
 /**
  * Pines de iniciativas del drill comunal (mig 104). Recibe la lista YA
@@ -41,8 +42,13 @@ import { SEMAFORO_CONFIG } from '@/lib/config'
 type Props = {
   pines: PinIniciativa[]
   onSelect: (id: number) => void
-  /** Color de la región drilled (mismo que colorea las comunas) — el pin es de un único color. */
-  regionColor: string
+  /**
+   * Color de la región drilled (mismo que colorea las comunas): todos los pines
+   * de un color. Se omite en el mapa país, donde conviven varias regiones y
+   * cada pin toma el color de la suya — así se lee de un vistazo cuán
+   * transversal es una etiqueta.
+   */
+  regionColor?: string
 }
 
 // Chico a propósito (Diego, 2026-09-10: la v1 a 22×30 se veía "muy grande"
@@ -75,11 +81,13 @@ function buildIcon(color: string): L.DivIcon {
 // largo no envuelve: el tooltip entero se ensancha y se sale del mapa. Se
 // resetea en el div de contenido, no en el className del tooltip (evita
 // tocar CSS global).
-function tooltipHtml(pin: PinIniciativa): string {
+function tooltipHtml(pin: PinIniciativa, mostrarRegion: boolean): string {
   const nombre = pin.nombre.replace(/</g, '&lt;')
   const sem = SEMAFORO_CONFIG[pin.semaforo]?.label ?? SEMAFORO_CONFIG.gris.label
+  // La región solo en el mapa país: adentro de un drill ya se sabe cuál es.
+  const pie = mostrarRegion ? `${pin.region.replace(/</g, '&lt;')} · ${sem}` : sem
   return `<div style="font-size:12px;font-weight:600;line-height:1.4;white-space:normal;width:220px">${nombre}
-    <br><span style="color:#6b7280;font-weight:400">${sem}</span></div>`
+    <br><span style="color:#6b7280;font-weight:400">${pie}</span></div>`
 }
 
 export default function PinesIniciativasLayer({ pines, onSelect, regionColor }: Props) {
@@ -87,19 +95,30 @@ export default function PinesIniciativasLayer({ pines, onSelect, regionColor }: 
   const onSelectRef = useRef(onSelect)
   useEffect(() => { onSelectRef.current = onSelect })
 
-  // Un solo ícono por región (mismo color para todos los pines del drill) —
-  // se reutiliza en todos los markers.
-  const icon = useMemo(() => buildIcon(regionColor), [regionColor])
+  // Sin `regionColor` el mapa muestra el país entero, no una región.
+  const esPais = regionColor === undefined
 
   useEffect(() => {
     const grupo = L.layerGroup().addTo(map)
     const tooltip = L.tooltip({ sticky: true, opacity: 0.95, direction: 'top', offset: [0, -PIN_H] })
 
+    // Un ícono por COLOR, no por pin: en el drill hay uno solo (el de la
+    // región); en el mapa país, uno por región presente. Construir un divIcon
+    // por marker sería rehacer el mismo SVG cientos de veces. El caché vive
+    // dentro del effect, que es exactamente lo que viven los markers.
+    const iconos = new Map<string, L.DivIcon>()
+    const iconoDe = (pin: PinIniciativa): L.DivIcon => {
+      const color = regionColor ?? getRegionColor(pin.region)
+      let icono = iconos.get(color)
+      if (!icono) { icono = buildIcon(color); iconos.set(color, icono) }
+      return icono
+    }
+
     for (const pin of pines) {
-      const marker = L.marker([pin.lat, pin.lng], { icon, riseOnHover: true, keyboard: false })
+      const marker = L.marker([pin.lat, pin.lng], { icon: iconoDe(pin), riseOnHover: true, keyboard: false })
       marker.on({
         mouseover(e: L.LeafletMouseEvent) {
-          tooltip.setContent(tooltipHtml(pin)).setLatLng(e.latlng).addTo(map)
+          tooltip.setContent(tooltipHtml(pin, esPais)).setLatLng(e.latlng).addTo(map)
         },
         mousemove(e: L.LeafletMouseEvent) { tooltip.setLatLng(e.latlng) },
         mouseout() { map.removeLayer(tooltip) },
@@ -118,7 +137,7 @@ export default function PinesIniciativasLayer({ pines, onSelect, regionColor }: 
       grupo.clearLayers()
       map.removeLayer(grupo)
     }
-  }, [map, pines, icon])
+  }, [map, pines, regionColor, esPais])
 
   return null
 }

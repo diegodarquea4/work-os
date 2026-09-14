@@ -150,6 +150,14 @@ type Props = {
   onSelectTerritorio?: (territorio: string) => void
   // Click en el mapa FUERA de una región (océano/fondo) → cerrar el detalle.
   onBackgroundClick?: () => void
+  /**
+   * Pines del mapa PAÍS (sin drill): las iniciativas de todas las regiones que
+   * calzan con el filtro de etiquetas. Una etiqueta transversal se ve entera,
+   * no recortada a la región abierta (pedido de Diego, 2026-09-14). Cada pin
+   * toma el color de SU región. null/vacío = sin pines, que es el default.
+   */
+  pinesPais?: PinIniciativa[] | null
+  onSelectPin?: (id: number) => void
 }
 
 // Clic en el fondo del mapa (no sobre una región): los clicks de features hacen
@@ -198,7 +206,7 @@ function buildDrillStyle(color: string, isDrilled: boolean): PathOptions {
   }
 }
 
-export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [], overlay = null, onSelectTerritorio, onBackgroundClick }: Props) {
+export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [], overlay = null, onSelectTerritorio, onBackgroundClick, pinesPais = null, onSelectPin }: Props) {
   const geoJsonRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
 
   // Overlay político leído vía ref por los handlers registrados una sola vez.
@@ -384,6 +392,11 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
             />
           )}
         </>
+      )}
+      {/* Pines del mapa país: fuera del drill y solo en PSG. Sin `regionColor`,
+          así cada pin se pinta del color de su región. */}
+      {!drill && !overlay && pinesPais && pinesPais.length > 0 && onSelectPin && (
+        <PinesIniciativasLayer pines={pinesPais} onSelect={onSelectPin} />
       )}
     </MapContainer>
   )

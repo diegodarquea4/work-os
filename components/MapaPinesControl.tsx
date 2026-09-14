@@ -4,8 +4,18 @@ import type { Capa } from '@/lib/projects'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 
 /**
- * Control flotante de los pines del drill comunal (mig 104). Va debajo del
- * breadcrumb, mismo chrome. Dos filas:
+ * Control flotante de los pines del Mapa (mig 104). Va debajo del breadcrumb,
+ * mismo chrome. Tiene dos alcances:
+ *
+ * `alcance='pais'` — sin drill, sobre Chile entero. Una sola fila con el
+ *   selector de etiquetas, y recién cuando hay una elegida aparecen los chips
+ *   de capa y el contador. Es deliberado que el mapa país arranque con un
+ *   botón y nada más: dibujar las miles de iniciativas georreferenciadas del
+ *   país de una sola vez no se lee ni se navega. Con una etiqueta elegida el
+ *   mapa responde la pregunta que la motiva —dónde está esto— sin recortarla
+ *   a una región (Diego, 2026-09-14).
+ *
+ * `alcance='region'` — dentro del drill comunal. Dos filas:
  *
  *   fila 1 — chips I · II · III para filtrar los pines por capa (multi, todas
  *     on), el contador de avance de la georreferenciación de la región (solo
@@ -31,17 +41,19 @@ type ComunaOpcion = { cut: number; nombre: string; pines: number }
 type EtiquetaOpcion = { tag: string; pines: number }
 
 type Props = {
+  /** 'region' = dentro del drill comunal; 'pais' = mapa de Chile entero. */
+  alcance?: 'region' | 'pais'
   capas: ReadonlySet<Capa>
   onToggleCapa: (capa: Capa) => void
   conUbicacion: number
   sinUbicacion: number
   regionales: number
   onVerRegionales?: () => void
-  /** Comunas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). */
-  comunasOpciones: ComunaOpcion[]
-  /** CUT seleccionados. Vacío = todas las comunas. */
-  comunasSel: ReadonlySet<number>
-  onChangeComunas: (next: Set<number>) => void
+  /** Comunas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). Solo en 'region'. */
+  comunasOpciones?: ComunaOpcion[]
+  /** CUT seleccionados. Vacío = todas las comunas. Solo en 'region'. */
+  comunasSel?: ReadonlySet<number>
+  onChangeComunas?: (next: Set<number>) => void
   /** Etiquetas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). */
   etiquetasOpciones: EtiquetaOpcion[]
   /** Etiquetas seleccionadas. Vacío = todas. */
@@ -50,8 +62,9 @@ type Props = {
 }
 
 export default function MapaPinesControl({
+  alcance = 'region',
   capas, onToggleCapa, conUbicacion, sinUbicacion, regionales, onVerRegionales,
-  comunasOpciones, comunasSel, onChangeComunas,
+  comunasOpciones = [], comunasSel, onChangeComunas,
   etiquetasOpciones, etiquetasSel, onChangeEtiquetas,
 }: Props) {
   const total = conUbicacion + sinUbicacion
@@ -62,7 +75,7 @@ export default function MapaPinesControl({
     label: c.nombre,
     count: c.pines,
   }))
-  const seleccionadas = new Set(Array.from(comunasSel, cut => String(cut)))
+  const seleccionadas = new Set(Array.from(comunasSel ?? [], cut => String(cut)))
 
   const opcionesTag: FilterOption[] = etiquetasOpciones.map(e => ({
     value: e.tag,
@@ -70,33 +83,74 @@ export default function MapaPinesControl({
     count: e.pines,
   }))
 
+  const chipsCapa = (
+    <div className="flex rounded-md border border-gray-200 overflow-hidden">
+      {CAPAS.map((c, i) => {
+        const on = capas.has(c.key)
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onToggleCapa(c.key)}
+            title={c.title}
+            aria-pressed={on}
+            className={`px-2 py-0.5 text-[11px] font-semibold transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
+              on ? 'bg-slate-800 text-white' : 'bg-white text-gray-400 hover:text-gray-700'
+            }`}
+          >
+            {c.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const contador = (
+    <p className="text-[11px] text-gray-500 tabular-nums" title="Iniciativas con ubicación exacta cargada. Las que no tienen ubicación aún no aparecen como pin — se fija desde la ficha o subiendo Latitud/Longitud por Excel.">
+      <span className="font-semibold text-slate-700">{conUbicacion}</span> de {total} georreferenciadas
+      {sinUbicacion > 0 && <span className="text-gray-400"> · {sinUbicacion} sin ubicación</span>}
+    </p>
+  )
+
+  const filtroEtiquetas = (
+    <div title="Muestra solo los pines de las iniciativas que tengan alguna de las etiquetas elegidas.">
+      <FilterPopover
+        label="Etiquetas"
+        options={opcionesTag}
+        selected={new Set(etiquetasSel)}
+        onChange={onChangeEtiquetas}
+        disabled={opcionesTag.length === 0}
+        searchPlaceholder="Buscar etiqueta..."
+      />
+    </div>
+  )
+
+  // ── Mapa país: el selector solo, y el resto cuando ya hay algo que contar ──
+  if (alcance === 'pais') {
+    const hayEtiqueta = (etiquetasSel?.size ?? 0) > 0
+    return (
+      <div className="pointer-events-auto flex items-center gap-2 flex-wrap bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
+        {filtroEtiquetas}
+        {hayEtiqueta ? (
+          <>
+            {chipsCapa}
+            {contador}
+          </>
+        ) : (
+          <span className="text-[11px] text-gray-400">
+            Elige una etiqueta para verla en todo el país
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="pointer-events-auto flex flex-col gap-1.5 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pines</span>
-        <div className="flex rounded-md border border-gray-200 overflow-hidden">
-          {CAPAS.map((c, i) => {
-            const on = capas.has(c.key)
-            return (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => onToggleCapa(c.key)}
-                title={c.title}
-                aria-pressed={on}
-                className={`px-2 py-0.5 text-[11px] font-semibold transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
-                  on ? 'bg-slate-800 text-white' : 'bg-white text-gray-400 hover:text-gray-700'
-                }`}
-              >
-                {c.label}
-              </button>
-            )
-          })}
-        </div>
-        <p className="text-[11px] text-gray-500 tabular-nums" title="Iniciativas con ubicación exacta cargada. Las que no tienen ubicación aún no aparecen como pin — se fija desde la ficha o subiendo Latitud/Longitud por Excel.">
-          <span className="font-semibold text-slate-700">{conUbicacion}</span> de {total} georreferenciadas
-          {sinUbicacion > 0 && <span className="text-gray-400"> · {sinUbicacion} sin ubicación</span>}
-        </p>
+        {chipsCapa}
+        {contador}
         {regionales > 0 && (
           <button
             type="button"
@@ -115,21 +169,12 @@ export default function MapaPinesControl({
             label="Comunas"
             options={opciones}
             selected={seleccionadas}
-            onChange={next => onChangeComunas(new Set(Array.from(next, v => Number(v))))}
+            onChange={next => onChangeComunas?.(new Set(Array.from(next, v => Number(v))))}
             disabled={opciones.length === 0}
             searchPlaceholder="Buscar comuna..."
           />
         </div>
-        <div title="Muestra solo los pines de las iniciativas que tengan alguna de las etiquetas elegidas.">
-          <FilterPopover
-            label="Etiquetas"
-            options={opcionesTag}
-            selected={new Set(etiquetasSel)}
-            onChange={onChangeEtiquetas}
-            disabled={opcionesTag.length === 0}
-            searchPlaceholder="Buscar etiqueta..."
-          />
-        </div>
+        {filtroEtiquetas}
       </div>
     </div>
   )

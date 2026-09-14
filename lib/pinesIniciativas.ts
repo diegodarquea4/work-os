@@ -40,6 +40,8 @@ export type PinIniciativa = {
   semaforo: SemaforoKey
   capa: Capa
   nombre: string
+  /** Nombre de la región, para colorear el pin cuando el mapa muestra varias a la vez. */
+  region: string
 }
 
 export type PinesResultado = {
@@ -141,7 +143,7 @@ export function construirPines(
     if (!tieneCoordenada(p)) { sinUbicacion++; continue }
     base.push({
       id: p.id, n: p.n, semaforo: p.estado_semaforo, capa: p.capa, nombre: p.nombre,
-      lat: p.ubicacion_lat, lng: p.ubicacion_lng,
+      region: p.region, lat: p.ubicacion_lat, lng: p.ubicacion_lng,
     })
   }
 
