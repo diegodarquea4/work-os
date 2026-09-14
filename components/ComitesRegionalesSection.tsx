@@ -39,11 +39,12 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
 ]
 
 // Comité Económico: activo en estas regiones; en el resto se muestra "Pronto".
-// Tarapacá fue la marcha blanca; las otras cinco se sumaron cuando el módulo
-// quedó listo para usarse de verdad. El desarrollo completo siempre estuvo
-// vivo — esto solo gatea su visibilidad por región.
+// Tarapacá fue la marcha blanca; las demás se sumaron cuando el módulo quedó
+// listo para usarse de verdad. El desarrollo completo siempre estuvo vivo —
+// esto solo gatea su visibilidad por región.
 const ECONOMICO_ACTIVO: readonly string[] = [
   'I',     // Tarapacá
+  'III',   // Atacama
   'V',     // Valparaíso
   'VII',   // Maule
   'VIII',  // Biobío
