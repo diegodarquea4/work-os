@@ -119,9 +119,17 @@ type Props = {
   /** Modo Autoridades: color de relleno por CUT (bloque político) y tooltip solo nombre. */
   comunaFill?: Record<number, string>
   autoridades?: boolean
+  /**
+   * Volar la cámara al encuadre de esta región cuando llegue su geojson. Solo
+   * la región del doble clic lo hace: desde el 2026-09-14 el drill monta una
+   * capa por cada región visible en pantalla (para poder desplazarse a una
+   * vecina sin salir del zoom), y si todas encuadraran, la cámara saltaría a la
+   * última que terminó de bajar.
+   */
+  encuadrar?: boolean
 }
 
-export default function ComunasLayer({ regionIne, regionColor, selectedCut, statsByCut, onSelectComuna, comunaFill, autoridades = false }: Props) {
+export default function ComunasLayer({ regionIne, regionColor, selectedCut, statsByCut, onSelectComuna, comunaFill, autoridades = false, encuadrar = true }: Props) {
   const map = useMap()
   const [fc, setFc] = useState<FeatureCollection | null>(comunaGeoCache.get(regionIne) ?? null)
   const geoRef = useRef<ReturnType<typeof import('leaflet')['geoJSON']> | null>(null)
@@ -168,10 +176,10 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
   // Encuadre al entrar (datos listos). La vuelta a Chile al salir del drill
   // la maneja MapController (ChileMap) — cámara centralizada por intención.
   useEffect(() => {
-    if (!fc) return
+    if (!fc || !encuadrar) return
     const bounds = boundsSinTerritoriosLejanos(fc, regionIne)
     if (bounds) map.flyToBounds(bounds, { padding: [30, 30], duration: 0.8 })
-  }, [fc, regionIne, map])
+  }, [fc, regionIne, map, encuadrar])
 
   // Re-estilo in-place al cambiar selección o conteos.
   useEffect(() => {

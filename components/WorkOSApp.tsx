@@ -9,7 +9,7 @@ import type { Region } from '@/lib/regions'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { ministerioCalza } from '@/lib/ministerios'
 import { construirPines, comunasConPin, etiquetasConPin } from '@/lib/pinesIniciativas'
-import { comunasDeRegion } from '@/lib/comunas'
+import { comunaNombre, regionCodDeComuna } from '@/lib/comunas'
 import MapaSummarySidebar from './MapaSummarySidebar'
 import RegionPreviewPanel from './RegionPreviewPanel'
 import ComunasSidebar from './ComunasSidebar'
@@ -22,7 +22,7 @@ import AutoridadesToolbar from './territorial/AutoridadesToolbar'
 import AutoridadesStatBar from './territorial/AutoridadesStatBar'
 import AutoridadesLeyenda from './territorial/AutoridadesLeyenda'
 import { regionKey } from '@/lib/territorial/politica'
-import { computeComunaStats } from '@/lib/comunaStats'
+import { computeComunaStats, statsByCutPais } from '@/lib/comunaStats'
 import { useInactivityLogout, IDLE_CON_2FA_MS, IDLE_DEFECTO_MS } from '@/lib/hooks/useInactivityLogout'
 import { prefetchRegionConfigs } from '@/lib/hooks/useRegionConfig'
 import { getSupabase } from '@/lib/supabase'
@@ -325,7 +325,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // al entrar se cierra el preview (setSelectedRegion(null)) para no pelear
   // con el effect que deriva mapaMode. NO se persiste en localStorage (igual
   // que selectedRegion) y muere al salir de la vista Mapa.
-  type MapDrill = { region: Region; comuna: { cut: number; nombre: string } | null }
+  // `region` = la del doble clic; manda la cámara y el breadcrumb. `comuna`
+  // lleva SU propia región: desde el 2026-09-14 el drill dibuja también las
+  // comunas de las vecinas, así que la comuna clickeada no tiene por qué ser de
+  // la región que se abrió (Diego).
+  type MapDrill = {
+    region: Region
+    comuna: { cut: number; nombre: string; region: Region } | null
+  }
   const [mapDrill, setMapDrill] = useState<MapDrill | null>(null)
 
   // ── Mapa: pines por iniciativa (mig 104) ───────────────────────────────────
@@ -567,7 +574,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
 
   const selectComuna = useCallback((cut: number, nombre: string) => {
-    setMapDrill(d => d ? { ...d, comuna: { cut, nombre } } : d)
+    // La comuna puede ser de una región vecina — se resuelve por CUT, no se
+    // asume la del drill.
+    const cod = regionCodDeComuna(cut)
+    const region = REGIONS.find(r => r.cod === cod)
+    setMapDrill(d => d ? { ...d, comuna: { cut, nombre, region: region ?? d.region } } : d)
   }, [])
 
   // Navegación directa a una comuna (buscador / modal de reelección del modo
@@ -630,6 +641,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     [drillRegion, projectsByRegion],
   )
 
+  // Conteos por CUT de TODO el país: los tooltips de los polígonos comunales,
+  // que en el drill ya no son solo los de la región abierta.
+  const statsComunalesPais = useMemo(
+    () => mapDrill ? statsByCutPais(visibleIniciativas) : null,
+    [mapDrill, visibleIniciativas],
+  )
+
   // Pines de la región drilled. NO son los que se dibujan (para eso está
   // `pinesMapa`, que trae el país entero): sirven para el contador de avance de
   // la georreferenciación de ESTA región y para su lista de alcance regional,
@@ -648,14 +666,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // dependiera del propio, al filtrar se irían las no seleccionadas y no
   // habría cómo volver a agregarlas; cruzarlos entre sí haría que la lista
   // bailara al tocar el de al lado.
+  // Las comunas que se ofrecen son las del PAÍS con al menos un pin, no las de
+  // la región abierta (Diego, 2026-09-14): el drill dibuja también las vecinas,
+  // así que acotar la lista a una región dejaría fuera comunas que están a la
+  // vista. El nombre sale del catálogo nacional por CUT.
   const comunasOpciones = useMemo(() => {
-    if (!drillRegion || mapaCapa !== 'psg') return []
-    const conteo = comunasConPin(projectsByRegion[drillRegion.nombre] ?? [], pinCapas)
-    const nombrePor = new Map(comunasDeRegion(drillRegion.cod).map(c => [c.cut, c.nombre]))
+    if (mapaCapa !== 'psg') return []
+    const conteo = comunasConPin(visibleIniciativas, pinCapas)
     return Array.from(conteo.entries())
-      .map(([cut, pines]) => ({ cut, nombre: nombrePor.get(cut) ?? `Comuna ${cut}`, pines }))
+      .map(([cut, pines]) => ({ cut, nombre: comunaNombre(cut) ?? `Comuna ${cut}`, pines }))
       .sort((a, b) => b.pines - a.pines || a.nombre.localeCompare(b.nombre, 'es'))
-  }, [drillRegion, projectsByRegion, pinCapas, mapaCapa])
+  }, [visibleIniciativas, pinCapas, mapaCapa])
 
   // Las etiquetas que se ofrecen son SIEMPRE las del país, también dentro de un
   // drill: el filtro de etiqueta es de alcance nacional (Diego, 2026-09-14), y
@@ -986,7 +1007,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               )}
               {mapDrill && (
                 <MapaDrillBreadcrumb
-                  regionNombre={mapDrill.region.nombre}
+                  regionNombre={(mapDrill.comuna?.region ?? mapDrill.region).nombre}
                   comunaNombre={mapDrill.comuna?.nombre ?? null}
                   onBack={drillBack}
                 />
@@ -1042,7 +1063,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 regionCod:      mapDrill.region.cod,
                 regionNombre:   mapDrill.region.nombre,
                 selectedCut:    mapDrill.comuna?.cut ?? null,
-                statsByCut:     comunaStats.statsByCut,
+                statsByCut:     statsComunalesPais ?? comunaStats.statsByCut,
                 onSelectComuna: selectComuna,
                 pines:          pinesMapa?.pines ?? null,
                 onSelectPin:    setMapIniciativaId,
@@ -1055,16 +1076,21 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             />
           </div>
 
-          {/* Lateral del drill comunal: lista de comunas, y al seleccionar
-              una, el mismo panel del preview regional filtrado por CUT. */}
-          {mapaCapa === 'psg' && mapDrill && comunaStats && !mapDrill.comuna && (
+          {/* Lateral del drill comunal. El default pasó a ser el resumen
+              general (más abajo): entrar al zoom de una región ya no acota lo
+              que se lee al costado, porque el mapa muestra también las vecinas
+              (Diego, 2026-09-14). Esta lista por comuna queda como vista
+              opcional de la región abierta, y hoy se llega a ella por el chip
+              «+N de alcance regional» del control de pines — que es lo único
+              que sigue hablando de una región en particular. */}
+          {mapaCapa === 'psg' && mapDrill && comunaStats && !mapDrill.comuna && regionalesAbierto && (
             <ComunasSidebar
               regionNombre={mapDrill.region.nombre}
               regionCod={mapDrill.region.cod}
               stats={comunaStats}
               selectedCut={null}
               onSelectComuna={selectComuna}
-              onBack={drillBack}
+              onBack={() => setRegionalesAbierto(false)}
               width={summarySidebarWidth}
               regionales={pinesRegion?.regionales ?? []}
               onSelectIniciativa={setMapIniciativaId}
@@ -1077,9 +1103,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               style={{ flexBasis: `min(${previewWidthPct}vw, 900px)` }}
             >
               <RegionPreviewPanel
-                region={mapDrill.region}
+                region={mapDrill.comuna.region}
                 comuna={mapDrill.comuna}
-                projects={projectsByRegion[mapDrill.region.nombre] ?? []}
+                projects={projectsByRegion[mapDrill.comuna.region.nombre] ?? []}
                 onClose={drillBack}
                 onGoToDashboard={() => setView('vista-regional')}
               />
@@ -1103,8 +1129,12 @@ export default function WorkOSApp({ projects, geoData }: Props) {
             </div>
           )}
 
-          {/* Sidebar resumen (default) */}
-          {mapaCapa === 'psg' && !mapDrill && mapaMode === 'summary' && (
+          {/* Sidebar resumen (default). También durante el drill mientras no
+              haya una comuna elegida: el zoom sirve para ver los puntos, y lo
+              del costado sigue siendo general hasta que se hace clic en una
+              comuna concreta (Diego, 2026-09-14). */}
+          {mapaCapa === 'psg' && mapaMode === 'summary'
+            && (!mapDrill || (!mapDrill.comuna && !regionalesAbierto)) && (
             <MapaSummarySidebar
               projects={visibleIniciativas}
               actividad={actividad}

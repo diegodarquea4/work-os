@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { COMUNAS, comunasDeRegion, comunaNombre, matchComunas, normalizeComunaText } from '@/lib/comunas'
+import { COMUNAS, comunasDeRegion, comunaNombre, regionCodDeComuna, matchComunas, normalizeComunaText } from '@/lib/comunas'
 
 /**
  * Tests del matcher comuna-texto → CUT (lib/comunas.ts).
@@ -142,5 +142,29 @@ describe('matchComunas — cross-región (filas OTRA REGIÓN del CSV)', () => {
 
   it('"Pozo Almonte, Sierra Gorda, María Elena" (Tarapacá + Antofagasta)', () => {
     expect(matchComunas('Pozo Almonte, Sierra Gorda, María Elena', 'II').cods).toEqual([1401, 2103, 2302])
+  })
+})
+
+describe('regionCodDeComuna', () => {
+  // El drill comunal dibuja también las comunas de las regiones vecinas desde
+  // el 2026-09-14: al hacer clic en una hay que resolver de qué región es en
+  // vez de asumir la que se abrió con el doble clic.
+  it('resuelve la región de un CUT, incluida la RM (cod que no es romano)', () => {
+    expect(regionCodDeComuna(5101)).toBe('V')       // Valparaíso
+    expect(regionCodDeComuna(8101)).toBe('VIII')    // Concepción
+    expect(regionCodDeComuna(13101)).toBe('RM')     // Santiago
+    expect(regionCodDeComuna(1101)).toBe('I')       // Iquique
+  })
+
+  it('devuelve null para un CUT que no está en el catálogo', () => {
+    expect(regionCodDeComuna(99999)).toBeNull()
+  })
+
+  it('concuerda con comunasDeRegion para TODO el catálogo', () => {
+    for (const c of COMUNAS) {
+      const cod = regionCodDeComuna(c.cut)
+      expect(cod).not.toBeNull()
+      expect(comunasDeRegion(cod!).some(x => x.cut === c.cut)).toBe(true)
+    }
   })
 })

@@ -71,6 +71,29 @@ export function computeComunaStats(iniciativas: Iniciativa[], regionCod: string)
   return { rows, statsByCut: acc, alcanceRegional, sinComuna }
 }
 
+/**
+ * Conteos por CUT de TODO el país, sin los buckets regionales. Desde el
+ * 2026-09-14 el drill comunal dibuja también las comunas de las regiones
+ * vecinas, y sus polígonos necesitan tooltip: `computeComunaStats` no sirve
+ * porque descarta las iniciativas de otra región (`p.cod !== regionCod`).
+ *
+ * Misma regla de producto: una iniciativa multi-comuna cuenta COMPLETA en cada
+ * una de sus comunas, monto incluido, sin prorrateo.
+ */
+export function statsByCutPais(iniciativas: Iniciativa[]): ReadonlyMap<number, { n: number; mm: number }> {
+  const acc = new Map<number, { n: number; mm: number }>()
+  for (const p of iniciativas) {
+    if (p.alcance_regional) continue
+    const mm = p.inversion_mm ?? 0
+    for (const cut of p.comuna_cods) {
+      const s = acc.get(cut)
+      if (s) { s.n += 1; s.mm += mm }
+      else acc.set(cut, { n: 1, mm })
+    }
+  }
+  return acc
+}
+
 /** Formato de inversión de la maqueta: "MM$ 542.235" (miles con punto es-CL). */
 export function fmtMM(v: number): string {
   return `MM$ ${Math.round(v).toLocaleString('es-CL')}`

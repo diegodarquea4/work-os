@@ -19,7 +19,7 @@
  */
 
 import catalogoJson from '@/data/comunas-cut.json'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, INE_INVERSE } from '@/lib/regions'
 
 export type ComunaInfo = { cut: number; nombre: string; regionIne: number }
 
@@ -73,6 +73,18 @@ export function comunasDeRegion(regionCod: string): ComunaInfo[] {
 
 export function comunaNombre(cut: number): string | null {
   return nombrePorCut.get(cut) ?? null
+}
+
+/**
+ * Región (cod de la app) a la que pertenece un CUT. El drill comunal del Mapa
+ * dibuja también las comunas de las regiones vecinas desde el 2026-09-14, así
+ * que al hacer clic en una hay que resolver de qué región es — no se puede
+ * asumir la que se abrió con el doble clic. null si el CUT no está en el
+ * catálogo.
+ */
+export function regionCodDeComuna(cut: number): string | null {
+  const ine = COMUNAS.find(c => c.cut === cut)?.regionIne
+  return ine === undefined ? null : (INE_INVERSE[ine] ?? null)
 }
 
 // ── Alias (docs/drilldown-comunal/alias_aplicados.csv + localidades del

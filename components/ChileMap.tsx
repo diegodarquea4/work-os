@@ -1,18 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, TileLayer, GeoJSON, ZoomControl, useMap, useMapEvent } from 'react-leaflet'
 import L from 'leaflet'
 import type { GeoJsonObject, Feature, FeatureCollection, Position } from 'geojson'
 import type { Layer, LeafletMouseEvent, PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getRegionColor } from '@/lib/regionColors'
-import { INE_CODE } from '@/lib/regions'
+import { INE_CODE, REGIONS } from '@/lib/regions'
 import ComunasLayer from './ComunasLayer'
 import PinesIniciativasLayer from './PinesIniciativasLayer'
 import TerritoriosLayer from './territorial/TerritoriosLayer'
 import type { MapaAutoridadesOverlay } from './territorial/TerritorialProvider'
 import type { PinIniciativa } from '@/lib/pinesIniciativas'
+
+// Nombre de región por código INE — el color de cada capa comunal del drill
+// sale de su PROPIA región, no de la que se abrió con el doble clic.
+const REGION_NOMBRE_POR_INE: Record<number, string> = Object.fromEntries(
+  REGIONS.map(r => [INE_CODE[r.cod], r.nombre]),
+)
 
 // Bounding box de Chile continental + extremos (Arica al norte, Cabo de Hornos al sur)
 const CHILE_BOUNDS: [[number, number], [number, number]] = [[-56, -76], [-17, -66]]
@@ -168,6 +174,50 @@ function MapBackgroundClick({ onClick }: { onClick?: () => void }) {
   return null
 }
 
+/**
+ * Qué regiones se ven ahora mismo en pantalla. El drill comunal dibuja las
+ * comunas de TODAS ellas (no solo la del doble clic), para que desplazarse
+ * hacia una vecina la muestre y la deje clickeable sin salir del zoom (Diego,
+ * 2026-09-14). Se recalcula al terminar cada paneo/zoom y solo avisa cuando el
+ * conjunto cambió de verdad, así no se remonta nada por mover el mapa dentro de
+ * la misma región.
+ */
+function useRegionesEnPantalla(geoData: GeoJsonObject, activo: boolean, siempre: number | null): number[] {
+  const map = useMap()
+  const [visibles, setVisibles] = useState<number[]>([])
+
+  // Bounds por región, calculados una sola vez sobre el geojson nacional que la
+  // capa regional ya tiene cargado — sin fetch ni datos nuevos.
+  const boundsPorIne = useMemo(() => {
+    const out = new Map<number, L.LatLngBounds>()
+    for (const f of ((geoData as FeatureCollection).features ?? [])) {
+      const b = regionFocusBounds(f)
+      const ine = INE_CODE[getCod(f)]
+      if (b && ine !== undefined) out.set(ine, b)
+    }
+    return out
+  }, [geoData])
+
+  const recalcular = useCallback(() => {
+    if (!activo) return
+    const vista = map.getBounds()
+    const next = [...boundsPorIne.entries()]
+      .filter(([ine, b]) => ine === siempre || b.intersects(vista))
+      .map(([ine]) => ine)
+      .sort((a, b) => a - b)
+    setVisibles(prev => (prev.length === next.length && prev.every((v, i) => v === next[i])) ? prev : next)
+  }, [map, boundsPorIne, activo, siempre])
+
+  // Sin cálculo inicial a propósito: al entrar al drill la cámara todavía
+  // encuadra el país entero, así que preguntar ahí por lo visible dispararía la
+  // bajada de los 16 geojson comunales de una. El `moveend` del vuelo al
+  // encuadre de la región llega enseguida y deja el conjunto correcto; hasta
+  // entonces se dibuja solo la región del doble clic (ver `aDibujar`).
+  useMapEvent('moveend', recalcular)
+
+  return activo ? visibles : []
+}
+
 function getCod(feature: Feature): string {
   return feature.properties?.codregion ?? ''
 }
@@ -205,6 +255,40 @@ function buildDrillStyle(color: string, isDrilled: boolean): PathOptions {
     color: '#fff',
     weight: 0.8,
   }
+}
+
+/**
+ * Las capas comunales del drill: una por región visible en pantalla. Vive como
+ * hijo del MapContainer porque necesita `useMap` para saber qué se está viendo.
+ * Solo la región del doble clic encuadra la cámara.
+ */
+function ComunasDelDrill({ geoData, drill, overlay }: {
+  geoData: GeoJsonObject
+  drill: MapDrillProps
+  overlay: MapaAutoridadesOverlay | null
+}) {
+  // Solo en PSG. El modo Autoridades sigue con una sola región: su barra de
+  // estadísticas y su ficha lateral están escritas alrededor de la región
+  // abierta, y abrirlo a las vecinas es otro trabajo.
+  const regiones = useRegionesEnPantalla(geoData, !overlay, drill.regionIne)
+  const aDibujar = regiones.length > 0 ? regiones : [drill.regionIne]
+  return (
+    <>
+      {aDibujar.map(ine => (
+        <ComunasLayer
+          key={ine}
+          regionIne={ine}
+          regionColor={getRegionColor(REGION_NOMBRE_POR_INE[ine] ?? drill.regionNombre)}
+          selectedCut={drill.selectedCut}
+          statsByCut={drill.statsByCut}
+          onSelectComuna={drill.onSelectComuna}
+          comunaFill={overlay?.comunaFill}
+          autoridades={!!overlay}
+          encuadrar={ine === drill.regionIne}
+        />
+      ))}
+    </>
+  )
 }
 
 export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect, onRegionDoubleClick, drill = null, focusCod = null, lockedRegions = [], overlay = null, onSelectTerritorio, onBackgroundClick, pinesPais = null, onSelectPin }: Props) {
@@ -374,16 +458,7 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
         />
       ) : drill && (
         <>
-          <ComunasLayer
-            key={drill.regionIne}
-            regionIne={drill.regionIne}
-            regionColor={getRegionColor(drill.regionNombre)}
-            selectedCut={drill.selectedCut}
-            statsByCut={drill.statsByCut}
-            onSelectComuna={drill.onSelectComuna}
-            comunaFill={overlay?.comunaFill}
-            autoridades={!!overlay}
-          />
+          <ComunasDelDrill geoData={geoData} drill={drill} overlay={overlay} />
           {/* Pines por iniciativa (mig 104) — solo PSG; Autoridades no los pasa.
               Traen TODAS las regiones, no solo la drilled: así se puede
               desplazar el mapa hacia una vecina sin salir del zoom comunal

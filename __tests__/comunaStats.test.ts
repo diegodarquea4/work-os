@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeComunaStats, fmtMM } from '@/lib/comunaStats'
+import { computeComunaStats, statsByCutPais, fmtMM } from '@/lib/comunaStats'
 import type { Iniciativa } from '@/lib/projects'
 
 /**
@@ -18,6 +18,29 @@ function ini(over: Partial<Iniciativa>): Iniciativa {
     ...over,
   } as Iniciativa
 }
+
+describe('statsByCutPais', () => {
+  // El drill comunal dibuja también las comunas de las regiones vecinas
+  // (Diego, 2026-09-14), y sus polígonos necesitan tooltip. computeComunaStats
+  // no sirve para eso: descarta lo que no es de la región.
+  it('cuenta comunas de TODAS las regiones, no solo de una', () => {
+    const stats = statsByCutPais([
+      ini({ cod: 'V',    comuna_cods: [5101], inversion_mm: 100 }),
+      ini({ cod: 'VIII', comuna_cods: [8101], inversion_mm: 40 }),
+    ])
+    expect(stats.get(5101)).toEqual({ n: 1, mm: 100 })
+    expect(stats.get(8101)).toEqual({ n: 1, mm: 40 })
+  })
+
+  it('multi-comuna sigue contando completa en cada una, y alcance regional queda fuera', () => {
+    const stats = statsByCutPais([
+      ini({ cod: 'V', comuna_cods: [5101, 8101], inversion_mm: 100 }),
+      ini({ cod: 'V', comuna_cods: [5101], alcance_regional: true, inversion_mm: 999 }),
+    ])
+    expect(stats.get(5101)).toEqual({ n: 1, mm: 100 })
+    expect(stats.get(8101)).toEqual({ n: 1, mm: 100 })
+  })
+})
 
 describe('computeComunaStats', () => {
   it('multi-comuna cuenta COMPLETA en cada comuna, monto incluido (sin prorrateo)', () => {
