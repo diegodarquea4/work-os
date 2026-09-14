@@ -47,7 +47,9 @@ const ECONOMICO_ACTIVO: readonly string[] = [
   'I',     // Tarapacá
   'III',   // Atacama
   'V',     // Valparaíso
+  'RM',    // Metropolitana
   'VII',   // Maule
+  'XVI',   // Ñuble
   'VIII',  // Biobío
   'IX',    // La Araucanía
   'X',     // Los Lagos
