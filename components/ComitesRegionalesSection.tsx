@@ -41,7 +41,8 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
 // Comité Económico: activo en estas regiones; en el resto se muestra "Pronto".
 // Tarapacá fue la marcha blanca; las demás se sumaron cuando el módulo quedó
 // listo para usarse de verdad. El desarrollo completo siempre estuvo vivo —
-// esto solo gatea su visibilidad por región.
+// esto solo gatea su visibilidad por región. Se suma una región cuando su
+// SEREMI de Economía ya tiene cuenta: si no, el comité aparece y nadie lo abre.
 const ECONOMICO_ACTIVO: readonly string[] = [
   'I',     // Tarapacá
   'III',   // Atacama
