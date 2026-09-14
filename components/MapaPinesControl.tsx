@@ -15,7 +15,13 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
  *   mapa responde la pregunta que la motiva —dónde está esto— sin recortarla
  *   a una región (Diego, 2026-09-14).
  *
- * `alcance='region'` — dentro del drill comunal. Dos filas:
+ * `alcance='region'` — dentro del drill comunal. El mapa dibuja los pines de
+ *   TODO el país (no solo los de la región abierta), para poder desplazarse a
+ *   una región vecina sin salir del zoom y volver a entrar. Por eso el alcance
+ *   de cada filtro es distinto, y así lo pidió Diego el 2026-09-14: capa y
+ *   etiqueta son GENERALES —cruzan regiones— y comuna es el único ESPECÍFICO.
+ *   El contador sigue hablando de la región abierta: es su señal de avance de
+ *   la georreferenciación, y el texto lo dice. Dos filas:
  *
  *   fila 1 — chips I · II · III para filtrar los pines por capa (multi, todas
  *     on), el contador de avance de la georreferenciación de la región (solo
@@ -105,15 +111,24 @@ export default function MapaPinesControl({
     </div>
   )
 
+  // En el drill el contador habla de la REGIÓN abierta (es su señal de avance
+  // de la georreferenciación), aunque el mapa dibuje además los pines de las
+  // vecinas. Decirlo evita leer el número como si contara todo lo que se ve.
   const contador = (
-    <p className="text-[11px] text-gray-500 tabular-nums" title="Iniciativas con ubicación exacta cargada. Las que no tienen ubicación aún no aparecen como pin — se fija desde la ficha o subiendo Latitud/Longitud por Excel.">
+    <p
+      className="text-[11px] text-gray-500 tabular-nums"
+      title={alcance === 'region'
+        ? 'Iniciativas de esta región con ubicación exacta cargada. El mapa muestra además los pines de las regiones vecinas, que no entran en esta cuenta. Sin ubicación no hay pin — se fija desde la ficha o subiendo Latitud/Longitud por Excel.'
+        : 'Iniciativas con ubicación exacta cargada que calzan con los filtros. Las que no tienen ubicación no aparecen como pin — se fija desde la ficha o subiendo Latitud/Longitud por Excel.'}
+    >
       <span className="font-semibold text-slate-700">{conUbicacion}</span> de {total} georreferenciadas
+      {alcance === 'region' && ' en esta región'}
       {sinUbicacion > 0 && <span className="text-gray-400"> · {sinUbicacion} sin ubicación</span>}
     </p>
   )
 
   const filtroEtiquetas = (
-    <div title="Muestra solo los pines de las iniciativas que tengan alguna de las etiquetas elegidas.">
+    <div title="Filtro general: se aplica a todas las regiones, también dentro del zoom comunal. Muestra solo los pines de las iniciativas que tengan alguna de las etiquetas elegidas.">
       <FilterPopover
         label="Etiquetas"
         options={opcionesTag}
@@ -164,7 +179,7 @@ export default function MapaPinesControl({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <div title="Muestra solo los pines de las comunas elegidas. Las de alcance regional quedan fuera al filtrar acá: no pertenecen a ninguna comuna.">
+        <div title="Único filtro específico: son las comunas de esta región, y al elegir alguna el mapa deja de mostrar las vecinas. Las de alcance regional también quedan fuera: no pertenecen a ninguna comuna.">
           <FilterPopover
             label="Comunas"
             options={opciones}

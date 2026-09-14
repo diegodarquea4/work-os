@@ -125,7 +125,8 @@ export type MapDrillProps = {
   statsByCut: ReadonlyMap<number, { n: number; mm: number }>
   onSelectComuna: (cut: number, nombre: string) => void
   // Pines de iniciativas (mig 104), ya calculados por WorkOSApp con
-  // construirPines. undefined/null = sin pines (modo Autoridades).
+  // construirPines. Incluyen las regiones vecinas, no solo la drilled.
+  // undefined/null = sin pines (modo Autoridades).
   pines?: PinIniciativa[] | null
   onSelectPin?: (id: number) => void
 }
@@ -383,13 +384,12 @@ export default function ChileMap({ geoData, selectedCod, projectCounts, onSelect
             comunaFill={overlay?.comunaFill}
             autoridades={!!overlay}
           />
-          {/* Pines por iniciativa (mig 104) — solo PSG; Autoridades no los pasa. */}
+          {/* Pines por iniciativa (mig 104) — solo PSG; Autoridades no los pasa.
+              Traen TODAS las regiones, no solo la drilled: así se puede
+              desplazar el mapa hacia una vecina sin salir del zoom comunal
+              (Diego, 2026-09-14). Cada pin va del color de su región. */}
           {drill.pines && drill.pines.length > 0 && drill.onSelectPin && (
-            <PinesIniciativasLayer
-              pines={drill.pines}
-              onSelect={drill.onSelectPin}
-              regionColor={getRegionColor(drill.regionNombre)}
-            />
+            <PinesIniciativasLayer pines={drill.pines} onSelect={drill.onSelectPin} />
           )}
         </>
       )}
