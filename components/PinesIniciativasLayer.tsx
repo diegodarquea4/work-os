@@ -106,7 +106,7 @@ export default function PinesIniciativasLayer({ pines, onSelect }: Props) {
       return icono
     }
 
-    for (const pin of pines) {
+    function crearMarker(pin: PinIniciativa): L.Marker {
       const marker = L.marker([pin.lat, pin.lng], { icon: iconoDe(pin), riseOnHover: true, keyboard: false })
       marker.on({
         mouseover(e: L.LeafletMouseEvent) {
@@ -121,10 +121,47 @@ export default function PinesIniciativasLayer({ pines, onSelect }: Props) {
         },
         dblclick(e: L.LeafletMouseEvent) { L.DomEvent.stopPropagation(e) },
       })
-      grupo.addLayer(marker)
+      return marker
     }
 
+    // Solo se dibuja lo que entra en pantalla. Un `L.Marker` no crea DOM hasta
+    // que se agrega al mapa, así que tenerlos en este Map es barato; lo caro es
+    // el nodo con su SVG, que Leaflet además reposiciona en cada paneo. Con la
+    // campaña de carga en marcha esto dejó de ser teórico: el 2026-09-11 había
+    // 203 iniciativas georreferenciadas y cuatro días después 1.120, y el mapa
+    // las dibujaba TODAS aunque se viera una comuna. Al terminar en las 7.091
+    // de la cartera, sin esto el Mapa sería inusable.
+    const markers = new Map<number, L.Marker>()
+    const enMapa = new Set<number>()
+
+    function sincronizar() {
+      // Un margen alrededor de la vista: los pines que están justo afuera ya
+      // están puestos cuando el paneo los trae, en vez de aparecer de golpe.
+      const vista = map.getBounds().pad(0.3)
+      const deben = new Set<number>()
+      for (const pin of pines) {
+        if (vista.contains(L.latLng(pin.lat, pin.lng))) deben.add(pin.id)
+      }
+      for (const id of enMapa) {
+        if (deben.has(id)) continue
+        const m = markers.get(id)
+        if (m) grupo.removeLayer(m)
+        enMapa.delete(id)
+      }
+      for (const pin of pines) {
+        if (!deben.has(pin.id) || enMapa.has(pin.id)) continue
+        let m = markers.get(pin.id)
+        if (!m) { m = crearMarker(pin); markers.set(pin.id, m) }
+        grupo.addLayer(m)
+        enMapa.add(pin.id)
+      }
+    }
+
+    sincronizar()
+    map.on('moveend', sincronizar)
+
     return () => {
+      map.off('moveend', sincronizar)
       map.removeLayer(tooltip)
       grupo.clearLayers()
       map.removeLayer(grupo)

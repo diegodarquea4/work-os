@@ -643,9 +643,14 @@ export default function WorkOSApp({ projects, geoData }: Props) {
 
   // Conteos por CUT de TODO el país: los tooltips de los polígonos comunales,
   // que en el drill ya no son solo los de la región abierta.
+  // Keyed por si HAY drill, no por el objeto `mapDrill`: elegir una comuna crea
+  // un objeto nuevo, y si eso recalculara el Map, cada `ComunasLayer` vería una
+  // identidad distinta y re-estilaría todos sus polígonos (cientos, ahora que
+  // el drill dibuja varias regiones) en cada clic.
+  const enDrill = mapDrill != null
   const statsComunalesPais = useMemo(
-    () => mapDrill ? statsByCutPais(visibleIniciativas) : null,
-    [mapDrill, visibleIniciativas],
+    () => enDrill ? statsByCutPais(visibleIniciativas) : null,
+    [enDrill, visibleIniciativas],
   )
 
   // Pines de la región drilled. NO son los que se dibujan (para eso está

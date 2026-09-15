@@ -200,6 +200,13 @@ function useRegionesEnPantalla(geoData: GeoJsonObject, activo: boolean, siempre:
 
   const recalcular = useCallback(() => {
     if (!activo) return
+    // Alejado al punto de ver Chile entero, las comunas no se distinguen y
+    // traer las 16 regiones serían ~346 polígonos SVG que Leaflet reproyecta en
+    // cada paneo. A ese zoom se dibuja solo la región del doble clic.
+    if (map.getZoom() <= map.getMinZoom() + 1) {
+      setVisibles(prev => (prev.length === 1 && prev[0] === siempre) ? prev : (siempre == null ? [] : [siempre]))
+      return
+    }
     const vista = map.getBounds()
     const next = [...boundsPorIne.entries()]
       .filter(([ine, b]) => ine === siempre || b.intersects(vista))
