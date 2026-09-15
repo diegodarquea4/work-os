@@ -134,6 +134,14 @@ export default function PinesIniciativasLayer({ pines, onSelect }: Props) {
     const markers = new Map<number, L.Marker>()
     const enMapa = new Set<number>()
 
+    function vaciar() {
+      for (const id of enMapa) {
+        const m = markers.get(id)
+        if (m) grupo.removeLayer(m)
+      }
+      enMapa.clear()
+    }
+
     function sincronizar() {
       // Un margen alrededor de la vista: los pines que están justo afuera ya
       // están puestos cuando el paneo los trae, en vez de aparecer de golpe.
@@ -157,11 +165,45 @@ export default function PinesIniciativasLayer({ pines, onSelect }: Props) {
       }
     }
 
-    sincronizar()
-    map.on('moveend', sincronizar)
+    // Durante un VUELO de cámara (el `flyTo` de entrar o salir del drill) los
+    // pines salen del mapa y vuelven al aterrizar. Leaflet reposiciona CADA
+    // marker en CADA cuadro del vuelo — `Marker.update` escucha el evento
+    // `zoom`, que el flyTo dispara ~60 veces por segundo —, así que con
+    // cientos de pines la animación pierde cuadros y se ve a saltos (Diego,
+    // 2026-09-15: "el zoom se ve mal, lento y poco fluido"). Sus propias capas
+    // de tiles hacen lo mismo: Leaflet marca los cuadros de un vuelo con
+    // `flyTo: true` en el payload y GridLayer lo usa para no recalcular tiles
+    // en el aire. El zoom con rueda NO pasa por acá (usa la animación por
+    // transform, que es barata y ni siquiera dispara `zoom`), así que los pines
+    // no parpadean al hacer zoom a mano.
+    let volando = false
+
+    function onZoom(e: L.LeafletEvent) {
+      if (volando || !(e as L.LeafletEvent & { flyTo?: boolean }).flyTo) return
+      volando = true
+      vaciar()
+    }
+
+    function onMoveEnd() {
+      volando = false
+      sincronizar()
+    }
+
+    // El primer dibujo se difiere un cuadro a propósito: al entrar al drill
+    // esta capa se monta en el MISMO commit en que ComunasLayer inicia el
+    // vuelo, y en ese instante la cámara todavía encuadra el país entero, o
+    // sea que "lo que se ve" son todos los pines del país. Crear esos cientos
+    // de nodos para borrarlos un cuadro después era justamente el tirón del
+    // arranque. Un cuadro de atraso no se nota cuando no hay vuelo.
+    const primerDibujo = requestAnimationFrame(() => { if (!volando) sincronizar() })
+
+    map.on('zoom', onZoom)
+    map.on('moveend', onMoveEnd)
 
     return () => {
-      map.off('moveend', sincronizar)
+      cancelAnimationFrame(primerDibujo)
+      map.off('zoom', onZoom)
+      map.off('moveend', onMoveEnd)
       map.removeLayer(tooltip)
       grupo.clearLayers()
       map.removeLayer(grupo)

@@ -178,7 +178,9 @@ export default function ComunasLayer({ regionIne, regionColor, selectedCut, stat
   useEffect(() => {
     if (!fc || !encuadrar) return
     const bounds = boundsSinTerritoriosLejanos(fc, regionIne)
-    if (bounds) map.flyToBounds(bounds, { padding: [30, 30], duration: 0.8 })
+    // 0.6s (era 0.8): el vuelo de entrada al drill se sentía largo. Mismo valor
+    // que los vuelos de MapController, para que entrar y salir se lean iguales.
+    if (bounds) map.flyToBounds(bounds, { padding: [30, 30], duration: 0.6 })
   }, [fc, regionIne, map, encuadrar])
 
   // Re-estilo in-place al cambiar selección o conteos.

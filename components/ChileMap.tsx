@@ -111,8 +111,8 @@ function MapController({ drillActive, focusBounds }: { drillActive: boolean; foc
       map.invalidateSize()
       map.setMinZoom(chileFitZoom(map))
       flyPendingRef.current = false
-      if (target) map.flyToBounds(target, { padding: [30, 30], duration: 0.8 })
-      else map.flyToBounds(CHILE_BOUNDS, { padding: [20, 20], duration: 0.8 })
+      if (target) map.flyToBounds(target, { padding: [30, 30], duration: 0.6 })
+      else map.flyToBounds(CHILE_BOUNDS, { padding: [20, 20], duration: 0.6 })
     }, 320)
     return () => {
       clearTimeout(t)
