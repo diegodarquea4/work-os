@@ -106,7 +106,13 @@ function buildContext(
   semaforoTrends?: SemaforoTrendSummary | null,
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
+  alcanceCapas?: string | null,
 ): string {
+  // Alcance de capas: si la minuta va acotada (p. ej. "Capa I"), la narrativa
+  // no puede hablar de "las N iniciativas de la región" como si fueran todas.
+  const alcanceStr = alcanceCapas
+    ? `ALCANCE DE ESTA MINUTA: ${alcanceCapas}. Todas las cifras de iniciativas de abajo excluyen las demás capas de importancia; al referirte a totales, di "iniciativas de ${alcanceCapas}".\n\n`
+    : ''
   const total = projects.length
   const rojo  = projects.filter(p => p.estado_semaforo === 'rojo').length
   const ambar = projects.filter(p => p.estado_semaforo === 'ambar').length
@@ -257,8 +263,8 @@ ${seguimientos.map(s =>
 FECHA: ${fecha}
 REGIÓN: ${regionNombre}
 
-ESTADO GENERAL DEL PLAN:
-- Total iniciativas: ${total}
+${alcanceStr}ESTADO GENERAL DEL PLAN:
+- Total iniciativas: ${total}${alcanceCapas ? ` (${alcanceCapas})` : ''}
 - Avance promedio: ${avgPct}%
 - Semáforo rojo (bloqueadas): ${rojo}
 - Semáforo ambar (en revisión): ${ambar}
@@ -317,13 +323,15 @@ export async function generateMinutaContent(
   nationalBenchmark?: NationalBenchmark[],
   trendSummaries?: TrendSummaries | null,
   fichaExtra?: FichaExtraData | null,
+  /** Alcance de capas ("Capa I") cuando la minuta va acotada; null = todas. */
+  alcanceCapas?: string | null,
 ): Promise<MinutaEjecutivaContent | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const client = new Anthropic({ apiKey })
 
-  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData, seguimientos, semaforoTrends, nationalBenchmark, trendSummaries)
+  const context = buildContext(regionNombre, fecha, projects, metrics, seiaProjects, mopProjects, leystopData, seguimientos, semaforoTrends, nationalBenchmark, trendSummaries, alcanceCapas)
   const ejes = [...new Set(projects.map(p => p.eje))]
 
   console.log(`[minutaAI] context length: ${context.length} chars (~${Math.round(context.length / 4)} tokens)`)

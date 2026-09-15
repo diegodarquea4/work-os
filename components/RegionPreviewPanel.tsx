@@ -48,6 +48,9 @@ type Props = {
   // (`comuna_cods @> {cut}`), con header propio. Oculta Métricas clave y
   // Minuta (artefactos regionales sin equivalente comunal).
   comuna?:                { cut: number; nombre: string } | null
+  /** Rótulo del selector de capas del Mapa ("Capa I"); null = todas. Los
+   *  `projects` ya vienen acotados — esto solo lo dice. */
+  capasLabel?:            string | null
   // CTA "Ver detalle comunal" — solo en modo región (equivale al doble click
   // en el polígono; regla 6 del spec del drill).
   onVerDetalleComunal?:   () => void
@@ -62,8 +65,10 @@ export default function RegionPreviewPanel({
   onGoToDashboard,
   onVerMasIndicadores,
   comuna = null,
+  capasLabel = null,
   onVerDetalleComunal,
 }: Props) {
+  const sufijoCapas = capasLabel ? ` · ${capasLabel}` : ''
   const { ejes: regionEjes } = useRegionEjes(region.cod)
 
   // ── Minuta "Contexto Regional" (tipo 'ficha') — descarga la última versión
@@ -135,8 +140,8 @@ export default function RegionPreviewPanel({
 
   // Eje seleccionado en la grid → el box de ese eje se expande en su lugar
   // (sigue mostrando su % de avance total) y despliega debajo TODAS sus
-  // iniciativas (Capa I, II y III), ordenadas por capa (las más importantes
-  // primero) para que arriba queden las que más importan; cuando son muchas,
+  // iniciativas de la capa elegida en el selector del Mapa, ordenadas por capa
+  // (las más importantes primero) — con "Todas" son I, II y III; cuando son muchas,
   // la lista tiene su propio scroll. Aplica igual a nivel regional y comunal
   // (regionIniciativas ya viene filtrado por CUT en modo comuna).
   const [selectedEjeId, setSelectedEjeId] = useState<number | null>(null)
@@ -164,14 +169,14 @@ export default function RegionPreviewPanel({
             {comuna && (
               <>
                 <p className="text-[11px] text-gray-500 truncate">
-                  {regionIniciativas.length} iniciativa{regionIniciativas.length === 1 ? '' : 's'} · {fmtMM(comunaInvMM)} de inversión asociada · CUT {comuna.cut}
+                  {regionIniciativas.length} iniciativa{regionIniciativas.length === 1 ? '' : 's'}{sufijoCapas} · {fmtMM(comunaInvMM)} de inversión asociada · CUT {comuna.cut}
                 </p>
                 <p className="text-[10px] text-gray-400 truncate">Las iniciativas multi-comuna se cuentan completas en cada comuna.</p>
               </>
             )}
             <div className="flex items-center justify-between gap-2">
               {!comuna && (
-                <p className="text-[11px] text-gray-400 truncate">{regionIniciativas.length} iniciativas · {region.capital}</p>
+                <p className="text-[11px] text-gray-400 truncate">{regionIniciativas.length} iniciativas{sufijoCapas} · {region.capital}</p>
               )}
               {!comuna && fichaCached && (
                 <button

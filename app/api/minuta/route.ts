@@ -10,6 +10,7 @@ import { INE_CODE } from '@/lib/regions'
 import { requireAuth, requireCan, isRegionRestricted } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { minutaPostSchema } from '@/lib/schemas'
+import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
 import {
   generateMinutaContent,
   generateKitViajeContent,
@@ -277,7 +278,10 @@ export async function POST(request: Request) {
       }
     }
 
-    projects     = prioridades
+    // Alcance de capas (selector de Mi Región): solo la ejecutiva (Avance
+    // PREGO) es un documento de avance. Se acota ACÁ, antes de todo lo que
+    // deriva de `projects` (seguimientos, tendencias, narrativa IA, tablas).
+    projects     = canonTipo === 'ejecutiva' ? filtrarPorCapas(prioridades, body.capas) : prioridades
     metrics      = metricas
     seiaProjects = (seiaRes.data as SeiaProject[] | null)
     mopProjects  = (mopRes.data  as MopProject[]  | null)
@@ -545,8 +549,10 @@ export async function POST(request: Request) {
   } else {
     const { getIniciativas } = await import('@/lib/projects')
     const all = getIniciativas()
-    projects = all.filter(p => p.cod === body.region.cod)
+    const deLaRegion = all.filter(p => p.cod === body.region.cod)
+    projects = canonTipo === 'ejecutiva' ? filtrarPorCapas(deLaRegion, body.capas) : deLaRegion
   }
+  const capasLabel = canonTipo === 'ejecutiva' && body.capas !== 'todas' ? capaSelLabel(body.capas) : null
 
   // Use cached AI content or generate fresh.
   // El shape del ai_content depende de canonTipo:
@@ -642,6 +648,7 @@ export async function POST(request: Request) {
       nationalBenchmark,
       trendSummaries,
       fichaExtra,
+      capasLabel,
     )
     // Store in cache. Awaited: en serverless, escrituras fire-and-forget se
     // pierden cuando el contenedor se congela tras Response (ver O-04 en
@@ -768,6 +775,7 @@ export async function POST(request: Request) {
         ejes: regionEjes,
         justificacionesEjes,
         planPdfState,
+        capasLabel,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       buffer = await renderToBuffer(element as any)
@@ -792,7 +800,7 @@ export async function POST(request: Request) {
       tipo: canonTipo,
       generado_por: authProfile.id,
       hash_pdf: hash,
-      parametros: { fecha: body.fecha, force, ai: !!aiContent, planPdfState },
+      parametros: { fecha: body.fecha, force, ai: !!aiContent, planPdfState, capas: body.capas },
     })
     if (logErr) console.error('[minuta] v2_minutas_log:', logErr.message)
   }

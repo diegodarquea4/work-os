@@ -31,6 +31,8 @@ type Props = {
   region: Region
   fecha: string
   soloEnFoco: boolean
+  /** Alcance de capas del selector del Tablero ("Capa I"); null = todas. */
+  capasLabel?: string | null
   groups: MinisterioGroup[]
   seguimientosByN: Record<number, Seguimiento[]>
 }
@@ -293,14 +295,14 @@ const s = StyleSheet.create({
 
 // ── Componentes internos ─────────────────────────────────────────────────────
 
-function MinisterioPageHeader({ ministerio, region, fecha }: { ministerio: string; region: Region; fecha: string }) {
+function MinisterioPageHeader({ ministerio, region, fecha, capasLabel }: { ministerio: string; region: Region; fecha: string; capasLabel?: string | null }) {
   return (
     <View style={s.pageHeader} fixed>
       <View style={s.pageHeaderLeft}>
         <Text style={s.pageHeaderMin}>{ministerio}</Text>
         <Text style={s.pageHeaderRegion}>Región de {region.nombre}</Text>
       </View>
-      <Text style={s.pageHeaderRight}>{fecha}</Text>
+      <Text style={s.pageHeaderRight}>{fecha}{capasLabel ? ` · ${capasLabel}` : ''}</Text>
     </View>
   )
 }
@@ -418,19 +420,24 @@ function FichaCompacta({ p, seguimientos }: { p: Iniciativa; seguimientos: Segui
 
 // ── Document ─────────────────────────────────────────────────────────────────
 
-export default function CarteraPdf({ region, fecha, soloEnFoco, groups, seguimientosByN }: Props) {
+export default function CarteraPdf({ region, fecha, soloEnFoco, capasLabel = null, groups, seguimientosByN }: Props) {
   const totalIniciativas = groups.reduce((acc, g) => acc + g.iniciativas.length, 0)
 
   return (
-    <Document title={`Cartera ${region.nombre}${soloEnFoco ? ' — en foco' : ''}`}>
+    <Document title={`Cartera ${region.nombre}${soloEnFoco ? ' — en foco' : ''}${capasLabel ? ` — ${capasLabel}` : ''}`}>
       {/* ── Portada ── */}
       <Page size="A4" orientation="portrait" style={s.page}>
         <Text style={s.portadaTitulo}>Carteras Ministeriales</Text>
         <Text style={s.portadaSub}>Región de {region.nombre}</Text>
         <Text style={s.portadaMeta}>Generado: {fecha}</Text>
         <Text style={s.portadaMeta}>
-          {groups.length} ministerios · {totalIniciativas} {soloEnFoco ? 'iniciativas en foco' : 'iniciativas'}
+          {groups.length} ministerios · {totalIniciativas} {soloEnFoco ? 'iniciativas en foco' : 'iniciativas'}{capasLabel ? ` · ${capasLabel}` : ''}
         </Text>
+        {/* El alcance de capas va explícito: el PDF sigue la selección de la
+            vista y sin esto un lector no sabría por qué faltan iniciativas. */}
+        {capasLabel && (
+          <Text style={s.portadaMeta}>Alcance: {capasLabel} (según el selector de capas del Tablero)</Text>
+        )}
 
         {soloEnFoco && (
           <View style={s.portadaBadgeFoco}>
@@ -457,7 +464,7 @@ export default function CarteraPdf({ region, fecha, soloEnFoco, groups, seguimie
       {/* ── Una página (con wrap) por ministerio ── */}
       {groups.map(group => (
         <Page key={group.nombre} size="A4" orientation="portrait" style={s.page} wrap>
-          <MinisterioPageHeader ministerio={group.nombre} region={region} fecha={fecha} />
+          <MinisterioPageHeader ministerio={group.nombre} region={region} fecha={fecha} capasLabel={capasLabel} />
           <MinisterioResumen iniciativas={group.iniciativas} />
           {group.iniciativas.map(p => (
             <FichaCompacta

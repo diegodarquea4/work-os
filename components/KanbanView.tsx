@@ -2,6 +2,9 @@
 
 import { useMemo, useState, useTransition, useRef, useEffect, useCallback, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
+import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { useCapaSel } from '@/lib/hooks/useCapaSel'
+import CapaSelector from './CapaSelector'
 import { SEMAFORO_CONFIG, splitMinisterios } from '@/lib/config'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import { getSupabase } from '@/lib/supabase'
@@ -275,13 +278,19 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
     regionActiva?.cod ?? '', { instancia: 'gabinete' }, mostrarStepperV2 && puedeVerPreparacion,
   )
   const sinSesionGabinete = mostrarStepperV2 && puedeVerPreparacion && !gabineteResumen.borradorId
+  // Capa de importancia: es el ALCANCE del Tablero (selector de 5 estados,
+  // persistido en `workos:capas:tablero`, default Capa I — Diego, 2026-09-15),
+  // no un filtro más. `pool` es el universo de las columnas, los counts del
+  // panel de filtros y el pane Preparación. Única excepción: al agrupar por
+  // capa (el "detalle por capa") se ven las tres columnas completas.
+  const [capaSel, setCapaSel] = useCapaSel('tablero')
+  const pool = useMemo(() => filtrarPorCapas(projects, capaSel), [projects, capaSel])
   // Filtros del panel "Filtros" — solo los que tienen uso real en la mesa
-  // de Gabinete: estado del compromiso (semáforo), prioridad, capa de
-  // importancia, etapa actual, etiquetas y "en foco". Eliminados respecto
-  // de versión anterior: eje gobierno (Economía/Social/Seguridad) — el
-  // SEREMI piensa por cartera, no por eje gobierno transversal.
+  // de Gabinete: estado del compromiso (semáforo), etapa actual, etiquetas y
+  // "en foco". Eliminados respecto de versión anterior: eje gobierno
+  // (Economía/Social/Seguridad) — el SEREMI piensa por cartera, no por eje
+  // gobierno transversal.
   const [filterSemaforo,  setFilterSemaforo]  = useState<Set<string>>(new Set())
-  const [filterCapa,      setFilterCapa]      = useState<Set<Capa>>(new Set())
   const [filterEtapa,     setFilterEtapa]     = useState<Set<string>>(new Set())
   const [filterTags,      setFilterTags]      = useState<Set<string>>(new Set())
   const [filterFoco,      setFilterFoco]      = useState<boolean>(false)
@@ -335,6 +344,8 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           region,
           soloEnFoco,
           fecha: new Date().toLocaleDateString('es-CL'),
+          // El PDF sigue la selección de capas de la vista y la imprime.
+          capas: capaSel,
         }),
       })
       if (!res.ok) {
@@ -346,7 +357,8 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `cartera-${region.cod}-${soloEnFoco ? 'foco' : 'completa'}-${new Date().toISOString().slice(0, 10)}.pdf`
+      const sufijoCapas = capaSel === 'todas' ? '' : `-capa-${capaSel}`
+      a.download = `cartera-${region.cod}-${soloEnFoco ? 'foco' : 'completa'}${sufijoCapas}-${new Date().toISOString().slice(0, 10)}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -401,15 +413,27 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
     return filtered.sort()
   }, [allowedRegionNames])
 
-  const filtered = useMemo(() => projects.filter(p => {
+  // El predicado se separa del universo para correrlo sobre dos: `pool` (la
+  // capa elegida) para todo, y `projects` entero solo para el modo por capa.
+  const pasaFiltros = useCallback((p: Iniciativa) => {
     if (filterRegion !== 'todas' && p.region !== filterRegion) return false
     if (filterSemaforo.size  > 0 && !filterSemaforo.has(p.estado_semaforo))                       return false
-    if (filterCapa.size      > 0 && !filterCapa.has(p.capa))                                      return false
     if (filterEtapa.size     > 0 && !(p.etapa_actual && filterEtapa.has(p.etapa_actual)))         return false
     if (filterTags.size      > 0 && !(p.tags ?? []).some(t => filterTags.has(t)))                 return false
     if (filterFoco && p.en_foco !== true)                                                         return false
     return true
-  }), [projects, filterRegion, filterSemaforo, filterCapa, filterEtapa, filterTags, filterFoco])
+  }, [filterRegion, filterSemaforo, filterEtapa, filterTags, filterFoco])
+
+  const filtered = useMemo(() => pool.filter(pasaFiltros), [pool, pasaFiltros])
+
+  // Modo por capa: la excepción al selector (Diego, 2026-09-15 — "menos en el
+  // detalle por capa"). Las tres columnas se llenan con la región completa,
+  // y el selector se muestra deshabilitado mientras dure.
+  const enModoCapa = pane === 'tablero' && isGroupedMode && groupBy === 'capa'
+  const filteredTodas = useMemo(
+    () => enModoCapa ? projects.filter(pasaFiltros) : null,
+    [enModoCapa, projects, pasaFiltros],
+  )
 
   // ── Modo "por eje": columnas planas ordenadas 1→6 ──────────────────────────
   const ejeColumns = useMemo(() => {
@@ -470,23 +494,23 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   // Orden de importancia decreciente. Sin columna "sin capa" — la BD garantiza
   // NOT NULL DEFAULT 'lll', toda iniciativa cae en una de las tres.
   const capaColumns = useMemo(() => {
-    if (!isGroupedMode || groupBy !== 'capa') return null
+    if (!filteredTodas) return null
     const buckets: Record<Capa, Iniciativa[]> = { l: [], ll: [], lll: [] }
-    for (const p of filtered) buckets[p.capa].push(p)
+    for (const p of filteredTodas) buckets[p.capa].push(p)
     return [
       { capa: 'l' as Capa,   label: 'Capa I',   sub: 'Las prioridades',  cards: buckets.l   },
       { capa: 'll' as Capa,  label: 'Capa II',  sub: 'Más importante',   cards: buckets.ll  },
       { capa: 'lll' as Capa, label: 'Capa III', sub: 'Cartera regular',  cards: buckets.lll },
     ]
-  }, [filtered, isGroupedMode, groupBy])
+  }, [filteredTodas])
 
   // Opciones del panel de Filtros — derivadas de las iniciativas de la región
-  // activa (sin aplicar otros filtros, para que el usuario vea el universo
-  // completo de opciones aunque ya tenga algún chip activo).
+  // activa en la capa elegida (sin aplicar otros filtros, para que el usuario
+  // vea el universo completo de opciones aunque ya tenga algún chip activo).
   const regionPool = useMemo(() => {
     if (filterRegion === 'todas') return [] as Iniciativa[]
-    return projects.filter(p => p.region === filterRegion)
-  }, [projects, filterRegion])
+    return pool.filter(p => p.region === filterRegion)
+  }, [pool, filterRegion])
 
   const availableEtapas = useMemo<FilterOption[]>(() => {
     const counts = new Map<string, number>()
@@ -509,26 +533,14 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
   }, [regionPool])
 
-  const availableCapas = useMemo<FilterOption[]>(() => {
-    const counts: Record<Capa, number> = { l: 0, ll: 0, lll: 0 }
-    for (const p of regionPool) counts[p.capa] += 1
-    return [
-      { value: 'l',   label: 'Capa I',   sublabel: 'Las prioridades', count: counts.l   },
-      { value: 'll',  label: 'Capa II',  sublabel: 'Más importante',  count: counts.ll  },
-      { value: 'lll', label: 'Capa III', sublabel: 'Cartera regular', count: counts.lll },
-    ]
-  }, [regionPool])
-
   const activeFilterCount =
     (filterSemaforo.size  > 0 ? 1 : 0) +
-    (filterCapa.size      > 0 ? 1 : 0) +
     (filterEtapa.size     > 0 ? 1 : 0) +
     (filterTags.size      > 0 ? 1 : 0) +
     (filterFoco                ? 1 : 0)
 
   function clearAllFilters() {
     setFilterSemaforo(new Set())
-    setFilterCapa(new Set())
     setFilterEtapa(new Set())
     setFilterTags(new Set())
     setFilterFoco(false)
@@ -573,6 +585,18 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           </div>
         )}
 
+        {/* Selector de capas del Tablero (rige ambos panes). Deshabilitado al
+            agrupar por capa: ahí se ven las tres. */}
+        <div className="flex items-center gap-1.5" title={enModoCapa ? undefined : 'Capa de importancia. Lo que elijas rige el Tablero, la Preparación y el PDF de la cartera. Se recuerda en este navegador.'}>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
+          <CapaSelector
+            value={capaSel}
+            onChange={setCapaSel}
+            disabled={enModoCapa}
+            disabledTitle="Al agrupar por capa se muestran las tres capas"
+          />
+        </div>
+
         <select
           value={filterRegion}
           onChange={e => { const v = e.target.value; startTransition(() => { setFilterRegion(v) }) }}
@@ -582,7 +606,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
         </select>
 
         {/* Botón único "Filtros" — abre panel inline con Semáforo, Foco,
-            Prioridad, Capa, Etapa y Etiquetas. Sin eje gobierno: el SEREMI
+            Etapa y Etiquetas (la capa es el selector de arriba). Sin eje gobierno: el SEREMI
             piensa por cartera, no por eje gobierno transversal. */}
         {pane === 'tablero' && isGroupedMode && (
           <button
@@ -670,7 +694,9 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
 
         {pane === 'tablero' && isGroupedMode && (
           <span className="text-xs text-gray-500 font-medium">
-            {filtered.length} iniciativas
+            {/* En modo por capa el número debe calzar con las tres columnas. */}
+            {(filteredTodas ?? filtered).length} iniciativas
+            {!enModoCapa && capaSel !== 'todas' && <span className="text-gray-400 font-normal"> · {capaSelLabel(capaSel)}</span>}
           </span>
         )}
 
@@ -779,7 +805,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           <div className="flex-1 overflow-hidden flex">
             <AttentionTray
               embedded
-              projects={projects}
+              projects={pool}
               actividad={actividad}
               actividadLoading={actividadLoading}
               onUpdatePrioridad={onUpdatePrioridad}
@@ -834,13 +860,6 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             <span className="text-[10px]">⚑</span>
             En foco
           </button>
-
-          <FilterPopover
-            label="Capa"
-            options={availableCapas}
-            selected={filterCapa as Set<string>}
-            onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
-          />
 
           {availableEtapas.length > 0 && (
             <FilterPopover

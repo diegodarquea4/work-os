@@ -7,6 +7,9 @@ import { safeWrite } from '@/lib/dbWrite'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
+import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { useCapaSel } from '@/lib/hooks/useCapaSel'
+import CapaSelector from './CapaSelector'
 import type { EjeSesion } from '@/lib/types'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import type { UserProfile } from '@/lib/apiAuth'
@@ -177,10 +180,18 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // desde RegionEjesPanel cuando se agrega/edita/elimina un eje.
   const { ejes: regionEjes, loading: regionEjesLoading, refresh: refreshRegionEjes } = useRegionEjes(selectedCod)
 
+  // Selector de capas de Mi Región (persistido en `workos:capas:mi-region`,
+  // default Capa I — Diego, 2026-09-15). `iniciativasCapa` es el universo de
+  // TODO lo que esta vista muestra y mide: header, avance, semáforos, foco,
+  // inversión y el grid de ejes ("el avance mide lo mismo que se ve"). Los
+  // efectos que propagan cambios de eje siguen con `iniciativas` entero.
+  const [capaSel, setCapaSel] = useCapaSel('mi-region')
+  const iniciativasCapa = useMemo(() => filtrarPorCapas(iniciativas, capaSel), [iniciativas, capaSel])
+
   // Initiatives for this region
   const regionIniciativas = useMemo(
-    () => selectedCod ? iniciativas.filter(p => p.cod === selectedCod) : [],
-    [iniciativas, selectedCod]
+    () => selectedCod ? iniciativasCapa.filter(p => p.cod === selectedCod) : [],
+    [iniciativasCapa, selectedCod]
   )
 
   // Población de la región activa (para Inversión per cápita) — misma tabla
@@ -237,8 +248,8 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // matcheadas por `eje_id`. Las sin `eje_id` quedan fuera del breakdown —
   // si admin las ve faltar en los totales, las edita y les asigna eje.
   const ejeData = useMemo(
-    () => selectedCod ? ejeBreakdownFor(selectedCod, iniciativas, regionEjes) : [],
-    [selectedCod, iniciativas, regionEjes],
+    () => selectedCod ? ejeBreakdownFor(selectedCod, iniciativasCapa, regionEjes) : [],
+    [selectedCod, iniciativasCapa, regionEjes],
   )
 
   // Cuando el admin renombra o reordena un eje, el catálogo (`regionEjes`) se
@@ -308,7 +319,13 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
       const res = await fetch('/api/minuta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, fecha, tipo, ...(numero ? { numero } : {}), ...(force ? { force: true } : {}) }),
+        body: JSON.stringify({
+          region, fecha, tipo,
+          ...(numero ? { numero } : {}),
+          ...(force ? { force: true } : {}),
+          // El Avance PREGO sigue la selección de capas de la vista y la imprime.
+          ...(tipo === 'ejecutiva' ? { capas: capaSel } : {}),
+        }),
       })
       if (!res.ok) {
         // El server devuelve JSON {error, detalle?} en 4xx/5xx. Leerlo para
@@ -506,7 +523,19 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 <h2 className="text-fluid-2xl font-bold text-slate-900 truncate">{region?.nombre ?? '—'}</h2>
                 <span className="text-xs text-gray-400 shrink-0">{region?.zona}</span>
               </div>
-              <p className="text-xs text-gray-400 mb-3">{regionIniciativas.length} iniciativas · {region?.capital}</p>
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <p className="text-xs text-gray-400">
+                  {regionIniciativas.length} iniciativas
+                  {capaSel !== 'todas' && <span> · {capaSelLabel(capaSel)}</span>}
+                  {' · '}{region?.capital}
+                </p>
+                {/* Selector de capas: rige todo lo que esta vista muestra y
+                    mide, incluido el PDF de Avance PREGO. Se recuerda. */}
+                <div className="flex items-center gap-1.5" title="Capa de importancia. Lo que elijas rige los conteos, el avance, los semáforos, los ejes y el Avance PREGO de esta vista. Se recuerda en este navegador.">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
+                  <CapaSelector value={capaSel} onChange={setCapaSel} />
+                </div>
+              </div>
 
               {/* Avance bar */}
               <div className="flex items-center gap-3 mb-3">

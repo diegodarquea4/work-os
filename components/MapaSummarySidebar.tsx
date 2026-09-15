@@ -43,6 +43,8 @@ type Props = {
   globalAvgPct:    number
   globalRag:       RagCounts
   totalIniciativas: number
+  /** Rótulo del selector de capas del Mapa ("Capa I"); null = todas. */
+  capasLabel?:     string | null
   lockedRegions?:  string[]
   ragFor:          (regionName: string) => { rojo: number; ambar: number; verde: number }
   avgPctFor:       (regionName: string) => number
@@ -65,6 +67,7 @@ export default function MapaSummarySidebar({
   globalAvgPct,
   globalRag,
   totalIniciativas,
+  capasLabel = null,
   lockedRegions = [],
   ragFor,
   avgPctFor,
@@ -93,9 +96,12 @@ export default function MapaSummarySidebar({
     }))
     if (sortMode === 'urgencia') {
       // Locked al final, después por avance ASC (rezagadas arriba), desempate
-      // por alertas DESC.
+      // por alertas DESC. Las regiones SIN iniciativas van después de las que
+      // tienen: con el selector en una capa angosta (Capa I) varias quedan en
+      // 0 y flotarían arriba como si fueran las más rezagadas.
       return [...base].sort((a, b) => {
         if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1
+        if ((a.count === 0) !== (b.count === 0)) return a.count === 0 ? 1 : -1
         if (a.avgPct !== b.avgPct) return a.avgPct - b.avgPct
         return b.alertas - a.alertas
       })
@@ -138,7 +144,7 @@ export default function MapaSummarySidebar({
           <SemDotTip label={SEM_TITLE.rojo} className="gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/><span className="text-red-600 font-medium">{globalRag.rojo}</span></SemDotTip>
           <SemDotTip label={SEM_TITLE.ambar} className="gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-amber-600 font-medium">{globalRag.ambar}</span></SemDotTip>
           <SemDotTip label={SEM_TITLE.verde} className="gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/><span className="text-green-600 font-medium">{globalRag.verde}</span></SemDotTip>
-          <span className="ml-auto text-gray-400">{totalIniciativas} iniciativas</span>
+          <span className="ml-auto text-gray-400">{totalIniciativas} iniciativas{capasLabel ? ` · ${capasLabel}` : ''}</span>
         </div>
 
         {/* Toggle de orden */}

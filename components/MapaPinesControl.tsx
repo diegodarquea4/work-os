@@ -1,30 +1,32 @@
 'use client'
 
-import type { Capa } from '@/lib/projects'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 
 /**
  * Control flotante de los pines del Mapa (mig 104). Va debajo del breadcrumb,
  * mismo chrome. Tiene dos alcances:
  *
+ * La CAPA ya no se elige acá: desde el 2026-09-15 la fija el selector de la
+ * vista Mapa (`CapaSelector` en WorkOSApp, persistido), que rige también el
+ * lateral. Este control solo ve iniciativas de la capa elegida.
+ *
  * `alcance='pais'` — sin drill, sobre Chile entero. Una sola fila con el
- *   selector de etiquetas, y recién cuando hay una elegida aparecen los chips
- *   de capa y el contador. Es deliberado que el mapa país arranque con un
- *   botón y nada más: dibujar las miles de iniciativas georreferenciadas del
- *   país de una sola vez no se lee ni se navega. Con una etiqueta elegida el
- *   mapa responde la pregunta que la motiva —dónde está esto— sin recortarla
- *   a una región (Diego, 2026-09-14).
+ *   selector de etiquetas, y recién cuando hay una elegida aparece el
+ *   contador. Es deliberado que el mapa país arranque con un botón y nada
+ *   más: dibujar las miles de iniciativas georreferenciadas del país de una
+ *   sola vez no se lee ni se navega. Con una etiqueta elegida el mapa responde
+ *   la pregunta que la motiva —dónde está esto— sin recortarla a una región
+ *   (Diego, 2026-09-14).
  *
  * `alcance='region'` — dentro del drill comunal. El mapa dibuja los pines de
  *   TODO el país (no solo los de la región abierta), para poder desplazarse a
  *   una región vecina sin salir del zoom y volver a entrar. Por eso el alcance
- *   de cada filtro es distinto, y así lo pidió Diego el 2026-09-14: capa y
- *   etiqueta son GENERALES —cruzan regiones— y comuna es el único ESPECÍFICO.
- *   El contador sigue hablando de la región abierta: es su señal de avance de
- *   la georreferenciación, y el texto lo dice. Dos filas:
+ *   de cada filtro es distinto, y así lo pidió Diego el 2026-09-14: la
+ *   etiqueta es GENERAL —cruza regiones— y comuna es el único ESPECÍFICO. El
+ *   contador sigue hablando de la región abierta: es su señal de avance de la
+ *   georreferenciación, y el texto lo dice. Dos filas:
  *
- *   fila 1 — chips I · II · III para filtrar los pines por capa (multi, todas
- *     on), el contador de avance de la georreferenciación de la región (solo
+ *   fila 1 — el contador de avance de la georreferenciación de la región (solo
  *     cuentan las que tienen ubicación exacta cargada: sin aproximación por
  *     centroide, Diego 2026-09-11) y el chip "+N de alcance regional" (esas
  *     no tienen pin) → abre la lista en el lateral.
@@ -37,30 +39,22 @@ import FilterPopover, { type FilterOption } from './FilterPopover'
  *     con O dentro de cada uno.
  */
 
-const CAPAS: { key: Capa; label: string; title: string }[] = [
-  { key: 'l',   label: 'I',   title: 'Capa I — las prioridades' },
-  { key: 'll',  label: 'II',  title: 'Capa II' },
-  { key: 'lll', label: 'III', title: 'Capa III — cartera regular' },
-]
-
 type ComunaOpcion = { cut: number; nombre: string; pines: number }
 type EtiquetaOpcion = { tag: string; pines: number }
 
 type Props = {
   /** 'region' = dentro del drill comunal; 'pais' = mapa de Chile entero. */
   alcance?: 'region' | 'pais'
-  capas: ReadonlySet<Capa>
-  onToggleCapa: (capa: Capa) => void
   conUbicacion: number
   sinUbicacion: number
   regionales: number
   onVerRegionales?: () => void
-  /** Comunas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). Solo en 'region'. */
+  /** Comunas que hoy tienen al menos un pin (en la capa elegida). Solo en 'region'. */
   comunasOpciones?: ComunaOpcion[]
   /** CUT seleccionados. Vacío = todas las comunas. Solo en 'region'. */
   comunasSel?: ReadonlySet<number>
   onChangeComunas?: (next: Set<number>) => void
-  /** Etiquetas de la región que hoy tienen al menos un pin (con el filtro de capas aplicado). */
+  /** Etiquetas que hoy tienen al menos un pin (en la capa elegida). */
   etiquetasOpciones: EtiquetaOpcion[]
   /** Etiquetas seleccionadas. Vacío = todas. */
   etiquetasSel: ReadonlySet<string>
@@ -69,7 +63,7 @@ type Props = {
 
 export default function MapaPinesControl({
   alcance = 'region',
-  capas, onToggleCapa, conUbicacion, sinUbicacion, regionales, onVerRegionales,
+  conUbicacion, sinUbicacion, regionales, onVerRegionales,
   comunasOpciones = [], comunasSel, onChangeComunas,
   etiquetasOpciones, etiquetasSel, onChangeEtiquetas,
 }: Props) {
@@ -88,28 +82,6 @@ export default function MapaPinesControl({
     label: e.tag,
     count: e.pines,
   }))
-
-  const chipsCapa = (
-    <div className="flex rounded-md border border-gray-200 overflow-hidden">
-      {CAPAS.map((c, i) => {
-        const on = capas.has(c.key)
-        return (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => onToggleCapa(c.key)}
-            title={c.title}
-            aria-pressed={on}
-            className={`px-2 py-0.5 text-[11px] font-semibold transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
-              on ? 'bg-slate-800 text-white' : 'bg-white text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            {c.label}
-          </button>
-        )
-      })}
-    </div>
-  )
 
   // En el drill el contador habla de la REGIÓN abierta (es su señal de avance
   // de la georreferenciación), aunque el mapa dibuje además los pines de las
@@ -146,12 +118,7 @@ export default function MapaPinesControl({
     return (
       <div className="pointer-events-auto flex items-center gap-2 flex-wrap bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
         {filtroEtiquetas}
-        {hayEtiqueta ? (
-          <>
-            {chipsCapa}
-            {contador}
-          </>
-        ) : (
+        {hayEtiqueta ? contador : (
           <span className="text-[11px] text-gray-400">
             Elige una etiqueta para verla en todo el país
           </span>
@@ -164,7 +131,6 @@ export default function MapaPinesControl({
     <div className="pointer-events-auto flex flex-col gap-1.5 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5 max-w-full">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pines</span>
-        {chipsCapa}
         {contador}
         {regionales > 0 && (
           <button

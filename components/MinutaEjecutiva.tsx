@@ -172,7 +172,7 @@ const s = StyleSheet.create({
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function PH({ region, fecha }: { region: Region; fecha: string }) {
+function PH({ region, fecha, capasLabel }: { region: Region; fecha: string; capasLabel?: string | null }) {
   return (
     <View style={s.ph}>
       <View>
@@ -183,6 +183,9 @@ function PH({ region, fecha }: { region: Region; fecha: string }) {
       <View style={s.phR}>
         <Text style={s.phRegion}>{regionLabel(region)}</Text>
         <Text style={s.phDate}>{fecha}</Text>
+        {/* Alcance de capas (selector de Mi Región): las cifras de esta
+            minuta excluyen las demás capas, y el lector tiene que saberlo. */}
+        {capasLabel && <Text style={s.phDate}>Alcance: {capasLabel}</Text>}
         <View style={s.phChip}><Text style={s.phChipTx}>MINUTA EJECUTIVA</Text></View>
       </View>
     </View>
@@ -383,11 +386,14 @@ type Props = {
   justificacionesEjes?: Record<string, string>
   /** Estado del PDF del plan regional — determina si el bloque diagnóstico muestra disclaimer. */
   planPdfState?: 'ok' | 'missing' | 'invalid'
+  /** Alcance de capas del selector de Mi Región ("Capa I"); null = todas.
+   *  `projects` ya viene acotado por la ruta — esto solo lo imprime. */
+  capasLabel?: string | null
 }
 
 export default function MinutaEjecutiva({
   region, projects, seiaProjects, mopProjects, fecha, aiContent,
-  ejes = [], justificacionesEjes = {}, planPdfState = 'missing',
+  ejes = [], justificacionesEjes = {}, planPdfState = 'missing', capasLabel = null,
 }: Props) {
   const ai = (aiContent && typeof aiContent === 'object' && 'avances_relevantes' in aiContent)
     ? aiContent as MinutaEjecutivaContent : null
@@ -432,7 +438,7 @@ export default function MinutaEjecutiva({
     <Document>
       {/* ── PÁGINA 1 ──────────────────────────────────────────────────────── */}
       <Page size="A4" style={s.page}>
-        <PH region={region} fecha={fecha} />
+        <PH region={region} fecha={fecha} capasLabel={capasLabel} />
 
         <View style={s.body}>
           {/* Bloque "Del diagnóstico a la priorización" — arriba de todo,
@@ -520,7 +526,7 @@ export default function MinutaEjecutiva({
 
       {/* ── PÁGINA 2 ──────────────────────────────────────────────────────── */}
       <Page size="A4" style={s.page}>
-        <PH region={region} fecha={fecha} />
+        <PH region={region} fecha={fecha} capasLabel={capasLabel} />
 
         <View style={s.body}>
 

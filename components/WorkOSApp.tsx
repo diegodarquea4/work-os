@@ -4,8 +4,11 @@ import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'rea
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import type { GeoJsonObject } from 'geojson'
-import type { Iniciativa, Capa } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
+import { filtrarPorCapas, capasDe, capaSelLabel } from '@/lib/capas'
+import { useCapaSel } from '@/lib/hooks/useCapaSel'
+import CapaSelector from './CapaSelector'
 import { REGIONS, INE_CODE } from '@/lib/regions'
 import { ministerioCalza } from '@/lib/ministerios'
 import { construirPines, comunasConPin, etiquetasConPin } from '@/lib/pinesIniciativas'
@@ -335,26 +338,22 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   }
   const [mapDrill, setMapDrill] = useState<MapDrill | null>(null)
 
-  // ── Mapa: pines por iniciativa (mig 104) ───────────────────────────────────
-  // Capas y comunas visibles en los pines (todas por defecto; sesión, no se
-  // persiste), la ficha abierta desde un pin (por id — n no es único) y si el
-  // lateral debe mostrar desplegada la lista de alcance regional. Solo van
-  // como pin las iniciativas con `ubicacion_lat/lng` cargada — no hay
-  // aproximación por centroide de comuna (Diego, 2026-09-11).
-  const [pinCapas, setPinCapas] = useState<Set<Capa>>(() => new Set<Capa>(['l', 'll', 'lll']))
+  // ── Mapa: selector de capas + pines por iniciativa (mig 104) ───────────────
+  // La capa la fija el selector de la VISTA (persistido en `workos:capas:mapa`,
+  // default Capa I — Diego, 2026-09-15) y alcanza todo lo que el Mapa muestra:
+  // pines, conteos por región, semáforos y avance del lateral. No es un filtro
+  // de los pines: es el universo del Mapa ("el avance mide lo mismo que se ve").
+  // Comunas y etiquetas sí son filtros de sesión de los pines. La ficha abierta
+  // desde un pin va por id (n no es único). Solo van como pin las iniciativas
+  // con `ubicacion_lat/lng` cargada — sin aproximación por centroide (Diego,
+  // 2026-09-11).
+  const [capaSelMapa, setCapaSelMapa] = useCapaSel('mapa')
   // CUT seleccionados; vacío = todas las comunas.
   const [pinComunas, setPinComunas] = useState<Set<number>>(() => new Set<number>())
   // Etiquetas seleccionadas; vacío = todas.
   const [pinTags, setPinTags] = useState<Set<string>>(() => new Set<string>())
   const [mapIniciativaId, setMapIniciativaId] = useState<number | null>(null)
   const [regionalesAbierto, setRegionalesAbierto] = useState(false)
-  const togglePinCapa = useCallback((capa: Capa) => {
-    setPinCapas(prev => {
-      const next = new Set(prev)
-      if (next.has(capa)) next.delete(capa); else next.add(capa)
-      return next
-    })
-  }, [])
 
   // Región que la cámara del mapa debe enfocar (click en una fila del lateral
   // → el mapa vuela a esa región). null = visual de todo Chile. Ortogonal al
@@ -433,6 +432,17 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     })
   }, [localIniciativas, needsRegionFilter, ministerioSeremi, profile])
 
+  // Universo del MAPA: lo visible por permisos, acotado a la capa elegida en
+  // su selector. Solo lo leen los consumidores del Mapa (pines, lateral,
+  // preview, stats comunales, conteos de ChileMap). Las otras vistas siguen
+  // recibiendo `visibleIniciativas` entero y se acotan con SU selector.
+  const iniciativasMapa = useMemo(
+    () => filtrarPorCapas(visibleIniciativas, capaSelMapa),
+    [visibleIniciativas, capaSelMapa],
+  )
+  const capasMapa = capasDe(capaSelMapa)   // Set constante por selección
+  const capasMapaLabel = capaSelMapa === 'todas' ? null : capaSelLabel(capaSelMapa)
+
   // Cerrar el menú tuerca al clickear fuera.
   useEffect(() => {
     if (!gearOpen) return
@@ -500,29 +510,30 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     setLocalIniciativas(prev => prev.map(p => set.has(p.n) ? { ...p, ...patch } : p))
   }, [])
 
-  // Agregados por región + globales. Se recalculaban en CADA render de WorkOSApp
-  // (incluso al arrastrar el sidebar o abrir un dropdown). Ahora se memoizan por
-  // `localIniciativas` — solo se rehacen cuando cambian los datos, y estabilizan
-  // las props que bajan a ChileMap / MapaSummarySidebar.
+  // Agregados por región + globales DEL MAPA. Se recalculaban en CADA render de
+  // WorkOSApp (incluso al arrastrar el sidebar o abrir un dropdown). Ahora se
+  // memoizan por `iniciativasMapa` — solo se rehacen cuando cambian los datos o
+  // la capa elegida, y estabilizan las props que bajan a ChileMap /
+  // MapaSummarySidebar.
   const { projectsByRegion, projectCounts, globalAvgPct, globalRag } = useMemo(() => {
     const byRegion: Record<string, Iniciativa[]> = {}
-    for (const p of visibleIniciativas) {
+    for (const p of iniciativasMapa) {
       if (!byRegion[p.region]) byRegion[p.region] = []
       byRegion[p.region].push(p)
     }
     const counts: Record<string, number> = {}
     for (const [region, list] of Object.entries(byRegion)) counts[region] = list.length
 
-    const avg = visibleIniciativas.length > 0
-      ? Math.round(visibleIniciativas.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / visibleIniciativas.length)
+    const avg = iniciativasMapa.length > 0
+      ? Math.round(iniciativasMapa.reduce((s, p) => s + (p.pct_avance ?? 0), 0) / iniciativasMapa.length)
       : 0
     const rag = {
-      rojo:  visibleIniciativas.filter(p => p.estado_semaforo === 'rojo').length,
-      ambar: visibleIniciativas.filter(p => p.estado_semaforo === 'ambar').length,
-      verde: visibleIniciativas.filter(p => p.estado_semaforo === 'verde').length,
+      rojo:  iniciativasMapa.filter(p => p.estado_semaforo === 'rojo').length,
+      ambar: iniciativasMapa.filter(p => p.estado_semaforo === 'ambar').length,
+      verde: iniciativasMapa.filter(p => p.estado_semaforo === 'verde').length,
     }
     return { projectsByRegion: byRegion, projectCounts: counts, globalAvgPct: avg, globalRag: rag }
-  }, [visibleIniciativas])
+  }, [iniciativasMapa])
 
   const selectedIniciativas = useMemo(
     () => selectedRegion ? (projectsByRegion[selectedRegion.nombre] ?? []) : [],
@@ -649,8 +660,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // el drill dibuja varias regiones) en cada clic.
   const enDrill = mapDrill != null
   const statsComunalesPais = useMemo(
-    () => enDrill ? statsByCutPais(visibleIniciativas) : null,
-    [enDrill, visibleIniciativas],
+    () => enDrill ? statsByCutPais(iniciativasMapa) : null,
+    [enDrill, iniciativasMapa],
   )
 
   // Pines de la región drilled. NO son los que se dibujan (para eso está
@@ -659,9 +670,9 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // que son las dos cosas del chrome que hablan de la región abierta.
   const pinesRegion = useMemo(
     () => (drillRegion && mapaCapa === 'psg')
-      ? construirPines(projectsByRegion[drillRegion.nombre] ?? [], pinCapas, pinComunas, pinTags)
+      ? construirPines(projectsByRegion[drillRegion.nombre] ?? [], capasMapa, pinComunas, pinTags)
       : null,
-    [drillRegion, projectsByRegion, pinCapas, pinComunas, pinTags, mapaCapa],
+    [drillRegion, projectsByRegion, capasMapa, pinComunas, pinTags, mapaCapa],
   )
 
   // Opciones de los selectores de comuna y etiqueta: solo las que hoy tienen
@@ -677,11 +688,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // vista. El nombre sale del catálogo nacional por CUT.
   const comunasOpciones = useMemo(() => {
     if (mapaCapa !== 'psg') return []
-    const conteo = comunasConPin(visibleIniciativas, pinCapas)
+    const conteo = comunasConPin(iniciativasMapa, capasMapa)
     return Array.from(conteo.entries())
       .map(([cut, pines]) => ({ cut, nombre: comunaNombre(cut) ?? `Comuna ${cut}`, pines }))
       .sort((a, b) => b.pines - a.pines || a.nombre.localeCompare(b.nombre, 'es'))
-  }, [visibleIniciativas, pinCapas, mapaCapa])
+  }, [iniciativasMapa, capasMapa, mapaCapa])
 
   // Las etiquetas que se ofrecen son SIEMPRE las del país, también dentro de un
   // drill: el filtro de etiqueta es de alcance nacional (Diego, 2026-09-14), y
@@ -689,11 +700,11 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // transversales, que son las que interesa seguir de una región a la otra.
   const etiquetasOpciones = useMemo(() => {
     if (mapaCapa !== 'psg') return []
-    const conteo = etiquetasConPin(visibleIniciativas, pinCapas)
+    const conteo = etiquetasConPin(iniciativasMapa, capasMapa)
     return Array.from(conteo.entries())
       .map(([tag, pines]) => ({ tag, pines }))
       .sort((a, b) => b.pines - a.pines || a.tag.localeCompare(b.tag, 'es'))
-  }, [visibleIniciativas, pinCapas, mapaCapa])
+  }, [iniciativasMapa, capasMapa, mapaCapa])
 
   // Los pines que se DIBUJAN, en los dos niveles del mapa. Siempre salen del
   // país entero, nunca de una sola región: en el zoom comunal eso permite
@@ -701,7 +712,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // la vista general para volver a entrar (Diego, 2026-09-14).
   //
   // Alcance de cada filtro, tal como lo pidió:
-  //   · capa y etiqueta — generales, cruzan todas las regiones.
+  //   · capa — es el selector de la vista (ya viene aplicado en
+  //     `iniciativasMapa`) y etiqueta — general, cruza todas las regiones.
   //   · comuna — específico, y solo existe dentro del drill: sus CUT son de la
   //     región abierta, así que fuera del drill se pasa `null` (si no, un
   //     filtro que quedó puesto en el drill anterior vaciaría el mapa país).
@@ -712,8 +724,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   const pinesMapa = useMemo(() => {
     if (mapaCapa !== 'psg') return null
     if (!drillRegion && pinTags.size === 0) return null
-    return construirPines(visibleIniciativas, pinCapas, drillRegion ? pinComunas : null, pinTags)
-  }, [drillRegion, visibleIniciativas, pinCapas, pinComunas, pinTags, mapaCapa])
+    return construirPines(iniciativasMapa, capasMapa, drillRegion ? pinComunas : null, pinTags)
+  }, [drillRegion, iniciativasMapa, capasMapa, pinComunas, pinTags, mapaCapa])
   // La ficha lee de localIniciativas para ver los patches en vivo (no un snapshot).
   const mapIniciativa = mapIniciativaId != null
     ? localIniciativas.find(p => p.id === mapIniciativaId) ?? null
@@ -1004,6 +1016,15 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 deja pasar el mouse al mapa entre los chips. */}
             <div data-autoridades-controls className="pointer-events-none absolute left-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-2">
               {puedeVerAutoridades && <MapaModoToggle value={mapaCapa} onChange={setMapaCapaPref} />}
+              {/* Selector de capas del Mapa: SIEMPRE visible en PSG (también en
+                  país sin etiqueta elegida), porque no rige solo los pines sino
+                  también el lateral — conteos, semáforos y avance por región. */}
+              {mapaCapa === 'psg' && (
+                <div className="pointer-events-auto flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
+                  <CapaSelector value={capaSelMapa} onChange={setCapaSelMapa} />
+                </div>
+              )}
               {mapaCapa === 'autoridades' && (
                 <>
                   <AutoridadesToolbar onNavigateComuna={handleNavigateComuna} />
@@ -1019,8 +1040,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               )}
               {mapDrill && mapaCapa === 'psg' && pinesRegion && (
                 <MapaPinesControl
-                  capas={pinCapas}
-                  onToggleCapa={togglePinCapa}
                   conUbicacion={pinesRegion.pines.length}
                   sinUbicacion={pinesRegion.sinUbicacion}
                   regionales={pinesRegion.regionales.length}
@@ -1038,8 +1057,6 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               {!mapDrill && mapaCapa === 'psg' && etiquetasOpciones.length > 0 && (
                 <MapaPinesControl
                   alcance="pais"
-                  capas={pinCapas}
-                  onToggleCapa={togglePinCapa}
                   conUbicacion={pinesMapa?.pines.length ?? 0}
                   sinUbicacion={pinesMapa?.sinUbicacion ?? 0}
                   regionales={0}
@@ -1111,6 +1128,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
                 region={mapDrill.comuna.region}
                 comuna={mapDrill.comuna}
                 projects={projectsByRegion[mapDrill.comuna.region.nombre] ?? []}
+                capasLabel={capasMapaLabel}
                 onClose={drillBack}
                 onGoToDashboard={() => setView('vista-regional')}
               />
@@ -1126,6 +1144,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               <RegionPreviewPanel
                 region={selectedRegion}
                 projects={selectedIniciativas}
+                capasLabel={capasMapaLabel}
                 onClose={() => { setSelectedRegion(null); setMapFocusCod(null) }}
                 onGoToDashboard={() => setView('vista-regional')}
                 onVerMasIndicadores={(r) => { setMetricasInitialRegion(r.nombre); setView('metricas') }}
@@ -1141,12 +1160,13 @@ export default function WorkOSApp({ projects, geoData }: Props) {
           {mapaCapa === 'psg' && mapaMode === 'summary'
             && (!mapDrill || (!mapDrill.comuna && !regionalesAbierto)) && (
             <MapaSummarySidebar
-              projects={visibleIniciativas}
+              projects={iniciativasMapa}
               actividad={actividad}
               projectCounts={projectCounts}
               globalAvgPct={globalAvgPct}
               globalRag={globalRag}
-              totalIniciativas={visibleIniciativas.length}
+              totalIniciativas={iniciativasMapa.length}
+              capasLabel={capasMapaLabel}
               lockedRegions={lockedRegions}
               ragFor={ragFor}
               avgPctFor={avgPctFor}

@@ -1506,9 +1506,29 @@ Sirven para:
 
 Atajos:
 - Botón "Limpiar todo" al lado de los chips resetea todos los filtros de una vez.
-- Los filtros persisten al recargar la página (se guardan en localStorage). Si quieres empezar limpio cada sesión, "Limpiar todo" antes de cerrar.`,
-    relacionadas: ['filtros-multi-select', 'kanban-vacio'],
-    ultima_revision: '2026-06-16',
+- Los filtros se reinician al recargar la página. Lo único que se recuerda es el selector de Capa de cada vista (ver "¿Qué hace el selector de Capa I · II · III?"), y "Limpiar todo" no lo toca.`,
+    relacionadas: ['filtros-multi-select', 'kanban-vacio', 'capas-selector'],
+    ultima_revision: '2026-09-15',
+  },
+  {
+    id: 'capas-selector',
+    audiencia: 'todos',
+    categoria: 'Atención y foco',
+    pregunta: '¿Qué hace el selector de Capa (I · II · III · I+II · Todas) que aparece en el Mapa, Iniciativas, Tablero y Mi Región?',
+    respuesta:
+`Elige qué capas de importancia entran en la vista. No es un filtro más: es el universo sobre el que se calcula todo lo que esa vista muestra — la lista, los pines del mapa, los conteos, los semáforos y el % de avance por región y por eje. El número que ves siempre corresponde a lo que tienes seleccionado.
+
+Por qué existe: la Capa III es cerca del 73% de la cartera y casi no tiene seguimiento, así que mezclarla enterraba el avance de lo que sí se sigue de cerca. Por defecto cada vista parte en Capa I.
+
+Cómo funciona:
+- Cada vista tiene el suyo y son independientes: puedes tener el Mapa en Capa I e Iniciativas en I+II.
+- Se recuerda en tu navegador; "Limpiar todo" no lo cambia.
+- Los PDF generados desde la vista siguen la misma selección y lo dicen en el encabezado ("Alcance: Capa I"): Avance PREGO desde Mi Región y Exportar cartera desde el Tablero.
+- Única excepción: en el Tablero, al agrupar por capa se muestran las tres columnas completas y el selector queda deshabilitado mientras dure esa vista.
+
+Si una región se ve casi vacía, revisa el selector antes de pensar que faltan datos: con Capa I hay regiones con menos de 20 iniciativas.`,
+    relacionadas: ['filtros-chips-activos', 'filtros-multi-select'],
+    ultima_revision: '2026-09-15',
   },
   {
     id: 'bandeja-actividad',

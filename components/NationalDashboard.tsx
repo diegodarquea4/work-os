@@ -2,8 +2,11 @@
 
 import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { Iniciativa, Capa } from '@/lib/projects'
+import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
+import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { useCapaSel } from '@/lib/hooks/useCapaSel'
+import CapaSelector from './CapaSelector'
 import ProjectTrackerModal from './ProjectTrackerModal'
 import { SEMAFORO_CONFIG as SEMAFORO_BASE, etapaColor } from '@/lib/config'
 import { useCanEditAny, useCanEditOperational, useCurrentUserEmail } from '@/lib/context/UserContext'
@@ -146,8 +149,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   const [filterResponsable, setFilterResponsable] = useState<Set<string>>(new Set())
   // Toggle "En foco": activo → solo p.en_foco === true; inactivo → todas.
   const [filterFoco, setFilterFoco]               = useState<boolean>(false)
-  // Capa de importancia (migración 024). Multi-select sobre valores 'l'|'ll'|'lll'.
-  const [filterCapa, setFilterCapa]               = useState<Set<Capa>>(new Set())
+  // Capa de importancia: NO es un filtro más, es el ALCANCE de la vista
+  // (selector de 5 estados, persistido en `workos:capas:iniciativas`, default
+  // Capa I — Diego, 2026-09-15). `pool` es el universo sobre el que corren
+  // todos los filtros, sus counts y los KPIs: "el avance mide lo mismo que se
+  // ve". Por eso "Limpiar todo" no lo toca.
+  const [capaSel, setCapaSel] = useCapaSel('iniciativas')
+  const pool = useMemo(() => filtrarPorCapas(projects, capaSel), [projects, capaSel])
   // Toggle "Solo desalojos" (admin only — el chip se oculta para otros roles
   // porque la marca es admin-only y filtrar por algo que no puedes ver es
   // confuso). La lógica del filtro funciona aunque el chip esté oculto.
@@ -238,7 +246,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   const filtered = useMemo(() => {
-    let list = projects.filter(p => {
+    let list = pool.filter(p => {
       if (deferredSearch) {
         const q = deferredSearch.toLowerCase()
         if (!p.nombre.toLowerCase().includes(q) &&
@@ -260,7 +268,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))   return false
       if (filterFoco     && p.en_foco     !== true) return false
       if (filterDesalojo && p.es_desalojo !== true) return false
-      if (filterCapa.size > 0 && !filterCapa.has(p.capa)) return false
       if (filterMinisterio.size > 0
           && !splitMinisterio(p.ministerio).map(normalizeMinisterio).some(m => filterMinisterio.has(m))) return false
       return true
@@ -282,7 +289,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [projects, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa, filterMinisterio, sortCol, sortDir, actividad])
+  }, [pool, deferredSearch, filterRegion, filterEje, filterEjeGobierno, filterSemaforo, filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen, filterTags, filterResponsable, filterFoco, filterDesalojo, filterMinisterio, sortCol, sortDir, actividad])
 
   // Catálogo formal de ejes per-región (migración 015). Si hay UNA sola región
   // filtrada, cargamos el catálogo de esa región para enriquecer las opciones
@@ -320,7 +327,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     // D1-03: usa deferredSearch igual que filtered. Los counts en los popovers
     // se actualizan junto con el resultado de la tabla, no por keystroke.
     const q = deferredSearch.toLowerCase()
-    return projects.filter(p => {
+    return pool.filter(p => {
       if (deferredSearch) {
         if (!p.nombre.toLowerCase().includes(q) &&
             !p.region.toLowerCase().includes(q) &&
@@ -339,7 +346,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
       if (excluding !== 'responsable'  && filterResponsable.size  > 0 && !(p.responsable && filterResponsable.has(p.responsable)))                          return false
       if (excluding !== 'foco'         && filterFoco              && p.en_foco     !== true)                                                               return false
       if (excluding !== 'desalojo'     && filterDesalojo          && p.es_desalojo !== true)                                                               return false
-      if (excluding !== 'capa'         && filterCapa.size > 0     && !filterCapa.has(p.capa))                                                              return false
       if (excluding !== 'ministerio'   && filterMinisterio.size > 0
           && !splitMinisterio(p.ministerio).map(normalizeMinisterio).some(m => filterMinisterio.has(m)))                                                  return false
       return true
@@ -370,10 +376,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   }
 
   const baseDeps = [
-    projects, deferredSearch,
+    pool, deferredSearch,
     filterRegion, filterEje, filterEjeGobierno, filterSemaforo,
     filterEtapa, filterRat, filterFuente, filterComuna, filterOrigen,
-    filterTags, filterResponsable, filterFoco, filterDesalojo, filterCapa,
+    filterTags, filterResponsable, filterFoco, filterDesalojo,
     filterMinisterio,
   ]
 
@@ -420,18 +426,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
         count,
       }))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
-  }, baseDeps)
-  // Capa: orden fijo I → II → III (no por counts) — la jerarquía importa
-  // visualmente más que la frecuencia.
-  const availableCapas = useMemo(() => {
-    const pool = basePool('capa')
-    const counts: Record<Capa, number> = { l: 0, ll: 0, lll: 0 }
-    for (const p of pool) counts[p.capa] += 1
-    return [
-      { value: 'l',   label: 'Capa I',   sublabel: 'Las prioridades', count: counts.l   },
-      { value: 'll',  label: 'Capa II',  sublabel: 'Más importante',  count: counts.ll  },
-      { value: 'lll', label: 'Capa III', sublabel: 'Cartera regular', count: counts.lll },
-    ] satisfies FilterOption[]
   }, baseDeps)
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -514,7 +508,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     setFilterResponsable(new Set())
     setFilterFoco(false)
     setFilterDesalojo(false)
-    setFilterCapa(new Set())
     setFilterMinisterio(new Set())
   }
 
@@ -683,15 +676,14 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
     filterEtapa.size > 0 || filterRat.size > 0 || filterFuente.size > 0 ||
     filterComuna.size > 0 || filterOrigen.size > 0 ||
     filterTags.size > 0 || filterResponsable.size > 0 || filterFoco || filterDesalojo ||
-    filterCapa.size > 0 || filterMinisterio.size > 0
+    filterMinisterio.size > 0
 
   // Conteo de filtros del bloque secundario activos. Sirve para mostrar el
   // badge "Más filtros (3)" en lugar de un dot abstracto.
-  // Semáforo y Capa bajaron a secundaria (jun 2026) → cuentan acá.
-  // Ministerio subió a primaria → NO cuenta.
+  // Semáforo bajó a secundaria (jun 2026) → cuenta acá. Ministerio subió a
+  // primaria → NO cuenta. Capa dejó de ser filtro (es el selector de la vista).
   const secondaryFilterCount =
     (filterSemaforo.size > 0      ? 1 : 0) +
-    (filterCapa.size > 0          ? 1 : 0) +
     (filterEje.size > 0           ? 1 : 0) +
     (filterEjeGobierno.size > 0   ? 1 : 0) +
     (filterEtapa.size > 0         ? 1 : 0) +
@@ -768,7 +760,10 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
           {/* Stacked bar + legend */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
-              <span className="font-semibold text-gray-800 text-sm">{total} iniciativas</span>
+              <span className="font-semibold text-gray-800 text-sm">
+                {total} iniciativas
+                {capaSel !== 'todas' && <span className="text-gray-400 font-normal"> · {capaSelLabel(capaSel)}</span>}
+              </span>
               {([['rojo', rojo], ['ambar', ambar], ['verde', verde], ['gris', gris]] as const).map(([key, count]) =>
                 count > 0 && (
                   <button
@@ -902,14 +897,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             filterDesalojo
               ? { key: 'desalojo', label: '🏚 Desalojos', onClear: () => setFilterDesalojo(false) }
               : null,
-            filterCapa.size > 0
-              ? {
-                  key: 'capa',
-                  label: 'Capa',
-                  value: Array.from(filterCapa).map(v => v === 'l' ? 'I' : v === 'll' ? 'II' : 'III').join(', '),
-                  onClear: () => setFilterCapa(new Set()),
-                }
-              : null,
           ].filter((c): c is ActiveChip => c !== null)
           return <ActiveFiltersBar chips={chips} clearFilters={clearFilters} />
         })()}
@@ -931,6 +918,13 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               placeholder="Buscar iniciativa o región..."
               className="pl-8 pr-3 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white w-56"
             />
+          </div>
+
+          {/* Selector de capas: el alcance dentro del que viven los filtros,
+              por eso va primero. Persistido; "Limpiar todo" no lo toca. */}
+          <div className="flex items-center gap-1.5" title="Capa de importancia. Lo que elijas rige la lista, los filtros y los KPIs de esta vista. Se recuerda en este navegador.">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
+            <CapaSelector value={capaSel} onChange={setCapaSel} />
           </div>
 
           {/* Región — popover multi-select, conserva 16 opciones con search. */}
@@ -1034,14 +1028,6 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
                 )
               })}
             </div>
-
-            {/* Capa de importancia — popover multi-select. Bajó a secundaria. */}
-            <FilterPopover
-              label="Capa"
-              options={availableCapas}
-              selected={filterCapa as Set<string>}
-              onChange={(next) => setFilterCapa(new Set(Array.from(next).filter((v): v is Capa => v === 'l' || v === 'll' || v === 'lll')))}
-            />
 
             {/* Eje regional. Si hay UNA región filtrada con catálogo, sus
                 opciones canónicas; si no, unión derivada. */}

@@ -24,6 +24,18 @@ describe('carteraPdfSchema', () => {
     expect(r.success).toBe(true)
   })
 
+  it('capas: sin el campo queda en "todas" (llamadas viejas), y un valor fuera del enum falla', () => {
+    // El selector de capas por vista viaja en el body; el default protege a
+    // cualquier llamador que no lo mande y el enum evita colar "IV" o "I".
+    const base = { region: { cod: 'XV' }, soloEnFoco: false, fecha: '11-06-2026' }
+    const sinCapas = carteraPdfSchema.safeParse(base)
+    expect(sinCapas.success && sinCapas.data.capas).toBe('todas')
+    expect(carteraPdfSchema.safeParse({ ...base, capas: 'l+ll' }).success).toBe(true)
+    expect(carteraPdfSchema.safeParse({ ...base, capas: 'IV' }).success).toBe(false)
+    const minuta = minutaPostSchema.safeParse({ region: { cod: 'XV', nombre: 'Arica y Parinacota', capital: 'Arica', zona: 'Norte' }, fecha: 'Junio 2026' })
+    expect(minuta.success && minuta.data.capas).toBe('todas')
+  })
+
   it('acepta fecha en formato display DD-MM-YYYY (lo que manda toLocaleDateString es-CL)', () => {
     // `fecha` es solo texto de portada — el PDF la pinta tal cual, no la
     // parsea — así que el schema NO debe exigir YYYY-MM-DD. Exigirlo dejaba
