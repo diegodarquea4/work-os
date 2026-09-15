@@ -7,7 +7,7 @@ import { safeWrite } from '@/lib/dbWrite'
 import { REGIONS } from '@/lib/regions'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capaSelCaption } from '@/lib/capas'
 import { useCapaSel } from '@/lib/hooks/useCapaSel'
 import CapaSelector from './CapaSelector'
 import type { EjeSesion } from '@/lib/types'
@@ -185,7 +185,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // TODO lo que esta vista muestra y mide: header, avance, semáforos, foco,
   // inversión y el grid de ejes ("el avance mide lo mismo que se ve"). Los
   // efectos que propagan cambios de eje siguen con `iniciativas` entero.
-  const [capaSel, setCapaSel] = useCapaSel('mi-region')
+  const [capaSel, toggleCapa] = useCapaSel('mi-region')
   const iniciativasCapa = useMemo(() => filtrarPorCapas(iniciativas, capaSel), [iniciativas, capaSel])
 
   // Initiatives for this region
@@ -526,14 +526,14 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
               <div className="flex items-center gap-3 mb-3 flex-wrap">
                 <p className="text-xs text-gray-400">
                   {regionIniciativas.length} iniciativas
-                  {capaSel !== 'todas' && <span> · {capaSelLabel(capaSel)}</span>}
+                  {capaSelCaption(capaSel) && <span> · {capaSelCaption(capaSel)}</span>}
                   {' · '}{region?.capital}
                 </p>
                 {/* Selector de capas: rige todo lo que esta vista muestra y
                     mide, incluido el PDF de Avance PREGO. Se recuerda. */}
                 <div className="flex items-center gap-1.5" title="Capa de importancia. Lo que elijas rige los conteos, el avance, los semáforos, los ejes y el Avance PREGO de esta vista. Se recuerda en este navegador.">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
-                  <CapaSelector value={capaSel} onChange={setCapaSel} />
+                  <CapaSelector value={capaSel} onToggle={toggleCapa} />
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import Image from 'next/image'
 import type { GeoJsonObject } from 'geojson'
 import type { Iniciativa } from '@/lib/projects'
 import type { Region } from '@/lib/regions'
-import { filtrarPorCapas, capasDe, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capasDe, capaSelCaption } from '@/lib/capas'
 import { useCapaSel } from '@/lib/hooks/useCapaSel'
 import CapaSelector from './CapaSelector'
 import { REGIONS, INE_CODE } from '@/lib/regions'
@@ -347,7 +347,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
   // desde un pin va por id (n no es único). Solo van como pin las iniciativas
   // con `ubicacion_lat/lng` cargada — sin aproximación por centroide (Diego,
   // 2026-09-11).
-  const [capaSelMapa, setCapaSelMapa] = useCapaSel('mapa')
+  const [capaSelMapa, toggleCapaMapa] = useCapaSel('mapa')
   // CUT seleccionados; vacío = todas las comunas.
   const [pinComunas, setPinComunas] = useState<Set<number>>(() => new Set<number>())
   // Etiquetas seleccionadas; vacío = todas.
@@ -440,8 +440,8 @@ export default function WorkOSApp({ projects, geoData }: Props) {
     () => filtrarPorCapas(visibleIniciativas, capaSelMapa),
     [visibleIniciativas, capaSelMapa],
   )
-  const capasMapa = capasDe(capaSelMapa)   // Set constante por selección
-  const capasMapaLabel = capaSelMapa === 'todas' ? null : capaSelLabel(capaSelMapa)
+  const capasMapa = capasDe(capaSelMapa)   // Set cacheado por selección
+  const capasMapaLabel = capaSelCaption(capaSelMapa)
 
   // Cerrar el menú tuerca al clickear fuera.
   useEffect(() => {
@@ -1022,7 +1022,7 @@ export default function WorkOSApp({ projects, geoData }: Props) {
               {mapaCapa === 'psg' && (
                 <div className="pointer-events-auto flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm px-2.5 py-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
-                  <CapaSelector value={capaSelMapa} onChange={setCapaSelMapa} />
+                  <CapaSelector value={capaSelMapa} onToggle={toggleCapaMapa} />
                 </div>
               )}
               {mapaCapa === 'autoridades' && (

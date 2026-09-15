@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, useRef, useEffect, useCallback, memo } from 'react'
 import type { Iniciativa, Capa } from '@/lib/projects'
-import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capaSelCaption, esTodas, serializeCapaSel } from '@/lib/capas'
 import { useCapaSel } from '@/lib/hooks/useCapaSel'
 import CapaSelector from './CapaSelector'
 import { SEMAFORO_CONFIG, splitMinisterios } from '@/lib/config'
@@ -283,7 +283,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   // no un filtro más. `pool` es el universo de las columnas, los counts del
   // panel de filtros y el pane Preparación. Única excepción: al agrupar por
   // capa (el "detalle por capa") se ven las tres columnas completas.
-  const [capaSel, setCapaSel] = useCapaSel('tablero')
+  const [capaSel, toggleCapa] = useCapaSel('tablero')
   const pool = useMemo(() => filtrarPorCapas(projects, capaSel), [projects, capaSel])
   // Filtros del panel "Filtros" — solo los que tienen uso real en la mesa
   // de Gabinete: estado del compromiso (semáforo), etapa actual, etiquetas y
@@ -357,7 +357,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      const sufijoCapas = capaSel === 'todas' ? '' : `-capa-${capaSel}`
+      const sufijoCapas = esTodas(capaSel) ? '' : `-capa-${serializeCapaSel(capaSel).replace(/,/g, '-')}`
       a.download = `cartera-${region.cod}-${soloEnFoco ? 'foco' : 'completa'}${sufijoCapas}-${new Date().toISOString().slice(0, 10)}.pdf`
       document.body.appendChild(a)
       a.click()
@@ -591,7 +591,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
           <CapaSelector
             value={capaSel}
-            onChange={setCapaSel}
+            onToggle={toggleCapa}
             disabled={enModoCapa}
             disabledTitle="Al agrupar por capa se muestran las tres capas"
           />
@@ -696,7 +696,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           <span className="text-xs text-gray-500 font-medium">
             {/* En modo por capa el número debe calzar con las tres columnas. */}
             {(filteredTodas ?? filtered).length} iniciativas
-            {!enModoCapa && capaSel !== 'todas' && <span className="text-gray-400 font-normal"> · {capaSelLabel(capaSel)}</span>}
+            {!enModoCapa && capaSelCaption(capaSel) && <span className="text-gray-400 font-normal"> · {capaSelCaption(capaSel)}</span>}
           </span>
         )}
 

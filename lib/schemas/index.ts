@@ -29,16 +29,18 @@
  */
 
 import { z } from 'zod'
-import { CAPA_SEL_VALUES } from '@/lib/capas'
+import { CAPAS_ORDEN } from '@/lib/capas'
 
 // ── Building blocks ─────────────────────────────────────────────────────────
 
 /**
- * Selector de capas por vista (lib/capas.ts). Los PDF que se generan desde
- * una vista reciben su selección para que sus cifras calcen con la pantalla;
- * default 'todas' en cada body para que las llamadas viejas no cambien.
+ * Selector de capas por vista (lib/capas.ts): array no vacío de capas
+ * marcadas. Los PDF que se generan desde una vista reciben su selección para
+ * que sus cifras calcen con la pantalla; default "las tres" en cada body para
+ * que las llamadas viejas no cambien de comportamiento.
  */
-export const capaSelSchema = z.enum(CAPA_SEL_VALUES)
+export const capaSelSchema = z.array(z.enum(CAPAS_ORDEN)).min(1).max(3)
+const CAPAS_TODAS = [...CAPAS_ORDEN]
 
 /** Code de región — "XV", "I", "RM", etc. Mayúsculas y números romanos. */
 const regionCodSchema = z
@@ -86,7 +88,7 @@ export const carteraPdfSchema = z.object({
   soloEnFoco: z.boolean(),
   fecha:      fechaDisplaySchema,
   /** Selección de capas de la vista que pide el PDF (ver capaSelSchema). */
-  capas:      capaSelSchema.default('todas'),
+  capas:      capaSelSchema.default(CAPAS_TODAS),
 })
 
 export type CarteraPdfBody = z.infer<typeof carteraPdfSchema>
@@ -122,7 +124,7 @@ export const minutaPostSchema = z.object({
   /** "61" en "Minuta DCI N°61" — solo aplica a 'ficha'/'kit_viaje' (Contexto Regional). */
   numero: z.string().max(20).optional(),
   /** Selección de capas de Mi Región — solo la usa 'ejecutiva' (Avance PREGO). */
-  capas:  capaSelSchema.default('todas'),
+  capas:  capaSelSchema.default(CAPAS_TODAS),
 })
 
 export type MinutaPostBody = z.infer<typeof minutaPostSchema>

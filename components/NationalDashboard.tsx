@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, me
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Iniciativa } from '@/lib/projects'
 import { REGIONS } from '@/lib/regions'
-import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capaSelCaption } from '@/lib/capas'
 import { useCapaSel } from '@/lib/hooks/useCapaSel'
 import CapaSelector from './CapaSelector'
 import ProjectTrackerModal from './ProjectTrackerModal'
@@ -154,7 +154,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
   // Capa I — Diego, 2026-09-15). `pool` es el universo sobre el que corren
   // todos los filtros, sus counts y los KPIs: "el avance mide lo mismo que se
   // ve". Por eso "Limpiar todo" no lo toca.
-  const [capaSel, setCapaSel] = useCapaSel('iniciativas')
+  const [capaSel, toggleCapa] = useCapaSel('iniciativas')
   const pool = useMemo(() => filtrarPorCapas(projects, capaSel), [projects, capaSel])
   // Toggle "Solo desalojos" (admin only — el chip se oculta para otros roles
   // porque la marca es admin-only y filtrar por algo que no puedes ver es
@@ -762,7 +762,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
             <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
               <span className="font-semibold text-gray-800 text-sm">
                 {total} iniciativas
-                {capaSel !== 'todas' && <span className="text-gray-400 font-normal"> · {capaSelLabel(capaSel)}</span>}
+                {capaSelCaption(capaSel) && <span className="text-gray-400 font-normal"> · {capaSelCaption(capaSel)}</span>}
               </span>
               {([['rojo', rojo], ['ambar', ambar], ['verde', verde], ['gris', gris]] as const).map(([key, count]) =>
                 count > 0 && (
@@ -924,7 +924,7 @@ export default function NationalDashboard({ projects, actividad, actividadLoadin
               por eso va primero. Persistido; "Limpiar todo" no lo toca. */}
           <div className="flex items-center gap-1.5" title="Capa de importancia. Lo que elijas rige la lista, los filtros y los KPIs de esta vista. Se recuerda en este navegador.">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
-            <CapaSelector value={capaSel} onChange={setCapaSel} />
+            <CapaSelector value={capaSel} onToggle={toggleCapa} />
           </div>
 
           {/* Región — popover multi-select, conserva 16 opciones con search. */}

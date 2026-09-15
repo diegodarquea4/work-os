@@ -29,11 +29,12 @@ describe('carteraPdfSchema', () => {
     // cualquier llamador que no lo mande y el enum evita colar "IV" o "I".
     const base = { region: { cod: 'XV' }, soloEnFoco: false, fecha: '11-06-2026' }
     const sinCapas = carteraPdfSchema.safeParse(base)
-    expect(sinCapas.success && sinCapas.data.capas).toBe('todas')
-    expect(carteraPdfSchema.safeParse({ ...base, capas: 'l+ll' }).success).toBe(true)
-    expect(carteraPdfSchema.safeParse({ ...base, capas: 'IV' }).success).toBe(false)
+    expect(sinCapas.success && sinCapas.data.capas).toEqual(['l', 'll', 'lll'])
+    expect(carteraPdfSchema.safeParse({ ...base, capas: ['l', 'll'] }).success).toBe(true)
+    expect(carteraPdfSchema.safeParse({ ...base, capas: ['IV'] }).success).toBe(false)
+    expect(carteraPdfSchema.safeParse({ ...base, capas: [] }).success).toBe(false)
     const minuta = minutaPostSchema.safeParse({ region: { cod: 'XV', nombre: 'Arica y Parinacota', capital: 'Arica', zona: 'Norte' }, fecha: 'Junio 2026' })
-    expect(minuta.success && minuta.data.capas).toBe('todas')
+    expect(minuta.success && minuta.data.capas).toEqual(['l', 'll', 'lll'])
   })
 
   it('acepta fecha en formato display DD-MM-YYYY (lo que manda toLocaleDateString es-CL)', () => {

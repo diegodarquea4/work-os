@@ -1506,7 +1506,7 @@ Sirven para:
 
 Atajos:
 - Botón "Limpiar todo" al lado de los chips resetea todos los filtros de una vez.
-- Los filtros se reinician al recargar la página. Lo único que se recuerda es el selector de Capa de cada vista (ver "¿Qué hace el selector de Capa I · II · III?"), y "Limpiar todo" no lo toca.`,
+- Los filtros se reinician al recargar la página. Lo único que se recuerda son los chips de Capa de cada vista (ver "¿Qué hacen los chips de Capa?"), y "Limpiar todo" no los toca.`,
     relacionadas: ['filtros-multi-select', 'kanban-vacio', 'capas-selector'],
     ultima_revision: '2026-09-15',
   },
@@ -1514,14 +1514,15 @@ Atajos:
     id: 'capas-selector',
     audiencia: 'todos',
     categoria: 'Atención y foco',
-    pregunta: '¿Qué hace el selector de Capa (I · II · III · I+II · Todas) que aparece en el Mapa, Iniciativas, Tablero y Mi Región?',
+    pregunta: '¿Qué hacen los chips de Capa (I · II · III) que aparecen en el Mapa, Iniciativas, Tablero y Mi Región?',
     respuesta:
-`Elige qué capas de importancia entran en la vista. No es un filtro más: es el universo sobre el que se calcula todo lo que esa vista muestra — la lista, los pines del mapa, los conteos, los semáforos y el % de avance por región y por eje. El número que ves siempre corresponde a lo que tienes seleccionado.
+`Marcan qué capas de importancia entran en la vista: las que están en negro se muestran, las grises no. No es un filtro más: es el universo sobre el que se calcula todo lo que esa vista muestra — la lista, los pines del mapa, los conteos, los semáforos y el % de avance por región y por eje. El número que ves siempre corresponde a lo que tienes marcado.
 
-Por qué existe: la Capa III es cerca del 73% de la cartera y casi no tiene seguimiento, así que mezclarla enterraba el avance de lo que sí se sigue de cerca. Por defecto cada vista parte en Capa I.
+Por qué existe: la Capa III es cerca del 73% de la cartera y casi no tiene seguimiento, así que mezclarla enterraba el avance de lo que sí se sigue de cerca. Por defecto cada vista parte solo con la Capa I marcada.
 
 Cómo funciona:
-- Cada vista tiene el suyo y son independientes: puedes tener el Mapa en Capa I e Iniciativas en I+II.
+- Cada vista tiene los suyos y son independientes: puedes tener el Mapa solo en I e Iniciativas en I y II.
+- Siempre queda al menos una marcada: para cambiar de capa, marca la nueva antes de desmarcar la actual.
 - Se recuerda en tu navegador; "Limpiar todo" no lo cambia.
 - Los PDF generados desde la vista siguen la misma selección y lo dicen en el encabezado ("Alcance: Capa I"): Avance PREGO desde Mi Región y Exportar cartera desde el Tablero.
 - Única excepción: en el Tablero, al agrupar por capa se muestran las tres columnas completas y el selector queda deshabilitado mientras dure esa vista.

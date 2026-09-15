@@ -10,9 +10,10 @@
  * Body:
  *   { region: Region, soloEnFoco: boolean, fecha: string, capas?: CapaSel }
  *
- * `capas` es la selección del selector de capas del Tablero (default 'todas'
- * para llamadas viejas): el PDF sigue lo que se veía en pantalla e imprime el
- * alcance en la portada y en el encabezado de cada página.
+ * `capas` son las capas marcadas en el selector del Tablero (array no vacío;
+ * default las tres, para llamadas viejas): el PDF sigue lo que se veía en
+ * pantalla e imprime el alcance en la portada y en el encabezado de cada
+ * página.
  *
  * Auth: requireAuth() (mismo patrón que /api/minuta).
  *
@@ -30,7 +31,7 @@ import { ministerioCalza } from '@/lib/ministerios'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { splitMinisterios } from '@/lib/config'
 import { carteraPdfSchema } from '@/lib/schemas'
-import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capaSelCaption, esTodas, serializeCapaSel } from '@/lib/capas'
 import CarteraPdf, { type MinisterioGroup } from '@/components/CarteraPdf'
 
 export const dynamic = 'force-dynamic'
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
   // 1c. Corte por capa: el selector de la vista que pidió el PDF. Va después
   // del corte SEREMI (permisos primero) y antes del de foco.
   const enCapas = filtrarPorCapas(iniciativas, body.capas)
-  const capasLabel = body.capas === 'todas' ? null : capaSelLabel(body.capas)
+  const capasLabel = capaSelCaption(body.capas)
 
   // 2. Filtrar por flag en_foco si corresponde
   const filtradas = body.soloEnFoco
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pdfBuffer = await renderToBuffer(element as any)
 
-  const sufijoCapas = body.capas === 'todas' ? '' : `-capa-${body.capas}`
+  const sufijoCapas = esTodas(body.capas) ? '' : `-capa-${serializeCapaSel(body.capas).replace(/,/g, '-')}`
   const filename = `cartera-${body.region.cod}-${body.soloEnFoco ? 'foco' : 'completa'}${sufijoCapas}-${new Date().toISOString().slice(0, 10)}.pdf`
 
   return new Response(pdfBuffer as unknown as BodyInit, {

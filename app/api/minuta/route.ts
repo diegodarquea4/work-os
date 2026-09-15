@@ -10,7 +10,7 @@ import { INE_CODE } from '@/lib/regions'
 import { requireAuth, requireCan, isRegionRestricted } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { minutaPostSchema } from '@/lib/schemas'
-import { filtrarPorCapas, capaSelLabel } from '@/lib/capas'
+import { filtrarPorCapas, capaSelCaption } from '@/lib/capas'
 import {
   generateMinutaContent,
   generateKitViajeContent,
@@ -552,7 +552,7 @@ export async function POST(request: Request) {
     const deLaRegion = all.filter(p => p.cod === body.region.cod)
     projects = canonTipo === 'ejecutiva' ? filtrarPorCapas(deLaRegion, body.capas) : deLaRegion
   }
-  const capasLabel = canonTipo === 'ejecutiva' && body.capas !== 'todas' ? capaSelLabel(body.capas) : null
+  const capasLabel = canonTipo === 'ejecutiva' ? capaSelCaption(body.capas) : null
 
   // Use cached AI content or generate fresh.
   // El shape del ai_content depende de canonTipo:
