@@ -523,19 +523,11 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                 <h2 className="text-fluid-2xl font-bold text-slate-900 truncate">{region?.nombre ?? '—'}</h2>
                 <span className="text-xs text-gray-400 shrink-0">{region?.zona}</span>
               </div>
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <p className="text-xs text-gray-400">
-                  {regionIniciativas.length} iniciativas
-                  {capaSelCaption(capaSel) && <span> · {capaSelCaption(capaSel)}</span>}
-                  {' · '}{region?.capital}
-                </p>
-                {/* Selector de capas: rige todo lo que esta vista muestra y
-                    mide, incluido el PDF de Avance PREGO. Se recuerda. */}
-                <div className="flex items-center gap-1.5" title="Capa de importancia. Lo que elijas rige los conteos, el avance, los semáforos, los ejes y el Avance PREGO de esta vista. Se recuerda en este navegador.">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
-                  <CapaSelector value={capaSel} onToggle={toggleCapa} />
-                </div>
-              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                {regionIniciativas.length} iniciativas
+                {capaSelCaption(capaSel) && <span> · {capaSelCaption(capaSel)}</span>}
+                {' · '}{region?.capital}
+              </p>
 
               {/* Avance bar */}
               <div className="flex items-center gap-3 mb-3">
@@ -571,6 +563,20 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                   <span className="text-gray-500 font-semibold">{semaforoCount.gris}</span>
                   <span className="text-gray-400">sin evaluar</span>
                 </span>
+                {/* Selector de capas: rige todo lo que esta vista muestra y
+                    mide, incluido el PDF de Avance PREGO. Se recuerda. Va
+                    anclado a la derecha con `ml-auto` (Diego, 2026-09-15):
+                    puesto a continuación de un texto, cada cambio de capa
+                    cambiaba el largo del texto y los chips bailaban de un
+                    lado a otro. Así su posición no depende de lo que diga
+                    la fila. */}
+                <div
+                  className="ml-auto flex items-center gap-1.5 shrink-0"
+                  title="Capas de importancia. Lo que marques rige los conteos, el avance, los semáforos, los ejes y el Avance PREGO de esta vista. Se recuerda en este navegador."
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Capa</span>
+                  <CapaSelector value={capaSel} onToggle={toggleCapa} />
+                </div>
               </div>
             </div>
 
