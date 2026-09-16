@@ -27,15 +27,23 @@ export async function GET() {
   }
 
   const signInById = new Map<string, string | null>()
-  const mfaById    = new Map<string, boolean>()
   if (!authError && authData?.users) {
-    for (const u of authData.users) {
-      signInById.set(u.id, u.last_sign_in_at ?? null)
-      // Estado del 2FA: al menos un factor verificado. Los factores vienen en la
-      // respuesta de listUsers, así que no cuesta una llamada extra. Es solo
-      // informativo — quién puede entrar lo decide el proxy.
-      mfaById.set(u.id, (u.factors ?? []).some(f => f.status === 'verified'))
-    }
+    for (const u of authData.users) signInById.set(u.id, u.last_sign_in_at ?? null)
+  }
+
+  // Estado del 2FA: al menos un factor verificado en `auth.mfa_factors`, vía la
+  // función `mfa_verificado_por_usuario` (mig 114, solo service_role). Antes se
+  // leía `u.factors` de listUsers, pero el listado de GoTrue NO los puebla (el
+  // tipo los marca opcionales) → la columna decía "2FA pendiente" para todos,
+  // incluidos los que ya tenían el autenticador (Diego, 2026-09-16). Es solo
+  // informativo — quién puede entrar lo decide el proxy. Si la RPC falla, se
+  // degrada a "pendiente" sin romper la respuesta.
+  const mfaById = new Map<string, boolean>()
+  const { data: mfaRows, error: mfaError } = await db.rpc('mfa_verificado_por_usuario')
+  if (mfaError) {
+    console.error('[admin/users] mfa_verificado_por_usuario:', mfaError.message)
+  } else {
+    for (const r of (mfaRows ?? []) as { user_id: string; verificado: boolean }[]) mfaById.set(r.user_id, r.verificado)
   }
 
   const enriched = (profiles ?? []).map(p => ({
