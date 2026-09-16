@@ -267,6 +267,15 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
   const isAdmin = useIsAdmin()
   const canPreparar = useCan('comite.gabinete.preparar', regionActiva?.cod)
   const puedeVerPreparacion = isAdmin || canPreparar
+  // Operar la Preparación (iniciarla, armar la pauta, enviarla) es la cap
+  // `comite.gabinete.operar` — la MISMA que exige la RLS de `eje_sesiones`
+  // (mig 070/075, `can_operar_instancia('gabinete', region)`). Antes se le
+  // pasaba `canEditFoco` (el trío operativo de iniciativas), así que una
+  // regional con los dos permisos de gabinete pero sin editar_operativo veía
+  // el pane y no el botón «Iniciar preparación» (Constanza, Maule, 2026-09-16).
+  // Regla de la casa: un gate de módulo usa la cap de ESE módulo.
+  const canOperarGab = useCan('comite.gabinete.operar', regionActiva?.cod)
+  const canOperarGabinete = isAdmin || canOperarGab
   // Sin permiso, la pestaña Preparación no existe → si el pane arranca ahí, cae a Tablero.
   useEffect(() => {
     if (pane === 'preparacion' && !puedeVerPreparacion) setPane('tablero')
@@ -796,7 +805,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
             <PreparacionGabinete
               region={{ cod: regionActiva.cod, nombre: regionActiva.nombre }}
               projects={projects.filter(p => p.cod === regionActiva.cod)}
-              canOperar={canEditFoco}
+              canOperar={canOperarGabinete}
               onOpenIniciativa={id => { const p = projects.find(x => x.id === id); if (p) setSelected(p) }}
               onQuitarFoco={id => { const p = projects.find(x => x.id === id); if (p) handleToggleFoco(p.n, id, false) }}
             />
