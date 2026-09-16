@@ -44,3 +44,10 @@ jobs:
       # Si falla, no se mergea: es lo que protege contra los 500 en producción.
       - name: Build
         run: npm run build
+
+      # La suite cubre los puntos frágiles (mapRow, dbWrite, schemas zod,
+      # lógica pura de capas/pines/territorial). Corre en ~1s y es el segundo
+      # gate: sin revisor humano permanente (Diego ausente sept-oct 2026),
+      # un PR con tests rojos no debe llegar a main.
+      - name: Tests
+        run: npm test
