@@ -1525,11 +1525,12 @@ Cómo funciona:
 - Siempre queda al menos una marcada: para cambiar de capa, marca la nueva antes de desmarcar la actual.
 - Se recuerda en tu navegador; "Limpiar todo" no lo cambia.
 - Los PDF generados desde la vista siguen la misma selección y lo dicen en el encabezado ("Alcance: Capa I"): Avance PREGO desde Mi Región y Exportar cartera desde el Tablero.
-- Única excepción: en el Tablero, al agrupar por capa se muestran las tres columnas completas y el selector queda deshabilitado mientras dure esa vista.
+- En el Tablero, al agrupar por capa se muestran las tres columnas completas y el selector queda deshabilitado mientras dure esa vista.
+- Comités y Gabinete no lo usan: la preparación de la pauta, las sesiones, los compromisos, el calendario y la propuesta de actualización por Excel trabajan siempre con todas las iniciativas de la región, cualquiera sea la capa marcada.
 
 Si una región se ve casi vacía, revisa el selector antes de pensar que faltan datos: con Capa I hay regiones con menos de 20 iniciativas.`,
     relacionadas: ['filtros-chips-activos', 'filtros-multi-select'],
-    ultima_revision: '2026-09-15',
+    ultima_revision: '2026-09-16',
   },
   {
     id: 'bandeja-actividad',

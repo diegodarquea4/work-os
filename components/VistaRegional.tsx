@@ -188,10 +188,22 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   const [capaSel, toggleCapa] = useCapaSel('mi-region')
   const iniciativasCapa = useMemo(() => filtrarPorCapas(iniciativas, capaSel), [iniciativas, capaSel])
 
-  // Initiatives for this region
+  // Initiatives for this region (en las capas marcadas)
   const regionIniciativas = useMemo(
     () => selectedCod ? iniciativasCapa.filter(p => p.cod === selectedCod) : [],
     [iniciativasCapa, selectedCod]
+  )
+
+  // La región COMPLETA, sin el corte de capas. Es lo que reciben Comités y
+  // Gabinete (pauta, compromisos, vínculos de sesión), el calendario, la
+  // propuesta de actualización por Excel y el vínculo métrica↔iniciativa:
+  // una sesión tiene que poder hablar de cualquier iniciativa cargada, no
+  // solo de las que el usuario dejó marcadas para leer el avance (Diego,
+  // 2026-09-16). Si algo de esa lista se cuelga de `regionIniciativas`, una
+  // iniciativa de Capa II "desaparece" de la pauta al cambiar el selector.
+  const regionIniciativasTodas = useMemo(
+    () => selectedCod ? iniciativas.filter(p => p.cod === selectedCod) : [],
+    [iniciativas, selectedCod]
   )
 
   // Población de la región activa (para Inversión per cápita) — misma tabla
@@ -470,7 +482,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             open={proposeModalOpen}
             onClose={() => setProposeModalOpen(false)}
             regionName={region.nombre}
-            iniciativas={regionIniciativas}
+            iniciativas={regionIniciativasTodas}
             regionEjes={regionEjes}
             onSubmitted={() => setProposalsRefreshKey(k => k + 1)}
           />
@@ -826,7 +838,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                         eje={selectedEje}
                         onClose={() => setSelectedEjeIdForMetrics(null)}
                         showSesiones={false}
-                        iniciativas={regionIniciativas}
+                        iniciativas={regionIniciativasTodas}
                       />
                     </div>
                   )
@@ -853,7 +865,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
             region={region}
             regionEjes={regionEjes}
             ejesLoading={regionEjesLoading}
-            iniciativas={regionIniciativas}
+            iniciativas={regionIniciativasTodas}
             onAbrirIniciativa={setSelectedIniciativa}
             onIrAPreparacion={onIrAPreparacion}
           />
@@ -983,7 +995,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           open={calendarioOpen}
           onClose={() => setCalendarioOpen(false)}
           region={region}
-          iniciativas={regionIniciativas}
+          iniciativas={regionIniciativasTodas}
           onSelectIniciativa={setSelectedIniciativa}
           onSelectSesion={setSelectedSesion}
         />

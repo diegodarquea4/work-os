@@ -798,7 +798,11 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
 
       {/* ── Pane Preparación — la ex Bandeja de Atención embebida (fusión
           spec gabinete §7.1). La región la maneja el select de esta toolbar
-          (mismo state global), por eso AttentionTray va en modo embedded. */}
+          (mismo state global), por eso AttentionTray va en modo embedded.
+          Las dos variantes reciben la cartera COMPLETA (`projects`, no `pool`):
+          el selector de capas del Tablero es para leer el avance, y la
+          preparación de un Gabinete tiene que poder poner en pauta cualquier
+          iniciativa cargada (Diego, 2026-09-16). */}
       {pane === 'preparacion' && puedeVerPreparacion && (
         mostrarStepperV2 && regionActiva ? (
           <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -814,7 +818,7 @@ export default function KanbanView({ projects, actividad, actividadLoading, onUp
           <div className="flex-1 overflow-hidden flex">
             <AttentionTray
               embedded
-              projects={pool}
+              projects={projects}
               actividad={actividad}
               actividadLoading={actividadLoading}
               onUpdatePrioridad={onUpdatePrioridad}
