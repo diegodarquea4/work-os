@@ -274,3 +274,22 @@ export const tareaGanttPdfSchema = z.object({
 })
 
 export type TareaGanttPdfBody = z.infer<typeof tareaGanttPdfSchema>
+
+// ── /api/comite-infraestructura/cartera POST ────────────────────────────────
+// Suma o saca una iniciativa de la cartera del comité moviendo una etiqueta de
+// `prioridades_territoriales.tags`.
+//
+// `prioridadId` es el `id` (PK estable), NUNCA el `n`: `n` no es UNIQUE y un
+// UPDATE por `n` puede tocar varias filas.
+//
+// `tag` es OPCIONAL y sirve para los megaproyectos (mig 061); omitirlo apunta
+// a la etiqueta del comité de esa región. Venga o no, el servidor lo valida
+// contra la lista blanca de `region_config` y usa la forma canónica de ahí —
+// el cliente no puede escribir una etiqueta arbitraria.
+export const comiteInfraCarteraPostSchema = z.object({
+  prioridadId: z.number().int().positive(),
+  accion: z.enum(['sumar', 'quitar']),
+  tag: z.string().trim().min(1).max(120).optional(),
+})
+
+export type ComiteInfraCarteraBody = z.infer<typeof comiteInfraCarteraPostSchema>
