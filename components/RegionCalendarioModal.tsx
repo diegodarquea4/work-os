@@ -76,7 +76,7 @@ function toISO(d: Date): string {
 function instanciaLabel(s: EjeSesion, gabineteNombre?: string, infraestructuraNombre?: string): string {
   switch (s.instancia) {
     case 'gabinete':       return gabineteNombre || 'Gabinete Regional'
-    case 'infraestructura': return infraestructuraNombre || 'Comité de Infraestructura'
+    case 'infraestructura': return infraestructuraNombre || 'Comité de Nudos Críticos'
     case 'inversion':      return 'Comité Económico'
     case 'politico':       return 'Comité Político'
     case 'eje':            return 'Comité'

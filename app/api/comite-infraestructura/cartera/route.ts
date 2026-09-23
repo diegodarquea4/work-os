@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   // ── 3. Capacidad en la región DE LA FILA ───────────────────────────────────
   if (!(await requireCan(profile, 'comite.infraestructura.operar', ini.cod))) {
     return NextResponse.json(
-      { error: 'No tienes permiso para operar el Comité de Infraestructura en esta región' },
+      { error: 'No tienes permiso para operar el Comité de Nudos Críticos en esta región' },
       { status: 403 },
     )
   }
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   }
   if (!cfg?.infraestructura_habilitado) {
     return NextResponse.json(
-      { error: 'El Comité de Infraestructura no está habilitado en esta región' },
+      { error: 'El Comité de Nudos Críticos no está habilitado en esta región' },
       { status: 409 },
     )
   }
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
   const canonica = etiquetaCanonica(tagPedido ?? cfg.infraestructura_tag, gestionables)
   if (!canonica) {
     return NextResponse.json(
-      { error: 'Esa etiqueta no pertenece al Comité de Infraestructura de esta región' },
+      { error: 'Esa etiqueta no pertenece al Comité de Nudos Críticos de esta región' },
       { status: 400 },
     )
   }

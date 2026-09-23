@@ -1597,7 +1597,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
                 sesion: s,
                 titulo: s.instancia === 'gabinete'
                   ? (regionConfigTags?.gabinete_nombre || 'Gabinete Regional')
-                  : (regionConfigTags?.infraestructura_nombre || 'Comité de Infraestructura'),
+                  : (regionConfigTags?.infraestructura_nombre || 'Comité de Nudos Críticos'),
               }))}
               onSelectSesion={setSelectedSesionTratada}
             />
@@ -1665,7 +1665,7 @@ export default function ProjectTrackerModal({ prioridad, onClose, onUpdatePriori
           region={region}
           instancia="infraestructura"
           eje={null}
-          nombreInstancia={regionConfigTags?.infraestructura_nombre || 'Comité de Infraestructura'}
+          nombreInstancia={regionConfigTags?.infraestructura_nombre || 'Comité de Nudos Críticos'}
           initialSesionId={selectedSesionTratada.id}
           onClose={() => setSelectedSesionTratada(null)}
         />

@@ -33,7 +33,7 @@ type TabKey = 'policial' | 'politico' | 'infraestructura' | 'inversion' | 'gabin
 const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'policial',       label: 'Comité Policial',                    ready: true  },
   { key: 'politico',       label: 'Comité Político',                    ready: true  },
-  { key: 'infraestructura', label: 'Comité de Infraestructura',          ready: true  },
+  { key: 'infraestructura', label: 'Comité de Nudos Críticos',          ready: true  },
   { key: 'inversion',      label: 'Comité Económico',                   ready: true  },
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
@@ -187,7 +187,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
           <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onUpdatePrioridad={onUpdatePrioridad} />
         ) : (
           <Placeholder
-            titulo="Comité de Infraestructura — en desarrollo"
+            titulo="Comité de Nudos Críticos — en desarrollo"
             texto="Esta instancia estará disponible próximamente."
           />
         )

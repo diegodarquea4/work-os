@@ -783,14 +783,14 @@ export default function SesionModal(props: Props) {
   const nombreInstancia = esGabinete
     ? (props.instancia === 'gabinete' ? props.gabineteNombre : 'Gabinete Regional')
     : esInfraestructura
-    ? (props.instancia === 'infraestructura' ? props.infraestructuraNombre : 'Comité de Infraestructura')
+    ? (props.instancia === 'infraestructura' ? props.infraestructuraNombre : 'Comité de Nudos Críticos')
     : (eje!.sesiones_nombre ?? 'Comité')
 
   // Nombre del comité de origen/destino (para chips de escalado/mandato en
   // zona 1 y 5 del GABINETE). Infraestructura no tiene eje_id — se resuelve
   // por region_config, no por el catálogo de ejes.
   const comiteNombre = useCallback((c: Pick<SesionCompromiso, 'instancia' | 'eje_id'>): string => {
-    if (c.instancia === 'infraestructura') return regionConfig?.infraestructura_nombre ?? 'Comité de Infraestructura'
+    if (c.instancia === 'infraestructura') return regionConfig?.infraestructura_nombre ?? 'Comité de Nudos Críticos'
     if (c.eje_id == null) return 'Comité'
     const e = ejesComites.find(x => x.id === c.eje_id)
     return e?.sesiones_nombre ?? (e ? `Eje ${e.numero}` : 'Comité')
@@ -1134,7 +1134,7 @@ export default function SesionModal(props: Props) {
                       {esGabinete
                         ? 'La nómina del gabinete está vacía — cárgala (seremis + equipo DPR) desde el botón "Nómina" del tab Gabinete Regional.'
                         : esInfraestructura
-                        ? 'La nómina está vacía — cárgala desde el botón "Nómina" del tab Comité de Infraestructura.'
+                        ? 'La nómina está vacía — cárgala desde el botón "Nómina" del tab Comité de Nudos Críticos.'
                         : 'La nómina está vacía — agrégala desde el botón "Nómina" del panel de métricas.'}
                     </p>
                   )}
