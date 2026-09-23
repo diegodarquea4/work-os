@@ -1021,7 +1021,7 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
           region={region}
           instancia="infraestructura"
           eje={null}
-          nombreInstancia="Comité de Infraestructura"
+          nombreInstancia="Comité de Nudos Críticos"
           initialSesionId={selectedSesion.id}
           onClose={() => setSelectedSesion(null)}
         />

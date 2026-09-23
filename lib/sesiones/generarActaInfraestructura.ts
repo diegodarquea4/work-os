@@ -94,7 +94,7 @@ export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion
   const regionNombre = REGIONS.find(r => r.cod === sesion.region_cod)?.nombre ?? sesion.region_cod
 
   const data: ActaInfraestructuraData = {
-    nombreInstancia: (cfgRes.data?.infraestructura_nombre as string | undefined) ?? 'Comité de Infraestructura',
+    nombreInstancia: (cfgRes.data?.infraestructura_nombre as string | undefined) ?? 'Comité de Nudos Críticos',
     tipoComite: sesion.tipo_comite,
     regionNombre,
     sesionNumero,

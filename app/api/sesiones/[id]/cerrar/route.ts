@@ -78,7 +78,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const { data: cfg } = await db
       .from('region_config').select('infraestructura_habilitado').eq('region_cod', sesion!.region_cod).maybeSingle()
     if (!cfg?.infraestructura_habilitado) {
-      return NextResponse.json({ error: 'El Comité de Infraestructura no está habilitado en esta región' }, { status: 422 })
+      return NextResponse.json({ error: 'El Comité de Nudos Críticos no está habilitado en esta región' }, { status: 422 })
     }
   } else if (sesion!.instancia === 'eje') {
     const { data: ejeRow } = await db

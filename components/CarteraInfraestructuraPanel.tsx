@@ -133,7 +133,7 @@ export default function CarteraInfraestructuraPanel({
 
   return (
     <ConsolaSesionShell
-      ariaLabel={`Cartera del Comité de Infraestructura — ${region.nombre}`}
+      ariaLabel={`Cartera del Comité de Nudos Críticos — ${region.nombre}`}
       mainMaxWidth="max-w-6xl"
       onEscape={onClose}
       header={

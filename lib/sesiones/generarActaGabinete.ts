@@ -95,7 +95,7 @@ export async function renderActaGabineteBuffer(db: SupabaseClient, sesion: EjeSe
     ((ejesRes.data ?? []) as { id: number; numero: number; sesiones_nombre: string | null }[])
       .map(e => [e.id, e.sesiones_nombre ?? `Eje ${e.numero}`]),
   )
-  const infraestructuraNombre = (cfg?.infraestructura_nombre as string | undefined) ?? 'Comité de Infraestructura'
+  const infraestructuraNombre = (cfg?.infraestructura_nombre as string | undefined) ?? 'Comité de Nudos Críticos'
   const comiteOrigenNombre = (c: SesionCompromiso): string | null =>
     c.instancia === 'infraestructura' ? infraestructuraNombre : (c.eje_id != null ? ejesPorId.get(c.eje_id) ?? null : null)
 

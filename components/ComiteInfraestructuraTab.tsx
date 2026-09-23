@@ -61,7 +61,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   const { config, loading: configLoading, refresh: refreshConfig } = useRegionConfig(region.cod)
 
   const habilitado = !!config?.infraestructura_habilitado
-  const nombreComite = config?.infraestructura_nombre ?? 'Comité de Infraestructura'
+  const nombreComite = config?.infraestructura_nombre ?? 'Comité de Nudos Críticos'
   const tag = config?.infraestructura_tag ?? 'CRI'
   // Gate único del módulo (patrón sesionesOn del drawer): sin él, ni queries.
   const infraOn = habilitado && puedeOperar
@@ -128,7 +128,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   if (!habilitado) {
     return (
       <EmptyState
-        title="Comité de Infraestructura no habilitado"
+        title="Comité de Nudos Críticos no habilitado"
         description="El módulo de sesiones de este comité aún no está activo para esta región."
         icon={
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
