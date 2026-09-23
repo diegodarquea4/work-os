@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
-import { SEMAFORO_CONFIG } from '@/lib/config'
 import { agruparPorMegaproyecto } from '@/lib/sesiones/helpers'
 import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
@@ -14,6 +13,8 @@ import NominaModal from './NominaModal'
 import MegaproyectosModal from './MegaproyectosModal'
 import MegaproyectoGroup from './MegaproyectoGroup'
 import AgregarACarteraModal from './AgregarACarteraModal'
+import CarteraInfraestructuraPanel from './CarteraInfraestructuraPanel'
+import FilaCarteraInfra from './FilaCarteraInfra'
 import { EmptyState } from '@/components/ui'
 import { moverEnCartera } from '@/lib/comiteInfraestructuraClient'
 
@@ -70,6 +71,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   const [nominaOpen, setNominaOpen]             = useState(false)
   const [megaproyectosOpen, setMegaproyectosOpen] = useState(false)
   const [agregarOpen, setAgregarOpen]           = useState(false)
+  const [carteraOpen, setCarteraOpen]           = useState(false)
   // id de la iniciativa que se está sacando de la cartera — deshabilita su
   // botón para no mandar el mismo POST dos veces.
   const [quitandoId, setQuitandoId]             = useState<number | null>(null)
@@ -198,6 +200,18 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           >
             + Sumar
           </button>
+          {iniciativasTag.length > 0 && (
+            <>
+              <span className="text-violet-200">|</span>
+              <button
+                onClick={() => setCarteraOpen(true)}
+                className="text-[11px] font-semibold text-violet-700 hover:text-violet-900 hover:underline"
+                title="Abrir la cartera completa, con filtros, orden y Excel"
+              >
+                Ver cartera →
+              </button>
+            </>
+          )}
         </div>
         {iniciativasTag.length === 0 ? (
           <button
@@ -209,7 +223,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
         ) : gruposMegaproyecto.length === 0 ? (
           <div className="space-y-1">
             {iniciativasTag.map(p => (
-              <FilaCartera
+              <FilaCarteraInfra
                 key={p.id}
                 p={p}
                 onAbrir={() => onAbrirIniciativa(p)}
@@ -223,7 +237,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
             {gruposMegaproyecto.map(g => (
               <MegaproyectoGroup key={g.tag} nombre={g.tag} count={g.items.length}>
                 {g.items.map(p => (
-                  <FilaCartera
+                  <FilaCarteraInfra
                     key={p.id}
                     p={p}
                     onAbrir={() => onAbrirIniciativa(p)}
@@ -236,7 +250,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
             {sinMegaproyecto.length > 0 && (
               <MegaproyectoGroup nombre="Sin megaproyecto" count={sinMegaproyecto.length} muted>
                 {sinMegaproyecto.map(p => (
-                  <FilaCartera
+                  <FilaCarteraInfra
                     key={p.id}
                     p={p}
                     onAbrir={() => onAbrirIniciativa(p)}
@@ -334,6 +348,21 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           onAgregada={(p, tags) => onUpdatePrioridad(p.n, { tags })}
         />
       )}
+      {/* La cartera completa: pantalla hermana del preview, igual que en el
+          Comité Económico. Acá se viene a filtrar, ordenar y exportar; el
+          preview de arriba sigue siendo el vistazo agrupado por megaproyecto. */}
+      {carteraOpen && (
+        <CarteraInfraestructuraPanel
+          region={region}
+          cartera={iniciativasTag}
+          iniciativasRegion={iniciativas}
+          tag={tag}
+          megaproyectosCurados={megaproyectos}
+          onAbrirIniciativa={onAbrirIniciativa}
+          onUpdatePrioridad={onUpdatePrioridad}
+          onClose={() => setCarteraOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -344,81 +373,3 @@ function fmtFechaCorta(fecha: string): string {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
-/**
- * Fila del preview: la card de siempre más la opción de sacarla de la cartera.
- *
- * El botón de quitar va FUERA de la card y no adentro: `IniciativaCard` es un
- * <button> completo, y un botón anidado dentro de otro es HTML inválido —
- * el navegador desarma el marcado y el click de adentro deja de funcionar.
- */
-function FilaCartera({ p, onAbrir, onQuitar, quitando }: {
-  p: Iniciativa
-  onAbrir: () => void
-  onQuitar: () => void
-  quitando: boolean
-}) {
-  return (
-    <div className="flex items-center gap-1">
-      <div className="flex-1 min-w-0">
-        <IniciativaCard p={p} onClick={onAbrir} />
-      </div>
-      {/* Siempre visible, en gris tenue. La versión anterior lo revelaba al
-          pasar el mouse (`sm:opacity-0` + `group-hover:opacity-100`), pero esas
-          dos utilidades tienen la misma especificidad y la responsive gana por
-          orden de salida en el CSS: en escritorio el botón no habría aparecido
-          nunca. Con pocos usuarios, un × discreto es mejor que un hover astuto. */}
-      <button
-        onClick={onQuitar}
-        disabled={quitando}
-        aria-label={`Sacar ${p.nombre} de la cartera del comité`}
-        title="Sacar de la cartera del comité"
-        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-      >
-        {quitando ? (
-          <span className="text-[10px] font-semibold text-gray-400">···</span>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M5 5l10 10M15 5L5 15"/>
-          </svg>
-        )}
-      </button>
-    </div>
-  )
-}
-
-/**
- * Card compacta de iniciativa — semáforo + nombre, y debajo comuna y
- * ministerio; el avance va como barra, igual que en las cards del Kanban.
- *
- * SIN etiquetas a propósito: acá dentro TODAS llevan la del comité, así que
- * repetirla en cada fila no distingue nada. Los megaproyectos, que también son
- * etiquetas, ya son el encabezado del grupo que contiene a la fila.
- */
-function IniciativaCard({ p, onClick }: { p: Iniciativa; onClick: () => void }) {
-  const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
-  const pct = p.pct_avance ?? 0
-  // Mismo criterio que la ficha: sin comuna cargada, una iniciativa marcada
-  // como regional lo dice en vez de quedar en blanco.
-  const lugar = p.comuna ?? (p.alcance_regional ? 'Alcance regional' : null)
-  const contexto = [lugar, p.ministerio].filter(Boolean).join(' · ')
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-2.5 py-2 border border-slate-200 rounded-lg hover:border-violet-300 hover:shadow-sm bg-white transition-all flex items-center gap-2.5"
-      title="Ver ficha completa de la iniciativa"
-    >
-      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-800 font-medium truncate">{p.nombre}</p>
-        {contexto && <p className="text-[11px] text-gray-400 truncate">{contexto}</p>}
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <div className="w-10 h-1 bg-gray-100 rounded-full overflow-hidden">
-          <div className={`h-1 rounded-full ${sem.dot}`} style={{ width: `${pct}%` }} />
-        </div>
-        <span className="text-xs font-semibold text-gray-600 tabular-nums w-9 text-right">{pct}%</span>
-      </div>
-    </button>
-  )
-}
