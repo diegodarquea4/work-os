@@ -10,9 +10,9 @@ import {
  * Mesa Técnica Regional Interministerial. Estructura propia (no clona
  * ActaComitePdf ni ActaGabinetePdf: ni reporte por institución ni Mesa
  * Empleo/proyectos/oficios, ni panorama por eje ni "Temas a tratar"):
- * antecedentes (con el tipo de sesión) → asistencia → iniciativas
- * contempladas (con el tag configurado) → compromisos (verificados + nuevos,
- * marcando cuáles se enviaron al Gabinete Regional).
+ * antecedentes (con el tipo de sesión) → asistencia → iniciativas tratadas
+ * (las que la sesión eligió, no la cartera entera) → compromisos (verificados
+ * + nuevos, marcando cuáles se enviaron al Gabinete Regional).
  *
  * Estilo SOBRIO de Minuta Regional (components/actaPdfBase.tsx). No fetchea:
  * recibe ActaInfraestructuraData pre-armado server-side.
@@ -23,7 +23,6 @@ export type ActaInfraestructuraData = ActaBranding & {
   borrador?: boolean
   nombreInstancia: string
   tipoComite: 'cri' | 'mesa_tecnica' | null
-  tag: string
   regionNombre: string
   sesionNumero: number
   fecha: string                       // YYYY-MM-DD
@@ -118,10 +117,13 @@ export default function ActaInfraestructuraPdf({ data }: { data: ActaInfraestruc
         ))}
         {data.asistencia.length === 0 && <Vacio>Sin registro de asistencia.</Vacio>}
 
-        {/* Iniciativas contempladas — las de la etiqueta configurada, no "en foco" */}
-        <SH>{`III. Iniciativas contempladas (etiqueta "${data.tag}")`}</SH>
+        {/* Las que la sesión eligió tratar (sesion_iniciativas), no la cartera
+            entera: desde que la zona 3 se elige, el acta reporta lo que
+            efectivamente se conversó. Por eso ya no dice la etiqueta — quién
+            está en la cartera es otra cosa que qué se trató ese día. */}
+        <SH>III. Iniciativas tratadas en la sesión</SH>
         {data.iniciativas.length === 0 ? (
-          <Vacio>No se contemplaron iniciativas con esta etiqueta en la sesión.</Vacio>
+          <Vacio>No se trataron iniciativas en la sesión.</Vacio>
         ) : data.iniciativas.map((ini, i) => (
           <View key={i} style={[s.tr, { flexDirection: 'column' }]} wrap={false}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>

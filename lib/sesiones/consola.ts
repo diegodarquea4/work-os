@@ -158,22 +158,25 @@ function estadoSeguimiento(proyectos: number, oficiosTotal: number, oficiosPendi
  */
 export function railParaSesion(e: EntradaConsola): RailItem[] {
   // El Económico entra por Integrantes y deja los compromisos anteriores en 2;
-  // Policial e Infraestructura verifican primero. Es el orden que cada comité
-  // ya tenía en su modal.
+  // el Policial verifica primero. Es el orden que cada comité ya tenía en su
+  // modal. Infraestructura se pasó al orden del Económico (Manuel, sept 2026):
+  // primero se toma asistencia —es lo que abre la sesión de verdad— y recién
+  // después se revisa lo comprometido la vez anterior.
   const esEconomico = e.instancia === 'economico'
+  const asistenciaPrimero = esEconomico || e.instancia === 'infraestructura'
 
   const itemAnteriores: RailItem = {
-    key: 'anteriores', numero: esEconomico ? 2 : 1, label: 'Compromisos anteriores',
+    key: 'anteriores', numero: asistenciaPrimero ? 2 : 1, label: 'Compromisos anteriores',
     badge: String(e.compAnteriores.length),
     estado: estadoAnteriores(e.compAnteriores),
   }
   const itemAsistencia: RailItem = {
-    key: 'asistencia', numero: esEconomico ? 1 : 2, label: esEconomico ? 'Integrantes' : 'Asistencia',
+    key: 'asistencia', numero: asistenciaPrimero ? 1 : 2, label: esEconomico ? 'Integrantes' : 'Asistencia',
     badge: `${e.asistencia.presentes}/${e.asistencia.total}`,
     estado: e.asistencia.presentes > 0 ? 'con-actividad' : 'vacio',
   }
 
-  const items: RailItem[] = esEconomico
+  const items: RailItem[] = asistenciaPrimero
     ? [itemAsistencia, itemAnteriores]
     : [itemAnteriores, itemAsistencia]
 

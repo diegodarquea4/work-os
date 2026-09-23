@@ -148,12 +148,23 @@ describe('railParaSesion — Policial', () => {
 })
 
 describe('railParaSesion — Infraestructura', () => {
-  it('numera 1 · 2 · 3 · 4, sin comentarios ni sub-ítems', () => {
+  // Asistencia PRIMERO, igual que el Económico (Manuel, sept 2026): tomar
+  // asistencia es lo que abre la sesión de verdad; revisar lo comprometido la
+  // vez anterior viene después. El Policial conserva el orden inverso.
+  it('numera 1 · 2 · 3 · 4 con asistencia al frente, sin comentarios ni sub-ítems', () => {
     const rail = railParaSesion(entradaInfra({ iniciativas: 6 }))
-    expect(rail.map(i => i.key)).toEqual(['anteriores', 'asistencia', 'iniciativas', 'nuevos'])
+    expect(rail.map(i => i.key)).toEqual(['asistencia', 'anteriores', 'iniciativas', 'nuevos'])
     expect(rail.map(i => i.numero)).toEqual([1, 2, 3, 4])
     expect(rail[2].badge).toBe('6')
     expect(rail.every(i => !i.subitems)).toBe(true)
+  })
+
+  // Guarda contra arrastrar el cambio a los demás: el Policial ('eje') sigue
+  // verificando primero.
+  it('el comité Policial mantiene compromisos anteriores en el 1', () => {
+    const rail = railParaSesion(entradaEje({}))
+    expect(rail[0].key).toBe('anteriores')
+    expect(rail[0].numero).toBe(1)
   })
 })
 
@@ -335,7 +346,10 @@ describe('ordenRecorrido / vecinos / etiquetaZona', () => {
   })
 
   it('en Infraestructura el recorrido es plano', () => {
-    expect(vecinos(railInfra, { zona: 'asistencia' }).siguiente).toEqual({ zona: 'iniciativas' })
+    // Con asistencia al frente el recorrido es asistencia → anteriores →
+    // iniciativas: sin sub-ítems de por medio, que es lo que este caso cuida.
+    expect(vecinos(railInfra, { zona: 'asistencia' }).siguiente).toEqual({ zona: 'anteriores' })
+    expect(vecinos(railInfra, { zona: 'anteriores' }).siguiente).toEqual({ zona: 'iniciativas' })
   })
 
   it('reporte sin instituciones entra como zona plana (defensivo)', () => {

@@ -415,10 +415,17 @@ export default function SesionModal(props: Props) {
     // distinto, ver requerimiento del comité).
     if (usaIniciativas) {
       let filas = (iniRes.data ?? []) as SesionIniciativa[]
-      if (s.estado === 'borrador') {
-        const candidatas = esGabinete
-          ? gabIniciativas.filter(p => p.en_foco === true)
-          : gabIniciativas.filter(p => (p.tags ?? []).includes(infraTag ?? ''))
+      // Solo el GABINETE precarga su agenda (las "en foco"): ahí la pauta se
+      // arma antes, en Tablero → Preparación, y la sesión la refleja.
+      //
+      // Infraestructura NO precarga más (Manuel, sept 2026). Traía la cartera
+      // entera como agenda, así que la zona 3 decía "contempladas" pero en
+      // realidad no contemplaba nada: eran las 15 de la cartera, todas. Ahora
+      // la zona 3 es para ELEGIR de qué se va a hablar, y lo elegido son los
+      // temas de la sesión. Las sesiones que ya tienen filas precargadas las
+      // conservan — se sacan de a una con su ×.
+      if (s.estado === 'borrador' && esGabinete) {
+        const candidatas = gabIniciativas.filter(p => p.en_foco === true)
         const faltantes = filasZona3Faltantes(candidatas, filas)
         if (faltantes.length) {
           const { data: inserted, error: insErr } = await sb
@@ -822,6 +829,46 @@ export default function SesionModal(props: Props) {
     )
   }, [sesIniciativas, gabIniciativas, esInfraestructura, megaproyectosInfra])
 
+  /** Los `prioridad_id` que ya son tema de esta sesión. */
+  const idsEnAgenda = useMemo(
+    () => new Set(sesIniciativas.map(f => f.prioridad_id)),
+    [sesIniciativas],
+  )
+
+  // Zona 3 de Infraestructura, en tres tramos que NO se repiten entre sí —
+  // una iniciativa está en uno y solo uno, así que tratarla la mueve de tramo
+  // y la lista de abajo se achica. De arriba hacia abajo:
+  //
+  //   1. NUDOS      — rojas todavía sin tratar. Primero porque es lo que la
+  //                   sala tiene que ver aunque nadie las haya puesto en tabla.
+  //   2. TEMAS      — lo que ya se va a conversar. Sube acá al tratarla.
+  //   3. DISPONIBLE — el resto de la cartera, agrupado por megaproyecto.
+  const nudosPendientes = useMemo(() => {
+    if (!esInfraestructura) return []
+    return candidatosBase.filter(p => p.estado_semaforo === 'rojo' && !idsEnAgenda.has(p.id))
+  }, [esInfraestructura, candidatosBase, idsEnAgenda])
+
+  /** Las elegidas, en el orden en que se fueron sumando a la sesión. */
+  const temasSesion = useMemo(
+    () => sesIniciativas
+      .map(fila => ({ fila, p: candidatosBase.find(x => x.id === fila.prioridad_id) ?? null }))
+      .filter((t): t is { fila: SesionIniciativa; p: Iniciativa } => t.p !== null),
+    [sesIniciativas, candidatosBase],
+  )
+
+  const { grupos: gruposCartera, sinMegaproyecto: carteraSinMegaproyecto } = useMemo(() => {
+    if (!esInfraestructura) return { grupos: [] as { tag: string; items: Iniciativa[] }[], sinMegaproyecto: [] as Iniciativa[] }
+    // Sin las rojas: ya están arriba en nudos, repetirlas sería mostrar la
+    // misma iniciativa dos veces en la misma pantalla.
+    const disponibles = candidatosBase.filter(p => !idsEnAgenda.has(p.id) && p.estado_semaforo !== 'rojo')
+    return agruparPorMegaproyecto(disponibles, p => p.tags, megaproyectosInfra)
+  }, [esInfraestructura, candidatosBase, idsEnAgenda, megaproyectosInfra])
+
+  /** Sumar a los temas de la sesión (sube de tramo). */
+  async function tratarEnSesion(p: Iniciativa) {
+    await agregarIniciativa(p)
+  }
+
   const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300'
 
   // ── Consola: riel, zona activa y navegación ───────────────────────────────
@@ -1148,21 +1195,111 @@ export default function SesionModal(props: Props) {
               </ZonaCard>
               )}
 
-              {/* ── Zona 3 (gabinete: en foco · infraestructura: por tag) ── */}
+              {/* ── Zona 3 (gabinete: en foco · infraestructura: elegir temas) ── */}
               {usaIniciativas && muestra('iniciativas') && (
-                <ZonaCard numero={3} titulo={esGabinete ? 'Iniciativas en foco' : 'Iniciativas contempladas'} badge={sesIniciativas.length}
+                <ZonaCard
+                  numero={3}
+                  titulo={esGabinete ? 'Iniciativas en foco' : 'Temas de la sesión'}
+                  badge={esInfraestructura ? `${sesIniciativas.length}/${candidatosBase.length}` : sesIniciativas.length}
                   anterior={navAnterior} siguiente={navSiguiente}>
                   <div className="space-y-2">
-                    {esInfraestructura && (
-                      <p className="text-[11px] text-gray-400 -mt-0.5 mb-1">
-                        Iniciativas con la etiqueta <span className="font-semibold text-gray-500">{infraTag}</span> — no las &quot;en foco&quot; del gabinete.
-                      </p>
-                    )}
+                    {/* Infraestructura, de arriba hacia abajo: nudos críticos,
+                        después lo que ya se va a tratar, y al final el resto de
+                        la cartera. Tratar una la sube de tramo. */}
+                    {esInfraestructura ? (
+                      <>
+                        {candidatosBase.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-2">
+                            La cartera del comité está vacía — súmale iniciativas desde el panel.
+                          </p>
+                        ) : (
+                          <>
+                            {/* 1 · Nudos críticos */}
+                            {nudosPendientes.length > 0 && (
+                              <div className="rounded-lg border border-red-200 bg-red-50/50 px-3 py-2.5">
+                                <div className="flex items-baseline gap-2 mb-1.5">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">
+                                    Nudos críticos
+                                  </p>
+                                  <span className="text-[10px] text-red-600/70">
+                                    en semáforo rojo y todavía sin tratar
+                                  </span>
+                                  <span className="text-[10px] text-red-600/70 ml-auto tabular-nums">
+                                    {nudosPendientes.length}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  {nudosPendientes.map(p => (
+                                    <IniciativaTemaRow key={p.id} p={p} enSesion={false} destacado
+                                      onTratar={tratarEnSesion} onAbrir={abrirIniciativa} />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 2 · Lo que se va a tratar */}
+                            {temasSesion.length > 0 && (
+                              <div className="rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2.5">
+                                <div className="flex items-baseline gap-2 mb-1.5">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                                    Se tratan en esta sesión
+                                  </p>
+                                  <span className="text-[10px] text-violet-600/70 ml-auto tabular-nums">
+                                    {temasSesion.length}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  {temasSesion.map(({ fila, p }) => (
+                                    <IniciativaTemaRow key={fila.id} p={p} enSesion
+                                      onQuitar={() => quitarIniciativa(fila)} onAbrir={abrirIniciativa} />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 3 · El resto de la cartera */}
+                            {(gruposCartera.length > 0 || carteraSinMegaproyecto.length > 0) && (
+                              <div className="pt-1">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                                  Resto de la cartera
+                                </p>
+                                {gruposCartera.length === 0 ? (
+                                  <div className="space-y-1">
+                                    {carteraSinMegaproyecto.map(p => (
+                                      <IniciativaTemaRow key={p.id} p={p} enSesion={false}
+                                        onTratar={tratarEnSesion} onAbrir={abrirIniciativa} />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {gruposCartera.map(g => (
+                                      <MegaproyectoGroup key={g.tag} nombre={g.tag} count={g.items.length}>
+                                        {g.items.map(p => (
+                                          <IniciativaTemaRow key={p.id} p={p} enSesion={false}
+                                            onTratar={tratarEnSesion} onAbrir={abrirIniciativa} />
+                                        ))}
+                                      </MegaproyectoGroup>
+                                    ))}
+                                    {carteraSinMegaproyecto.length > 0 && (
+                                      <MegaproyectoGroup nombre="Sin megaproyecto" count={carteraSinMegaproyecto.length} muted>
+                                        {carteraSinMegaproyecto.map(p => (
+                                          <IniciativaTemaRow key={p.id} p={p} enSesion={false}
+                                            onTratar={tratarEnSesion} onAbrir={abrirIniciativa} />
+                                        ))}
+                                      </MegaproyectoGroup>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    ) : (
+                    <>
                     {sesIniciativas.length === 0 && (
                       <p className="text-xs text-gray-400 text-center py-2">
-                        {esGabinete
-                          ? 'No hay iniciativas en foco — márcalas desde Gabinete → Preparación, o agrégalas acá.'
-                          : `No hay iniciativas con la etiqueta "${infraTag}" — agrégalas acá o etiqueta iniciativas en su ficha.`}
+                        No hay iniciativas en foco — márcalas desde Gabinete → Preparación, o agrégalas acá.
                       </p>
                     )}
                     {gruposIniciativas.length === 0 ? (
@@ -1188,12 +1325,13 @@ export default function SesionModal(props: Props) {
                       </>
                     )}
                     <IniciativaTypeahead
-                      placeholder={esGabinete
-                        ? '+ Agregar iniciativa a la agenda (busca por nombre o ministerio)…'
-                        : `+ Agregar iniciativa con la etiqueta "${infraTag}" (busca por nombre o ministerio)…`}
+                      placeholder="+ Agregar iniciativa a la agenda (busca por nombre o ministerio)…"
                       buscar={q => buscarIniciativas(q, true)}
                       onPick={agregarIniciativa}
                     />
+                    </>
+                    )}
+
                   </div>
                 </ZonaCard>
               )}
@@ -1433,7 +1571,7 @@ export default function SesionModal(props: Props) {
                             </div>
                           ) : (
                             <IniciativaTypeahead
-                              placeholder={`Vincular a iniciativa con etiqueta "${infraTag}" (opcional)…`}
+                              placeholder="Vincular a iniciativa (opcional)…"
                               buscar={q => buscarIniciativas(q, false)}
                               onPick={p => setCVinculada(p)}
                               compact
@@ -1474,8 +1612,82 @@ export default function SesionModal(props: Props) {
   )
 }
 
-/** Fila de la agenda de iniciativas (zona 3 gabinete/infraestructura) —
- * extraída para reusarla tanto en lista plana como agrupada por megaproyecto. */
+/**
+ * Fila de la CARTERA en la zona 3 de Infraestructura: se marca para que la
+ * iniciativa sea tema de la sesión.
+ *
+ * La casilla y el cuerpo hacen cosas distintas a propósito: la casilla marca o
+ * desmarca el tema, el cuerpo abre la ficha. Son las dos acciones que se piden
+ * en sala y confundirlas obligaría a deshacer.
+ */
+function IniciativaTemaRow({ p, enSesion, destacado = false, onTratar, onQuitar, onAbrir }: {
+  p: Iniciativa
+  /** true = ya es tema de la sesión (muestra la × para bajarla). */
+  enSesion: boolean
+  /** Fila de un nudo crítico: fondo propio para que se lea como alerta. */
+  destacado?: boolean
+  onTratar?: (p: Iniciativa) => void
+  onQuitar?: () => void
+  onAbrir?: (p: Iniciativa) => void
+}) {
+  const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+  const fondo = enSesion
+    ? 'bg-white border-violet-200'
+    : destacado
+      ? 'bg-white/70 border-red-100'
+      : 'bg-gray-50 border-transparent hover:border-gray-200'
+
+  return (
+    <div className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border transition-colors ${fondo}`}>
+      <button
+        type="button"
+        onClick={() => { if (onAbrir) onAbrir(p) }}
+        className="flex-1 min-w-0 text-left group"
+        title="Ver ficha completa de la iniciativa"
+      >
+        <p className={`text-sm leading-snug flex items-center gap-2 flex-wrap group-hover:text-violet-800 ${enSesion ? 'text-slate-900 font-medium' : 'text-gray-800'}`}>
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
+          <span>{p.nombre}</span>
+          <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity">ver ficha →</span>
+        </p>
+        <p className="text-[11px] text-gray-400 mt-0.5">
+          {p.pct_avance ?? 0}% avance
+          {p.fecha_proximo_hito ? ` · próximo hito ${fmtFecha(p.fecha_proximo_hito)}` : ''}
+          {p.ministerio ? ` · ${p.ministerio}` : ''}
+        </p>
+      </button>
+
+      {enSesion ? (
+        <button
+          type="button"
+          onClick={onQuitar}
+          className="mt-0.5 text-gray-300 hover:text-red-500 p-0.5 flex-shrink-0"
+          title="Sacarla de los temas de esta sesión"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round"/>
+          </svg>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onTratar?.(p)}
+          className={`mt-0.5 flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+            destacado
+              ? 'border-red-200 text-red-700 hover:bg-red-100'
+              : 'border-violet-200 text-violet-700 hover:bg-violet-50'
+          }`}
+          title="Sumarla a los temas de esta sesión"
+        >
+          Tratar en sesión
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Fila de la agenda de iniciativas (zona 3 del gabinete) — extraída para
+ * reusarla tanto en lista plana como agrupada por megaproyecto. */
 function IniciativaAgendaRow({ fila, p, onAbrir, onQuitar }: {
   fila: SesionIniciativa
   p: Iniciativa | null
