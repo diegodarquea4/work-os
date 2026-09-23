@@ -23,9 +23,12 @@ import type { Iniciativa } from '@/lib/projects'
 
 const CURADOS = ['Carretera Austral', 'Aeropuerto Tepual']
 
+// OJO: en `Iniciativa` (la que sale de mapRow) `estado_semaforo` y `pct_avance`
+// NO son nullables — el mapeo siempre los rellena, con 'gris' y 0. El "sin
+// dato" de esos dos campos son esos valores, no null; los que sí admiten null
+// son comuna y etapa_actual.
 function ini(over: Partial<Iniciativa> & { id: number }): Iniciativa {
   return {
-    id: over.id,
     n: over.id,
     nombre: `Iniciativa ${over.id}`,
     estado_semaforo: 'verde',
@@ -43,7 +46,7 @@ const CARTERA: Iniciativa[] = [
   ini({ id: 1, tags: ['CRI', 'Carretera Austral'], estado_semaforo: 'rojo', pct_avance: 10 }),
   ini({ id: 2, tags: ['CRI', 'Aeropuerto Tepual'], estado_semaforo: 'ambar', pct_avance: 50, comuna: 'Puerto Montt' }),
   ini({ id: 3, tags: ['CRI'], estado_semaforo: 'verde', pct_avance: 90, ministerio: 'Ministerio de Vivienda y Urbanismo' }),
-  ini({ id: 4, tags: ['CRI'], estado_semaforo: null, pct_avance: null, comuna: null, etapa_actual: null, capa: 'lll' }),
+  ini({ id: 4, tags: ['CRI'], estado_semaforo: 'gris', pct_avance: 0, comuna: null, etapa_actual: null, capa: 'lll' }),
 ]
 
 describe('megaproyectosDe', () => {
@@ -65,7 +68,7 @@ describe('filtrarCartera', () => {
     expect(hayFiltros(filtrosVacios())).toBe(false)
   })
 
-  it('filtra por semáforo, tratando el nulo como gris', () => {
+  it('filtra por semáforo, y "gris" agrupa a las sin evaluar', () => {
     const f: FiltrosCartera = { ...filtrosVacios(), semaforo: new Set(['rojo']) }
     expect(filtrarCartera(CARTERA, f, CURADOS).map(p => p.id)).toEqual([1])
 

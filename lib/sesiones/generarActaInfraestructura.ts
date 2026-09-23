@@ -25,16 +25,33 @@ import ActaInfraestructuraPdf, { type ActaInfraestructuraData } from '@/componen
 export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion: EjeSesion, opts: ActaOpts): Promise<Buffer> {
   const sesionId = sesion.id
 
+  // N° de sesión = cerradas de Infraestructura de la región, del MISMO tipo de
+  // comité. Correlativo propio, independiente de los otros comités y separado
+  // entre CRI y Mesa Técnica: son dos instancias distintas y hasta ahora
+  // compartían numeración, así que una Mesa Técnica intercalada le corría el
+  // número a la CRI siguiente y el acta decía otro N° que el que la región
+  // llevaba en sus registros.
+  //
+  // `tipo_comite` es nullable (sesiones previas al campo). Se compara con `is`
+  // en ese caso: en PostgREST `eq.null` NO matchea filas NULL, así que un
+  // `.eq()` a secas devolvería cero cerradas y toda sesión sin tipo quedaría
+  // eternamente numerada como la N°1.
+  const baseCerradas = db.from('eje_sesiones').select('id, fecha')
+    .eq('region_cod', sesion.region_cod)
+    .eq('instancia', 'infraestructura')
+    .eq('estado', 'cerrada')
+  const cerradasDelTipo = sesion.tipo_comite == null
+    ? baseCerradas.is('tipo_comite', null)
+    : baseCerradas.eq('tipo_comite', sesion.tipo_comite)
+
   const [numRes, asisRes, iniRes, verifRes, nuevosRes, cfgRes, preside] = await Promise.all([
-    // N° de sesión = cerradas de Infraestructura de la región (correlativo
-    // propio, independiente de los otros comités).
-    db.from('eje_sesiones').select('id, fecha')
-      .eq('region_cod', sesion.region_cod).eq('instancia', 'infraestructura').eq('estado', 'cerrada'),
+    cerradasDelTipo,
     db.from('sesion_asistencia')
       .select('presente, invitado_nombre, invitado_institucion, nomina:sesion_nomina(nombre, cargo, institucion, calidad)')
       .eq('sesion_id', sesionId),
-    // Iniciativas contempladas. En preview no hay snapshot todavía → traemos
-    // también el semáforo/avance EN VIVO para mostrar lo que capturará el cierre.
+    // Iniciativas tratadas: las que la sesión eligió, no la cartera entera. En
+    // preview no hay snapshot todavía → traemos también el semáforo/avance EN
+    // VIVO para mostrar lo que capturará el cierre.
     db.from('sesion_iniciativas')
       .select('*, prioridad:prioridades_territoriales(nombre, estado_semaforo, pct_avance)')
       .eq('sesion_id', sesionId)
@@ -46,7 +63,9 @@ export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion
       .neq('sesion_origen_id', sesionId)
       .or(verificadosOr(sesionId, opts.preview)),
     db.from('sesion_compromisos').select('*').eq('sesion_origen_id', sesionId).order('created_at'),
-    db.from('region_config').select('infraestructura_nombre, infraestructura_tag')
+    // Solo el nombre del comité: el acta dejó de nombrar la etiqueta en su
+    // punto III, así que `infraestructura_tag` ya no se lee acá.
+    db.from('region_config').select('infraestructura_nombre')
       .eq('region_cod', sesion.region_cod).maybeSingle(),
     resolvePreside(db, sesion, opts),
   ])
@@ -77,7 +96,6 @@ export async function renderActaInfraestructuraBuffer(db: SupabaseClient, sesion
   const data: ActaInfraestructuraData = {
     nombreInstancia: (cfgRes.data?.infraestructura_nombre as string | undefined) ?? 'Comité de Infraestructura',
     tipoComite: sesion.tipo_comite,
-    tag: (cfgRes.data?.infraestructura_tag as string | undefined) ?? 'CRI',
     regionNombre,
     sesionNumero,
     fecha: sesion.fecha,
