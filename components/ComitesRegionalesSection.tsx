@@ -72,11 +72,14 @@ type Props = {
   // Abrir la ficha de una iniciativa desde la sesión del gabinete — la maneja
   // VistaRegional con su ProjectTrackerModal.
   onAbrirIniciativa: (p: Iniciativa) => void
+  // Propagar un cambio de iniciativa al estado global (WorkOSApp). Hoy lo usa
+  // el Comité de Infraestructura al sumar o sacar de su cartera.
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
   // Ir al Tablero → Preparación (armar la pauta del gabinete) — la resuelve WorkOSApp.
   onIrAPreparacion: (regionNombre: string) => void
 }
 
-export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa, onIrAPreparacion }: Props) {
+export default function ComitesRegionalesSection({ region, regionEjes, ejesLoading, iniciativas, onAbrirIniciativa, onUpdatePrioridad, onIrAPreparacion }: Props) {
   // Un SEREMI llega acá porque le asignaron la capacidad de ALGÚN comité
   // (mig 112), no porque le toquen todos: ve solo las pestañas que puede
   // operar. Para la delegación no cambia nada — sigue viendo las cinco, con
@@ -181,7 +184,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onIrAPreparacion={onIrAPreparacion} />
       ) : (
         infraestructuraActivo ? (
-          <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
+          <ComiteInfraestructuraTab region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onUpdatePrioridad={onUpdatePrioridad} />
         ) : (
           <Placeholder
             titulo="Comité de Infraestructura — en desarrollo"

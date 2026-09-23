@@ -13,8 +13,9 @@ import HistorialSesionesModal from './HistorialSesionesModal'
 import NominaModal from './NominaModal'
 import MegaproyectosModal from './MegaproyectosModal'
 import MegaproyectoGroup from './MegaproyectoGroup'
-import TagChips from './TagChips'
+import AgregarACarteraModal from './AgregarACarteraModal'
 import { EmptyState } from '@/components/ui'
+import { moverEnCartera } from '@/lib/comiteInfraestructuraClient'
 
 /**
  * Tab "Comité de Infraestructura" de la sección Comités y Gabinete Regional
@@ -34,7 +35,7 @@ import { EmptyState } from '@/components/ui'
  * Preview de la cartera con el tag configurado, SIEMPRE visible al abrir el
  * tab (no solo dentro de la sesión) — mismo lenguaje visual de card que usa
  * el resto del panel para iniciativas individuales (semáforo + nombre +
- * TagChips + avance), pedido explícito del comité.
+ * comuna/ministerio + barra de avance), pedido explícito del comité.
  */
 
 type Props = {
@@ -46,9 +47,13 @@ type Props = {
   // ProjectTrackerModal, por encima de la sesión) — desde el preview o la
   // zona 3 de la sesión.
   onAbrirIniciativa: (p: Iniciativa) => void
+  // Propagar al estado global el cambio de etiquetas al sumar/sacar de la
+  // cartera, para que el preview y el resto de las vistas se enteren sin
+  // recargar (mismo canal que usa la ficha).
+  onUpdatePrioridad: (n: number, patch: Partial<Iniciativa>) => void
 }
 
-export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirIniciativa }: Props) {
+export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirIniciativa, onUpdatePrioridad }: Props) {
   // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
   const puedeOperar = useCan('comite.infraestructura.operar', region.cod)
   const userEmail          = useCurrentUserEmail()
@@ -64,6 +69,10 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
   const [historialOpen, setHistorialOpen]       = useState(false)
   const [nominaOpen, setNominaOpen]             = useState(false)
   const [megaproyectosOpen, setMegaproyectosOpen] = useState(false)
+  const [agregarOpen, setAgregarOpen]           = useState(false)
+  // id de la iniciativa que se está sacando de la cartera — deshabilita su
+  // botón para no mandar el mismo POST dos veces.
+  const [quitandoId, setQuitandoId]             = useState<number | null>(null)
   const { resumen, refresh: refreshResumen } = useSesionesResumen(
     region.cod, { instancia: 'infraestructura' }, infraOn,
   )
@@ -85,6 +94,30 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
     () => agruparPorMegaproyecto(iniciativasTag, p => p.tags, megaproyectos),
     [iniciativasTag, megaproyectos],
   )
+
+  // Sacar de la cartera = quitar la etiqueta. La iniciativa sigue existiendo
+  // con toda su ficha; solo deja de mirarla este comité.
+  //
+  // A diferencia del resto del panel acá NO se hace update optimista: la
+  // escritura la hace el servidor y se propaga recién con la respuesta. Sin
+  // optimismo no hay revert que pueda quedar a medias, y el POST es corto.
+  async function handleQuitar(p: Iniciativa) {
+    const ok = window.confirm(
+      `¿Sacar "${p.nombre}" de la cartera del comité?\n\n` +
+      `Se le quita la etiqueta "${tag}". La iniciativa y su ficha no se tocan, y se puede volver a sumar cuando quieras.`,
+    )
+    if (!ok) return
+
+    setQuitandoId(p.id)
+    try {
+      const tags = await moverEnCartera({ prioridadId: p.id, accion: 'quitar', tag })
+      onUpdatePrioridad(p.n, { tags })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setQuitandoId(null)
+    }
+  }
 
   if (configLoading) {
     return <div className="py-10 text-center text-sm text-gray-400">Cargando comité…</div>
@@ -149,8 +182,8 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
       </div>
 
       {/* Preview de la cartera con el tag configurado — siempre visible al
-          abrir el tab, mismo lenguaje visual (semáforo + TagChips + avance)
-          que las cards de iniciativa del resto del panel. */}
+          abrir el tab, mismo lenguaje visual (semáforo + comuna/ministerio +
+          barra de avance) que las cards de iniciativa del resto del panel. */}
       <div className="px-4 pb-3">
         <div className="flex items-center gap-2 mb-1.5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
@@ -158,15 +191,31 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           </p>
           <span className="text-[10px] text-gray-400">— etiqueta &quot;{tag}&quot;</span>
           <span className="text-[10px] text-gray-400 ml-auto">{iniciativasTag.length}</span>
+          <button
+            onClick={() => setAgregarOpen(true)}
+            className="text-[11px] font-semibold text-violet-700 hover:text-violet-900 hover:underline"
+            title="Buscar una iniciativa de la región y sumarla a la cartera del comité"
+          >
+            + Sumar
+          </button>
         </div>
         {iniciativasTag.length === 0 ? (
-          <p className="text-xs text-gray-500 text-center py-3 border border-dashed border-gray-200 rounded-lg">
-            Ninguna iniciativa tiene la etiqueta &quot;{tag}&quot; todavía — agrégala desde la ficha de la iniciativa.
-          </p>
+          <button
+            onClick={() => setAgregarOpen(true)}
+            className="w-full text-xs text-gray-500 hover:text-violet-700 text-center py-3 border border-dashed border-gray-200 hover:border-violet-300 rounded-lg transition-colors"
+          >
+            Ninguna iniciativa tiene la etiqueta &quot;{tag}&quot; todavía — súmale la primera.
+          </button>
         ) : gruposMegaproyecto.length === 0 ? (
           <div className="space-y-1">
             {iniciativasTag.map(p => (
-              <IniciativaCard key={p.id} p={p} onClick={() => onAbrirIniciativa(p)} />
+              <FilaCartera
+                key={p.id}
+                p={p}
+                onAbrir={() => onAbrirIniciativa(p)}
+                onQuitar={() => handleQuitar(p)}
+                quitando={quitandoId === p.id}
+              />
             ))}
           </div>
         ) : (
@@ -174,14 +223,26 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
             {gruposMegaproyecto.map(g => (
               <MegaproyectoGroup key={g.tag} nombre={g.tag} count={g.items.length}>
                 {g.items.map(p => (
-                  <IniciativaCard key={p.id} p={p} onClick={() => onAbrirIniciativa(p)} />
+                  <FilaCartera
+                    key={p.id}
+                    p={p}
+                    onAbrir={() => onAbrirIniciativa(p)}
+                    onQuitar={() => handleQuitar(p)}
+                    quitando={quitandoId === p.id}
+                  />
                 ))}
               </MegaproyectoGroup>
             ))}
             {sinMegaproyecto.length > 0 && (
               <MegaproyectoGroup nombre="Sin megaproyecto" count={sinMegaproyecto.length} muted>
                 {sinMegaproyecto.map(p => (
-                  <IniciativaCard key={p.id} p={p} onClick={() => onAbrirIniciativa(p)} />
+                  <FilaCartera
+                    key={p.id}
+                    p={p}
+                    onAbrir={() => onAbrirIniciativa(p)}
+                    onQuitar={() => handleQuitar(p)}
+                    quitando={quitandoId === p.id}
+                  />
                 ))}
               </MegaproyectoGroup>
             )}
@@ -264,6 +325,15 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           onSaved={refreshConfig}
         />
       )}
+      {agregarOpen && (
+        <AgregarACarteraModal
+          region={region}
+          iniciativas={iniciativas}
+          tag={tag}
+          onClose={() => setAgregarOpen(false)}
+          onAgregada={(p, tags) => onUpdatePrioridad(p.n, { tags })}
+        />
+      )}
     </div>
   )
 }
@@ -274,10 +344,64 @@ function fmtFechaCorta(fecha: string): string {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
-/** Card compacta de iniciativa — semáforo + nombre + tags + avance, mismo
- * lenguaje visual que el resto del panel (ej. cards del Kanban). */
+/**
+ * Fila del preview: la card de siempre más la opción de sacarla de la cartera.
+ *
+ * El botón de quitar va FUERA de la card y no adentro: `IniciativaCard` es un
+ * <button> completo, y un botón anidado dentro de otro es HTML inválido —
+ * el navegador desarma el marcado y el click de adentro deja de funcionar.
+ */
+function FilaCartera({ p, onAbrir, onQuitar, quitando }: {
+  p: Iniciativa
+  onAbrir: () => void
+  onQuitar: () => void
+  quitando: boolean
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex-1 min-w-0">
+        <IniciativaCard p={p} onClick={onAbrir} />
+      </div>
+      {/* Siempre visible, en gris tenue. La versión anterior lo revelaba al
+          pasar el mouse (`sm:opacity-0` + `group-hover:opacity-100`), pero esas
+          dos utilidades tienen la misma especificidad y la responsive gana por
+          orden de salida en el CSS: en escritorio el botón no habría aparecido
+          nunca. Con pocos usuarios, un × discreto es mejor que un hover astuto. */}
+      <button
+        onClick={onQuitar}
+        disabled={quitando}
+        aria-label={`Sacar ${p.nombre} de la cartera del comité`}
+        title="Sacar de la cartera del comité"
+        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+      >
+        {quitando ? (
+          <span className="text-[10px] font-semibold text-gray-400">···</span>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Card compacta de iniciativa — semáforo + nombre, y debajo comuna y
+ * ministerio; el avance va como barra, igual que en las cards del Kanban.
+ *
+ * SIN etiquetas a propósito: acá dentro TODAS llevan la del comité, así que
+ * repetirla en cada fila no distingue nada. Los megaproyectos, que también son
+ * etiquetas, ya son el encabezado del grupo que contiene a la fila.
+ */
 function IniciativaCard({ p, onClick }: { p: Iniciativa; onClick: () => void }) {
   const sem = SEMAFORO_CONFIG[p.estado_semaforo as keyof typeof SEMAFORO_CONFIG] ?? SEMAFORO_CONFIG.gris
+  const pct = p.pct_avance ?? 0
+  // Mismo criterio que la ficha: sin comuna cargada, una iniciativa marcada
+  // como regional lo dice en vez de quedar en blanco.
+  const lugar = p.comuna ?? (p.alcance_regional ? 'Alcance regional' : null)
+  const contexto = [lugar, p.ministerio].filter(Boolean).join(' · ')
+
   return (
     <button
       onClick={onClick}
@@ -285,14 +409,16 @@ function IniciativaCard({ p, onClick }: { p: Iniciativa; onClick: () => void }) 
       title="Ver ficha completa de la iniciativa"
     >
       <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${sem.dot}`} title={sem.label} />
-      <span className="text-sm text-slate-800 font-medium line-clamp-1 flex-1 min-w-0">{p.nombre}</span>
-      <TagChips tags={p.tags} max={2} className="flex-shrink-0" />
-      {p.ministerio && (
-        <span className="text-xs text-gray-400 truncate max-w-[140px] flex-shrink-0">{p.ministerio}</span>
-      )}
-      <span className="text-xs font-semibold text-gray-600 tabular-nums flex-shrink-0 w-9 text-right">
-        {p.pct_avance ?? 0}%
-      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-slate-800 font-medium truncate">{p.nombre}</p>
+        {contexto && <p className="text-[11px] text-gray-400 truncate">{contexto}</p>}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="w-10 h-1 bg-gray-100 rounded-full overflow-hidden">
+          <div className={`h-1 rounded-full ${sem.dot}`} style={{ width: `${pct}%` }} />
+        </div>
+        <span className="text-xs font-semibold text-gray-600 tabular-nums w-9 text-right">{pct}%</span>
+      </div>
     </button>
   )
 }
