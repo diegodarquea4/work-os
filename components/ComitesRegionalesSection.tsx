@@ -55,10 +55,18 @@ const ECONOMICO_ACTIVO: readonly string[] = [
   'X',     // Los Lagos
 ]
 
-// Comité de Infraestructura en marcha blanca: visible solo en estas regiones;
+// Comité de Nudos Críticos en marcha blanca: visible solo en estas regiones;
 // en el resto se muestra "Pronto" (mismo trato que Económico). El desarrollo
 // completo sigue vivo — solo se gatea su visibilidad por región.
-const INFRAESTRUCTURA_ACTIVO: readonly string[] = ['X'] // Los Lagos
+//
+// `region_config.infraestructura_habilitado` ya está en true en las 16 desde
+// la mig 060: esta lista es el gate de verdad, y es la que se toca para sumar
+// una región.
+const INFRAESTRUCTURA_ACTIVO: readonly string[] = [
+  'X',     // Los Lagos — marcha blanca, 14 iniciativas en cartera
+  'VIII',  // Biobío (2026-09-23) — arranca con la cartera vacía: se arma desde
+           // «+ Sumar» sobre las 971 iniciativas de la región
+]
 
 type Props = {
   region:     Region
@@ -115,7 +123,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   // muestra "Pronto" (mismo trato que Infraestructura).
   const economicoActivo = ECONOMICO_ACTIVO.includes(region.cod)
 
-  // Infraestructura en marcha blanca: solo Los Lagos lo tiene activo; en el
+  // Nudos Críticos en marcha blanca: Los Lagos y Biobío; en el
   // resto muestra "Pronto".
   const infraestructuraActivo = INFRAESTRUCTURA_ACTIVO.includes(region.cod)
 
