@@ -41,8 +41,10 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
 // Comité Económico: activo en estas regiones; en el resto se muestra "Pronto".
 // Tarapacá fue la marcha blanca; las demás se sumaron cuando el módulo quedó
 // listo para usarse de verdad. El desarrollo completo siempre estuvo vivo —
-// esto solo gatea su visibilidad por región. Se suma una región cuando su
-// SEREMI de Economía ya tiene cuenta: si no, el comité aparece y nadie lo abre.
+// esto solo gatea su visibilidad por región. La regla para sumar una región es
+// que haya alguien que pueda CONDUCIR el comité con cuenta creada: si no, el
+// comité aparece y nadie lo abre. Normalmente es su SEREMI de Economía; la
+// delegación (rol regional) también conduce, ver `conduceComiteEconomico`.
 const ECONOMICO_ACTIVO: readonly string[] = [
   'I',     // Tarapacá
   'III',   // Atacama
@@ -53,6 +55,9 @@ const ECONOMICO_ACTIVO: readonly string[] = [
   'VIII',  // Biobío
   'IX',    // La Araucanía
   'X',     // Los Lagos
+  'XV',    // Arica y Parinacota (2026-09-24) — todavía SIN SEREMI de Economía
+           // con cuenta: lo conduce la delegación. Arranca con la cartera
+           // vacía, por las dos vías (0 privados, 0 iniciativas con CER).
 ]
 
 // Comité de Infraestructura en marcha blanca: visible solo en estas regiones;
@@ -111,7 +116,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   // El Comité Policial se ancla al eje con sesiones habilitadas.
   const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
 
-  // Económico en marcha blanca: solo Tarapacá lo tiene activo; en el resto
+  // Económico en marcha blanca: 10 regiones; en el resto
   // muestra "Pronto" (mismo trato que Infraestructura).
   const economicoActivo = ECONOMICO_ACTIVO.includes(region.cod)
 
