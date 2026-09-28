@@ -65,7 +65,9 @@ export default function OficiosSeiaPage() {
       body.append('archivo', archivo)
       const res = await fetch('/api/oficios-seia/import', { method: 'POST', body })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'La importación falló')
+      // El detalle de Postgres se muestra tal cual: es feo, pero es lo único
+      // que dice qué arreglar.
+      if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join('\n\n') || 'La importación falló')
       setUltimo(json as Importacion)
       await cargar()
     } catch (err) {
@@ -124,7 +126,7 @@ export default function OficiosSeiaPage() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 whitespace-pre-line">
           {error}
         </div>
       )}

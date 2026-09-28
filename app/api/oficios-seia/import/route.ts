@@ -116,6 +116,26 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin()
 
+  // ── Chequeo previo: ¿está corrida la migración 117? ───────────────────────
+  // Sin esto, el primer INSERT falla con un error de Postgres sobre una
+  // columna cualquiera y hay que deducir la causa. Preguntar primero cuesta
+  // una consulta y convierte el problema en una instrucción.
+  {
+    const { error } = await db
+      .from('sesion_oficios_tratados')
+      .select('id, automatico, id_documento, id_expediente, region_seia')
+      .limit(1)
+    if (error) {
+      return NextResponse.json(
+        {
+          error: 'La base todavía no tiene las columnas que esta importación necesita: falta correr la migración 117.',
+          detalle: error.message,
+        },
+        { status: 409 },
+      )
+    }
+  }
+
   // ── 2. La cartera, que es lo que le da región a cada oficio ───────────────
   const { data: carteraRows, error: carteraErr } = await db
     .from('comite_economico_proyecto')
@@ -178,8 +198,19 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     console.error('[oficios-seia] escritura falló:', err)
+    // El detalle del error de Postgres va AL CLIENTE, no solo al log del
+    // servidor: esto lo corre una persona desde una pantalla, y «falló a
+    // mitad de camino» sin decir por qué la deja sin nada que hacer. Lo que
+    // Postgres dice —qué columna falta, qué constraint se violó— es
+    // exactamente lo que hay que saber para arreglarlo.
+    const e = err as { message?: string; details?: string; hint?: string; code?: string }
+    const detalle = [e?.message, e?.details, e?.hint].filter(Boolean).join(' · ')
     return NextResponse.json(
-      { error: 'La importación falló a mitad de camino. Volvé a subir el archivo: es idempotente, no duplica lo que ya entró.' },
+      {
+        error: 'La importación falló a mitad de camino. Volvé a subir el archivo: es idempotente, no duplica lo que ya entró.',
+        detalle: detalle || String(err),
+        codigo: e?.code ?? null,
+      },
       { status: 500 },
     )
   }
