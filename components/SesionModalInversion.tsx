@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
+import {
+  DIAS_VENTANA_PROXIMA_SESION, diasHasta, estaAtrasado, esParaLaProximaSesion,
+} from '@/lib/oficiosSeia'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -71,6 +74,24 @@ type V2Proyecto = {
   inversion: number | null
   moneda: string | null
   etapa: string | null
+}
+
+/**
+ * Un oficio del SEIA (automatico = true). Es un subconjunto de columnas: la
+ * sesión solo necesita saber qué organismo debe responder, sobre qué proyecto
+ * y para cuándo.
+ */
+type OficioSeiaFila = {
+  id: number
+  nombre_proyecto: string | null
+  ministerio: string | null
+  oaeca_nombre: string | null
+  oaeca_sea: string | null
+  tipo_oficio: string | null
+  fecha_limite: string | null
+  url_oficio: string | null
+  url_proyecto: string | null
+  proyecto_privado_id: number | null
 }
 
 type SesionOficioConNombres = SesionOficioTratado & {
@@ -291,6 +312,10 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
 
   const [oficiosAnteriores, setOficiosAnteriores]         = useState<SesionOficioConNombres[]>([])
+  // Los que vienen del SEIA (automatico = true). No son compromisos del
+  // comité: son el estado del expediente, y se muestran para saber qué hay
+  // que apurar. Van aparte de los de arriba, que sí los levantó una sesión.
+  const [oficiosSeia, setOficiosSeia]                     = useState<OficioSeiaFila[]>([])
   const [oficiosTratadosSesion, setOficiosTratadosSesion] = useState<SesionOficioConNombres[]>([])
   const [oficioNotaDraft, setOficioNotaDraft]             = useState<Record<number, string>>({})
 
@@ -420,7 +445,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const OFICIO_SELECT = '*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)'
     const [
       nominaRes, asisRes, compRes, nuevosRes, oficiosAntRes, oficiosTratRes,
-      oaecaRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
+      oaecaRes, oficiosSeiaRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
       subRegionRes, subSesionRes,
     ] = await Promise.all([
       sb.from('sesion_nomina').select('*')
@@ -439,11 +464,22 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       // sin sellar — mismo criterio que compromisos).
       sb.from('sesion_oficios_tratados').select(OFICIO_SELECT)
         .eq('region_cod', region.cod)
+        // Explícito y no por efecto colateral: un oficio importado tiene
+        // sesion_origen_id NULL y el .neq de abajo ya lo dejaría fuera, pero
+        // depender de eso es frágil. Los del SEIA viven en su propio bloque.
+        .eq('automatico', false)
         .neq('sesion_origen_id', s.id)
         .or('estado.eq.pendiente,and(estado.eq.resuelto,resuelto_en_sesion_id.is.null)')
         .order('created_at'),
       sb.from('sesion_oficios_tratados').select(OFICIO_SELECT).eq('sesion_origen_id', s.id).order('created_at'),
       sb.from('oaeca').select('*').order('nombre'),
+      // Oficios del SEIA pendientes en esta región, los más urgentes primero.
+      sb.from('sesion_oficios_tratados')
+        .select('id, nombre_proyecto, ministerio, oaeca_nombre, oaeca_sea, tipo_oficio, fecha_limite, url_oficio, url_proyecto, proyecto_privado_id')
+        .eq('region_cod', region.cod)
+        .eq('automatico', true)
+        .eq('estado', 'pendiente')
+        .order('fecha_limite', { ascending: true, nullsFirst: false }),
       sb.from('comite_economico_proyecto').select('*').eq('region_cod', region.cod).order('nombre'),
       sb.from('sesion_proyectos').select('*').eq('sesion_id', s.id),
       sb.from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
@@ -459,6 +495,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     setOficiosAnteriores((oficiosAntRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOficiosTratadosSesion((oficiosTratRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOaecaList((oaecaRes.data ?? []) as Oaeca[])
+    setOficiosSeia((oficiosSeiaRes.data ?? []) as OficioSeiaFila[])
     setProyectosPrivados((proyPrivadosRes.data ?? []) as ComiteEconomicoProyecto[])
     setMetaEmpleoRegion((metaRegionRes.data as RegionMetaEmpleo | null) ?? null)
     const metaSesion = (metaSesionRes.data as SesionMetaEmpleoValor | null) ?? null
@@ -839,6 +876,18 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // en el Policial: mismos endpoints, mismos textos.
 
   // ── Derivados ─────────────────────────────────────────────────────────────
+
+  // Lo que hay que apurar en esta sesión: lo vencido primero y después lo que
+  // vence antes de la próxima. La ventana cubre el intervalo entre sesiones —
+  // con una más corta quedaría una franja que no se ve en ninguna de las dos.
+  const seiaVencidos = useMemo(
+    () => oficiosSeia.filter(o => estaAtrasado(o, hoyISO())),
+    [oficiosSeia],
+  )
+  const seiaPorVencer = useMemo(
+    () => oficiosSeia.filter(o => !estaAtrasado(o, hoyISO()) && esParaLaProximaSesion(o, hoyISO())),
+    [oficiosSeia],
+  )
 
   const invitados = useMemo(() => asistencia.filter(a => a.nomina_id === null), [asistencia])
   const presentes = useMemo(() => asistencia.filter(a => a.presente).length, [asistencia])
@@ -1443,6 +1492,51 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     descripcion="Los oficios pendientes de sesiones anteriores se verifican acá; abajo se levantan los nuevos."
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
+                        {/* ── Del SEIA: vencidos y por vencer ──────────────
+                            Estos NO los levantó el comité: son el estado real
+                            del expediente, importados del SEIA. Van primero
+                            porque son lo que hay que apurar, y se muestran
+                            solos —sin botones de estado— porque el comité no
+                            los cierra: los cierra el organismo cuando
+                            responde, y eso llega en la próxima importación. */}
+                        {(seiaVencidos.length > 0 || seiaPorVencer.length > 0) && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <h5 className="text-[10px] font-semibold text-gray-500">
+                                Pendientes en el SEIA
+                              </h5>
+                              <span className="text-[10px] text-gray-400">
+                                vencidos y por vencer en {DIAS_VENTANA_PROXIMA_SESION} días
+                              </span>
+                              <span className="text-xs text-gray-400 ml-auto tabular-nums">
+                                {seiaVencidos.length + seiaPorVencer.length}
+                              </span>
+                            </div>
+
+                            {seiaVencidos.length > 0 && (
+                              <div className="mb-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-red-700 mb-1">
+                                  Vencidos · {seiaVencidos.length}
+                                </p>
+                                <div className="space-y-1">
+                                  {seiaVencidos.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} />)}
+                                </div>
+                              </div>
+                            )}
+
+                            {seiaPorVencer.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1">
+                                  Por vencer · {seiaPorVencer.length}
+                                </p>
+                                <div className="space-y-1">
+                                  {seiaPorVencer.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} />)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Oficios anteriores */}
                         <div>
                           <div className="flex items-center gap-2 mb-2">
@@ -1737,5 +1831,61 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       />
     )}
     </>
+  )
+}
+
+/**
+ * Una fila de oficio del SEIA. Sin botones de estado a propósito: el comité no
+ * cierra estos oficios — los cierra el organismo cuando responde, y eso llega
+ * en la importación siguiente. Lo que sí puede hacer acá es abrir el oficio y
+ * el expediente, que es lo que se necesita para reclamarlo.
+ */
+function FilaOficioSeia({ o, hoy }: { o: OficioSeiaFila; hoy: string }) {
+  const dias = o.fecha_limite ? diasHasta(o.fecha_limite, hoy) : null
+  const vencido = dias != null && dias < 0
+  const plazo = dias == null ? 'sin plazo'
+    : vencido ? `${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'} de atraso`
+    : dias === 0 ? 'vence hoy'
+    : `vence en ${dias} día${dias === 1 ? '' : 's'}`
+
+  return (
+    <div className={`px-3 py-2 rounded-lg border ${vencido ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/40'}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-slate-800 leading-snug">
+            {o.url_proyecto ? (
+              <a href={o.url_proyecto} target="_blank" rel="noreferrer" className="hover:underline">
+                {o.nombre_proyecto ?? 'Proyecto sin nombre'}
+              </a>
+            ) : (o.nombre_proyecto ?? 'Proyecto sin nombre')}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">
+            {/* El OAECA con su jurisdicción cuando la hay: «CONAF» sirve de
+                poco si no se sabe cuál de las quince. */}
+            {o.oaeca_sea ?? o.oaeca_nombre ?? '—'}
+            {o.ministerio ? ` · ${o.ministerio}` : ''}
+          </p>
+          {o.tipo_oficio && (
+            <p className="text-[11px] text-gray-400 mt-0.5 truncate">{o.tipo_oficio}</p>
+          )}
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <p className={`text-[11px] font-bold ${vencido ? 'text-red-700' : 'text-amber-700'}`}>{plazo}</p>
+          {o.fecha_limite && (
+            <p className="text-[10px] text-gray-400 tabular-nums mt-0.5">{fmtFecha(o.fecha_limite)}</p>
+          )}
+          {o.url_oficio && (
+            <a
+              href={o.url_oficio}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-violet-700 hover:text-violet-900 hover:underline font-medium mt-1 inline-block"
+            >
+              Ver oficio →
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
