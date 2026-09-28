@@ -27,11 +27,15 @@ type Props = {
   // VistaRegional con su ProjectTrackerModal, sin queries nuevas.
   iniciativas: Iniciativa[]
   onAbrirIniciativa: (p: Iniciativa) => void
+  // Propaga el cambio de etiquetas al sumar o sacar una iniciativa PÚBLICA de
+  // la cartera (etiqueta CER), para que el resto de las vistas se entere sin
+  // recargar. Las públicas viven en el estado de WorkOSApp, no acá.
+  onUpdatePrioridad?: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 const NOMBRE_COMITE = 'Comité Económico'
 
-export default function ComiteInversionPanel({ region, iniciativas, onAbrirIniciativa }: Props) {
+export default function ComiteInversionPanel({ region, iniciativas, onAbrirIniciativa, onUpdatePrioridad }: Props) {
   // Gate = capacidad propia del comité por región (no iniciativa.editar_operativo).
   const puedeOperar = useCan('comite.economico.operar', region.cod)
   // Conducir = abrir/cerrar sesiones y definir la meta. Aportar = la cartera.
@@ -166,6 +170,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           region={region}
           iniciativas={iniciativas}
           onAbrirIniciativa={onAbrirIniciativa}
+          onUpdatePrioridad={onUpdatePrioridad}
           modo="preview"
           onVerTodos={() => setProyectosOpen(true)}
         />
@@ -180,6 +185,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           region={region}
           iniciativas={iniciativas}
           onAbrirIniciativa={onAbrirIniciativa}
+          onUpdatePrioridad={onUpdatePrioridad}
           modo="completo"
           onClose={() => { setProyectosOpen(false); setCarteraVersion(v => v + 1) }}
           onIrASesion={() => {
