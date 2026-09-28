@@ -152,7 +152,11 @@ export async function POST(request: Request) {
   // ── 3. Contra lo que ya está guardado ─────────────────────────────────────
   const { data: guardadosRows, error: guardadosErr } = await db
     .from('sesion_oficios_tratados')
-    .select('id, id_documento, region_cod, estado, proyecto_privado_id')
+    // `oaeca_sea` va en el select porque es parte de la llave natural: un
+    // mismo documento se dirige a varios organismos (ver `clave` en
+    // lib/oficiosSeia.ts). Sin él, la reconciliación daría por repetidos
+    // oficios distintos del mismo oficio.
+    .select('id, id_documento, oaeca_sea, oaeca_nombre, region_cod, estado, proyecto_privado_id')
     .eq('automatico', true)
 
   if (guardadosErr) {

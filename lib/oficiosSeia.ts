@@ -315,6 +315,9 @@ export function parsearPendientes(
 export type OficioGuardado = {
   id: number
   id_documento: number | null
+  /** Con jurisdicción. Es parte de la llave, no un adorno: ver `clave`. */
+  oaeca_sea: string | null
+  oaeca_nombre: string | null
   region_cod: string
   estado: 'pendiente' | 'resuelto'
   proyecto_privado_id: number | null
@@ -350,12 +353,23 @@ export function planificarEscritura(
   delArchivo: OficioImportado[],
   guardados: OficioGuardado[],
 ): PlanEscritura {
-  const clave = (regionCod: string, doc: number) => `${regionCod}|${doc}`
+  // La llave NO es el documento. Un oficio del SEA se dirige a VARIOS
+  // organismos a la vez y el expediente guarda un solo documento con todos en
+  // su «Distribución:»: en el archivo real son 638 oficios sobre 114
+  // documentos, uno de ellos con 22 destinatarios. Lo que hace pendiente a un
+  // oficio es que UN organismo no respondió, así que la llave lleva el
+  // organismo — y con su jurisdicción («CONAF, Región de Coquimbo»), porque
+  // con el nombre corto dos filas del archivo real colisionan.
+  const clave = (regionCod: string, doc: number, oaeca: string | null) =>
+    `${regionCod}|${doc}|${(oaeca ?? '').trim().toLocaleLowerCase('es')}`
+
+  const oaecaDe = (o: { oaeca_sea: string | null; oaeca_nombre: string | null }) =>
+    o.oaeca_sea ?? o.oaeca_nombre
 
   const porClave = new Map<string, OficioGuardado>()
   for (const g of guardados) {
     if (g.id_documento == null) continue
-    porClave.set(clave(g.region_cod, g.id_documento), g)
+    porClave.set(clave(g.region_cod, g.id_documento, oaecaDe(g)), g)
   }
 
   const nuevos: OficioImportado[] = []
@@ -363,7 +377,7 @@ export function planificarEscritura(
   const vistos = new Set<string>()
 
   for (const o of delArchivo) {
-    const k = clave(o.region_cod, o.id_documento)
+    const k = clave(o.region_cod, o.id_documento, oaecaDe(o))
     vistos.add(k)
     const g = porClave.get(k)
     if (!g) { nuevos.push(o); continue }
@@ -380,7 +394,7 @@ export function planificarEscritura(
   const resolver = guardados
     .filter(g => g.estado === 'pendiente'
       && g.id_documento != null
-      && !vistos.has(clave(g.region_cod, g.id_documento)))
+      && !vistos.has(clave(g.region_cod, g.id_documento, oaecaDe(g))))
     .map(g => g.id)
 
   return { nuevos, actualizar, resolver }

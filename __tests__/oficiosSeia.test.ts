@@ -300,7 +300,7 @@ const imp = (over: Partial<OficioImportado> = {}): OficioImportado => ({
   region_cod: 'X',
   proyecto_privado_id: null,
   nombre_proyecto: 'Proyecto',
-  ministerio: null, oaeca_nombre: null, oaeca_sea: null,
+  ministerio: null, oaeca_nombre: 'CONAF', oaeca_sea: 'CONAF, Región de Los Lagos',
   tipo_oficio: null, tipo_presentacion: null,
   fecha_oficio: null, fecha_limite: null,
   emisor: null, url_proyecto: null, url_oficio: null, region_seia: null,
@@ -309,6 +309,8 @@ const imp = (over: Partial<OficioImportado> = {}): OficioImportado => ({
 
 const guard = (over: Partial<OficioGuardado> & { id: number }): OficioGuardado => ({
   id_documento: 100,
+  oaeca_sea: 'CONAF, Región de Los Lagos',
+  oaeca_nombre: 'CONAF',
   region_cod: 'X',
   estado: 'pendiente',
   proyecto_privado_id: null,
@@ -348,6 +350,51 @@ describe('planificarEscritura', () => {
   it('no vuelve a resolver lo que ya estaba resuelto', () => {
     const p = planificarEscritura([], [guard({ id: 1, estado: 'resuelto' })])
     expect(p.resolver).toHaveLength(0)
+  })
+
+  // ── La llave es documento + ORGANISMO, no el documento ───────────────────
+  // Un oficio del SEA se dirige a varios organismos a la vez y el expediente
+  // guarda UN solo documento con todos en su «Distribución:». En el archivo
+  // real son 638 oficios sobre 114 documentos, uno de ellos con 22
+  // destinatarios. Tomar el documento como llave hacía que la importación
+  // muriera con «duplicate key» en la primera tanda.
+  it('dos organismos del mismo documento son dos oficios', () => {
+    const p = planificarEscritura(
+      [
+        imp({ oaeca_sea: 'Ilustre Municipalidad de Arica' }),
+        imp({ oaeca_sea: 'SEREMI de Salud, Región de Arica y Parinacota' }),
+      ],
+      [],
+    )
+    expect(p.nuevos).toHaveLength(2)
+  })
+
+  it('reconoce cada organismo por separado contra lo guardado', () => {
+    const p = planificarEscritura(
+      [imp({ oaeca_sea: 'CONAF' }), imp({ oaeca_sea: 'SAG' })],
+      [guard({ id: 1, oaeca_sea: 'CONAF' })],
+    )
+    expect(p.nuevos.map(o => o.oaeca_sea)).toEqual(['SAG'])
+    expect(p.resolver).toHaveLength(0)
+  })
+
+  // Uno responde y el otro no: solo se cierra el que dejó de venir.
+  it('resuelve al organismo que respondió y deja al que no', () => {
+    const p = planificarEscritura(
+      [imp({ oaeca_sea: 'CONAF' })],
+      [guard({ id: 1, oaeca_sea: 'CONAF' }), guard({ id: 2, oaeca_sea: 'SAG' })],
+    )
+    expect(p.resolver).toEqual([2])
+  })
+
+  // Se compara sin distinguir mayúsculas ni espacios: el archivo no es
+  // perfectamente consistente y una diferencia de forma no puede duplicar.
+  it('no duplica por mayúsculas o espacios en el nombre del organismo', () => {
+    const p = planificarEscritura(
+      [imp({ oaeca_sea: '  conaf, región de los lagos  ' })],
+      [guard({ id: 1, oaeca_sea: 'CONAF, Región de Los Lagos' })],
+    )
+    expect(p.nuevos).toHaveLength(0)
   })
 
   // El mismo documento en dos regiones son dos oficios distintos: que una
