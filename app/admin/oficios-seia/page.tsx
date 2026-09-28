@@ -134,13 +134,28 @@ export default function OficiosSeiaPage() {
       {ultimo && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
           <p className="text-sm font-semibold text-green-900">Importación lista</p>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3 text-center">
+          {/* «Con proyecto» es el número que de verdad dice si esto sirve: un
+              oficio sin proyecto no aparece en ninguna ficha ni en la sesión
+              de nadie. «Re-enganchadas» solo cuenta los que YA existían y
+              recién ahora encontraron su proyecto, así que en la primera
+              importación siempre da cero — mostrarlo solo a él hacía parecer
+              que el vínculo estaba roto sin decir nada útil. */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-3 text-center">
             <Dato n={ultimo.filas_leidas}       label="leídas" />
             <Dato n={ultimo.filas_nuevas}       label="nuevas" />
-            <Dato n={ultimo.filas_actualizadas} label="enganchadas" />
+            <Dato n={vinculadas(ultimo)}        label="con proyecto" />
+            <Dato n={ultimo.detalle?.sin_asignar ?? 0} label="sin asignar" alerta={(ultimo.detalle?.sin_asignar ?? 0) > 0} />
             <Dato n={ultimo.filas_resueltas}    label="resueltas" />
             <Dato n={ultimo.filas_sin_region}   label="descartadas" alerta={ultimo.filas_sin_region > 0} />
           </div>
+          {vinculadas(ultimo) === 0 && ultimo.filas_nuevas > 0 && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+              Ningún oficio quedó pegado a un proyecto de la cartera. Un oficio se une a su
+              proyecto por el <strong>expediente del SEIA</strong>, y eso solo lo tienen los
+              proyectos importados del catálogo. Cargá el expediente en la ficha de cada
+              proyecto y volvé a importar: se enganchan solos.
+            </p>
+          )}
           {/* Lo descartado se muestra siempre: una fila que se pierde en
               silencio es un oficio que el comité no va a ver y nadie va a
               saber por qué. */}
@@ -172,7 +187,7 @@ export default function OficiosSeiaPage() {
             <thead className="text-gray-500">
               <tr className="[&_th]:text-left [&_th]:font-semibold [&_th]:py-1.5 [&_th]:pr-3 [&_th]:border-b [&_th]:border-gray-200">
                 <th>Corte</th><th>Archivo</th><th>Leídas</th><th>Nuevas</th>
-                <th>Enganchadas</th><th>Resueltas</th><th>Fuera</th><th>Quién</th>
+                <th>Con proyecto</th><th>Resueltas</th><th>Fuera</th><th>Quién</th>
               </tr>
             </thead>
             <tbody>
@@ -182,7 +197,7 @@ export default function OficiosSeiaPage() {
                   <td className="py-1.5 pr-3 max-w-[180px] truncate text-gray-600">{h.archivo_nombre ?? '—'}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{h.filas_leidas}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{h.filas_nuevas}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{h.filas_actualizadas}</td>
+                  <td className="py-1.5 pr-3 tabular-nums">{vinculadas(h)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{h.filas_resueltas}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{h.filas_sin_region}</td>
                   <td className="py-1.5 pr-3 text-gray-500 max-w-[160px] truncate">{h.importado_por_email ?? '—'}</td>
@@ -194,6 +209,11 @@ export default function OficiosSeiaPage() {
       )}
     </div>
   )
+}
+
+/** Cuántos de los recién entrados quedaron pegados a un proyecto. */
+function vinculadas(i: Importacion): number {
+  return Math.max(0, i.filas_nuevas - (i.detalle?.sin_asignar ?? 0))
 }
 
 function Dato({ n, label, alerta = false }: { n: number; label: string; alerta?: boolean }) {

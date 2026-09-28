@@ -8,6 +8,7 @@ import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEco
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 import { catalogoAvanzo, camposPendientes } from '@/lib/carteraOrigen'
+import { parsearExpedientePegado } from '@/lib/oficiosSeia'
 import { useConduceEconomico } from '@/lib/context/UserContext'
 import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
@@ -279,6 +280,28 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
       window.alert((err as Error).message)
       cargar()
     }
+  }
+
+  /**
+   * Guarda el expediente del SEIA. Acepta lo que uno pega de verdad —la URL
+   * completa de la ficha— además del número pelado, y rechaza el resto en vez
+   * de guardar basura: un expediente mal cargado no falla, simplemente hace
+   * que los oficios nunca aparezcan, que es la peor forma de fallar.
+   */
+  async function commitExpediente(texto: string) {
+    if (!proyecto) return
+    const limpio = texto.trim()
+    const id = limpio ? parsearExpedientePegado(limpio) : null
+
+    if (limpio && id == null) {
+      window.alert(
+        'No reconocí un expediente ahí.\n\nPegá el link de la ficha del SEIA ' +
+        '(…expediente.php?id_expediente=2156785500) o solo el número.',
+      )
+      return
+    }
+    if (id === proyecto.seia_expediente_id) return
+    await commitCampo('seia_expediente_id', id)
   }
 
   async function commitNombre() {
@@ -868,6 +891,16 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                         onCommit={v => commitCampo('vida_util_anios', v.trim() ? Number(v.trim()) : null)}
                       />
                       <TextAreaPillField label="Meta 2026 - 2027" value={proyecto.meta_2026_2027 ?? ''} editable={editable} onCommit={v => commitCampo('meta_2026_2027', v.trim() || null)} />
+                      {/* El expediente es lo que le pega a este proyecto sus
+                          oficios pendientes del SEIA. Acepta el link pegado
+                          del navegador o el número pelado, porque lo que uno
+                          copia de verdad es la URL. */}
+                      <TextPillField
+                        label="Expediente SEIA"
+                        value={proyecto.seia_expediente_id != null ? String(proyecto.seia_expediente_id) : ''}
+                        editable={editable}
+                        onCommit={v => commitExpediente(v)}
+                      />
                     </div>
                   </div>
                 </div>

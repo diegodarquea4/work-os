@@ -139,8 +139,11 @@ export async function POST(request: Request) {
   // ── 2. La cartera, que es lo que le da región a cada oficio ───────────────
   const { data: carteraRows, error: carteraErr } = await db
     .from('comite_economico_proyecto')
-    .select('id, region_cod, origen_sistema, origen_id')
-    .eq('origen_sistema', 'seia')
+    .select('id, region_cod, origen_sistema, origen_id, seia_expediente_id')
+    // Los dos caminos al expediente: importado del catálogo (origen_id) o
+    // cargado a mano en la ficha (seia_expediente_id, mig 119). Por eso NO se
+    // filtra por origen_sistema: eso dejaría fuera justo a los manuales.
+    .or('origen_sistema.eq.seia,seia_expediente_id.not.is.null')
 
   if (carteraErr) {
     console.error('[oficios-seia] lectura de cartera falló:', carteraErr)

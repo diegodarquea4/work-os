@@ -8,7 +8,9 @@ import {
   idDocumentoDesdeUrl,
   idExpediente,
   idExpedienteDesdeUrl,
+  expedienteDeProyecto,
   indiceCartera,
+  parsearExpedientePegado,
   parsearPendientes,
   planificarEscritura,
   regionCodDesdeSeia,
@@ -154,6 +156,7 @@ const proy = (over: Partial<ProyectoCartera> & { id: number }): ProyectoCartera 
   region_cod: 'X',
   origen_sistema: 'seia',
   origen_id: 'seia_2156785500',
+  seia_expediente_id: null,
   ...over,
 })
 
@@ -446,5 +449,64 @@ describe('esParaLaProximaSesion', () => {
   it('la ventana se puede mover sin tocar el resto', () => {
     expect(esParaLaProximaSesion({ fecha_limite: '2026-10-05' }, hoy, 7)).toBe(true)
     expect(esParaLaProximaSesion({ fecha_limite: '2026-10-06' }, hoy, 7)).toBe(false)
+  })
+})
+
+// ── El expediente cargado a mano (mig 119) ───────────────────────────────────
+// La mayoría de la cartera se cargó a mano y NO tiene `origen_id`, así que sin
+// este camino ningún oficio encuentra a su proyecto. Pasó de verdad: la
+// primera importación real dejó los 568 oficios sin vincular.
+
+describe('expedienteDeProyecto', () => {
+  it('usa el expediente cargado a mano', () => {
+    expect(expedienteDeProyecto(proy({ id: 1, origen_sistema: null, origen_id: null, seia_expediente_id: 2156785500 })))
+      .toBe(2156785500)
+  })
+
+  it('usa el del catálogo cuando no hay uno a mano', () => {
+    expect(expedienteDeProyecto(proy({ id: 1 }))).toBe(2156785500)
+  })
+
+  // El de la ficha es la afirmación más reciente y deliberada sobre qué
+  // expediente es este proyecto.
+  it('el cargado a mano le gana al del catálogo', () => {
+    expect(expedienteDeProyecto(proy({ id: 1, origen_id: 'seia_111', seia_expediente_id: 999 }))).toBe(999)
+  })
+
+  it('devuelve null cuando no hay ninguno', () => {
+    expect(expedienteDeProyecto(proy({ id: 1, origen_sistema: null, origen_id: null }))).toBeNull()
+    expect(expedienteDeProyecto(proy({ id: 1, origen_sistema: 'mop', origen_id: 'mop_9' }))).toBeNull()
+  })
+})
+
+describe('parsearExpedientePegado', () => {
+  // Lo que uno copia del navegador es la URL entera, no el número.
+  it('entiende la URL pegada del SEIA', () => {
+    expect(parsearExpedientePegado('https://seia.sea.gob.cl/expediente/expediente.php?id_expediente=2156785500&modo=ficha'))
+      .toBe(2156785500)
+    expect(parsearExpedientePegado('  expediente.php?id_expediente=2160923176  ')).toBe(2160923176)
+  })
+
+  it('entiende el número pelado', () => {
+    expect(parsearExpedientePegado('2156785500')).toBe(2156785500)
+  })
+
+  // Rechazar es mejor que guardar basura: un expediente mal cargado no falla,
+  // solo hace que los oficios nunca aparezcan — la peor forma de fallar.
+  it('rechaza lo que no reconoce', () => {
+    expect(parsearExpedientePegado('Parque Eólico Mirador del Sur')).toBeNull()
+    expect(parsearExpedientePegado('12345')).toBeNull()
+    expect(parsearExpedientePegado('')).toBeNull()
+    expect(parsearExpedientePegado(null)).toBeNull()
+  })
+})
+
+describe('parsearPendientes con expediente a mano', () => {
+  it('engancha el oficio a un proyecto sin origen_id', () => {
+    const cartera = [proy({ id: 42, region_cod: 'XIV', origen_sistema: null, origen_id: null, seia_expediente_id: 2156785500 })]
+    const r = parsearPendientes([fila()], registro, cartera)
+    expect(r.oficios[0].proyecto_privado_id).toBe(42)
+    expect(r.oficios[0].region_cod).toBe('XIV')
+    expect(r.sinAsignar).toBe(0)
   })
 })

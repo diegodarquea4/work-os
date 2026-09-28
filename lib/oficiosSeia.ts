@@ -60,6 +60,12 @@ export type ProyectoCartera = {
   region_cod: string
   origen_sistema: string | null
   origen_id: string | null
+  /**
+   * Expediente cargado a mano desde la ficha (mig 119). Es el camino para los
+   * proyectos que NO se importaron del catálogo —la mayoría de la cartera— y
+   * que por eso no tienen `origen_id` por donde unirlos a sus oficios.
+   */
+  seia_expediente_id: number | null
 }
 
 // ── Constantes de negocio ────────────────────────────────────────────────────
@@ -177,15 +183,48 @@ export function idExpedienteDesdeUrl(url: string | null | undefined): number | n
 export function indiceCartera(proyectos: ProyectoCartera[]): Map<number, ProyectoCartera[]> {
   const idx = new Map<number, ProyectoCartera[]>()
   for (const p of proyectos) {
-    if (p.origen_sistema !== 'seia' || !p.origen_id) continue
-    if (!p.origen_id.startsWith(PREFIJO_ORIGEN_SEIA)) continue
-    const exp = Number(p.origen_id.slice(PREFIJO_ORIGEN_SEIA.length))
-    if (!Number.isFinite(exp)) continue
+    const exp = expedienteDeProyecto(p)
+    if (exp == null) continue
     const acc = idx.get(exp) ?? []
     acc.push(p)
     idx.set(exp, acc)
   }
   return idx
+}
+
+/**
+ * El expediente de un proyecto de la cartera, por cualquiera de los dos
+ * caminos. El manual gana: si alguien lo cargó a mano en la ficha, esa es la
+ * afirmación más reciente y más deliberada sobre qué expediente es este
+ * proyecto.
+ *
+ * `origen_id` solo sirve cuando el proyecto se importó del catálogo, y lo
+ * guarda con el prefijo que hereda de v2_proyectos_inversion
+ * (`seia_${EXPEDIENTE_ID}`). Cruzarlo sin quitar el prefijo da cero
+ * coincidencias y ningún error.
+ */
+export function expedienteDeProyecto(p: ProyectoCartera): number | null {
+  if (p.seia_expediente_id != null && Number.isFinite(p.seia_expediente_id)) {
+    return p.seia_expediente_id
+  }
+  if (p.origen_sistema !== 'seia' || !p.origen_id) return null
+  if (!p.origen_id.startsWith(PREFIJO_ORIGEN_SEIA)) return null
+  const exp = Number(p.origen_id.slice(PREFIJO_ORIGEN_SEIA.length))
+  return Number.isFinite(exp) ? exp : null
+}
+
+/**
+ * El expediente que alguien pega en la ficha: acepta el número pelado o
+ * cualquiera de las URLs del SEIA, que es lo que de verdad se copia del
+ * navegador. `null` si no se reconoce nada.
+ */
+export function parsearExpedientePegado(texto: string | null | undefined): number | null {
+  const t = (texto ?? '').trim()
+  if (!t) return null
+  const deUrl = /id_expediente=(\d+)/.exec(t)
+  if (deUrl) return Number(deUrl[1])
+  if (/^\d{6,}$/.test(t)) return Number(t)
+  return null
 }
 
 // ── El resultado del parseo ──────────────────────────────────────────────────

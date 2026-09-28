@@ -1002,6 +1002,10 @@ export type ComiteEconomicoProyecto = {
   origen_id: string | null
   origen_importado_at: string | null
   origen_estado_al_importar: string | null
+  // Expediente del SEIA al que corresponde, cargado a mano desde la ficha
+  // (mig 119). Sirve para que sus oficios pendientes se le peguen solos; NO
+  // implica que el proyecto se haya importado del catálogo.
+  seia_expediente_id: number | null
 }
 
 // Avance registrado por una SEREMI en un proyecto privado del Comité
