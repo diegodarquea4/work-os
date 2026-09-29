@@ -9,6 +9,7 @@ import {
 } from '@/lib/oficiosSeia'
 import { descripcionSeguimiento, type GrupoOaeca } from '@/lib/oficiosSeguimiento'
 import OficiosSeguimientoBloque from './OficiosSeguimientoBloque'
+import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -1572,11 +1573,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                         <OficiosSeguimientoBloque
                           oficios={seiaEnVentana}
                           compromisos={compromisosOaeca}
-                          nomina={nomina}
                           hoy={hoyISO()}
-                          puedeOperar={!!sesion && sesion.estado === 'borrador'}
                           onAbrirProyecto={abrirProyectoDeOficio}
-                          onComprometer={comprometerSeguimiento}
                         />
 
                         {/* Oficios anteriores */}
@@ -1774,6 +1772,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     </div>
                     )
                   })}
+                  {sesion?.estado === 'borrador' && (
+                    <CompromisosOaecaSugeridos
+                      oficios={seiaEnVentana}
+                      compromisos={compromisosOaeca}
+                      nomina={nomina}
+                      hoy={hoyISO()}
+                      onComprometer={comprometerSeguimiento}
+                    />
+                  )}
                   <form onSubmit={agregarCompromiso} className="space-y-2 pt-1">
                     <textarea
                       value={cDescripcion}

@@ -125,6 +125,112 @@ export function agruparPorOaeca(oficios: OficioSeguimiento[], hoyISO: string): G
   return [...porClave.values()].sort((a, b) => a.peorPlazo - b.peorPlazo)
 }
 
+// ── Agrupar por proyecto, con sus organismos adentro ─────────────────────────
+
+/**
+ * La llave con que se identifica el proyecto de un oficio.
+ *
+ * Por id de cartera cuando lo tiene; por nombre normalizado cuando no. Dos
+ * oficios de un proyecto que nadie sumó a la cartera siguen siendo un solo
+ * proyecto, y sin esto aparecerían como dos.
+ */
+export function claveProyecto(o: Pick<OficioSeguimiento, 'proyecto_privado_id' | 'nombre_proyecto'>): string {
+  return o.proyecto_privado_id != null
+    ? `p${o.proyecto_privado_id}`
+    : `n${claveOaeca(o.nombre_proyecto)}`
+}
+
+export type OrganismoDelProyecto = {
+  clave: string
+  nombre: string
+  oficios: OficioSeguimiento[]
+  vencidos: number
+  porVencer: number
+  peorPlazo: number
+}
+
+export type GrupoProyecto = {
+  clave: string
+  /** `null` = no está en la cartera; no hay ficha que abrir. */
+  proyectoId: number | null
+  nombre: string
+  oficios: OficioSeguimiento[]
+  vencidos: number
+  porVencer: number
+  /** Quiénes deben responder por este proyecto. */
+  organismos: OrganismoDelProyecto[]
+  peorPlazo: number
+}
+
+/**
+ * Agrupa los oficios pendientes por PROYECTO, y dentro de cada uno por el
+ * organismo que debe responder.
+ *
+ * Es la vista de lectura de la sesión: se recorre la cartera proyecto por
+ * proyecto. La unidad de ACCIÓN sigue siendo el organismo —el compromiso lo
+ * persigue a él, y por eso los subgrupos existen—, pero el compromiso que sale
+ * de acá cubre a ese organismo en TODA la región, no solo en este proyecto:
+ * es una sola conversación, y partirla por proyecto sería reclamarle dos veces
+ * la mitad. Por eso `descripcionSeguimiento` se arma sobre el grupo de
+ * `agruparPorOaeca`, que ve la región entera, y no sobre el subgrupo de acá.
+ */
+export function agruparPorProyecto(oficios: OficioSeguimiento[], hoyISO: string): GrupoProyecto[] {
+  const porClave = new Map<string, GrupoProyecto>()
+
+  for (const o of oficios) {
+    if (o.estado !== 'pendiente') continue
+    const clave = claveProyecto(o)
+
+    let g = porClave.get(clave)
+    if (!g) {
+      g = {
+        clave,
+        proyectoId: o.proyecto_privado_id,
+        nombre: o.nombre_proyecto ?? 'Proyecto sin nombre',
+        oficios: [],
+        vencidos: 0,
+        porVencer: 0,
+        organismos: [],
+        peorPlazo: Number.POSITIVE_INFINITY,
+      }
+      porClave.set(clave, g)
+    }
+
+    const d = o.fecha_limite ? diasHasta(o.fecha_limite, hoyISO) : null
+    const vencido = d != null && d < 0
+
+    g.oficios.push(o)
+    if (vencido) g.vencidos++
+    else g.porVencer++
+    if (d != null && d < g.peorPlazo) g.peorPlazo = d
+
+    const nombreOrg = nombreOaeca(o)
+    const claveOrg = claveOaeca(nombreOrg)
+    let org = g.organismos.find(x => x.clave === claveOrg)
+    if (!org) {
+      org = {
+        clave: claveOrg,
+        nombre: nombreOrg,
+        oficios: [],
+        vencidos: 0,
+        porVencer: 0,
+        peorPlazo: Number.POSITIVE_INFINITY,
+      }
+      g.organismos.push(org)
+    }
+    org.oficios.push(o)
+    if (vencido) org.vencidos++
+    else org.porVencer++
+    if (d != null && d < org.peorPlazo) org.peorPlazo = d
+  }
+
+  // Lo más atrasado primero, en los dos niveles.
+  for (const g of porClave.values()) {
+    g.organismos.sort((a, b) => a.peorPlazo - b.peorPlazo)
+  }
+  return [...porClave.values()].sort((a, b) => a.peorPlazo - b.peorPlazo)
+}
+
 // ── Cerrar lo que se cumplió solo ────────────────────────────────────────────
 
 export type CompromisoSeguimiento = {

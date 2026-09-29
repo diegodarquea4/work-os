@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   agruparPorOaeca,
   claveOaeca,
+  agruparPorProyecto,
   compromisosACerrar,
   descripcionSeguimiento,
   nombreOaeca,
@@ -192,5 +193,72 @@ describe('descripcionSeguimiento', () => {
     const [g] = agruparPorOaeca([of({ id: 1, fecha_limite: '2026-10-30' })], HOY)
     expect(descripcionSeguimiento(g))
       .toBe('Seguimiento a DGA, Región de Los Lagos: 1 oficio pendiente de 1 proyecto.')
+  })
+})
+
+describe('agruparPorProyecto', () => {
+  it('junta los oficios de un proyecto y los abre por organismo', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, oaeca_sea: 'DGA, Región de Los Lagos' }),
+      of({ id: 2, oaeca_sea: 'DGA, Región de Los Lagos' }),
+      of({ id: 3, oaeca_sea: 'CONADI, Región de Los Lagos' }),
+    ], HOY)
+
+    expect(g).toHaveLength(1)
+    expect(g[0].oficios).toHaveLength(3)
+    expect(g[0].organismos.map(o => o.nombre)).toEqual([
+      'DGA, Región de Los Lagos',
+      'CONADI, Región de Los Lagos',
+    ])
+    expect(g[0].organismos[0].oficios).toHaveLength(2)
+  })
+
+  it('separa dos proyectos del mismo organismo', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, proyecto_privado_id: 287, nombre_proyecto: 'Gramado' }),
+      of({ id: 2, proyecto_privado_id: 300, nombre_proyecto: 'Otro' }),
+    ], HOY)
+    expect(g.map(x => x.nombre).sort()).toEqual(['Gramado', 'Otro'])
+  })
+
+  // Sin esto, dos oficios de un proyecto que nadie sumó salen como dos
+  // proyectos distintos porque no tienen id de cartera.
+  it('agrupa por nombre los que no están en la cartera', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, proyecto_privado_id: null, nombre_proyecto: 'Planta Los Lilenes' }),
+      of({ id: 2, proyecto_privado_id: null, nombre_proyecto: 'planta  los lilenes' }),
+    ], HOY)
+    expect(g).toHaveLength(1)
+    expect(g[0].proyectoId).toBeNull()
+  })
+
+  it('deja fuera los resueltos', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, estado: 'resuelto' }),
+      of({ id: 2 }),
+    ], HOY)
+    expect(g[0].oficios.map(o => o.id)).toEqual([2])
+  })
+
+  it('cuenta vencidos y por vencer en los dos niveles', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, oaeca_sea: 'DGA', fecha_limite: '2026-09-20' }),
+      of({ id: 2, oaeca_sea: 'DGA', fecha_limite: '2026-10-30' }),
+      of({ id: 3, oaeca_sea: 'SAG', fecha_limite: '2026-10-30' }),
+    ], HOY)
+    expect(g[0].vencidos).toBe(1)
+    expect(g[0].porVencer).toBe(2)
+    expect(g[0].organismos[0].vencidos).toBe(1)
+    expect(g[0].organismos[0].porVencer).toBe(1)
+  })
+
+  it('ordena proyectos y organismos por lo más atrasado', () => {
+    const g = agruparPorProyecto([
+      of({ id: 1, proyecto_privado_id: 1, nombre_proyecto: 'Tibio', oaeca_sea: 'SAG',  fecha_limite: '2026-10-20' }),
+      of({ id: 2, proyecto_privado_id: 2, nombre_proyecto: 'Urgente', oaeca_sea: 'SAG', fecha_limite: '2026-10-10' }),
+      of({ id: 3, proyecto_privado_id: 2, nombre_proyecto: 'Urgente', oaeca_sea: 'DGA', fecha_limite: '2026-09-01' }),
+    ], HOY)
+    expect(g.map(x => x.nombre)).toEqual(['Urgente', 'Tibio'])
+    expect(g[0].organismos.map(o => o.nombre)).toEqual(['DGA', 'SAG'])
   })
 })
