@@ -262,6 +262,15 @@ export function railParaSesion(e: EntradaConsola): RailItem[] {
   return items
 }
 
+/**
+ * La llave con que se recuerda una sección visitada. Lleva el sub-ítem porque
+ * en el Económico los sub-ítems SON las secciones: «Proyectos tratados» y
+ * «Oficios» son dos partes distintas de la reunión, no dos vistas de una.
+ */
+export function claveZona(ref: ZonaRef): string {
+  return `${ref.zona}|${ref.inst ?? ''}`
+}
+
 export function mismaZona(a: ZonaRef, b: ZonaRef): boolean {
   return a.zona === b.zona && (a.inst ?? null) === (b.inst ?? null)
 }
@@ -385,4 +394,84 @@ export function avisosCierreComite(r: ResumenCierreComite, instancia: InstanciaC
   if (r.asistencia.presentes === 0) avisos.push('Sin asistencia registrada')
 
   return avisos
+}
+
+// ── Bloqueos del cierre ──────────────────────────────────────────────────────
+
+/**
+ * Algo que impide cerrar la sesión, con dónde se arregla.
+ *
+ * Distinto de `avisosCierreComite`, que solo advierte. Un aviso dice «esto
+ * quedó así»; un bloqueo dice «esto no se puede dar por terminado». La
+ * diferencia importa: un acta que sella una reunión sin asistencia, o que deja
+ * oficios vencidos sin nadie a cargo, documenta que no pasó nada.
+ */
+export type BloqueoCierre = {
+  texto: string
+  /** A qué zona mandar para resolverlo. `null` = no hay una sola. */
+  ir: ZonaRef | null
+}
+
+export type EntradaBloqueos = {
+  instancia: InstanciaConsola
+  asistencia: { presentes: number; total: number }
+  /** Organismos con oficios VENCIDOS y sin compromiso de seguimiento abierto. */
+  organismosSinSeguimiento: string[]
+  /** Secciones del recorrido que todavía no se abrieron en esta sesión. */
+  faltanVisitar: { ref: ZonaRef; label: string }[]
+}
+
+/**
+ * Qué impide cerrar.
+ *
+ * ── Por qué solo el Económico ──────────────────────────────────────────────
+ *
+ * Los tres bloqueos salen de cómo trabaja este comité y de datos que solo él
+ * tiene. Policial, Infraestructura y Gabinete siguen cerrando como siempre: no
+ * es una decisión sobre ellos, y cambiarles el cierre de rebote sería tomarla
+ * sin que nadie la haya pedido.
+ *
+ * ── Por qué los vencidos y no todo lo pendiente ────────────────────────────
+ *
+ * Un oficio que todavía no vence es aviso: se mira para que no llegue vencido
+ * a la próxima. Exigir un responsable para algo que nadie incumplió todavía
+ * convierte el bloqueo en trámite, y un trámite se completa sin leerlo. Los
+ * vencidos son los que ya tienen a alguien fallando el plazo.
+ */
+export function bloqueosCierreComite(e: EntradaBloqueos): BloqueoCierre[] {
+  if (e.instancia !== 'economico') return []
+
+  const bloqueos: BloqueoCierre[] = []
+
+  if (e.asistencia.presentes === 0) {
+    bloqueos.push({
+      texto: 'Nadie quedó registrado como presente',
+      ir: { zona: 'asistencia' },
+    })
+  }
+
+  const n = e.organismosSinSeguimiento.length
+  if (n > 0) {
+    // Se nombran hasta tres: la lista completa de quince no se lee, y el
+    // número sin ningún nombre no dice por dónde empezar.
+    const muestra = e.organismosSinSeguimiento.slice(0, 3).join(', ')
+    const resto = n > 3 ? ` y ${n - 3} más` : ''
+    bloqueos.push({
+      texto: n === 1
+        ? `${muestra} tiene oficios vencidos y nadie a cargo del seguimiento`
+        : `${n} organismos con oficios vencidos y nadie a cargo: ${muestra}${resto}`,
+      ir: { zona: 'nuevos' },
+    })
+  }
+
+  if (e.faltanVisitar.length > 0) {
+    const labels = e.faltanVisitar.slice(0, 3).map(f => f.label).join(', ')
+    const resto = e.faltanVisitar.length > 3 ? ` y ${e.faltanVisitar.length - 3} más` : ''
+    bloqueos.push({
+      texto: `Falta pasar por ${labels}${resto}`,
+      ir: e.faltanVisitar[0].ref,
+    })
+  }
+
+  return bloqueos
 }

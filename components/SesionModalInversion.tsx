@@ -7,7 +7,9 @@ import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import {
   estaAtrasado, esParaLaProximaSesion,
 } from '@/lib/oficiosSeia'
-import { descripcionSeguimiento, type GrupoOaeca } from '@/lib/oficiosSeguimiento'
+import {
+  agruparPorOaeca, claveOaeca, descripcionSeguimiento, type GrupoOaeca,
+} from '@/lib/oficiosSeguimiento'
 import OficiosSeguimientoBloque, { ChevronPlegado } from './OficiosSeguimientoBloque'
 import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
 import type { Region } from '@/lib/regions'
@@ -22,7 +24,8 @@ import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import {
-  railParaSesion, resumenAsistencia, vecinos, etiquetaZona,
+  railParaSesion, resumenAsistencia, vecinos, etiquetaZona, claveZona, ordenRecorrido,
+  bloqueosCierreComite,
   type ZonaKey, type ZonaRef,
 } from '@/lib/sesiones/consola'
 import ConsolaSesionShell, { soltarFoco } from './sesiones/ConsolaSesionShell'
@@ -399,6 +402,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // Consola: en qué zona está parado el usuario y si está en la sala o en la
   // pantalla de cierre. Arranca en Integrantes, que es la zona 1 de este comité.
   const [activa, setActiva] = useState<ZonaRef>({ zona: 'asistencia' })
+  /**
+   * Secciones que ya se abrieron en esta apertura de la consola.
+   *
+   * Es de sesión y no de base a propósito: lo que se quiere garantizar es que
+   * la reunión RECORRIÓ la agenda, no que alguien alguna vez hizo clic. Si se
+   * cierra la consola y se vuelve a entrar, se vuelve a recorrer — y eso es
+   * justo lo que pasa cuando la sesión se retoma otro día.
+   */
+  const [visitadas, setVisitadas] = useState<Set<string>>(() => new Set([claveZona({ zona: 'asistencia' })]))
   const [fase, setFase]     = useState<'sala' | 'cierre'>('sala')
   // Lo pone CierreSesionComite mientras hay un cierre en vuelo: bloquea Escape
   // y la ✕ para no desmontar la consola a medio camino.
@@ -990,7 +1002,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // Cambiar de zona vacía primero un onBlur pendiente: hay campos que guardan
   // al salir (nota del oficio, lugar) y el enfocado se va a desmontar.
-  const irA = useCallback((ref: ZonaRef) => { soltarFoco(); setActiva(ref) }, [])
+  const irA = useCallback((ref: ZonaRef) => {
+    soltarFoco()
+    setActiva(ref)
+    setVisitadas(prev => {
+      const k = claveZona(ref)
+      if (prev.has(k)) return prev
+      const next = new Set(prev)
+      next.add(k)
+      return next
+    })
+  }, [])
 
   const { anterior, siguiente } = vecinos(rail, activa)
   const navAnterior  = anterior  ? { label: etiquetaZona(rail, anterior),  onClick: () => irA(anterior) }  : null
@@ -1001,6 +1023,40 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const subSeguimiento = activa.zona === 'seguimiento'
     ? (activa.inst === 'oficios' ? 'oficios' : activa.inst === 'mesa_empleo' ? 'mesa_empleo' : 'proyectos')
     : 'proyectos'
+
+  /**
+   * Organismos con oficios VENCIDOS y sin compromiso de seguimiento abierto.
+   * Es lo que no se puede dejar sin dueño al cerrar: alguien ya falló un plazo
+   * y nadie quedó a cargo de reclamarlo.
+   */
+  const organismosSinSeguimiento = useMemo(() => {
+    const conSeguimiento = new Set(
+      compromisosOaeca
+        .filter(c => c.estado !== 'cumplido' && c.oaeca_objetivo)
+        .map(c => claveOaeca(c.oaeca_objetivo!)),
+    )
+    return agruparPorOaeca(seiaVencidos, hoyISO())
+      .filter(g => !conSeguimiento.has(g.clave))
+      .map(g => g.nombre)
+  }, [seiaVencidos, compromisosOaeca])
+
+  /** Secciones del recorrido que todavía no se abrieron. */
+  const faltanVisitar = useMemo(
+    () => ordenRecorrido(rail)
+      .filter(ref => !visitadas.has(claveZona(ref)))
+      .map(ref => ({ ref, label: etiquetaZona(rail, ref) })),
+    [rail, visitadas],
+  )
+
+  const bloqueosCierre = useMemo(
+    () => bloqueosCierreComite({
+      instancia: 'economico',
+      asistencia: asist,
+      organismosSinSeguimiento,
+      faltanVisitar,
+    }),
+    [asist, organismosSinSeguimiento, faltanVisitar],
+  )
 
   const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
   const navTerminar = { label: 'Terminar sesión', onClick: abrirCierre }
@@ -1156,6 +1212,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       escapeDeshabilitado={cerrando}
       overlay={fase === 'cierre' && sesion ? (
         <CierreSesionComite
+          bloqueos={bloqueosCierre}
           instancia="economico"
           sesion={sesion}
           nombreInstancia={NOMBRE_COMITE}
@@ -1810,15 +1867,6 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                     </div>
                     )
                   })}
-                  {sesion?.estado === 'borrador' && (
-                    <CompromisosOaecaSugeridos
-                      oficios={seiaEnVentana}
-                      compromisos={compromisosOaeca}
-                      nomina={nomina}
-                      hoy={hoyISO()}
-                      onComprometer={comprometerSeguimiento}
-                    />
-                  )}
                   <form onSubmit={agregarCompromiso} className="space-y-2 pt-1">
                     <textarea
                       value={cDescripcion}
@@ -1902,6 +1950,22 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       </button>
                     </div>
                   </form>
+
+                  {/* El seguimiento de oficios va ABAJO: arriba está lo que la
+                      sesión ya comprometió y el alta libre, que es lo que se
+                      redacta en la reunión. Esto es una lista de pendientes que
+                      el archivo del SEIA trajo, y se resuelve al final. */}
+                  {sesion?.estado === 'borrador' && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <CompromisosOaecaSugeridos
+                        oficios={seiaEnVentana}
+                        compromisos={compromisosOaeca}
+                        nomina={nomina}
+                        hoy={hoyISO()}
+                        onComprometer={comprometerSeguimiento}
+                      />
+                    </div>
+                  )}
                 </div>
               </ZonaCard>
               )}

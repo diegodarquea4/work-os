@@ -5,6 +5,7 @@ import { SEMAFORO_CONFIG } from '@/lib/config'
 import { formatoValorComite } from '@/lib/sesiones/helpers'
 import {
   ESTADO_COMPROMISO, resumenAsistencia, resumenCierreComite, avisosCierreComite,
+  type BloqueoCierre,
   type InstanciaConsola, type ZonaRef,
 } from '@/lib/sesiones/consola'
 import { Movimiento, Vacio } from './Movimiento'
@@ -66,13 +67,18 @@ type Props = {
   onIrA: (ref: ZonaRef) => void
   /** Deja al padre saber si hay un cierre en vuelo (bloquea Escape y la ✕). */
   onCerrandoChange?: (cerrando: boolean) => void
+  /**
+   * Lo que IMPIDE cerrar, no lo que advierte. Los avisos ámbar siguen sin
+   * bloquear nada: estos son otra cosa, y por eso van aparte.
+   */
+  bloqueos?: BloqueoCierre[]
 }
 
 export default function CierreSesionComite({
   instancia, sesion, nombreInstancia, compAnteriores, onEstadoCompromiso, compNuevos, nomina, asistencia,
   instituciones = [], catalogo = [], valores = [], iniciativas = [],
   proyectos = [], oficios = { anteriores: [], nuevos: [] },
-  onVolver, onCerrada, onIrA, onCerrandoChange,
+  onVolver, onCerrada, onIrA, onCerrandoChange, bloqueos = [],
 }: Props) {
   const [cerrando, setCerrando]   = useState(false)
   const [preview, setPreview]     = useState(false)
@@ -107,7 +113,7 @@ export default function CierreSesionComite({
   // ── Acciones (movidas desde SesionModal, sin cambios de fondo) ─────────────
 
   async function handleCerrar() {
-    if (cerrando) return
+    if (cerrando || bloqueos.length > 0) return
     const sinDatos = instancia === 'eje' && valores.length === 0
     const msg = instancia === 'infraestructura'
       ? '¿Cerrar la sesión y generar el acta?\n\nLos acuerdos y compromisos quedarán sellados; la sesión no se podrá editar.'
@@ -426,6 +432,30 @@ export default function CierreSesionComite({
           {/* Footer */}
           <footer className="flex-none bg-white border-t border-slate-200 px-5 py-3">
             <div className="max-w-3xl mx-auto flex items-center gap-2.5 flex-wrap">
+              {/* Los bloqueos se listan uno por línea y cada uno lleva a
+                  donde se arregla: un renglón que dice «faltan tres cosas» sin
+                  decir cuáles ni dónde obliga a buscarlas a ciegas. */}
+              {bloqueos.length > 0 && (
+                <div className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 space-y-1">
+                  <p className="text-[12.5px] font-bold text-red-800">
+                    Falta esto para poder cerrar
+                  </p>
+                  {bloqueos.map((b, i) => (
+                    <div key={i} className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-[12.5px] text-red-900">· {b.texto}</span>
+                      {b.ir && (
+                        <button
+                          type="button"
+                          onClick={() => onIrA(b.ir!)}
+                          className="text-[12px] font-semibold text-red-700 hover:text-red-900 underline"
+                        >
+                          corregir →
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {avisos.length > 0 && (
                 <span className="text-[12.5px] font-medium text-amber-700 inline-flex items-start gap-1.5 min-w-0">
                   <svg className="flex-none mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
@@ -438,8 +468,10 @@ export default function CierreSesionComite({
                   className="text-[13px] font-bold px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                   {preview ? 'Generando…' : 'Previsualizar acta'}
                 </button>
-                {/* Siempre habilitado (salvo en vuelo): los avisos informan, no bloquean. */}
-                <button onClick={handleCerrar} disabled={cerrando}
+                {/* Los AVISOS siguen sin bloquear: informan. Los BLOQUEOS sí,
+                    y el título dice por qué el botón está apagado. */}
+                <button onClick={handleCerrar} disabled={cerrando || bloqueos.length > 0}
+                  title={bloqueos.length > 0 ? bloqueos.map(b => b.texto).join(' · ') : undefined}
                   className="text-[13px] font-bold px-4 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40">
                   {cerrando ? 'Cerrando…' : 'Generar acta y cerrar'}
                 </button>
