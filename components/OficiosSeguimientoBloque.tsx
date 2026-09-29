@@ -148,9 +148,10 @@ function ProyectoCard({ g, hoy, comprometidos, onAbrirProyecto }: {
           type="button"
           onClick={() => setAbierto(v => !v)}
           aria-expanded={abierto}
-          className="flex-shrink-0 text-[11px] text-violet-700 hover:text-violet-900 font-medium"
+          aria-label={abierto ? 'Contraer proyecto' : 'Expandir proyecto'}
+          className="flex-shrink-0 p-1 -m-1 rounded hover:bg-white/60"
         >
-          {abierto ? 'Contraer' : 'Expandir'}
+          <ChevronPlegado abierto={abierto} />
         </button>
       </div>
 
@@ -238,6 +239,22 @@ function FilaOficio({ o, hoy, mostrarTipo }: {
         </a>
       )}
     </div>
+  )
+}
+
+/**
+ * El chevron de plegado del panel: mismo trazo y misma rotación que
+ * CollapsibleSection —abierto apunta abajo, cerrado a la izquierda—, para que
+ * plegar se vea igual en todas partes.
+ */
+export function ChevronPlegado({ abierto }: { abierto: boolean }) {
+  return (
+    <svg
+      className={`w-3.5 h-3.5 text-gray-400 transition-transform ${abierto ? 'rotate-90' : '-rotate-90'}`}
+      viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+    >
+      <path d="M5 2l5 5-5 5"/>
+    </svg>
   )
 }
 

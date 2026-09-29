@@ -8,7 +8,7 @@ import {
   estaAtrasado, esParaLaProximaSesion,
 } from '@/lib/oficiosSeia'
 import { descripcionSeguimiento, type GrupoOaeca } from '@/lib/oficiosSeguimiento'
-import OficiosSeguimientoBloque from './OficiosSeguimientoBloque'
+import OficiosSeguimientoBloque, { ChevronPlegado } from './OficiosSeguimientoBloque'
 import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
@@ -1678,8 +1678,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                 {oficiosTratadosSesion.length} en esta sesión
                               </span>
                             )}
-                            <span className="ml-auto text-[11px] text-violet-700 font-medium">
-                              {altaOficioAbierta ? 'Contraer' : 'Expandir'}
+                            <span className="ml-auto">
+                              <ChevronPlegado abierto={altaOficioAbierta} />
                             </span>
                           </button>
                           <div className="space-y-2" hidden={!altaOficioAbierta}>

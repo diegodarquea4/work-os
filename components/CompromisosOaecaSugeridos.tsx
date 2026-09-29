@@ -8,7 +8,7 @@ import {
   type OficioSeguimiento,
 } from '@/lib/oficiosSeguimiento'
 import type { SesionNomina } from '@/lib/types'
-import type { CompromisoAbierto } from './OficiosSeguimientoBloque'
+import { ChevronPlegado, type CompromisoAbierto } from './OficiosSeguimientoBloque'
 
 /**
  * Compromisos de seguimiento precargados, uno por ORGANISMO con oficios
@@ -80,8 +80,8 @@ export default function CompromisosOaecaSugeridos({
         <span className="text-[10px] text-gray-500">
           {sugeridos.length} organismo{sugeridos.length === 1 ? '' : 's'} sin seguimiento
         </span>
-        <span className="ml-auto text-[11px] text-violet-700 font-medium">
-          {abierto ? 'Contraer' : 'Expandir'}
+        <span className="ml-auto">
+          <ChevronPlegado abierto={abierto} />
         </span>
       </button>
 
