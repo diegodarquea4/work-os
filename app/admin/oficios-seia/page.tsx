@@ -31,6 +31,18 @@ type Importacion = {
   created_at: string
 }
 
+type Scrape = {
+  partial: boolean
+  proyectos: number
+  procesados: number
+  desde: number
+  hasta: number
+  pendientes_escritos: number
+  resueltos: number
+  fallados: number
+  errores: string[]
+}
+
 type Revinculacion = {
   revisados: number
   vinculados: number
@@ -50,6 +62,9 @@ export default function OficiosSeiaPage() {
   const [error, setError]         = useState<string | null>(null)
   const [ultimo, setUltimo]       = useState<Importacion | null>(null)
   const [revinculando, setRevinculando] = useState(false)
+  const [scrapeando, setScrapeando]     = useState(false)
+  const [scrape, setScrape]             = useState<Scrape | null>(null)
+  const [progreso, setProgreso]         = useState<string | null>(null)
   const [vinculo, setVinculo]     = useState<Revinculacion | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -88,6 +103,48 @@ export default function OficiosSeiaPage() {
     }
   }
 
+  /**
+   * Lee el SEIA directo, sin archivo. La ruta es reanudable —corta a 240s y
+   * devuelve partial— así que acá se la vuelve a llamar hasta que termine,
+   * igual que hace el botón «Actualizar proyectos en SEIA» del comité.
+   */
+  async function scrapear() {
+    setScrapeando(true)
+    setError(null)
+    setScrape(null)
+    setProgreso(null)
+    try {
+      const acum: Scrape = {
+        partial: false, proyectos: 0, procesados: 0, desde: 0, hasta: 0,
+        pendientes_escritos: 0, resueltos: 0, fallados: 0, errores: [],
+      }
+      // Tope de vueltas: sin él, una ruta que devolviera partial siempre
+      // dejaría la pantalla girando para siempre.
+      for (let vuelta = 0; vuelta < 12; vuelta++) {
+        const res = await fetch('/api/oficios-seia/scrape', { method: 'POST' })
+        const json = await res.json()
+        if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join(String.fromCharCode(10, 10)) || 'El scraping falló')
+        const j = json as Scrape
+        acum.proyectos = j.proyectos
+        acum.procesados += j.procesados
+        acum.hasta = j.hasta
+        acum.pendientes_escritos += j.pendientes_escritos
+        acum.resueltos += j.resueltos
+        acum.fallados += j.fallados
+        acum.errores = [...acum.errores, ...(j.errores ?? [])].slice(0, 20)
+        acum.partial = j.partial
+        setProgreso(`${j.hasta} de ${j.proyectos} proyectos`)
+        if (!j.partial) break
+      }
+      setScrape(acum)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setScrapeando(false)
+      setProgreso(null)
+    }
+  }
+
   async function revincular() {
     setRevinculando(true)
     setError(null)
@@ -114,7 +171,7 @@ export default function OficiosSeiaPage() {
     <div className="max-w-4xl mx-auto px-6 py-8">
       <h1 className="text-xl font-bold text-slate-900">Oficios pendientes del SEIA</h1>
       <p className="text-sm text-gray-500 mt-1">
-        Sube el Excel de <span className="font-medium">seia-abierto.cl → Proyectos en calificación → Detalle
+        El panel lee el SEIA solo los lunes, miércoles y viernes. El Excel de <span className="font-medium">seia-abierto.cl → Proyectos en calificación → Detalle
         oficios pendientes → Descargar datos</span>. Reimportar el mismo archivo no duplica nada.
       </p>
 
@@ -138,6 +195,64 @@ export default function OficiosSeiaPage() {
           )}
         </div>
       )}
+
+      {/* Leer el SEIA directo va PRIMERO: es lo que reemplaza a la subida, y
+          la subida queda como respaldo para cuando el SEIA cambie de forma o
+          haga falta la fecha límite oficial. */}
+      <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50/40 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Leer el SEIA directamente</p>
+            <p className="text-xs text-gray-600 mt-1 max-w-xl">
+              Recorre los proyectos de la cartera que tienen expediente y lee sus oficios
+              pendientes del SEIA público, sin archivo. Corre solo los lunes, miércoles y
+              viernes; esto es para adelantarlo.
+            </p>
+            <p className="text-[11px] text-gray-500 mt-1.5 max-w-xl">
+              La fecha límite la <strong>calcula</strong>: el SEIA no la publica por organismo.
+              Puede errar un día. Si subís el Excel, esa fecha —que sí es oficial— la pisa.
+            </p>
+          </div>
+          <button
+            onClick={scrapear}
+            disabled={scrapeando || subiendo}
+            className="shrink-0 px-4 py-2 rounded-lg bg-violet-700 text-white text-sm font-semibold hover:bg-violet-800 disabled:opacity-50"
+          >
+            {scrapeando ? (progreso ?? 'Leyendo…') : 'Leer ahora'}
+          </button>
+        </div>
+
+        {scrape && (
+          <div className="mt-4 rounded-lg border border-violet-200 bg-white px-4 py-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <Dato n={scrape.hasta}               label="proyectos leídos" />
+              <Dato n={scrape.pendientes_escritos} label="pendientes nuevos" />
+              <Dato n={scrape.resueltos}           label="resueltos" />
+              <Dato n={scrape.fallados}            label="fallaron" alerta={scrape.fallados > 0} />
+            </div>
+            {scrape.partial && (
+              <p className="text-xs text-amber-800 mt-2">
+                Quedó a medias en el proyecto {scrape.hasta} de {scrape.proyectos}. Volvé a
+                apretar: retoma donde quedó.
+              </p>
+            )}
+            {scrape.errores.length > 0 && (
+              // Un expediente que falla se reintenta solo en la corrida
+              // siguiente, pero si falla siempre hay que poder verlo.
+              <details className="mt-2">
+                <summary className="text-xs text-amber-800 cursor-pointer font-medium">
+                  Ver los expedientes que fallaron
+                </summary>
+                <ul className="mt-1.5 space-y-0.5 max-h-40 overflow-y-auto">
+                  {scrape.errores.map((e, i) => (
+                    <li key={i} className="text-[11px] text-gray-500">{e}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-6 text-center">
         <input
