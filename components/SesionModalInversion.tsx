@@ -328,6 +328,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
+  // Con qué pestaña abre la ficha. Quien llega desde un oficio quiere verlo
+  // en su proyecto, no aterrizar en Avances y tener que buscarlo.
+  const [fichaTab, setFichaTab] = useState<'avances' | 'oficios'>('avances')
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -780,10 +783,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // iniciativa pública) referenciado desde cualquier lado de la sesión —
   // proyectos tratados, oficios, compromisos: los tres comparten esta misma
   // forma (proyecto_privado_id / prioridad_id) desde mig 094/095/097.
+  /** Desde un oficio: abre la ficha del proyecto directo en sus Oficios. */
+  function abrirProyectoDeOficio(id: number) {
+    setFichaTab('oficios')
+    setFichaPrivadoId(id)
+  }
+
   function abrirFichaCartera(
     row: { proyecto_privado_id?: number | null; prioridad_id?: number | null },
   ) {
     if (row.proyecto_privado_id != null) {
+      setFichaTab('avances')
       setFichaPrivadoId(row.proyecto_privado_id)
       return
     }
@@ -1519,7 +1529,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   Vencidos · {seiaVencidos.length}
                                 </p>
                                 <div className="space-y-1">
-                                  {seiaVencidos.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} />)}
+                                  {seiaVencidos.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} onAbrirProyecto={abrirProyectoDeOficio} />)}
                                 </div>
                               </div>
                             )}
@@ -1530,7 +1540,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                                   Por vencer · {seiaPorVencer.length}
                                 </p>
                                 <div className="space-y-1">
-                                  {seiaPorVencer.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} />)}
+                                  {seiaPorVencer.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} onAbrirProyecto={abrirProyectoDeOficio} />)}
                                 </div>
                               </div>
                             )}
@@ -1827,6 +1837,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         puedeOperar={true}
         currentUserEmail={currentUserEmail}
         sesionId={sesion?.id ?? null}
+        tabInicial={fichaTab}
         onClose={() => setFichaPrivadoId(null)}
       />
     )}
@@ -1840,7 +1851,12 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
  * en la importación siguiente. Lo que sí puede hacer acá es abrir el oficio y
  * el expediente, que es lo que se necesita para reclamarlo.
  */
-function FilaOficioSeia({ o, hoy }: { o: OficioSeiaFila; hoy: string }) {
+function FilaOficioSeia({ o, hoy, onAbrirProyecto }: {
+  o: OficioSeiaFila
+  hoy: string
+  /** Abre la ficha interna en su pestaña de Oficios. */
+  onAbrirProyecto: (id: number) => void
+}) {
   const dias = o.fecha_limite ? diasHasta(o.fecha_limite, hoy) : null
   const vencido = dias != null && dias < 0
   const plazo = dias == null ? 'sin plazo'
@@ -1852,11 +1868,22 @@ function FilaOficioSeia({ o, hoy }: { o: OficioSeiaFila; hoy: string }) {
     <div className={`px-3 py-2 rounded-lg border ${vencido ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/40'}`}>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
+          {/* El nombre lleva a la ficha INTERNA, no al SEIA: desde la sesión lo
+              que se necesita es el proyecto que el comité sigue —sus avances,
+              sus permisos, el resto de sus oficios—, no la ficha pública que
+              ya se puede abrir desde «Ver oficio». Si el oficio todavía no
+              tiene proyecto en la cartera queda como texto plano: mandar al
+              SEIA sería ofrecer una salida del panel justo donde falta
+              cargarlo. El link al SEIA sigue disponible abajo. */}
           <p className="text-sm text-slate-800 leading-snug">
-            {o.url_proyecto ? (
-              <a href={o.url_proyecto} target="_blank" rel="noreferrer" className="hover:underline">
+            {o.proyecto_privado_id != null ? (
+              <button
+                type="button"
+                onClick={() => onAbrirProyecto(o.proyecto_privado_id!)}
+                className="text-left hover:underline hover:text-violet-800"
+              >
                 {o.nombre_proyecto ?? 'Proyecto sin nombre'}
-              </a>
+              </button>
             ) : (o.nombre_proyecto ?? 'Proyecto sin nombre')}
           </p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">

@@ -11,6 +11,7 @@ import HistorialSesionesInversionModal from './HistorialSesionesInversionModal'
 import NominaInversionModal from './NominaInversionModal'
 import MetaEmpleoModal from './MetaEmpleoModal'
 import OaecaModal from './OaecaModal'
+import OficiosRegionModal from './OficiosRegionModal'
 import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
 
 /**
@@ -46,6 +47,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [nominaOpen, setNominaOpen]       = useState(false)
   const [metaEmpleoOpen, setMetaEmpleoOpen] = useState(false)
   const [oaecaOpen, setOaecaOpen]         = useState(false)
+  const [oficiosOpen, setOficiosOpen]     = useState(false)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
@@ -148,6 +150,17 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 OAECA
               </button>
               <span className="text-violet-200">|</span>
+              {/* Va pegado a OAECA porque son las dos caras de lo mismo: el
+                  catálogo de quién emite y la lista de lo que está sin
+                  responder. */}
+              <button
+                onClick={() => setOficiosOpen(true)}
+                className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                title="Todos los oficios del SEIA de la región, agrupados por proyecto"
+              >
+                Oficios
+              </button>
+              <span className="text-violet-200">|</span>
               <button
                 onClick={() => setHistorialOpen(true)}
                 className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
@@ -224,6 +237,13 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       )}
       {oaecaOpen && (
         <OaecaModal currentUserEmail={userEmail} onClose={() => setOaecaOpen(false)} />
+      )}
+      {oficiosOpen && (
+        <OficiosRegionModal
+          regionCod={region.cod}
+          currentUserEmail={userEmail}
+          onClose={() => setOficiosOpen(false)}
+        />
       )}
     </>
   )

@@ -55,6 +55,12 @@ type Props = {
    * proyecto. NULL/ausente = avance normal de cartera, fuera de toda acta.
    */
   sesionId?: number | null
+  /**
+   * Con qué pestaña abrir. Lo usa quien llega desde un oficio: si la ficha
+   * abriera en Avances habría que buscar la pestaña a mano justo cuando se
+   * sabe exactamente qué se venía a ver.
+   */
+  tabInicial?: 'avances' | 'oficios' | 'permisos'
 }
 
 // El estado que se puede cambiar al registrar un avance es el del PERMISO
@@ -84,7 +90,7 @@ function hoyISO(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null }: Props) {
+export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, currentUserEmail, onClose, onChanged, sesionId = null, tabInicial = 'avances' }: Props) {
   const [proyecto, setProyecto] = useState<ComiteEconomicoProyecto | null>(null)
   const [borrando, setBorrando] = useState(false)
   // Sacar un proyecto de la cartera es conducción, no aporte (mig 112): un
@@ -96,7 +102,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
 
-  const [tab, setTab] = useState<'avances' | 'oficios' | 'permisos'>('avances')
+  const [tab, setTab] = useState<'avances' | 'oficios' | 'permisos'>(tabInicial)
 
   // Oficios del SEIA pegados a este proyecto (mig 117 + 119). Se cargan acá y
   // no dentro de la pestaña para que el contador de la solapa sea el mismo
