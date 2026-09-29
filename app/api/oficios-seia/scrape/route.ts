@@ -17,10 +17,19 @@
  *
  * ── Qué recorre ────────────────────────────────────────────────────────────
  *
- * Los expedientes de la CARTERA, no los del país. El archivo del SEIA es
- * nacional y traía 638 oficios de los cuales el panel solo podía mostrar ~100:
- * el resto era de proyectos que nadie sigue. Recorrer la cartera cuesta
- * ~200 expedientes en vez de miles y cubre el 100% de lo que se ve.
+ * Dos conjuntos, unidos:
+ *
+ *   · Los expedientes de la CARTERA, que es lo que el comité sigue.
+ *   · Los que YA tienen oficios guardados, estén o no en la cartera.
+ *
+ * El segundo existe porque el archivo del SEIA era nacional y dejó 465 oficios
+ * de proyectos que nadie sigue. Sin refrescarlos quedan congelados: su plazo
+ * envejece solo y con los meses aparecen como atrasos gravísimos cuando la
+ * mayoría ya fue respondida. Se midió: son 51 expedientes más, o sea que
+ * mantenerlos al día es barato — y mentir sobre ellos, gratis pero caro.
+ *
+ * Lo que NO se hace es recorrer el catálogo entero del SEIA: son miles de
+ * expedientes y traerían oficios que nadie pidió ver.
  *
  * ── Reanudable ─────────────────────────────────────────────────────────────
  *
@@ -93,7 +102,8 @@ async function bajar(url: string): Promise<string> {
 
 type OficioParaEscribir = {
   region_cod: string
-  proyecto_privado_id: number
+  /** `null` = el expediente no está en la cartera; se refresca igual. */
+  proyecto_privado_id: number | null
   id_expediente: number
   id_documento: number | null
   seia_doc_n: number | null
@@ -150,7 +160,7 @@ async function scrapearExpediente(p: ProyectoAScrapear): Promise<OficioParaEscri
 
   return pendientesDelExpediente(conDest, docs, presentacion).map(o => ({
     region_cod: p.region_cod,
-    proyecto_privado_id: p.id,
+    proyecto_privado_id: p.id > 0 ? p.id : null,
     id_expediente: p.expediente,
     id_documento: o.idDocumento,
     // Solo cuando falta el documento: con él presente, la llave tiene que
@@ -246,9 +256,7 @@ export async function POST(request: Request) {
     )
   }
 
-  // Orden estable: el cursor es un índice, y si la lista se reordenara entre
-  // invocaciones saltearía expedientes sin avisar.
-  const proyectos: ProyectoAScrapear[] = (carteraRows ?? [])
+  const deCartera: ProyectoAScrapear[] = (carteraRows ?? [])
     .filter(r => !soloRegion || r.region_cod === soloRegion)
     .map(r => {
       const exp = expedienteDeProyecto(r as unknown as ProyectoCartera)
@@ -260,7 +268,45 @@ export async function POST(request: Request) {
       }
     })
     .filter((x): x is ProyectoAScrapear => x !== null)
-    .sort((a, b) => a.id - b.id)
+
+  // ── Los que ya están guardados, aunque no sean de la cartera ─────────────
+  //
+  // Se identifican por su expediente y NO tienen proyecto: `id` va en negativo
+  // para que no colisione con un id de cartera en el orden, y
+  // `proyecto_privado_id` queda nulo — lo que escriban sigue sin proyecto,
+  // que es lo correcto: nadie los sumó.
+  let q = db
+    .from('sesion_oficios_tratados')
+    .select('id_expediente, region_cod, nombre_proyecto')
+    .eq('automatico', true)
+    .eq('estado', 'pendiente')
+    .is('proyecto_privado_id', null)
+    .not('id_expediente', 'is', null)
+    .limit(5000)
+  if (soloRegion) q = q.eq('region_cod', soloRegion)
+  const { data: huerfanosRows } = await q
+
+  const yaEnCartera = new Set(deCartera.map(p => p.expediente))
+  const sueltos = new Map<number, ProyectoAScrapear>()
+  for (const r of huerfanosRows ?? []) {
+    const exp = r.id_expediente as number
+    if (yaEnCartera.has(exp) || sueltos.has(exp)) continue
+    sueltos.set(exp, {
+      id: -exp,
+      region_cod: r.region_cod as string,
+      nombre: (r.nombre_proyecto as string) ?? 'Proyecto sin nombre',
+      expediente: exp,
+    })
+  }
+
+  // Orden estable: el cursor es un índice, y si la lista se reordenara entre
+  // invocaciones saltearía expedientes sin avisar. La cartera va primero —es
+  // lo que el comité mira— para que un corte por tiempo deje afuera lo de
+  // afuera, no lo propio.
+  const proyectos: ProyectoAScrapear[] = [
+    ...deCartera.sort((a, b) => a.id - b.id),
+    ...[...sueltos.values()].sort((a, b) => a.expediente - b.expediente),
+  ]
 
   if (proyectos.length === 0) {
     await recordSyncStatus(SYNC_NAME, {

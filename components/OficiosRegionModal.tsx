@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { useIsAdmin } from '@/lib/context/UserContext'
 import { diasHasta } from '@/lib/oficiosSeia'
 import { Modal } from '@/components/ui'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
@@ -75,6 +76,10 @@ export default function OficiosRegionModal({ regionCod, currentUserEmail, onClos
   const [verResueltos, setVerResueltos] = useState(false)
   const [q, setQ]               = useState('')
   const [fichaId, setFichaId]   = useState<number | null>(null)
+  // La subida del Excel dejó de ser el camino normal: el SEIA se lee solo. Se
+  // deja a mano, y solo para admin, porque sigue siendo el respaldo si el SEIA
+  // cambia de forma y el único que trae la fecha límite oficial.
+  const esAdmin = useIsAdmin()
 
   const hoy = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
@@ -213,6 +218,18 @@ export default function OficiosRegionModal({ regionCod, currentUserEmail, onClos
             placeholder="Buscar por proyecto, organismo o ministerio…"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"
           />
+
+          {esAdmin && (
+            <p className="text-[11px] text-gray-400">
+              ¿El SEIA cambió de forma o falta una fecha oficial?{' '}
+              <a
+                href="/admin/oficios-seia"
+                className="text-violet-600 hover:text-violet-800 hover:underline font-medium"
+              >
+                Subir el Excel de seia-abierto.cl
+              </a>
+            </p>
+          )}
 
           {cargando ? (
             <p className="text-sm text-gray-400 py-8 text-center">Cargando…</p>
