@@ -29,7 +29,7 @@ on:
     # seia-abierto.cl. Lunes, miércoles y viernes — el comité sesiona cada 15
     # días y con una sola corrida semanal un oficio puede vencer y volverse
     # atraso sin que nadie lo haya visto venir.
-    - cron: '0 11 * * 1,3,5'      # oficios-seia/scrape
+    - cron: '30 11 * * 1,3,5'     # oficios-seia/scrape
     - cron: '0 10 * * 3'          # stop-sync (miércoles)
     - cron: '0 11 * * 1'          # pib-sync
     - cron: '0 12 * * 1'          # external-sync
@@ -88,7 +88,7 @@ jobs:
             '0 7 * * 1')          ENDPOINTS="ine-sync" ;;
             '30 8 * * 1')         ENDPOINTS="seia-sync-v2" ;;
             '0 9 * * 1')          ENDPOINTS="mop-sync" ;;
-            '0 11 * * 1,3,5')     ENDPOINTS="oficios-seia/scrape" ;;
+            '30 11 * * 1,3,5')    ENDPOINTS="oficios-seia/scrape" ;;
             '0 10 * * 3')         ENDPOINTS="stop-sync" ;;
             '0 11 * * 1')         ENDPOINTS="pib-sync" ;;
             '0 12 * * 1')         ENDPOINTS="external-sync" ;;
