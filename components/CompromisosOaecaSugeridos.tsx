@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import {
   agruparPorOaeca,
   claveOaeca,
-  descripcionSeguimiento,
   type GrupoOaeca,
   type OficioSeguimiento,
 } from '@/lib/oficiosSeguimiento'
@@ -57,6 +56,9 @@ export default function CompromisosOaecaSugeridos({
     return s
   }, [compromisos])
 
+  // Abierto por defecto: es una lista de cosas por hacer, no un archivo.
+  const [abierto, setAbierto] = useState(true)
+
   const sugeridos = useMemo(
     () => agruparPorOaeca(oficios, hoy).filter(g => !comprometidos.has(g.clave)),
     [oficios, hoy, comprometidos],
@@ -66,24 +68,30 @@ export default function CompromisosOaecaSugeridos({
 
   return (
     <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 space-y-2">
-      <div className="flex items-baseline gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+      <button
+        type="button"
+        onClick={() => setAbierto(v => !v)}
+        aria-expanded={abierto}
+        className="w-full flex items-baseline gap-2 text-left"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
           Seguimiento de oficios
-        </p>
-        <span className="text-[10px] text-gray-500">
-          {sugeridos.length} organismo{sugeridos.length === 1 ? '' : 's'} sin nadie que lo persiga
         </span>
-      </div>
-      <p className="text-[11px] text-gray-500">
-        Un compromiso por organismo, que cubre sus oficios en toda la región. Elegí quién lo
-        persigue y queda como compromiso de esta sesión.
-      </p>
+        <span className="text-[10px] text-gray-500">
+          {sugeridos.length} organismo{sugeridos.length === 1 ? '' : 's'} sin seguimiento
+        </span>
+        <span className="ml-auto text-[11px] text-violet-700 font-medium">
+          {abierto ? 'Contraer' : 'Expandir'}
+        </span>
+      </button>
 
-      <div className="space-y-1.5">
-        {sugeridos.map(g => (
-          <Sugerido key={g.clave} g={g} nomina={nomina} onComprometer={onComprometer} />
-        ))}
-      </div>
+      {abierto && (
+        <div className="space-y-1.5">
+          {sugeridos.map(g => (
+            <Sugerido key={g.clave} g={g} nomina={nomina} onComprometer={onComprometer} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -130,18 +138,13 @@ function Sugerido({ g, nomina, onComprometer }: {
         {g.proyectos.map(p => `${p.nombre} (${p.oficios})`).join(' · ')}
       </p>
 
-      {/* La descripción es lo que va a quedar escrito. Se muestra antes de
-          guardar y no se edita: es un hecho, y editarlo solo abre la puerta a
-          que diga otra cosa que la lista de arriba. */}
-      <p className="text-[11px] text-gray-400 italic mt-1">{descripcionSeguimiento(g)}</p>
-
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
         <select
           value={nominaId}
           onChange={e => setNominaId(e.target.value === '' ? '' : Number(e.target.value))}
           className="text-[11px] px-2 py-1 border border-slate-200 rounded bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-300"
         >
-          <option value="">Quién lo persigue…</option>
+          <option value="">Quién hace el seguimiento…</option>
           {nomina.map(n => (
             <option key={n.id} value={n.id}>{n.nombre} — {n.institucion}</option>
           ))}

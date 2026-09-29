@@ -322,6 +322,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [oficiosSeia, setOficiosSeia]                     = useState<OficioSeiaFila[]>([])
   const [oficiosTratadosSesion, setOficiosTratadosSesion] = useState<SesionOficioConNombres[]>([])
   const [oficioNotaDraft, setOficioNotaDraft]             = useState<Record<number, string>>({})
+  // El alta manual de oficios arranca plegada: con los del SEIA llegando
+  // solos, levantar uno a mano es la excepción.
+  const [altaOficioAbierta, setAltaOficioAbierta]         = useState(false)
 
   const [oaecaList, setOaecaList]           = useState<Oaeca[]>([])
 
@@ -1560,23 +1563,8 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               {muestra('seguimiento') && subSeguimiento === 'oficios' && (
                   <ZonaCard numero={3} titulo="Seguimiento de la inversión · Oficios"
                     badge={oficiosAnteriores.length + oficiosTratadosSesion.length}
-                    descripcion="Los oficios pendientes de sesiones anteriores se verifican acá; abajo se levantan los nuevos."
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
-                        {/* ── Del SEIA: vencidos y por vencer ──────────────
-                            Estos NO los levantó el comité: son el estado real
-                            del expediente, importados del SEIA. Van primero
-                            porque son lo que hay que apurar, y se muestran
-                            solos —sin botones de estado— porque el comité no
-                            los cierra: los cierra el organismo cuando
-                            responde, y eso llega en la próxima importación. */}
-                        <OficiosSeguimientoBloque
-                          oficios={seiaEnVentana}
-                          compromisos={compromisosOaeca}
-                          hoy={hoyISO()}
-                          onAbrirProyecto={abrirProyectoDeOficio}
-                        />
-
                         {/* Oficios anteriores */}
                         <div>
                           <div className="flex items-center gap-2 mb-2">
@@ -1638,13 +1626,63 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           </div>
                         </div>
 
-                        {/* Oficios tratados nuevos */}
+                        {/* ── Del SEIA ─────────────────────────────────────
+                            Estos NO los levantó el comité: son el estado real
+                            del expediente, importados del SEIA, y se muestran
+                            sin botones de estado porque el comité no los
+                            cierra — los cierra el organismo cuando responde.
+
+                            Van en dos tramos y en este orden porque son dos
+                            conversaciones distintas. Un oficio VENCIDO ya se
+                            vio en una sesión anterior estando por vencer, así
+                            que lo que toca hoy es pedir cuentas. Uno que
+                            todavía no vence es aviso: se mira para que no
+                            llegue vencido a la próxima. Por eso un oficio que
+                            la vez pasada estaba por vencer y sigue sin vencer
+                            NO sube de tramo: no pasó nada nuevo con él. */}
+                        <OficiosSeguimientoBloque
+                          oficios={seiaVencidos}
+                          compromisos={compromisosOaeca}
+                          hoy={hoyISO()}
+                          titulo="Vencidos en el SEIA"
+                          subtitulo="vienen de sesiones anteriores"
+                          onAbrirProyecto={abrirProyectoDeOficio}
+                        />
+
+                        <OficiosSeguimientoBloque
+                          oficios={seiaPorVencer}
+                          compromisos={compromisosOaeca}
+                          hoy={hoyISO()}
+                          titulo="Pendientes en el SEIA"
+                          subtitulo="por vencer antes de la próxima sesión"
+                          onAbrirProyecto={abrirProyectoDeOficio}
+                        />
+
+                        {/* Oficios tratados nuevos — plegado por defecto.
+                            Es el alta manual, y con los oficios del SEIA
+                            llegando solos pasó a ser la excepción: lo que se
+                            levanta a mano es lo que el archivo no trae. Que
+                            ocupe una línea hasta que haga falta. */}
                         <div className="pt-3 border-t border-gray-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h5 className="text-[10px] font-semibold text-gray-500">Oficios tratados nuevos</h5>
-                            <span className="text-xs text-gray-400 ml-auto">{oficiosTratadosSesion.length}</span>
-                          </div>
-                          <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setAltaOficioAbierta(v => !v)}
+                            aria-expanded={altaOficioAbierta}
+                            className="w-full flex items-center gap-2 mb-2 text-left"
+                          >
+                            <span className="text-[10px] font-semibold text-violet-700">
+                              {altaOficioAbierta ? 'Agregar oficio nuevo' : '+ Agregar oficio nuevo'}
+                            </span>
+                            {oficiosTratadosSesion.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {oficiosTratadosSesion.length} en esta sesión
+                              </span>
+                            )}
+                            <span className="ml-auto text-[11px] text-violet-700 font-medium">
+                              {altaOficioAbierta ? 'Contraer' : 'Expandir'}
+                            </span>
+                          </button>
+                          <div className="space-y-2" hidden={!altaOficioAbierta}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <ComboboxOaeca
                                 oaecaList={oaecaList}

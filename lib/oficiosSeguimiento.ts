@@ -22,6 +22,15 @@ export type OficioSeguimiento = {
   proyecto_privado_id: number | null
   fecha_limite: string | null
   estado: 'pendiente' | 'resuelto'
+  /**
+   * De qué se trata el oficio («Solicitud de Adenda»), y dónde leerlo.
+   *
+   * Opcionales porque son de presentación: ni el agrupamiento ni el cierre de
+   * compromisos los miran, y la importación —que solo hace lo segundo— no
+   * tiene por qué traerlos en una lectura de 20.000 filas.
+   */
+  tipo_oficio?: string | null
+  url_oficio?: string | null
 }
 
 /**
