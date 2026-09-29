@@ -229,6 +229,16 @@ export function esRespuesta(tipo: string): boolean {
  */
 export function cierraRonda(tipo: string): boolean {
   return /informe consolidado/i.test(tipo)
+    // Cierres del EXPEDIENTE entero, no de una ronda. Sin ellos, los
+    // organismos que nunca alcanzaron a pronunciarse quedan debiendo un oficio
+    // de un proyecto que ya no existe — y no hay nada que puedan hacer.
+    //
+    // El «Término Anticipado» no es un caso de borde: de los 27 oficios que el
+    // scraper inventó en la primera corrida contra el Excel, los 5 expedientes
+    // involucrados estaban cerrados así, con plazos vencidos hacía uno y dos
+    // años. Era 5 de 5.
+    || /t[ée]rmino anticipado/i.test(tipo)
+    || /desistimiento/i.test(tipo)
     || /resoluci[óo]n de calificaci[óo]n ambiental/i.test(tipo)
 }
 

@@ -171,6 +171,26 @@ describe('clasificación de documentos', () => {
     expect(cierraRonda('Adenda')).toBe(false)
   })
 
+  /**
+   * El caso que el Excel delató: el scraper daba por pendientes 27 oficios de
+   * 2023 y 2024, con plazos vencidos hacía uno y dos años. Los 5 expedientes
+   * involucrados estaban cerrados con «Término Anticipado» — 5 de 5.
+   */
+  it('reconoce el cierre del expediente entero', () => {
+    expect(cierraRonda('Resolución de Término Anticipado a la DIA')).toBe(true)
+    expect(cierraRonda('Resolución de Término Anticipado al EIA')).toBe(true)
+    expect(cierraRonda('Resolución que acoge el desistimiento')).toBe(true)
+  })
+
+  // La admisibilidad ABRE el expediente; confundirla con un cierre dejaría
+  // todo proyecto vivo sin un solo oficio pendiente.
+  it('no confunde la admisibilidad con un cierre', () => {
+    expect(cierraRonda('Resolución de Admisibilidad')).toBe(false)
+    expect(cierraRonda('Resolución Exenta')).toBe(false)
+    expect(cierraRonda('Resolución de Extensión de la Suspensión de Plazo')).toBe(false)
+    expect(cierraRonda('Resolución de ampliación de plazo')).toBe(false)
+  })
+
   it('deduce la presentación del tipo', () => {
     expect(presentacionDe('Oficio solicitud de evaluación DIA')).toBe('DIA')
     expect(presentacionDe('Solicitud de evaluación de EIA')).toBe('EIA')
