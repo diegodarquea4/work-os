@@ -69,6 +69,12 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/ine-sync')      ||
     pathname.startsWith('/api/ine-discover')  ||
     pathname.startsWith('/api/seia-sync')     ||
+    // El scraper de oficios pendientes: lo llama el cron con Bearer. Sin esto
+    // el proxy lo manda a /login ANTES de que corra su propio gate, y el cron
+    // queda en silencio sin fallar — igual que los 53 días de 2026-04.
+    // La ruta hace su propia autorización (bearer o admin/editor), así que
+    // saltarse el proxy no la deja abierta.
+    pathname.startsWith('/api/oficios-seia/scrape') ||
     pathname.startsWith('/api/mop-sync')      ||
     pathname.startsWith('/api/pib-sync')      ||
     pathname.startsWith('/api/pib-discover')  ||

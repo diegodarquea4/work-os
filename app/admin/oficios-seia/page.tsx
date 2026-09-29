@@ -51,6 +51,26 @@ type Revinculacion = {
   sin_proyecto: number
 }
 
+/**
+ * Lee la respuesta como JSON, y si no lo es dice por qué.
+ *
+ * Cuando la sesión vence, el proxy responde la PÁGINA de login: el `.json()`
+ * falla con «Unexpected token '<'», que no le dice nada a nadie y menos a
+ * alguien que está mirando si se importaron oficios. El síntoma real es que
+ * hay que volver a entrar.
+ */
+async function leerJson(res: Response): Promise<Record<string, unknown>> {
+  const texto = await res.text()
+  try {
+    return JSON.parse(texto) as Record<string, unknown>
+  } catch {
+    if (/<!DOCTYPE|<html/i.test(texto)) {
+      throw new Error('Tu sesión venció y el panel te devolvió la página de inicio. Recargá (Ctrl+Shift+R), entrá de nuevo y volvé a intentar.')
+    }
+    throw new Error(`El servidor respondió algo que no es JSON (HTTP ${res.status}): ${texto.slice(0, 200)}`)
+  }
+}
+
 /** A partir de cuántos días el dato se considera viejo. El comité sesiona cada
  *  15 días: si el archivo pasa de eso, ya no cubre la reunión que viene. */
 const DIAS_PARA_ENVEJECER = 15
@@ -89,11 +109,11 @@ export default function OficiosSeiaPage() {
       const body = new FormData()
       body.append('archivo', archivo)
       const res = await fetch('/api/oficios-seia/import', { method: 'POST', body })
-      const json = await res.json()
+      const json = await leerJson(res)
       // El detalle de Postgres se muestra tal cual: es feo, pero es lo único
       // que dice qué arreglar.
       if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join('\n\n') || 'La importación falló')
-      setUltimo(json as Importacion)
+      setUltimo(json as unknown as Importacion)
       await cargar()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -122,9 +142,9 @@ export default function OficiosSeiaPage() {
       // dejaría la pantalla girando para siempre.
       for (let vuelta = 0; vuelta < 12; vuelta++) {
         const res = await fetch('/api/oficios-seia/scrape', { method: 'POST' })
-        const json = await res.json()
+        const json = await leerJson(res)
         if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join(String.fromCharCode(10, 10)) || 'El scraping falló')
-        const j = json as Scrape
+        const j = json as unknown as Scrape
         acum.proyectos = j.proyectos
         acum.procesados += j.procesados
         acum.hasta = j.hasta
@@ -151,9 +171,9 @@ export default function OficiosSeiaPage() {
     setVinculo(null)
     try {
       const res = await fetch('/api/oficios-seia/revincular', { method: 'POST' })
-      const json = await res.json()
+      const json = await leerJson(res)
       if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join('\n\n') || 'La revinculación falló')
-      setVinculo(json as Revinculacion)
+      setVinculo(json as unknown as Revinculacion)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
