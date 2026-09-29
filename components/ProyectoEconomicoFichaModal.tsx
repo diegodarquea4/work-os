@@ -8,7 +8,8 @@ import type { ComiteEconomicoProyecto, ComiteEconomicoProyectoPermiso, ComiteEco
 import { LISTA_CANONICA } from '@/lib/ministerios'
 import { ESTADO_ACTUAL_ECONOMICO_OPCIONES } from '@/lib/comiteEconomico'
 import { catalogoAvanzo, camposPendientes } from '@/lib/carteraOrigen'
-import { parsearExpedientePegado } from '@/lib/oficiosSeia'
+import { parsearExpedientePegado, estaAtrasado } from '@/lib/oficiosSeia'
+import ProyectoOficiosTab, { type OficioProyecto } from './ProyectoOficiosTab'
 import { useConduceEconomico } from '@/lib/context/UserContext'
 import { EmptyState, Modal } from '@/components/ui'
 import FilterPopover, { type FilterOption } from './FilterPopover'
@@ -95,7 +96,12 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const [avances, setAvances]   = useState<ComiteEconomicoProyectoSeguimiento[]>([])
   const [loading, setLoading]   = useState(true)
 
-  const [tab, setTab] = useState<'avances' | 'permisos'>('avances')
+  const [tab, setTab] = useState<'avances' | 'oficios' | 'permisos'>('avances')
+
+  // Oficios del SEIA pegados a este proyecto (mig 117 + 119). Se cargan acá y
+  // no dentro de la pestaña para que el contador de la solapa sea el mismo
+  // dato que la lista, y no dos consultas que pueden discrepar.
+  const [oficios, setOficios] = useState<OficioProyecto[]>([])
 
   // Permisos del proyecto (join con el catálogo global) + catálogo completo
   // (para el picker "+ Agregar permiso") + padrón de usuarios con su
@@ -182,11 +188,19 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
   const cargar = useCallback(async () => {
     setLoading(true)
     const sb = getSupabase()
-    const [{ data: p }, { data: segs }, { data: perms }, { data: catalogo }] = await Promise.all([
+    const [{ data: p }, { data: segs }, { data: perms }, { data: catalogo }, { data: ofs }] = await Promise.all([
       sb.from('comite_economico_proyecto').select('*').eq('id', proyectoId).single(),
       sb.from('comite_economico_proyecto_seguimiento').select('*').eq('proyecto_id', proyectoId).order('fecha', { ascending: false }).order('created_at', { ascending: false }),
       sb.from('comite_economico_proyecto_permiso').select('*, pas:pas_catalogo(*)').eq('proyecto_id', proyectoId).order('created_at'),
       sb.from('pas_catalogo').select('*').order('n_pas'),
+      // `automatico = true` es lo que separa estos de los oficios que el
+      // comité levanta a mano en una sesión: aquellos son de la sesión, no
+      // del proyecto, y no tienen por qué aparecer en su ficha.
+      sb.from('sesion_oficios_tratados')
+        .select('id, oaeca_nombre, oaeca_sea, ministerio, tipo_oficio, fecha_limite, url_oficio, estado')
+        .eq('automatico', true)
+        .eq('proyecto_privado_id', proyectoId)
+        .order('fecha_limite', { ascending: true, nullsFirst: false }),
     ])
     const proy = (p as ComiteEconomicoProyecto | null) ?? null
     setProyecto(proy)
@@ -195,6 +209,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     setAvances((segs ?? []) as ComiteEconomicoProyectoSeguimiento[])
     setPermisos((perms ?? []) as unknown as PermisoConCatalogo[])
     setPasCatalogo((catalogo ?? []) as PasCatalogo[])
+    setOficios((ofs ?? []) as OficioProyecto[])
     setLoading(false)
   }, [proyectoId])
 
@@ -209,6 +224,24 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
     () => camposPendientes(proyecto as unknown as Record<string, unknown> | null),
     [proyecto],
   )
+
+  // `hoy` se fija una vez por apertura de la ficha: recalcularlo en cada
+  // render haría que un modal abierto al filo de la medianoche cambiara de
+  // "vence hoy" a "1 día de atraso" a mitad de una sesión.
+  const hoy = useMemo(() => hoyISO(), [])
+  const oficiosPendientes = useMemo(
+    () => oficios.filter(o => o.estado === 'pendiente').length,
+    [oficios],
+  )
+  const oficiosVencidos = useMemo(
+    () => oficios.filter(o => o.estado === 'pendiente' && estaAtrasado(o, hoy)).length,
+    [oficios, hoy],
+  )
+  // Sin ninguno de los dos caminos al expediente no hay por dónde unirle sus
+  // oficios, y la pestaña vacía tiene que decir eso y no "no hay".
+  const sinExpediente = proyecto != null
+    && proyecto.seia_expediente_id == null
+    && !(proyecto.origen_sistema === 'seia' && proyecto.origen_id)
 
   const origenId = proyecto?.origen_id ?? null
   useEffect(() => {
@@ -906,7 +939,7 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 </div>
               )}
 
-              {/* Tabs — Avances | Permisos */}
+              {/* Tabs — Avances | Oficios | Permisos */}
               <div className="flex items-center gap-1 border-b border-gray-200">
                 <button
                   type="button"
@@ -917,6 +950,21 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 </button>
                 <button
                   type="button"
+                  onClick={() => setTab('oficios')}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'oficios' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                  Oficios
+                  {/* El contador lleva SOLO lo pendiente, y se pone rojo si hay
+                      vencidos: el número que importa desde afuera de la pestaña
+                      es cuánto falta responder, no cuántos hubo. */}
+                  {oficiosPendientes > 0 && (
+                    <span className={`font-semibold ml-1 ${oficiosVencidos > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                      ({oficiosPendientes})
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setTab('permisos')}
                   className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'permisos' ? 'border-violet-700 text-violet-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
@@ -924,7 +972,13 @@ export default function ProyectoEconomicoFichaModal({ proyectoId, puedeOperar, c
                 </button>
               </div>
 
-              {tab === 'permisos' ? (
+              {tab === 'oficios' ? (
+                <ProyectoOficiosTab
+                  oficios={oficios}
+                  sinExpediente={sinExpediente}
+                  hoy={hoy}
+                />
+              ) : tab === 'permisos' ? (
                 <div className="pt-1 space-y-3">
                   {editable && (
                     <div className="relative">
