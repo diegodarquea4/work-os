@@ -360,6 +360,9 @@ export type OficioGuardado = {
   region_cod: string
   estado: 'pendiente' | 'resuelto'
   proyecto_privado_id: number | null
+  fecha_limite?: string | null
+  /** true = la calculó el scraper (mig 121); el archivo trae la oficial. */
+  plazo_estimado?: boolean
 }
 
 export type PlanEscritura = {
@@ -421,11 +424,24 @@ export function planificarEscritura(
     const g = porClave.get(k)
     if (!g) { nuevos.push(o); continue }
 
-    const cambios: Partial<OficioImportado> = {}
+    const cambios: Partial<OficioImportado> & { plazo_estimado?: boolean } = {}
     // El caso que importa: el expediente entró a una cartera desde la última
     // importación, así que el oficio deja de estar «sin asignar».
     if (o.proyecto_privado_id != null && g.proyecto_privado_id == null) {
       cambios.proyecto_privado_id = o.proyecto_privado_id
+    }
+    /**
+     * La fecha del archivo es la OFICIAL: la publica el SEA. El scraper la
+     * calcula y acierta al día exacto ~4 de cada 5 veces, así que cuando el
+     * archivo dice otra cosa —o cuando la de la fila era estimada— gana él.
+     *
+     * Sin esto, «el Excel manda» era falso en la práctica: la importación solo
+     * enganchaba proyectos y nunca corregía un plazo, así que una estimación
+     * equivocada se quedaba ahí para siempre.
+     */
+    if (o.fecha_limite && (o.fecha_limite !== g.fecha_limite || g.plazo_estimado)) {
+      cambios.fecha_limite = o.fecha_limite
+      cambios.plazo_estimado = false
     }
     if (Object.keys(cambios).length > 0) actualizar.push({ id: g.id, cambios })
   }

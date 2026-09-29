@@ -178,7 +178,10 @@ export async function POST(request: Request) {
     // mismo documento se dirige a varios organismos (ver `clave` en
     // lib/oficiosSeia.ts). Sin él, la reconciliación daría por repetidos
     // oficios distintos del mismo oficio.
-    .select('id, id_documento, oaeca_sea, oaeca_nombre, region_cod, estado, proyecto_privado_id')
+    // `fecha_limite` y `plazo_estimado` van porque el archivo trae la fecha
+    // OFICIAL y esta importación tiene que poder corregir una estimada del
+    // scraper (mig 121).
+    .select('id, id_documento, oaeca_sea, oaeca_nombre, region_cod, estado, proyecto_privado_id, fecha_limite, plazo_estimado')
     .eq('automatico', true)
 
   if (guardadosErr) {

@@ -594,3 +594,85 @@ describe('planificarVinculacion', () => {
     expect(plan.vincular).toEqual([{ id: 1, proyecto_privado_id: 5 }])
   })
 })
+
+// ── La fecha oficial del archivo vs la estimada del scraper ──────────────────
+
+describe('planificarEscritura y el plazo oficial', () => {
+  const guardado = (over: Partial<OficioGuardado> & { id: number }): OficioGuardado => ({
+    id_documento: 111,
+    oaeca_sea: 'DGA, Región de Los Lagos',
+    oaeca_nombre: 'DGA',
+    region_cod: 'X',
+    estado: 'pendiente',
+    proyecto_privado_id: 7,
+    ...over,
+  })
+
+  const delArchivo = (over: Partial<OficioImportado> = {}): OficioImportado => ({
+    id_documento: 111,
+    id_expediente: 2168105623,
+    nombre_proyecto: 'Gramado',
+    ministerio: null,
+    oaeca_nombre: 'DGA',
+    oaeca_sea: 'DGA, Región de Los Lagos',
+    tipo_oficio: 'Solicitud de evaluación de Adenda',
+    tipo_presentacion: 'DIA',
+    fecha_oficio: '2026-09-16',
+    fecha_limite: '2026-10-01',
+    emisor: null,
+    url_proyecto: null,
+    url_oficio: null,
+    region_seia: 'Región de Los Lagos',
+    region_cod: 'X',
+    proyecto_privado_id: 7,
+    ...over,
+  })
+
+  // Sin esto «el Excel manda» era falso: la importación solo enganchaba
+  // proyectos y nunca corregía un plazo que el scraper había estimado mal.
+  it('corrige el plazo que el scraper había estimado', () => {
+    const plan = planificarEscritura(
+      [delArchivo({ fecha_limite: '2026-10-01' })],
+      [guardado({ id: 1, fecha_limite: '2026-09-30', plazo_estimado: true })],
+    )
+    expect(plan.actualizar).toEqual([
+      { id: 1, cambios: { fecha_limite: '2026-10-01', plazo_estimado: false } },
+    ])
+  })
+
+  it('baja la marca de estimado aunque la fecha coincida', () => {
+    const plan = planificarEscritura(
+      [delArchivo({ fecha_limite: '2026-10-01' })],
+      [guardado({ id: 1, fecha_limite: '2026-10-01', plazo_estimado: true })],
+    )
+    expect(plan.actualizar).toEqual([
+      { id: 1, cambios: { fecha_limite: '2026-10-01', plazo_estimado: false } },
+    ])
+  })
+
+  it('no toca nada si la fecha ya era oficial y coincide', () => {
+    const plan = planificarEscritura(
+      [delArchivo({ fecha_limite: '2026-10-01' })],
+      [guardado({ id: 1, fecha_limite: '2026-10-01', plazo_estimado: false })],
+    )
+    expect(plan.actualizar).toEqual([])
+  })
+
+  it('el archivo sin fecha no borra la que hay', () => {
+    const plan = planificarEscritura(
+      [delArchivo({ fecha_limite: null })],
+      [guardado({ id: 1, fecha_limite: '2026-10-01', plazo_estimado: true })],
+    )
+    expect(plan.actualizar).toEqual([])
+  })
+
+  it('corrige el plazo y engancha el proyecto en el mismo cambio', () => {
+    const plan = planificarEscritura(
+      [delArchivo({ fecha_limite: '2026-10-01', proyecto_privado_id: 7 })],
+      [guardado({ id: 1, proyecto_privado_id: null, fecha_limite: null, plazo_estimado: true })],
+    )
+    expect(plan.actualizar).toEqual([
+      { id: 1, cambios: { proyecto_privado_id: 7, fecha_limite: '2026-10-01', plazo_estimado: false } },
+    ])
+  })
+})

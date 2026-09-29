@@ -309,7 +309,7 @@ export async function POST(request: Request) {
     // es más simple de razonar que la llave de columnas.
     const { data: guardados, error: leerErr } = await db
       .from('sesion_oficios_tratados')
-      .select('id, oaeca_sea, oaeca_nombre, estado')
+      .select('id, oaeca_sea, oaeca_nombre, estado, id_documento, plazo_estimado')
       .eq('automatico', true)
       .eq('id_expediente', p.expediente)
 
@@ -319,12 +319,18 @@ export async function POST(request: Request) {
       continue
     }
 
-    const porOrganismo = new Map<string, { id: number; estado: string }>()
+    type Guardado = { id: number; estado: string; id_documento: number | null; plazo_estimado: boolean }
+    const porOrganismo = new Map<string, Guardado>()
     for (const g of guardados ?? []) {
       const k = claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))
       // Si el Excel dejó dos filas del mismo organismo, gana la primera y la
       // otra queda para resolverse abajo.
-      if (!porOrganismo.has(k)) porOrganismo.set(k, { id: g.id as number, estado: g.estado as string })
+      if (!porOrganismo.has(k)) porOrganismo.set(k, {
+        id: g.id as number,
+        estado: g.estado as string,
+        id_documento: (g.id_documento as number | null) ?? null,
+        plazo_estimado: (g.plazo_estimado as boolean) ?? false,
+      })
     }
 
     const nuevas = vivos.filter(v => !porOrganismo.has(claveOrganismo(v.oaeca_sea)))
@@ -346,14 +352,29 @@ export async function POST(request: Request) {
     for (const v of vivos) {
       const g = porOrganismo.get(claveOrganismo(v.oaeca_sea))
       if (!g) continue
+
+      /**
+       * Una fecha OFICIAL le gana a una estimada, para el MISMO oficio.
+       *
+       * El Excel de seia-abierto.cl trae la fecha límite que publica el SEA;
+       * esta ruta la calcula y acierta ~80% al día exacto. Pisar la oficial
+       * con la estimada en cada corrida perdía precisión sin ganar nada: la
+       * primera pasada dejó los 120 oficios de la cartera marcados como
+       * estimados, borrando lo que el Excel sabía.
+       *
+       * Si cambió el documento, en cambio, es OTRO oficio —una Adenda nueva
+       * al mismo organismo— y ahí la fecha vieja no dice nada de él.
+       */
+      const mismoOficio = g.id_documento != null && g.id_documento === v.id_documento
+      const conservarPlazo = mismoOficio && !g.plazo_estimado
+
       const { error } = await db
         .from('sesion_oficios_tratados')
         .update({
           estado: 'pendiente',
           tipo_oficio: v.tipo_oficio,
           fecha_oficio: v.fecha_oficio,
-          fecha_limite: v.fecha_limite,
-          plazo_estimado: true,
+          ...(conservarPlazo ? {} : { fecha_limite: v.fecha_limite, plazo_estimado: true }),
           id_documento: v.id_documento,
           seia_doc_n: v.seia_doc_n,
           url_oficio: v.url_oficio,
