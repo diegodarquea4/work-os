@@ -32,6 +32,7 @@ function comp(over: Partial<SesionCompromiso> & { id: number }): SesionCompromis
     escalado_at: null,
     escalado_en_sesion_id: null,
     seccion: null,
+    oaeca_objetivo: null,
     proyecto_id: null,
     proyecto_privado_id: null,
     megaproyecto: null,

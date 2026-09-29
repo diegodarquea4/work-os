@@ -5,8 +5,10 @@ import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
 import {
-  DIAS_VENTANA_PROXIMA_SESION, diasHasta, estaAtrasado, esParaLaProximaSesion,
+  estaAtrasado, esParaLaProximaSesion,
 } from '@/lib/oficiosSeia'
+import { descripcionSeguimiento, type GrupoOaeca } from '@/lib/oficiosSeguimiento'
+import OficiosSeguimientoBloque from './OficiosSeguimientoBloque'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -92,6 +94,7 @@ type OficioSeiaFila = {
   url_oficio: string | null
   url_proyecto: string | null
   proyecto_privado_id: number | null
+  estado: 'pendiente' | 'resuelto'
 }
 
 type SesionOficioConNombres = SesionOficioTratado & {
@@ -478,7 +481,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       sb.from('oaeca').select('*').order('nombre'),
       // Oficios del SEIA pendientes en esta región, los más urgentes primero.
       sb.from('sesion_oficios_tratados')
-        .select('id, nombre_proyecto, ministerio, oaeca_nombre, oaeca_sea, tipo_oficio, fecha_limite, url_oficio, url_proyecto, proyecto_privado_id')
+        .select('id, nombre_proyecto, ministerio, oaeca_nombre, oaeca_sea, tipo_oficio, fecha_limite, url_oficio, url_proyecto, proyecto_privado_id, estado')
         .eq('region_cod', region.cod)
         .eq('automatico', true)
         .eq('estado', 'pendiente')
@@ -835,6 +838,48 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // ── Zona 5: compromisos nuevos ─────────────────────────────────────────────
 
+  /**
+   * Comprometer a alguien de la nómina con perseguir a un organismo.
+   *
+   * Es un compromiso común con `oaeca_objetivo`: así reaparece en la sesión
+   * siguiente por el mecanismo que ya existe para todos los demás, sin nada
+   * nuevo que mantener. La descripción se arma sola —es un hecho, no una
+   * redacción— y queda fija: dentro de dos semanas los números van a ser otros
+   * y lo que se acordó fue esto.
+   */
+  async function comprometerSeguimiento(
+    g: GrupoOaeca,
+    responsable: SesionNomina,
+    plazo: string | null,
+  ) {
+    if (!sesion) return
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('sesion_compromisos').insert({
+          region_cod: region.cod,
+          instancia: 'inversion',
+          sesion_origen_id: sesion.id,
+          descripcion: descripcionSeguimiento(g),
+          responsable_institucion: responsable.institucion,
+          responsable_nombre: responsable.nombre,
+          plazo,
+          seccion: 'oficios',
+          oaeca_objetivo: g.nombre,
+        }),
+        `compromiso seguimiento oaeca=${g.nombre}`,
+      )
+      setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
+    } catch (err) {
+      // El choque contra uq_compromiso_oaeca_abierto es el caso real: dos
+      // personas comprometiendo el mismo organismo en paralelo. Decirlo por
+      // su nombre en vez de mostrar el error de Postgres.
+      const msg = (err as Error).message
+      window.alert(/uq_compromiso_oaeca_abierto/.test(msg)
+        ? `${g.nombre} ya tiene un compromiso de seguimiento abierto en esta región. Refrescá la sesión para verlo.`
+        : msg)
+    }
+  }
+
   async function agregarCompromiso(e: React.FormEvent) {
     e.preventDefault()
     if (!sesion || !cDescripcion.trim() || !cInstitucion.trim() || !cSeccion) return
@@ -897,6 +942,21 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const seiaPorVencer = useMemo(
     () => oficiosSeia.filter(o => !estaAtrasado(o, hoyISO()) && esParaLaProximaSesion(o, hoyISO())),
     [oficiosSeia],
+  )
+  /** Los dos juntos: el bloque los agrupa por organismo, no por plazo. */
+  const seiaEnVentana = useMemo(
+    () => [...seiaVencidos, ...seiaPorVencer],
+    [seiaVencidos, seiaPorVencer],
+  )
+  /**
+   * Los compromisos de seguimiento de organismo, de esta sesión y de las
+   * anteriores. Van los dos porque uno recién creado tiene que dejar de
+   * ofrecer el botón en el acto, y uno viejo tiene que seguir mostrando quién
+   * lo persigue — la mig 120 garantiza a lo sumo uno abierto por organismo.
+   */
+  const compromisosOaeca = useMemo(
+    () => [...compAnteriores, ...compNuevos].filter(c => c.oaeca_objetivo != null),
+    [compAnteriores, compNuevos],
   )
 
   const invitados = useMemo(() => asistencia.filter(a => a.nomina_id === null), [asistencia])
@@ -1509,43 +1569,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                             solos —sin botones de estado— porque el comité no
                             los cierra: los cierra el organismo cuando
                             responde, y eso llega en la próxima importación. */}
-                        {(seiaVencidos.length > 0 || seiaPorVencer.length > 0) && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <h5 className="text-[10px] font-semibold text-gray-500">
-                                Pendientes en el SEIA
-                              </h5>
-                              <span className="text-[10px] text-gray-400">
-                                vencidos y por vencer en {DIAS_VENTANA_PROXIMA_SESION} días
-                              </span>
-                              <span className="text-xs text-gray-400 ml-auto tabular-nums">
-                                {seiaVencidos.length + seiaPorVencer.length}
-                              </span>
-                            </div>
-
-                            {seiaVencidos.length > 0 && (
-                              <div className="mb-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-red-700 mb-1">
-                                  Vencidos · {seiaVencidos.length}
-                                </p>
-                                <div className="space-y-1">
-                                  {seiaVencidos.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} onAbrirProyecto={abrirProyectoDeOficio} />)}
-                                </div>
-                              </div>
-                            )}
-
-                            {seiaPorVencer.length > 0 && (
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1">
-                                  Por vencer · {seiaPorVencer.length}
-                                </p>
-                                <div className="space-y-1">
-                                  {seiaPorVencer.map(o => <FilaOficioSeia key={o.id} o={o} hoy={hoyISO()} onAbrirProyecto={abrirProyectoDeOficio} />)}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <OficiosSeguimientoBloque
+                          oficios={seiaEnVentana}
+                          compromisos={compromisosOaeca}
+                          nomina={nomina}
+                          hoy={hoyISO()}
+                          puedeOperar={!!sesion && sesion.estado === 'borrador'}
+                          onAbrirProyecto={abrirProyectoDeOficio}
+                          onComprometer={comprometerSeguimiento}
+                        />
 
                         {/* Oficios anteriores */}
                         <div>
@@ -1845,74 +1877,3 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   )
 }
 
-/**
- * Una fila de oficio del SEIA. Sin botones de estado a propósito: el comité no
- * cierra estos oficios — los cierra el organismo cuando responde, y eso llega
- * en la importación siguiente. Lo que sí puede hacer acá es abrir el oficio y
- * el expediente, que es lo que se necesita para reclamarlo.
- */
-function FilaOficioSeia({ o, hoy, onAbrirProyecto }: {
-  o: OficioSeiaFila
-  hoy: string
-  /** Abre la ficha interna en su pestaña de Oficios. */
-  onAbrirProyecto: (id: number) => void
-}) {
-  const dias = o.fecha_limite ? diasHasta(o.fecha_limite, hoy) : null
-  const vencido = dias != null && dias < 0
-  const plazo = dias == null ? 'sin plazo'
-    : vencido ? `${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'} de atraso`
-    : dias === 0 ? 'vence hoy'
-    : `vence en ${dias} día${dias === 1 ? '' : 's'}`
-
-  return (
-    <div className={`px-3 py-2 rounded-lg border ${vencido ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/40'}`}>
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          {/* El nombre lleva a la ficha INTERNA, no al SEIA: desde la sesión lo
-              que se necesita es el proyecto que el comité sigue —sus avances,
-              sus permisos, el resto de sus oficios—, no la ficha pública que
-              ya se puede abrir desde «Ver oficio». Si el oficio todavía no
-              tiene proyecto en la cartera queda como texto plano: mandar al
-              SEIA sería ofrecer una salida del panel justo donde falta
-              cargarlo. El link al SEIA sigue disponible abajo. */}
-          <p className="text-sm text-slate-800 leading-snug">
-            {o.proyecto_privado_id != null ? (
-              <button
-                type="button"
-                onClick={() => onAbrirProyecto(o.proyecto_privado_id!)}
-                className="text-left hover:underline hover:text-violet-800"
-              >
-                {o.nombre_proyecto ?? 'Proyecto sin nombre'}
-              </button>
-            ) : (o.nombre_proyecto ?? 'Proyecto sin nombre')}
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
-            {/* El OAECA con su jurisdicción cuando la hay: «CONAF» sirve de
-                poco si no se sabe cuál de las quince. */}
-            {o.oaeca_sea ?? o.oaeca_nombre ?? '—'}
-            {o.ministerio ? ` · ${o.ministerio}` : ''}
-          </p>
-          {o.tipo_oficio && (
-            <p className="text-[11px] text-gray-400 mt-0.5 truncate">{o.tipo_oficio}</p>
-          )}
-        </div>
-        <div className="flex-shrink-0 text-right">
-          <p className={`text-[11px] font-bold ${vencido ? 'text-red-700' : 'text-amber-700'}`}>{plazo}</p>
-          {o.fecha_limite && (
-            <p className="text-[10px] text-gray-400 tabular-nums mt-0.5">{fmtFecha(o.fecha_limite)}</p>
-          )}
-          {o.url_oficio && (
-            <a
-              href={o.url_oficio}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[10px] text-violet-700 hover:text-violet-900 hover:underline font-medium mt-1 inline-block"
-            >
-              Ver oficio →
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}

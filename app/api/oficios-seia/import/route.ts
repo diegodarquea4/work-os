@@ -44,6 +44,11 @@ import {
   type OficioGuardado,
   type ProyectoCartera,
 } from '@/lib/oficiosSeia'
+import {
+  compromisosACerrar,
+  type CompromisoSeguimiento,
+  type OficioSeguimiento,
+} from '@/lib/oficiosSeguimiento'
 
 export const maxDuration = 120
 
@@ -236,6 +241,68 @@ export async function POST(request: Request) {
     )
   }
 
+  // ── 4b. Cerrar los seguimientos que se cumplieron solos ───────────────────
+  //
+  // El objetivo de un compromiso de seguimiento es que el organismo responda.
+  // Cuando ya no le queda ningún oficio pendiente eso pasó, y pedirle a
+  // alguien que lo confirme sería pedirle que ratifique lo que el archivo ya
+  // dice. Se cierra acá y el acta de la sesión siguiente lo reporta.
+  //
+  // Va DESPUÉS de escribir y con una lectura nueva a propósito: lo que decide
+  // es el estado de los oficios recién guardados, no el de antes de importar.
+  let seguimientosCerrados = 0
+  try {
+    const { data: comps } = await db
+      .from('sesion_compromisos')
+      .select('id, region_cod, oaeca_objetivo, estado')
+      .not('oaeca_objetivo', 'is', null)
+      .in('estado', ['pendiente', 'en_curso'])
+
+    if (comps && comps.length > 0) {
+      const { data: vivos } = await db
+        .from('sesion_oficios_tratados')
+        .select('id, region_cod, oaeca_sea, oaeca_nombre, nombre_proyecto, proyecto_privado_id, fecha_limite, estado')
+        .eq('automatico', true)
+        .eq('estado', 'pendiente')
+        .limit(20000)
+
+      // Por región: un organismo puede deber oficios en una y no en otra, y
+      // el compromiso es de una región.
+      const porRegion = new Map<string, OficioSeguimiento[]>()
+      for (const o of (vivos ?? []) as (OficioSeguimiento & { region_cod: string })[]) {
+        const acc = porRegion.get(o.region_cod) ?? []
+        acc.push(o)
+        porRegion.set(o.region_cod, acc)
+      }
+
+      const cerrar: number[] = []
+      const porRegionComp = new Map<string, CompromisoSeguimiento[]>()
+      for (const c of comps as (CompromisoSeguimiento & { region_cod: string })[]) {
+        const acc = porRegionComp.get(c.region_cod) ?? []
+        acc.push(c)
+        porRegionComp.set(c.region_cod, acc)
+      }
+      for (const [region, cs] of porRegionComp) {
+        cerrar.push(...compromisosACerrar(cs, porRegion.get(region) ?? []))
+      }
+
+      if (cerrar.length > 0) {
+        const { error } = await db
+          .from('sesion_compromisos')
+          .update({ estado: 'cumplido', estado_updated_at: ahora })
+          // Sin `estado_updated_by_email`: no lo cerró una persona. Queda en
+          // NULL, que es lo que distingue un cierre automático de uno de sala.
+          .in('id', cerrar)
+        if (error) console.error('[oficios-seia] no se pudieron cerrar seguimientos:', error)
+        else seguimientosCerrados = cerrar.length
+      }
+    }
+  } catch (err) {
+    // Un fallo acá no invalida la importación, que ya está escrita. Se
+    // reporta y el próximo archivo vuelve a intentarlo.
+    console.error('[oficios-seia] cierre de seguimientos falló:', err)
+  }
+
   // ── 5. Dejar huella ───────────────────────────────────────────────────────
   const resumen = {
     fecha_corte: fechaCorte,
@@ -261,7 +328,14 @@ export async function POST(request: Request) {
     `${parseo.descartadas.length} descartadas`,
   )
 
-  return NextResponse.json({ ok: true, ...resumen, sin_asignar: parseo.sinAsignar })
+  return NextResponse.json({
+    ok: true,
+    ...resumen,
+    sin_asignar: parseo.sinAsignar,
+    // Fuera de `resumen` porque no se guarda en seia_oficios_import: es una
+    // consecuencia de la importación, no una medida del archivo.
+    seguimientos_cerrados: seguimientosCerrados,
+  })
 }
 
 /**
