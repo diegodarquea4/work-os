@@ -44,3 +44,6 @@ supabase/.temp/
 # PDFs de preview generados en desarrollo (actas/cronogramas de muestra) —
 # artefactos locales para revisar, no parte de la app.
 /entregables/
+
+# Datos de trabajo que no van al repo (Excel del SEIA, sondas).
+/tmp-datos/
