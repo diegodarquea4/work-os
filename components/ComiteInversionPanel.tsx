@@ -48,6 +48,8 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [metaEmpleoOpen, setMetaEmpleoOpen] = useState(false)
   const [oaecaOpen, setOaecaOpen]         = useState(false)
   const [oficiosOpen, setOficiosOpen]     = useState(false)
+  const [actualizando, setActualizando]   = useState(false)
+  const [oficiosVersion, setOficiosVersion] = useState(0)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
@@ -55,6 +57,58 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(region.cod, { instancia: 'inversion' }, puedeOperar)
 
+
+  /**
+   * Trae del SEIA los oficios pendientes de ESTA región y los pega a la
+   * cartera, en una sola pasada.
+   *
+   * El cron ya lo hace lunes, miércoles y viernes; esto es para cuando alguien
+   * necesita el dato AHORA —el día de la sesión, típicamente— sin esperar al
+   * siguiente. Mismo patrón que el botón «Actualizar proyectos en SEIA»: la
+   * ruta es reanudable, pero una región entra de sobra en una sola llamada.
+   */
+  async function actualizarOficios() {
+    setActualizando(true)
+    try {
+      const res = await fetch(`/api/oficios-seia/scrape?region=${encodeURIComponent(region.cod)}`, { method: 'POST' })
+      const texto = await res.text()
+      let json: Record<string, unknown>
+      try {
+        json = JSON.parse(texto) as Record<string, unknown>
+      } catch {
+        // Sesión vencida: el proxy devuelve la página de login, y un .json()
+        // acá explota con «Unexpected token '<'», que no dice nada.
+        throw new Error('Tu sesión venció. Recargá la página y volvé a entrar.')
+      }
+      if (!res.ok) throw new Error(String(json.error ?? 'No se pudieron actualizar los oficios'))
+
+      const nuevos = Number(json.pendientes_escritos ?? 0)
+      const resueltos = Number(json.resueltos ?? 0)
+      const vinculados = Number(json.vinculados ?? 0)
+      const fallados = Number(json.fallados ?? 0)
+      // Se refresca la vista de oficios, que es lo que la persona vino a mirar.
+      setOficiosVersion(v => v + 1)
+      window.alert(
+        `Oficios actualizados desde el SEIA.
+
+` +
+        `${json.hasta ?? 0} proyectos leídos
+` +
+        `${nuevos} pendientes nuevos
+` +
+        `${resueltos} pasaron a resueltos
+` +
+        `${vinculados} se pegaron a su proyecto` +
+        (fallados > 0 ? `
+
+${fallados} expedientes no respondieron; el SEIA es intermitente, volvé a intentar.` : ''),
+      )
+    } catch (err) {
+      window.alert((err as Error).message)
+    } finally {
+      setActualizando(false)
+    }
+  }
 
   function fmtFechaCorta(fecha: string): string {
     return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
@@ -160,6 +214,16 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
               >
                 Oficios
               </button>
+              {/* Pegado a «Oficios» y no en un menú: se aprieta justo antes de
+                  mirarlos, el día de la sesión. */}
+              <button
+                onClick={actualizarOficios}
+                disabled={actualizando}
+                className="text-xs text-violet-500 hover:text-violet-800 font-medium disabled:opacity-50"
+                title="Traer del SEIA los oficios pendientes de esta región y pegarlos a la cartera"
+              >
+                {actualizando ? 'actualizando…' : '↻'}
+              </button>
               <span className="text-violet-200">|</span>
               <button
                 onClick={() => setHistorialOpen(true)}
@@ -240,6 +304,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       )}
       {oficiosOpen && (
         <OficiosRegionModal
+          key={`oficios-${oficiosVersion}`}
           regionCod={region.cod}
           currentUserEmail={userEmail}
           onClose={() => setOficiosOpen(false)}

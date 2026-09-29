@@ -31,7 +31,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/apiAuth'
+import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import {
@@ -45,6 +45,8 @@ import {
 } from '@/lib/seiaScraper'
 import {
   expedienteDeProyecto,
+  planificarVinculacion,
+  type OficioSinProyecto,
   type ProyectoCartera,
 } from '@/lib/oficiosSeia'
 
@@ -188,16 +190,35 @@ async function leerCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Curs
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  // Dos formas de entrar, igual que el sync del catálogo: el cron con bearer,
-  // o una persona admin/editor desde el panel.
+  /**
+   * Con `?region=<cod>` recorre UNA región; sin él, las 16. La diferencia no
+   * es solo de alcance:
+   *
+   *   · Una región entra de sobra en el presupuesto de tiempo (son ~15
+   *     proyectos), así que NO usa cursor. Tocarlo sería peor que inútil:
+   *     pisaría el avance de la corrida nacional del cron, que es lo que
+   *     garantiza que ninguna región se quede sin actualizar. Mismo criterio
+   *     que /api/seia-sync-v2 con su `?region=`.
+   *   · Y la puede apretar quien conduce ESE comité, no solo un admin: es su
+   *     región y su cartera.
+   */
+  const soloRegion = new URL(request.url).searchParams.get('region')
+
   const bearer = request.headers.get('authorization')
   const esCron = !!process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`
   if (!esCron) {
     const profile = await requireAuth()
     if (!profile) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-    if (profile.role !== 'admin' && profile.role !== 'editor') {
+    if (soloRegion) {
+      if (!(await requireCan(profile, 'comite.economico.operar', soloRegion))) {
+        return NextResponse.json(
+          { error: 'Sin permiso sobre el Comité Económico de esta región.' },
+          { status: 403 },
+        )
+      }
+    } else if (profile.role !== 'admin' && profile.role !== 'editor') {
       return NextResponse.json(
-        { error: 'El scraping del SEIA es nacional: solo admin o editor.' },
+        { error: 'Sin región, el scraping recorre las 16: solo admin o editor.' },
         { status: 403 },
       )
     }
@@ -228,6 +249,7 @@ export async function POST(request: Request) {
   // Orden estable: el cursor es un índice, y si la lista se reordenara entre
   // invocaciones saltearía expedientes sin avisar.
   const proyectos: ProyectoAScrapear[] = (carteraRows ?? [])
+    .filter(r => !soloRegion || r.region_cod === soloRegion)
     .map(r => {
       const exp = expedienteDeProyecto(r as unknown as ProyectoCartera)
       return exp == null ? null : {
@@ -252,7 +274,9 @@ export async function POST(request: Request) {
     })
   }
 
-  const cursor = await leerCursor(db)
+  // Sin región se retoma el cursor nacional; con región se empieza de cero y
+  // no se escribe ninguno.
+  const cursor = soloRegion ? { idx: 0 } : await leerCursor(db)
   const desde = cursor.idx < proyectos.length ? cursor.idx : 0
 
   let i = desde
@@ -364,17 +388,76 @@ export async function POST(request: Request) {
   }
 
   const termino = i >= proyectos.length
+
+  // ── Revincular, en la misma pasada ────────────────────────────────────────
+  //
+  // Lo que el scraper escribe ya viene con su proyecto —recorre la cartera, así
+  // que sabe de quién es cada oficio—. Esto es para los que trajo el Excel y
+  // quedaron sueltos: si el proyecto entró a la cartera después, acá se pegan.
+  //
+  // Va acá y no en un botón aparte porque quien aprieta «Actualizar oficios»
+  // quiere verlos donde corresponde, no ejecutar dos pasos que solo tienen
+  // sentido juntos.
+  let vinculados = 0
+  if (termino || soloRegion) {
+    try {
+      let q = db
+        .from('sesion_oficios_tratados')
+        .select('id, id_expediente, region_cod')
+        .eq('automatico', true)
+        .is('proyecto_privado_id', null)
+        .not('id_expediente', 'is', null)
+        .limit(5000)
+      if (soloRegion) q = q.eq('region_cod', soloRegion)
+
+      const { data: huerfanos } = await q
+      const plan = planificarVinculacion(
+        (huerfanos ?? []) as OficioSinProyecto[],
+        (carteraRows ?? []) as ProyectoCartera[],
+      )
+      // Agrupado por destino: un oficio va hasta a 22 organismos, así que un
+      // solo proyecto arrastra decenas de filas con el MISMO update.
+      const porDestino = new Map<string, { patch: Record<string, unknown>; ids: number[] }>()
+      for (const v of plan.vincular) {
+        const k = `${v.proyecto_privado_id}|${v.region_cod ?? ''}`
+        const acc = porDestino.get(k)
+        if (acc) { acc.ids.push(v.id); continue }
+        porDestino.set(k, {
+          patch: v.region_cod
+            ? { proyecto_privado_id: v.proyecto_privado_id, region_cod: v.region_cod }
+            : { proyecto_privado_id: v.proyecto_privado_id },
+          ids: [v.id],
+        })
+      }
+      for (const { patch, ids } of porDestino.values()) {
+        const { error } = await db
+          .from('sesion_oficios_tratados')
+          .update(patch)
+          .in('id', ids)
+          .eq('automatico', true)
+          .is('proyecto_privado_id', null)
+        if (!error) vinculados += ids.length
+      }
+    } catch (err) {
+      // No invalida el scraping, que ya está escrito.
+      console.error('[oficios-seia/scrape] revinculación falló:', err)
+    }
+  }
+
   // Cadena vacía y no null: es lo que `leerCursor` entiende como «empezar de
   // cero», y es como el sync del catálogo limpia el suyo.
-  const notes = termino ? '' : JSON.stringify({ idx: i } satisfies Cursor)
-
-  await recordSyncStatus(SYNC_NAME, {
-    status:     !termino || fallados > 0 ? 'partial' : 'ok',
-    durationMs: Date.now() - t0,
-    rows:       escritos,
-    errors:     errores.length > 0 ? errores : undefined,
-    notes,
-  })
+  // La corrida por región NO toca el cursor nacional: si lo hiciera, apretar
+  // el botón de una región borraría el avance del cron y las demás quedarían
+  // sin actualizar sin que nadie se entere.
+  if (!soloRegion) {
+    await recordSyncStatus(SYNC_NAME, {
+      status:     !termino || fallados > 0 ? 'partial' : 'ok',
+      durationMs: Date.now() - t0,
+      rows:       escritos,
+      errors:     errores.length > 0 ? errores : undefined,
+      notes:      termino ? '' : JSON.stringify({ idx: i } satisfies Cursor),
+    })
+  }
 
   console.log(
     `[oficios-seia/scrape] ${desde}→${i} de ${proyectos.length} · ` +
@@ -383,6 +466,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    region: soloRegion,
+    vinculados,
     partial: !termino,
     next_cursor: termino ? null : { idx: i },
     proyectos: proyectos.length,
