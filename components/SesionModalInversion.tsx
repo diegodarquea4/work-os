@@ -11,6 +11,7 @@ import {
   agruparPorOaeca, claveOaeca, descripcionSeguimiento, type GrupoOaeca,
 } from '@/lib/oficiosSeguimiento'
 import OficiosSeguimientoBloque, { ChevronPlegado } from './OficiosSeguimientoBloque'
+import BotonActualizarOficios from './BotonActualizarOficios'
 import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
@@ -1620,6 +1621,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               {muestra('seguimiento') && subSeguimiento === 'oficios' && (
                   <ZonaCard numero={3} titulo="Seguimiento de la inversión · Oficios"
                     badge={oficiosAnteriores.length + oficiosTratadosSesion.length}
+                    accion={<BotonActualizarOficios regionCod={region.cod} onActualizado={() => { if (sesion) void loadAll(sesion) }} />}
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
                         {/* Oficios anteriores */}

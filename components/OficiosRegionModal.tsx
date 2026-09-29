@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { diasHasta } from '@/lib/oficiosSeia'
 import { Modal } from '@/components/ui'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
+import BotonActualizarOficios from './BotonActualizarOficios'
 
 /**
  * Todos los oficios del SEIA de la región, agrupados por proyecto.
@@ -166,10 +167,17 @@ export default function OficiosRegionModal({ regionCod, currentUserEmail, onClos
     <>
       <Modal open onClose={onClose} size="xl" title="Oficios del SEIA">
         <div className="space-y-3">
-          <p className="text-xs text-gray-500 -mt-1">
-            Lo que el SEIA lista para los proyectos de esta región, agrupado por proyecto. Lo trae
-            la importación del archivo de seia-abierto.cl; el estado lo manda el SEIA y no se edita acá.
-          </p>
+          <div className="flex items-start justify-between gap-3 -mt-1">
+            <p className="text-xs text-gray-500 flex-1">
+              Lo que el SEIA lista para los proyectos de esta región, agrupado por proyecto.
+              El estado lo manda el SEIA y no se edita acá.
+            </p>
+            {/* Acá y no afuera: se renueva mirando la lista, no antes de abrirla. */}
+            <BotonActualizarOficios
+              regionCod={regionCod}
+              onActualizado={() => { void cargar(() => true) }}
+            />
+          </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
             <Chip
