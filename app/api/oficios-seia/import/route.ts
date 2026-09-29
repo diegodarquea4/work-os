@@ -147,7 +147,21 @@ export async function POST(request: Request) {
 
   if (carteraErr) {
     console.error('[oficios-seia] lectura de cartera falló:', carteraErr)
-    return NextResponse.json({ error: 'No se pudo leer la cartera' }, { status: 500 })
+    // Igual que el chequeo de la 117: el caso frecuente es una migración sin
+    // correr, y sin nombrarla el error obliga a leer los logs del servidor.
+    if (/seia_expediente_id/.test(carteraErr.message ?? '')) {
+      return NextResponse.json(
+        {
+          error: 'Falta correr la migración 119 (seia_expediente_id) en Supabase.',
+          detalle: carteraErr.message,
+        },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json(
+      { error: 'No se pudo leer la cartera', detalle: carteraErr.message },
+      { status: 500 },
+    )
   }
 
   const parseo = parsearPendientes(pendientes, registro, (carteraRows ?? []) as ProyectoCartera[])

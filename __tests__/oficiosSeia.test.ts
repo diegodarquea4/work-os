@@ -13,11 +13,13 @@ import {
   parsearExpedientePegado,
   parsearPendientes,
   planificarEscritura,
+  planificarVinculacion,
   regionCodDesdeSeia,
   type FilaPendiente,
   type FilaRegistro,
   type OficioGuardado,
   type OficioImportado,
+  type OficioSinProyecto,
   type ProyectoCartera,
 } from '@/lib/oficiosSeia'
 
@@ -508,5 +510,87 @@ describe('parsearPendientes con expediente a mano', () => {
     expect(r.oficios[0].proyecto_privado_id).toBe(42)
     expect(r.oficios[0].region_cod).toBe('XIV')
     expect(r.sinAsignar).toBe(0)
+  })
+})
+
+// ── Revincular ───────────────────────────────────────────────────────────────
+
+/**
+ * El caso real: la primera importación corrió a las 21:19:09 y el proyecto de
+ * Los Lagos se cargó a las 21:20:59. Sus siete oficios y su proyecto estaban
+ * los dos en la base, sin verse.
+ */
+describe('planificarVinculacion', () => {
+  const huerfano = (over: Partial<OficioSinProyecto> & { id: number }): OficioSinProyecto => ({
+    id_expediente: 2156785500,
+    region_cod: 'X',
+    ...over,
+  })
+
+  it('pega el oficio al proyecto que llegó después', () => {
+    const plan = planificarVinculacion([huerfano({ id: 165 })], [proy({ id: 287 })])
+    expect(plan.vincular).toEqual([{ id: 165, proyecto_privado_id: 287 }])
+    expect(plan.ambiguos).toEqual([])
+  })
+
+  it('no toca el oficio cuyo expediente no está en ninguna cartera', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, id_expediente: 999999999 })],
+      [proy({ id: 287 })],
+    )
+    expect(plan.vincular).toEqual([])
+  })
+
+  it('ignora al que no trae expediente', () => {
+    const plan = planificarVinculacion([huerfano({ id: 1, id_expediente: null })], [proy({ id: 287 })])
+    expect(plan.vincular).toEqual([])
+  })
+
+  // Un oficio sin proyecto se guarda en la región que declara el SEIA. Al
+  // aparecer el proyecto manda la región de la cartera, igual que en la
+  // importación.
+  it('muda el oficio a la región de su proyecto', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, region_cod: 'RM' })],
+      [proy({ id: 287, region_cod: 'X' })],
+    )
+    expect(plan.vincular).toEqual([{ id: 1, proyecto_privado_id: 287, region_cod: 'X' }])
+  })
+
+  it('no lo muda si ya está en la región de uno de los candidatos', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, region_cod: 'XIV' })],
+      [proy({ id: 10, region_cod: 'X' }), proy({ id: 11, region_cod: 'XIV' })],
+    )
+    expect(plan.vincular).toEqual([{ id: 1, proyecto_privado_id: 11 }])
+    expect(plan.ambiguos).toEqual([])
+  })
+
+  // Una fila sola no puede ir a dos regiones; la importación sí escribe una
+  // por región. Se reporta en vez de elegir al azar.
+  it('deja sin resolver el expediente que está en dos carteras ajenas', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, region_cod: 'RM' })],
+      [proy({ id: 10, region_cod: 'X' }), proy({ id: 11, region_cod: 'XIV' })],
+    )
+    expect(plan.vincular).toEqual([])
+    expect(plan.ambiguos).toEqual([{ id: 1, id_expediente: 2156785500, regiones: ['X', 'XIV'] }])
+  })
+
+  it('el mismo proyecto en la misma región dos veces no es ambiguo', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, region_cod: 'X' })],
+      [proy({ id: 10, region_cod: 'X' }), proy({ id: 11, region_cod: 'X' })],
+    )
+    expect(plan.vincular).toEqual([{ id: 1, proyecto_privado_id: 10 }])
+  })
+
+  // El manual gana sobre el catálogo, igual que en expedienteDeProyecto.
+  it('usa el expediente cargado a mano en la ficha', () => {
+    const plan = planificarVinculacion(
+      [huerfano({ id: 1, id_expediente: 2168105623 })],
+      [proy({ id: 5, origen_sistema: null, origen_id: null, seia_expediente_id: 2168105623 })],
+    )
+    expect(plan.vincular).toEqual([{ id: 1, proyecto_privado_id: 5 }])
   })
 })

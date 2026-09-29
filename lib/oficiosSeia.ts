@@ -464,3 +464,82 @@ export function esParaLaProximaSesion(
 export function estaAtrasado(o: OficioConPlazo, hoyISO: string): boolean {
   return o.fecha_limite != null && diasHasta(o.fecha_limite, hoyISO) < 0
 }
+
+// ── Revincular lo ya guardado contra la cartera ──────────────────────────────
+
+/** Lo mínimo de un oficio guardado para volver a cruzarlo con la cartera. */
+export type OficioSinProyecto = {
+  id: number
+  id_expediente: number | null
+  region_cod: string
+}
+
+export type Vinculacion = {
+  id: number
+  proyecto_privado_id: number
+  /** Solo cuando el oficio se muda: el proyecto manda sobre la región del SEIA. */
+  region_cod?: string
+}
+
+export type PlanVinculacion = {
+  vincular: Vinculacion[]
+  /** El expediente está en la cartera de varias regiones y ninguna es la del
+   *  oficio: una fila sola no puede ir a las dos. Lo resuelve la importación,
+   *  que sí escribe una fila por región. Se reporta para no perderlo. */
+  ambiguos: { id: number; id_expediente: number; regiones: string[] }[]
+}
+
+/**
+ * Qué oficios ya guardados encuentran ahora su proyecto en la cartera.
+ *
+ * Existe porque la importación es la foto de UN instante: un proyecto que se
+ * suma a la cartera después queda con sus oficios huérfanos hasta la próxima
+ * subida de archivo. Pasó al día siguiente de la primera importación —un
+ * proyecto cargado 110 segundos tarde— y obligar a rebajar el Excel para
+ * arreglarlo es atar el vínculo a un trámite que no tiene nada que ver.
+ *
+ * Solo mira oficios SIN proyecto: nunca reasigna uno ya vinculado. Si alguien
+ * lo corrigió a mano, esa decisión gana.
+ *
+ * La región del proyecto manda sobre la que declara el SEIA (misma regla que
+ * `parsearPendientes`): un oficio «sin asignar» se guardó provisoriamente en
+ * la región del SEIA, y al aparecer el proyecto se muda a la suya.
+ */
+export function planificarVinculacion(
+  huerfanos: OficioSinProyecto[],
+  cartera: ProyectoCartera[],
+): PlanVinculacion {
+  const idx = indiceCartera(cartera)
+  const vincular: Vinculacion[] = []
+  const ambiguos: PlanVinculacion['ambiguos'] = []
+
+  for (const o of huerfanos) {
+    if (o.id_expediente == null) continue
+    const candidatos = idx.get(o.id_expediente) ?? []
+    if (candidatos.length === 0) continue
+
+    // Si alguno es de la región donde el oficio ya está, ese: no hay mudanza.
+    const mismaRegion = candidatos.find(p => p.region_cod === o.region_cod)
+    if (mismaRegion) {
+      vincular.push({ id: o.id, proyecto_privado_id: mismaRegion.id })
+      continue
+    }
+
+    if (candidatos.length > 1) {
+      ambiguos.push({
+        id: o.id,
+        id_expediente: o.id_expediente,
+        regiones: [...new Set(candidatos.map(p => p.region_cod))],
+      })
+      continue
+    }
+
+    vincular.push({
+      id: o.id,
+      proyecto_privado_id: candidatos[0].id,
+      region_cod: candidatos[0].region_cod,
+    })
+  }
+
+  return { vincular, ambiguos }
+}

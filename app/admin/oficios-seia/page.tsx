@@ -31,6 +31,14 @@ type Importacion = {
   created_at: string
 }
 
+type Revinculacion = {
+  revisados: number
+  vinculados: number
+  mudados: number
+  ambiguos: number
+  sin_proyecto: number
+}
+
 /** A partir de cuántos días el dato se considera viejo. El comité sesiona cada
  *  15 días: si el archivo pasa de eso, ya no cubre la reunión que viene. */
 const DIAS_PARA_ENVEJECER = 15
@@ -41,6 +49,8 @@ export default function OficiosSeiaPage() {
   const [subiendo, setSubiendo]   = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [ultimo, setUltimo]       = useState<Importacion | null>(null)
+  const [revinculando, setRevinculando] = useState(false)
+  const [vinculo, setVinculo]     = useState<Revinculacion | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
@@ -75,6 +85,22 @@ export default function OficiosSeiaPage() {
     } finally {
       setSubiendo(false)
       if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  async function revincular() {
+    setRevinculando(true)
+    setError(null)
+    setVinculo(null)
+    try {
+      const res = await fetch('/api/oficios-seia/revincular', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error([json.error, json.detalle].filter(Boolean).join('\n\n') || 'La revinculación falló')
+      setVinculo(json as Revinculacion)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRevinculando(false)
     }
   }
 
@@ -123,6 +149,62 @@ export default function OficiosSeiaPage() {
           className="block mx-auto text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border-0 file:bg-violet-700 file:text-white file:font-semibold file:cursor-pointer disabled:opacity-50"
         />
         {subiendo && <p className="text-sm text-violet-700 mt-3 font-medium">Importando…</p>}
+      </div>
+
+      {/* Revincular va DESPUÉS de la subida pero se usa más seguido: sumar un
+          proyecto a la cartera no debería obligar a rebajar el Excel para que
+          sus oficios aparezcan. La importación ya cruza contra la cartera,
+          pero contra la que existía en ese instante. */}
+      <div className="mt-5 rounded-xl border border-gray-200 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Revincular con la cartera</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-xl">
+              Cruza los oficios ya importados con los proyectos de la cartera. Corré esto cada vez
+              que sumes un proyecto: la importación los une con la cartera <strong>tal como estaba
+              al subir el archivo</strong>, así que un proyecto agregado después queda con sus
+              oficios sueltos hasta que corras esto. No desvincula nada.
+            </p>
+          </div>
+          <button
+            onClick={revincular}
+            disabled={revinculando}
+            className="shrink-0 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+          >
+            {revinculando ? 'Revinculando…' : 'Revincular'}
+          </button>
+        </div>
+
+        {vinculo && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-sm text-slate-800">
+              {vinculo.vinculados === 0
+                ? <>Ningún oficio nuevo encontró proyecto. Se revisaron <strong>{vinculo.revisados}</strong> sin asignar.</>
+                : <><strong>{vinculo.vinculados}</strong> oficio{vinculo.vinculados === 1 ? '' : 's'} quedaron pegados a su proyecto.</>}
+            </p>
+            {vinculo.mudados > 0 && (
+              // No es un efecto raro: un oficio sin proyecto se guarda en la
+              // región que declara el SEIA, y al aparecer el proyecto manda la
+              // región del proyecto. Decirlo evita que parezca un error.
+              <p className="text-xs text-slate-600 mt-1">
+                {vinculo.mudados} cambiaron de región: al encontrar su proyecto, mandan la región de la cartera
+                y no la que declara el SEIA.
+              </p>
+            )}
+            {vinculo.ambiguos > 0 && (
+              <p className="text-xs text-amber-800 mt-1">
+                {vinculo.ambiguos} quedaron sin resolver porque su expediente está en la cartera de
+                más de una región. Se reparten en la próxima importación.
+              </p>
+            )}
+            {vinculo.sin_proyecto > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                {vinculo.sin_proyecto} siguen sin proyecto: el archivo es nacional y su proyecto no está en
+                ninguna cartera.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {error && (
