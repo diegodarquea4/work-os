@@ -1,8 +1,8 @@
-import type { AccionCartera } from '@/lib/comiteInfraestructura'
+import type { AccionCartera, Comite } from '@/lib/comitesCartera'
 
 /**
- * Llama a /api/comite-infraestructura/cartera para sumar o sacar una iniciativa
- * de la cartera del comité. Devuelve el arreglo `tags` ya guardado.
+ * Llama a /api/comites/cartera para sumar o sacar una iniciativa de la cartera
+ * pública de un comité. Devuelve el arreglo `tags` ya guardado.
  *
  * Por qué no `safeWrite`: ese helper existe porque la RLS responde 200 con cero
  * filas y el cliente cree que guardó. Acá el camino es otro — la escritura la
@@ -12,14 +12,15 @@ import type { AccionCartera } from '@/lib/comiteInfraestructura'
  * panel.
  *
  * `tags` vuelve del servidor en vez de reconstruirse acá a propósito: la forma
- * canónica de la etiqueta la decide `region_config`, no el navegador.
+ * canónica de la etiqueta la decide el comité, no el navegador.
  */
 export async function moverEnCartera(params: {
+  comite: Comite
   prioridadId: number
   accion: AccionCartera
   tag?: string
 }): Promise<string[]> {
-  const res = await fetch('/api/comite-infraestructura/cartera', {
+  const res = await fetch('/api/comites/cartera', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),

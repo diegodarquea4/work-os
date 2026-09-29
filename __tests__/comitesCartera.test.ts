@@ -3,63 +3,97 @@ import {
   aplicarEtiqueta,
   etiquetaCanonica,
   etiquetasGestionables,
-  puedeMoverEtiquetaCartera,
+  puedeGestionarCartera,
   TAG_INFRAESTRUCTURA_DEFAULT,
-} from '@/lib/comiteInfraestructura'
+} from '@/lib/comitesCartera'
 
 /**
  * Estas funciones NO son filtros de UI: son la autorización real de
- * /api/comite-infraestructura/cartera, que escribe con service role y por lo
+ * /api/comites/cartera, que escribe con service role y por lo
  * tanto no pasa ni por la RLS (mig 087) ni por el trigger de columnas
  * (mig 028). Lo que se cuele acá llega a la columna `tags`.
  */
 
 const MOP = 'Ministerio de Obras Públicas'
+const ECONOMIA = 'Ministerio de Economía, Fomento y Turismo'
 
-describe('puedeMoverEtiquetaCartera', () => {
+describe('puedeGestionarCartera', () => {
   // La delegación arma la cartera: no está acotada por ministerio en ningún
   // lado del sistema (su `ministerio` es NULL y current_user_sees_ministerio
   // le devuelve todo).
   it('la delegación puede con cualquier iniciativa', () => {
     for (const rol of ['admin', 'editor', 'regional']) {
-      expect(puedeMoverEtiquetaCartera(rol, null, MOP)).toBe(true)
-      expect(puedeMoverEtiquetaCartera(rol, null, 'Ministerio de Vivienda y Urbanismo')).toBe(true)
-      expect(puedeMoverEtiquetaCartera(rol, null, null)).toBe(true)
+      expect(puedeGestionarCartera('infraestructura', rol, null, MOP)).toBe(true)
+      expect(puedeGestionarCartera('infraestructura', rol, null, 'Ministerio de Vivienda y Urbanismo')).toBe(true)
+      expect(puedeGestionarCartera('infraestructura', rol, null, null)).toBe(true)
     }
   })
 
   it('un SEREMI puede con las de su propio ministerio', () => {
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, MOP)).toBe(true)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, MOP)).toBe(true)
   })
 
   // El caso que hace falta tapar: el service role se salta la RLS, así que sin
   // este corte un SEREMI podría mandar el id de una iniciativa que no tiene
   // permitido ni leer y etiquetarla igual.
   it('un SEREMI NO puede con las de otro ministerio', () => {
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, 'Ministerio de Vivienda y Urbanismo')).toBe(false)
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, 'Ministerio de Salud')).toBe(false)
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, null)).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, 'Ministerio de Vivienda y Urbanismo')).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, 'Ministerio de Salud')).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, null)).toBe(false)
   })
 
   // `ministerio` es multi-valor con ';' — el SEREMI de MOP alcanza una
   // iniciativa compartida con Vivienda.
   it('un SEREMI alcanza las iniciativas compartidas entre ministerios', () => {
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, `Ministerio de Vivienda y Urbanismo;${MOP}`)).toBe(true)
-    expect(puedeMoverEtiquetaCartera('seremi', MOP, `${MOP};Ministerio de Transportes y Telecomunicaciones`)).toBe(true)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, `Ministerio de Vivienda y Urbanismo;${MOP}`)).toBe(true)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, `${MOP};Ministerio de Transportes y Telecomunicaciones`)).toBe(true)
   })
 
   // Fail-closed ante el dato faltante: se recupera completando el perfil.
   it('un SEREMI sin ministerio declarado no puede con nada', () => {
-    expect(puedeMoverEtiquetaCartera('seremi', null, MOP)).toBe(false)
-    expect(puedeMoverEtiquetaCartera('seremi', '', MOP)).toBe(false)
-    expect(puedeMoverEtiquetaCartera('seremi', '   ', MOP)).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', null, MOP)).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', '', MOP)).toBe(false)
+    expect(puedeGestionarCartera('infraestructura', 'seremi', '   ', MOP)).toBe(false)
   })
 
   it('reconoce las variantes con que se escribe el ministerio', () => {
     for (const variante of ['Ministerio de Obras Publicas', 'Min. Obras Públicas', `  ${MOP}  `]) {
-      expect(puedeMoverEtiquetaCartera('seremi', variante, MOP)).toBe(true)
-      expect(puedeMoverEtiquetaCartera('seremi', MOP, variante)).toBe(true)
+      expect(puedeGestionarCartera('infraestructura', 'seremi', variante, MOP)).toBe(true)
+      expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, variante)).toBe(true)
     }
+  })
+
+  // ── El Económico corta distinto ────────────────────────────────────────────
+  // Allá "quién entra y quién sale de la cartera lo decide quien conduce"
+  // (mig 112). No es el ministerio de la INICIATIVA lo que manda, como en
+  // Infraestructura, sino el del USUARIO: un SEREMI sectorial aporta sobre lo
+  // que ya está adentro, pero no compone la cartera.
+
+  it('en el Económico conduce la delegación, con cualquier iniciativa', () => {
+    for (const rol of ['admin', 'editor', 'regional']) {
+      expect(puedeGestionarCartera('economico', rol, null, MOP)).toBe(true)
+      expect(puedeGestionarCartera('economico', rol, null, ECONOMIA)).toBe(true)
+      expect(puedeGestionarCartera('economico', rol, null, null)).toBe(true)
+    }
+  })
+
+  it('en el Económico el SEREMI de Economía compone la cartera', () => {
+    expect(puedeGestionarCartera('economico', 'seremi', ECONOMIA, MOP)).toBe(true)
+    expect(puedeGestionarCartera('economico', 'seremi', ECONOMIA, null)).toBe(true)
+  })
+
+  // La diferencia que importa entre los dos comités: acá el SEREMI de MOP NO
+  // puede, ni siquiera con una iniciativa de su propio ministerio.
+  it('en el Económico un SEREMI sectorial no compone la cartera, ni la suya', () => {
+    expect(puedeGestionarCartera('economico', 'seremi', MOP, MOP)).toBe(false)
+    expect(puedeGestionarCartera('economico', 'seremi', MOP, ECONOMIA)).toBe(false)
+    // …mientras que en Infraestructura esa misma persona sí puede con la suya.
+    expect(puedeGestionarCartera('infraestructura', 'seremi', MOP, MOP)).toBe(true)
+  })
+
+  it('en el Económico un SEREMI sin ministerio declarado no puede', () => {
+    expect(puedeGestionarCartera('economico', 'seremi', null, MOP)).toBe(false)
+    expect(puedeGestionarCartera('economico', 'seremi', '', MOP)).toBe(false)
   })
 })
 

@@ -1,12 +1,19 @@
+import { ministerioCalza } from '@/lib/ministerios'
+import { conduceComiteEconomico } from '@/lib/comiteEconomico'
+
 /**
- * Reglas de la cartera del Comité de Infraestructura: quién puede sumar o sacar
- * una iniciativa, qué etiquetas se pueden tocar, y cómo se modifica el arreglo
- * `tags` sin pisar lo que no se vino a cambiar.
+ * Reglas de la CARTERA PÚBLICA de un comité: qué iniciativas de la región mira
+ * el comité, marcadas con una etiqueta en `prioridades_territoriales.tags`.
+ *
+ * Sirve a los dos comités que tienen cartera pública:
+ *   · infraestructura (Nudos Críticos) — etiqueta configurable por región
+ *     (`region_config.infraestructura_tag`, 'CRI'), más sus megaproyectos.
+ *   · economico — etiqueta fija 'CER', sin megaproyectos.
  *
  * ── Por qué esto vive acá, puro y aparte de la ruta ─────────────────────────
  *
- * La ruta `/api/comite-infraestructura/cartera` escribe con SERVICE ROLE, y el
- * service role se salta dos barreras a la vez:
+ * La ruta que lo usa escribe con SERVICE ROLE, y el service role se salta dos
+ * barreras a la vez:
  *
  *   · la RLS de `prioridades_territoriales` (mig 087: un SEREMI solo ve las de
  *     su ministerio), y
@@ -16,27 +23,31 @@
  *     que /api/import y /api/proposals puedan escribir la cartera).
  *
  * O sea que entre un POST y la columna `tags` no queda nada más que estas
- * funciones. Si `puedeMoverEtiquetaCartera` devuelve `true` de más, un SEREMI
- * puede etiquetar una iniciativa que ni siquiera tiene permitido LEER. Por eso
- * están puras y testeadas aparte del handler HTTP.
+ * funciones. Si `puedeGestionarCartera` devuelve `true` de más, alguien puede
+ * etiquetar una iniciativa que ni siquiera tiene permitido LEER. Por eso están
+ * puras y testeadas aparte del handler HTTP.
  *
  * ── Por qué una ruta y no un UPDATE desde el navegador ──────────────────────
  *
- * Porque `tags` es definicional: hoy solo admin y editor pueden moverla. La
- * delegación que lleva el comité no puede armar su propia cartera, y por eso
- * en producción hay UNA sola iniciativa etiquetada. Abrir la columna entera en
- * el trigger sería tocar la autorización de `prioridades_territoriales`, que
- * está fuera de alcance por ahora; la ruta acotada logra lo mismo sin migración.
+ * Porque `tags` es definicional: solo admin y editor la mueven. Sin esto, ni la
+ * delegación que lleva el comité ni el SEREMI pueden armar su propia cartera, y
+ * quedan pidiéndole a un admin que etiquete por ellos. Abrir la columna entera
+ * en el trigger sería tocar la autorización de `prioridades_territoriales`; la
+ * ruta acotada logra lo mismo sin migración.
  */
 
-import { ministerioCalza } from '@/lib/ministerios'
+export type Comite = 'economico' | 'infraestructura'
 
 export type AccionCartera = 'sumar' | 'quitar'
 
+/** Etiqueta de la cartera pública del Comité Económico. Fija, no configurable
+ *  por región — a diferencia de Infraestructura, que la lee de region_config. */
+export const TAG_ECONOMICO = 'CER'
+
 /**
- * Tag del comité cuando `region_config` no trae uno. La mig 060 lo sembró con
- * este valor en las 16 regiones, así que en la práctica el fallback no se usa —
- * está para que la ruta no escriba `null` si alguien borra la fila de config.
+ * Tag de Infraestructura cuando `region_config` no trae uno. La mig 060 lo
+ * sembró con este valor en las 16 regiones, así que en la práctica el fallback
+ * no se usa — está para que la ruta no escriba `null` si alguien borra la fila.
  *
  * OJO: el valor REAL se lee siempre de `region_config.infraestructura_tag`.
  * Esta constante no es la fuente de verdad; una región puede tener el suyo.
@@ -50,40 +61,47 @@ function mismaEtiqueta(a: string, b: string): boolean {
 }
 
 /**
- * ¿Este usuario puede mover la etiqueta del comité en ESTA iniciativa?
+ * ¿Este usuario puede sumar o sacar ESTA iniciativa de la cartera del comité?
  *
- * Presupone que la capacidad `comite.infraestructura.operar` en la región de la
- * iniciativa ya se verificó — acá solo se resuelve el corte por ministerio.
+ * Presupone que la capacidad del comité en la región de la iniciativa ya se
+ * verificó — acá solo se resuelve el corte fino, que es DISTINTO en cada uno
+ * porque cada comité lo decidió distinto:
  *
- *   · Delegación (admin / editor / regional): cualquier iniciativa de la región.
- *     Es quien arma la cartera del comité.
- *   · SEREMI: solo las de su propio ministerio. La columna `ministerio` es
- *     multi-valor (';'), así que basta con que el suyo esté entre los de la
- *     iniciativa — el SEREMI de MOP alcanza una "Vivienda;Obras Públicas".
+ *   · ECONÓMICO — solo quien CONDUCE (mig 112: "quién entra y quién sale de la
+ *     cartera lo decide quien conduce"). Es el SEREMI de Economía o la
+ *     delegación; un SEREMI sectorial aporta sobre lo que ya está adentro, pero
+ *     no compone la cartera. Misma regla que ya rige a los proyectos privados,
+ *     extendida acá a las iniciativas públicas: es la misma decisión.
  *
- * Fail-closed: un SEREMI sin ministerio declarado no mueve nada. Se recupera
- * completando el perfil, que es mejor que dejarlo etiquetar cartera ajena.
+ *   · INFRAESTRUCTURA — la delegación con cualquier iniciativa de la región;
+ *     un SEREMI solo con las de su propio ministerio. La columna `ministerio`
+ *     es multi-valor (';'), así que basta con que el suyo esté entre los de la
+ *     iniciativa: el SEREMI de MOP alcanza una "Vivienda;Obras Públicas".
  *
- * Espeja `current_user_sees_ministerio()` de la mig 087 vía `ministerioCalza`,
- * que es la misma función que usa el filtro de UI. Acá NO es "solo UI": es la
- * autorización, porque la barrera de la base no corre para el service role.
+ * Fail-closed en los dos: un SEREMI sin ministerio declarado no mueve nada. Se
+ * recupera completando el perfil, que es mejor que dejarlo componer cartera
+ * ajena.
  */
-export function puedeMoverEtiquetaCartera(
+export function puedeGestionarCartera(
+  comite: Comite,
   role: string | null | undefined,
   ministerioUsuario: string | null | undefined,
   ministerioIniciativa: string | null | undefined,
 ): boolean {
+  if (comite === 'economico') return conduceComiteEconomico(role, ministerioUsuario)
   if (role !== 'seremi') return true
   return ministerioCalza(ministerioUsuario, ministerioIniciativa)
 }
 
 /**
- * Lista blanca de etiquetas que la ruta puede tocar en una región: la del
- * comité y sus megaproyectos curados (mig 061). Nada más.
+ * Lista blanca de etiquetas que la ruta puede tocar. Nada más.
  *
  * La ruta NO es un editor genérico de `tags` — si lo fuera, cualquiera con la
- * capacidad del comité podría reescribir etiquetas que no tienen nada que ver
+ * capacidad de un comité podría reescribir etiquetas que no tienen nada que ver
  * con él, saltándose el trigger que justamente las protege.
+ *
+ * El Económico pasa `megaproyectos` vacío: no tiene ese concepto, su cartera
+ * pública es una lista plana.
  */
 export function etiquetasGestionables(
   tagComite: string | null | undefined,
@@ -98,8 +116,8 @@ export function etiquetasGestionables(
   return lista
 }
 
-/** ¿`tag` está en la lista blanca de la región? Devuelve la forma CANÓNICA
- *  (la de `region_config`), no la que mandó el cliente, o `null` si no aplica. */
+/** ¿`tag` está en la lista blanca? Devuelve la forma CANÓNICA (la que define el
+ *  comité), no la que mandó el cliente, o `null` si no aplica. */
 export function etiquetaCanonica(
   tag: string | null | undefined,
   gestionables: string[],
