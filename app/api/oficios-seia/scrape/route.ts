@@ -31,18 +31,29 @@
  * Lo que NO se hace es recorrer el catálogo entero del SEIA: son miles de
  * expedientes y traerían oficios que nadie pidió ver.
  *
+ * ── Cuánto tarda, y por qué ────────────────────────────────────────────────
+ *
+ * El SEIA tarda ~5,4 s por consulta (medido sobre 3 expedientes desde
+ * Santiago). La primera versión de esta ruta las hacía TODAS en fila: los 6
+ * expedientes de Los Lagos son ~18 consultas, o sea 97 s locales y ~5 min desde
+ * Vercel — que es lo que Manuel reportó el 2026-09-30. Hoy van hasta
+ * MAX_EN_VUELO en paralelo y un expediente ya consultado hoy no se vuelve a
+ * consultar (ver «candado diario» más abajo).
+ *
  * ── Reanudable ─────────────────────────────────────────────────────────────
  *
  * Mismo patrón que /api/seia-sync-v2: cursor en `sync_status.notes`, corte
  * limpio a 240s y `partial: true` con el cursor siguiente. Quien dispara
  * vuelve a llamar hasta que termine. Cada expediente es independiente, así que
- * cortar a la mitad no deja nada inconsistente.
+ * cortar a la mitad no deja nada inconsistente — y el cursor avanza de lote en
+ * lote, nunca por dentro de uno.
  */
 
 import { NextResponse } from 'next/server'
 import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
+import { inicioDelDiaChile } from '@/lib/fechaChile'
 import {
   claveOrganismo,
   esSolicitud,
@@ -67,6 +78,22 @@ const PRESUPUESTO_MS = 240_000
 const BASE = 'https://seia.sea.gob.cl'
 const UA = 'work-os DCI panel (Ministerio del Interior, Chile)'
 
+/**
+ * Consultas simultáneas al SEIA. Es el único número que gobierna la velocidad
+ * de todo esto, así que vale decir de dónde sale: con 1 —la versión original—
+ * una región tardaba ~5 min; con 6 tarda ~16 s. Más arriba deja de rendir: el
+ * SEIA es flaky y castiga la insistencia con timeouts, que cuestan un reintento
+ * de 20 s cada uno. Y es un servicio público al que no le pedimos permiso para
+ * apurarlo. Seis es rápido y educado.
+ */
+const MAX_EN_VUELO = 6
+/**
+ * Expedientes que se toman juntos. El que manda es MAX_EN_VUELO —cada
+ * expediente dispara 1 + N consultas—; esto solo evita armar 250 promesas de
+ * una y mantiene el cursor avanzando en pasos chicos.
+ */
+const LOTE = 4
+
 type Cursor = { idx: number }
 
 type ProyectoAScrapear = {
@@ -79,23 +106,48 @@ type ProyectoAScrapear = {
 // ── Red ──────────────────────────────────────────────────────────────────────
 
 /**
+ * Deja pasar `max` promesas a la vez y encola el resto. Un semáforo global y no
+ * un `Promise.all` por lote porque los expedientes traen distinta cantidad de
+ * consultas: con lotes, el más chico espera al más grande y se desperdicia la
+ * mitad del paralelismo.
+ */
+function crearLimitador(max: number) {
+  let enVuelo = 0
+  const cola: (() => void)[] = []
+  return async function limitar<T>(fn: () => Promise<T>): Promise<T> {
+    if (enVuelo >= max) await new Promise<void>(resolver => cola.push(resolver))
+    enVuelo++
+    try {
+      return await fn()
+    } finally {
+      enVuelo--
+      cola.shift()?.()
+    }
+  }
+}
+
+type Bajar = (url: string) => Promise<string>
+
+/**
  * El SEIA responde en ISO-8859-1 y es flaky: un reintento corto alcanza, y lo
  * que no, queda para la reinvocación siguiente vía cursor.
  */
-async function bajar(url: string): Promise<string> {
-  const pedir = () => fetch(url, {
-    headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(20_000),
+function crearBajar(limitar: ReturnType<typeof crearLimitador>): Bajar {
+  return (url: string) => limitar(async () => {
+    const pedir = () => fetch(url, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(20_000),
+    })
+    let res: Response
+    try {
+      res = await pedir()
+    } catch {
+      await new Promise(r => setTimeout(r, 2_000))
+      res = await pedir()
+    }
+    if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
+    return new TextDecoder('iso-8859-1').decode(await res.arrayBuffer())
   })
-  let res: Response
-  try {
-    res = await pedir()
-  } catch {
-    await new Promise(r => setTimeout(r, 2_000))
-    res = await pedir()
-  }
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
-  return new TextDecoder('iso-8859-1').decode(await res.arrayBuffer())
 }
 
 // ── Un expediente ────────────────────────────────────────────────────────────
@@ -121,7 +173,7 @@ type OficioParaEscribir = {
   automatico: true
 }
 
-async function scrapearExpediente(p: ProyectoAScrapear): Promise<OficioParaEscribir[]> {
+async function scrapearExpediente(p: ProyectoAScrapear, bajar: Bajar): Promise<OficioParaEscribir[]> {
   const docs = parsearDocumentos(
     await bajar(`${BASE}/expediente/documentos.php?id_expediente=${p.expediente}`),
   )
@@ -137,24 +189,26 @@ async function scrapearExpediente(p: ProyectoAScrapear): Promise<OficioParaEscri
     if (pr) presentacion = pr
   }
 
-  const conDest: SolicitudConDestinatarios[] = []
-  for (const s of solicitudes) {
-    if (s.destinatarios == null) {
-      conDest.push({ fila: s, destinatarios: s.destinadoA ? [s.destinadoA] : [] })
-      continue
-    }
-    if (s.idDocumento == null) {
-      // Varios destinatarios pero sin enlace: no hay dónde leer la lista.
-      conDest.push({ fila: s, destinatarios: [] })
-      continue
-    }
-    conDest.push({
-      fila: s,
-      destinatarios: parsearDestinatarios(
-        await bajar(`${BASE}/documentos/verDestinatarios.php?id_documento=${s.idDocumento}`),
-      ),
-    })
-  }
+  // En paralelo, que es de donde sale la mayor parte del tiempo: un expediente
+  // con 8 solicitudes eran 8 esperas de 5 s en fila. El techo lo pone el
+  // semáforo de `bajar`, compartido con los otros expedientes del lote.
+  const conDest: SolicitudConDestinatarios[] = await Promise.all(
+    solicitudes.map(async (s): Promise<SolicitudConDestinatarios> => {
+      if (s.destinatarios == null) {
+        return { fila: s, destinatarios: s.destinadoA ? [s.destinadoA] : [] }
+      }
+      if (s.idDocumento == null) {
+        // Varios destinatarios pero sin enlace: no hay dónde leer la lista.
+        return { fila: s, destinatarios: [] }
+      }
+      return {
+        fila: s,
+        destinatarios: parsearDestinatarios(
+          await bajar(`${BASE}/documentos/verDestinatarios.php?id_documento=${s.idDocumento}`),
+        ),
+      }
+    }),
+  )
 
   const urlProyecto = `${BASE}/expediente/expediente.php?id_expediente=${p.expediente}`
 
@@ -185,9 +239,141 @@ async function scrapearExpediente(p: ProyectoAScrapear): Promise<OficioParaEscri
   }))
 }
 
+// ── Lo que se escribe de un expediente ───────────────────────────────────────
+
+type Db = ReturnType<typeof getSupabaseAdmin>
+
+type Resultado = {
+  escritos: number
+  resueltos: number
+  fallado: boolean
+  errores: string[]
+}
+
+const NADA: Resultado = { escritos: 0, resueltos: 0, fallado: false, errores: [] }
+
+async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): Promise<Resultado> {
+  let vivos: OficioParaEscribir[]
+  try {
+    vivos = await scrapearExpediente(p, bajar)
+  } catch (err) {
+    // El expediente que falla se reintenta en la corrida siguiente.
+    return { ...NADA, fallado: true, errores: [`${p.expediente}: ${(err as Error).message}`] }
+  }
+
+  const ahora = new Date().toISOString()
+
+  // ── Escribir, comparando contra lo guardado DE ESTE EXPEDIENTE ───────────
+  //
+  // Explícito y no un upsert: el índice único de la mig 121 va sobre
+  // expresiones COALESCE, y PostgREST no puede apuntar su ON CONFLICT a un
+  // índice así. Además la identidad real es (expediente, organismo) —
+  // `pendientesDelExpediente` devuelve a lo sumo una fila por organismo—, que
+  // es más simple de razonar que la llave de columnas.
+  const { data: guardados, error: leerErr } = await db
+    .from('sesion_oficios_tratados')
+    .select('id, oaeca_sea, oaeca_nombre, estado, id_documento, plazo_estimado')
+    .eq('automatico', true)
+    .eq('id_expediente', p.expediente)
+
+  if (leerErr) {
+    return { ...NADA, fallado: true, errores: [`${p.expediente}: ${leerErr.message}`] }
+  }
+
+  const errores: string[] = []
+  let escritos = 0
+  let resueltos = 0
+
+  type Guardado = { id: number; estado: string; id_documento: number | null; plazo_estimado: boolean }
+  const porOrganismo = new Map<string, Guardado>()
+  for (const g of guardados ?? []) {
+    const k = claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))
+    // Si el Excel dejó dos filas del mismo organismo, gana la primera y la
+    // otra queda para resolverse abajo.
+    if (!porOrganismo.has(k)) porOrganismo.set(k, {
+      id: g.id as number,
+      estado: g.estado as string,
+      id_documento: (g.id_documento as number | null) ?? null,
+      plazo_estimado: (g.plazo_estimado as boolean) ?? false,
+    })
+  }
+
+  const nuevas = vivos.filter(v => !porOrganismo.has(claveOrganismo(v.oaeca_sea)))
+  if (nuevas.length > 0) {
+    const { error } = await db
+      .from('sesion_oficios_tratados')
+      .insert(nuevas.map(v => ({ ...v, estado: 'pendiente' as const, importado_at: ahora })))
+    if (error) return { ...NADA, fallado: true, errores: [`${p.expediente}: ${error.message}`] }
+    escritos += nuevas.length
+  }
+
+  // Los que ya estaban: se refresca el plazo y se los devuelve a pendiente
+  // si el SEIA los volvió a listar (una Adenda reabre el pedido al mismo
+  // organismo). No se toca `estado_updated_by_email`: nadie los tocó.
+  for (const v of vivos) {
+    const g = porOrganismo.get(claveOrganismo(v.oaeca_sea))
+    if (!g) continue
+
+    /**
+     * Una fecha OFICIAL le gana a una estimada, para el MISMO oficio.
+     *
+     * El Excel de seia-abierto.cl trae la fecha límite que publica el SEA;
+     * esta ruta la calcula y acierta ~80% al día exacto. Pisar la oficial
+     * con la estimada en cada corrida perdía precisión sin ganar nada: la
+     * primera pasada dejó los 120 oficios de la cartera marcados como
+     * estimados, borrando lo que el Excel sabía.
+     *
+     * Si cambió el documento, en cambio, es OTRO oficio —una Adenda nueva
+     * al mismo organismo— y ahí la fecha vieja no dice nada de él.
+     */
+    const mismoOficio = g.id_documento != null && g.id_documento === v.id_documento
+    const conservarPlazo = mismoOficio && !g.plazo_estimado
+
+    const { error } = await db
+      .from('sesion_oficios_tratados')
+      .update({
+        estado: 'pendiente',
+        tipo_oficio: v.tipo_oficio,
+        fecha_oficio: v.fecha_oficio,
+        ...(conservarPlazo ? {} : { fecha_limite: v.fecha_limite, plazo_estimado: true }),
+        id_documento: v.id_documento,
+        seia_doc_n: v.seia_doc_n,
+        url_oficio: v.url_oficio,
+        proyecto_privado_id: v.proyecto_privado_id,
+        region_cod: v.region_cod,
+        importado_at: ahora,
+      })
+      .eq('id', g.id)
+      .eq('automatico', true)
+    if (error) errores.push(`${p.expediente}: ${error.message}`)
+  }
+
+  // Lo que YA NO está pendiente: estaba guardado y el SEIA ya no lo lista.
+  // Es la regla del Excel —el archivo es la lista completa de lo que falta—
+  // aplicada a un expediente.
+  const clavesVivas = new Set(vivos.map(v => claveOrganismo(v.oaeca_sea)))
+  const aResolver = (guardados ?? [])
+    .filter(g => g.estado === 'pendiente')
+    .filter(g => !clavesVivas.has(claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))))
+    .map(g => g.id as number)
+
+  if (aResolver.length > 0) {
+    // Sin `resuelto_en_sesion_id` ni email: no lo cerró una persona ni una
+    // reunión — el organismo respondió y el SEIA dejó de listarlo.
+    const { error } = await db
+      .from('sesion_oficios_tratados')
+      .update({ estado: 'resuelto', estado_updated_at: ahora, importado_at: ahora })
+      .in('id', aResolver)
+      .eq('automatico', true)
+    if (!error) resueltos += aResolver.length
+  }
+
+  return { escritos, resueltos, fallado: false, errores }
+}
+
 // ── Cursor ───────────────────────────────────────────────────────────────────
 
-async function leerCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Cursor> {
+async function leerCursor(db: Db): Promise<Cursor> {
   const { data } = await db.from('sync_status').select('notes').eq('name', SYNC_NAME).maybeSingle()
   if (!data?.notes) return { idx: 0 }
   try {
@@ -195,6 +381,42 @@ async function leerCursor(db: ReturnType<typeof getSupabaseAdmin>): Promise<Curs
     if (typeof c.idx === 'number' && c.idx >= 0) return { idx: c.idx }
   } catch { /* cursor ilegible: se empieza de nuevo, que es idempotente */ }
   return { idx: 0 }
+}
+
+// ── Candado diario ───────────────────────────────────────────────────────────
+
+/**
+ * Los expedientes que ya se consultaron HOY — día chileno, no UTC: a las 21:30
+ * de Santiago en Vercel ya es mañana, y el candado se abriría seis horas antes
+ * de tiempo (ver lib/fechaChile.ts).
+ *
+ * No se vuelven a tocar. El SEIA publica documentos en horario de oficina, así
+ * que preguntarle dos veces el mismo día casi nunca cambia algo, pero cuesta
+ * ~5 s por expediente y obliga a esperar de nuevo. Con esto, apretar «Renovar»
+ * dos veces seguidas es instantáneo la segunda.
+ *
+ * La marca es `importado_at`, que ya se escribe en cada fila que el scraper
+ * toca: no hace falta una tabla nueva. Un expediente SIN ninguna fila guardada
+ * no aparece acá y se consulta igual, que es lo correcto — puede tener una
+ * solicitud nueva y no hay nada que permita afirmar que ya se miró.
+ */
+async function expedientesVistosHoy(db: Db, soloRegion: string | null): Promise<Set<number>> {
+  let q = db
+    .from('sesion_oficios_tratados')
+    .select('id_expediente')
+    .eq('automatico', true)
+    .not('id_expediente', 'is', null)
+    .gte('importado_at', inicioDelDiaChile().toISOString())
+    .limit(20_000)
+  if (soloRegion) q = q.eq('region_cod', soloRegion)
+
+  const { data, error } = await q
+  if (error) {
+    // Sin candado se trabaja más, no mal: se scrapea todo, como antes.
+    console.error('[oficios-seia/scrape] no se pudo leer el candado diario:', error.message)
+    return new Set()
+  }
+  return new Set((data ?? []).map(r => r.id_expediente as number))
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -211,14 +433,23 @@ export async function POST(request: Request) {
    *     que /api/seia-sync-v2 con su `?region=`.
    *   · Y la puede apretar quien conduce ESE comité, no solo un admin: es su
    *     región y su cartera.
+   *
+   * Con `?forzar=1` se ignora el candado diario. Es para cuando alguien sabe
+   * algo que el panel no —«el SEREMI dice que respondió hace una hora»— y queda
+   * acotado a admin/editor: en una región son 16 s, pero a nivel nacional
+   * volver a consultarlo todo son varios minutos de SEIA.
    */
-  const soloRegion = new URL(request.url).searchParams.get('region')
+  const params = new URL(request.url).searchParams
+  const soloRegion = params.get('region')
+  const pidioForzar = params.get('forzar') === '1'
 
   const bearer = request.headers.get('authorization')
   const esCron = !!process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`
+  let puedeForzar = esCron
   if (!esCron) {
     const profile = await requireAuth()
     if (!profile) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    puedeForzar = profile.role === 'admin' || profile.role === 'editor'
     if (soloRegion) {
       if (!(await requireCan(profile, 'comite.economico.operar', soloRegion))) {
         return NextResponse.json(
@@ -226,16 +457,24 @@ export async function POST(request: Request) {
           { status: 403 },
         )
       }
-    } else if (profile.role !== 'admin' && profile.role !== 'editor') {
+    } else if (!puedeForzar) {
       return NextResponse.json(
         { error: 'Sin región, el scraping recorre las 16: solo admin o editor.' },
         { status: 403 },
       )
     }
   }
+  if (pidioForzar && !puedeForzar) {
+    return NextResponse.json(
+      { error: 'Volver a consultar lo que ya se consultó hoy es de admin o editor.' },
+      { status: 403 },
+    )
+  }
+  const forzar = pidioForzar && puedeForzar
 
   const db = getSupabaseAdmin()
   const t0 = Date.now()
+  const bajar = crearBajar(crearLimitador(MAX_EN_VUELO))
 
   // ── La cartera, que define qué expedientes se miran ──────────────────────
   const { data: carteraRows, error: carteraErr } = await db
@@ -320,6 +559,8 @@ export async function POST(request: Request) {
     })
   }
 
+  const vistosHoy = forzar ? new Set<number>() : await expedientesVistosHoy(db, soloRegion)
+
   // Sin región se retoma el cursor nacional; con región se empieza de cero y
   // no se escribe ninguno.
   const cursor = soloRegion ? { idx: 0 } : await leerCursor(db)
@@ -329,129 +570,32 @@ export async function POST(request: Request) {
   let escritos = 0
   let resueltos = 0
   let fallados = 0
+  let saltados = 0
   const errores: string[] = []
 
-  for (; i < proyectos.length; i++) {
+  // De a lotes y no de a uno: dentro del lote los expedientes van en paralelo,
+  // y el cursor solo avanza cuando el lote entero terminó — así un corte por
+  // tiempo nunca deja medio lote sin registrar.
+  for (let base = desde; base < proyectos.length; base += LOTE) {
     if (Date.now() - t0 > PRESUPUESTO_MS) break
-    const p = proyectos[i]
+    const lote = proyectos.slice(base, base + LOTE)
 
-    let vivos: OficioParaEscribir[]
-    try {
-      vivos = await scrapearExpediente(p)
-    } catch (err) {
-      fallados++
-      if (errores.length < 20) errores.push(`${p.expediente}: ${(err as Error).message}`)
-      continue   // el expediente que falla se reintenta en la corrida siguiente
-    }
-
-    const ahora = new Date().toISOString()
-
-    // ── Escribir, comparando contra lo guardado DE ESTE EXPEDIENTE ─────────
-    //
-    // Explícito y no un upsert: el índice único de la mig 121 va sobre
-    // expresiones COALESCE, y PostgREST no puede apuntar su ON CONFLICT a un
-    // índice así. Además la identidad real es (expediente, organismo) —
-    // `pendientesDelExpediente` devuelve a lo sumo una fila por organismo—, que
-    // es más simple de razonar que la llave de columnas.
-    const { data: guardados, error: leerErr } = await db
-      .from('sesion_oficios_tratados')
-      .select('id, oaeca_sea, oaeca_nombre, estado, id_documento, plazo_estimado')
-      .eq('automatico', true)
-      .eq('id_expediente', p.expediente)
-
-    if (leerErr) {
-      fallados++
-      if (errores.length < 20) errores.push(`${p.expediente}: ${leerErr.message}`)
-      continue
-    }
-
-    type Guardado = { id: number; estado: string; id_documento: number | null; plazo_estimado: boolean }
-    const porOrganismo = new Map<string, Guardado>()
-    for (const g of guardados ?? []) {
-      const k = claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))
-      // Si el Excel dejó dos filas del mismo organismo, gana la primera y la
-      // otra queda para resolverse abajo.
-      if (!porOrganismo.has(k)) porOrganismo.set(k, {
-        id: g.id as number,
-        estado: g.estado as string,
-        id_documento: (g.id_documento as number | null) ?? null,
-        plazo_estimado: (g.plazo_estimado as boolean) ?? false,
-      })
-    }
-
-    const nuevas = vivos.filter(v => !porOrganismo.has(claveOrganismo(v.oaeca_sea)))
-    if (nuevas.length > 0) {
-      const { error } = await db
-        .from('sesion_oficios_tratados')
-        .insert(nuevas.map(v => ({ ...v, estado: 'pendiente' as const, importado_at: ahora })))
-      if (error) {
-        fallados++
-        if (errores.length < 20) errores.push(`${p.expediente}: ${error.message}`)
-        continue
+    const resultados = await Promise.all(lote.map(p => {
+      if (vistosHoy.has(p.expediente)) {
+        saltados++
+        return Promise.resolve(NADA)
       }
-      escritos += nuevas.length
+      return procesarExpediente(p, bajar, db)
+    }))
+
+    for (const r of resultados) {
+      escritos += r.escritos
+      resueltos += r.resueltos
+      if (r.fallado) fallados++
+      for (const e of r.errores) if (errores.length < 20) errores.push(e)
     }
 
-    // Los que ya estaban: se refresca el plazo y se los devuelve a pendiente
-    // si el SEIA los volvió a listar (una Adenda reabre el pedido al mismo
-    // organismo). No se toca `estado_updated_by_email`: nadie los tocó.
-    for (const v of vivos) {
-      const g = porOrganismo.get(claveOrganismo(v.oaeca_sea))
-      if (!g) continue
-
-      /**
-       * Una fecha OFICIAL le gana a una estimada, para el MISMO oficio.
-       *
-       * El Excel de seia-abierto.cl trae la fecha límite que publica el SEA;
-       * esta ruta la calcula y acierta ~80% al día exacto. Pisar la oficial
-       * con la estimada en cada corrida perdía precisión sin ganar nada: la
-       * primera pasada dejó los 120 oficios de la cartera marcados como
-       * estimados, borrando lo que el Excel sabía.
-       *
-       * Si cambió el documento, en cambio, es OTRO oficio —una Adenda nueva
-       * al mismo organismo— y ahí la fecha vieja no dice nada de él.
-       */
-      const mismoOficio = g.id_documento != null && g.id_documento === v.id_documento
-      const conservarPlazo = mismoOficio && !g.plazo_estimado
-
-      const { error } = await db
-        .from('sesion_oficios_tratados')
-        .update({
-          estado: 'pendiente',
-          tipo_oficio: v.tipo_oficio,
-          fecha_oficio: v.fecha_oficio,
-          ...(conservarPlazo ? {} : { fecha_limite: v.fecha_limite, plazo_estimado: true }),
-          id_documento: v.id_documento,
-          seia_doc_n: v.seia_doc_n,
-          url_oficio: v.url_oficio,
-          proyecto_privado_id: v.proyecto_privado_id,
-          region_cod: v.region_cod,
-          importado_at: ahora,
-        })
-        .eq('id', g.id)
-        .eq('automatico', true)
-      if (error && errores.length < 20) errores.push(`${p.expediente}: ${error.message}`)
-    }
-
-    // Lo que YA NO está pendiente: estaba guardado y el SEIA ya no lo lista.
-    // Es la regla del Excel —el archivo es la lista completa de lo que falta—
-    // aplicada a un expediente.
-    const clavesVivas = new Set(vivos.map(v => claveOrganismo(v.oaeca_sea)))
-    const aResolver = (guardados ?? [])
-      .filter(g => g.estado === 'pendiente')
-      .filter(g => !clavesVivas.has(claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))))
-      .map(g => g.id as number)
-
-    if (aResolver.length > 0) {
-      // Sin `resuelto_en_sesion_id` ni email: no lo cerró una persona ni una
-      // reunión — el organismo respondió y el SEIA dejó de listarlo.
-      const { error } = await db
-        .from('sesion_oficios_tratados')
-        .update({ estado: 'resuelto', estado_updated_at: ahora, importado_at: ahora })
-        .in('id', aResolver)
-        .eq('automatico', true)
-      if (!error) resueltos += aResolver.length
-    }
+    i = base + lote.length
   }
 
   const termino = i >= proyectos.length
@@ -528,7 +672,8 @@ export async function POST(request: Request) {
 
   console.log(
     `[oficios-seia/scrape] ${desde}→${i} de ${proyectos.length} · ` +
-    `${escritos} pendientes · ${resueltos} resueltos · ${fallados} fallados`,
+    `${escritos} pendientes · ${resueltos} resueltos · ` +
+    `${saltados} ya vistos hoy · ${fallados} fallados · ${Date.now() - t0} ms`,
   )
 
   return NextResponse.json({
@@ -539,6 +684,9 @@ export async function POST(request: Request) {
     next_cursor: termino ? null : { idx: i },
     proyectos: proyectos.length,
     procesados: i - desde,
+    // Cuántos de los procesados no se consultaron porque ya se habían
+    // consultado hoy. Igual a `procesados` = no se tocó el SEIA.
+    saltados,
     desde,
     hasta: i,
     pendientes_escritos: escritos,
