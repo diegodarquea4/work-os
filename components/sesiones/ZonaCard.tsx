@@ -17,6 +17,13 @@ type Props = {
   titulo: string
   /** Texto corto a la derecha del título (conteos). */
   badge?: ReactNode
+  /**
+   * Acción propia de la zona, a la derecha del todo. Opcional y sin estilo
+   * propio: la zona decide qué pone. Existe para lo que se aprieta ANTES de
+   * leer la zona —refrescar un dato externo, por ejemplo—, que no cabe entre
+   * los botones de recorrido del pie.
+   */
+  accion?: ReactNode
   descripcion?: string
   anterior?: NavZona | null
   siguiente?: NavZona | null
@@ -26,7 +33,7 @@ type Props = {
 }
 
 export default function ZonaCard({
-  numero, icono, titulo, badge, descripcion, anterior = null, siguiente = null, siguienteDestacado = false, children,
+  numero, icono, titulo, badge, accion, descripcion, anterior = null, siguiente = null, siguienteDestacado = false, children,
 }: Props) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -39,6 +46,7 @@ export default function ZonaCard({
           {descripcion && <p className="text-[12.5px] text-slate-500 mt-0.5 leading-snug">{descripcion}</p>}
         </div>
         {badge !== undefined && <span className="flex-none text-[12px] font-semibold text-slate-500 tabular-nums mt-1">{badge}</span>}
+        {accion && <span className="flex-none mt-1">{accion}</span>}
       </div>
 
       <div className="px-5 pb-5">{children}</div>

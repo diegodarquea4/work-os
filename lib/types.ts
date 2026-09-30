@@ -776,6 +776,15 @@ export type SesionCompromiso = {
   // al crear el compromiso en esa instancia (se exige en la app, no en BD);
   // NULL para compromisos de Comité Policial/Gabinete. Genera el tag al listar.
   seccion: SeccionComiteEconomico | null
+  /**
+   * Organismo (OAECA) al que este compromiso le persigue sus oficios
+   * pendientes del SEIA — mig 120. NULL = compromiso común.
+   *
+   * No es el responsable: el responsable es alguien de la nómina del comité y
+   * va en responsable_institucion/responsable_nombre. Este es a quién hay que
+   * ir a reclamarle, y la DGA no está en la sala.
+   */
+  oaeca_objetivo: string | null
   // Proyecto asociado (v2_proyectos_inversion), opcional — solo trazabilidad,
   // no determina el tag. Legado: los compromisos nuevos usan
   // proyecto_privado_id (privado) o prioridad_id (público, ya genérico
@@ -1002,6 +1011,10 @@ export type ComiteEconomicoProyecto = {
   origen_id: string | null
   origen_importado_at: string | null
   origen_estado_al_importar: string | null
+  // Expediente del SEIA al que corresponde, cargado a mano desde la ficha
+  // (mig 119). Sirve para que sus oficios pendientes se le peguen solos; NO
+  // implica que el proyecto se haya importado del catálogo.
+  seia_expediente_id: number | null
 }
 
 // Avance registrado por una SEREMI en un proyecto privado del Comité

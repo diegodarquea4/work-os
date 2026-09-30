@@ -9,7 +9,9 @@ import {
   etiquetaZona,
   resumenCierreComite,
   avisosCierreComite,
+  bloqueosCierreComite,
   type EntradaConsola,
+  type ZonaRef,
 } from '@/lib/sesiones/consola'
 import type { SesionComiteValor } from '@/lib/types'
 
@@ -479,10 +481,88 @@ describe('avisosCierreComite — solo texto, nunca bloquea', () => {
     expect(avisos).toContain('Sin asistencia registrada')
   })
 
-  it('el módulo no exporta ningún bloqueo y no lanza con entradas vacías', () => {
-    // Guardia de diseño: el cierre del comité NO agrega requisitos (decisión
-    // explícita). Si alguien exporta un `puedeGenerar` acá, este test lo delata.
-    expect(Object.keys(consola).some(k => /puede|bloqueo/i.test(k))).toBe(false)
+  it('los avisos no lanzan con entradas vacías', () => {
     expect(() => avisosCierreComite(resumenCierreComite(entradaEje({ instituciones: [], catalogo: [], valores: [] })), 'eje')).not.toThrow()
+  })
+
+  it('avisar y bloquear son cosas distintas: los avisos siguen sin impedir nada', () => {
+    // La guardia original decía que el módulo no exportaba NINGÚN bloqueo —el
+    // cierre no agregaba requisitos, decisión explícita—. El Económico ahora sí
+    // los tiene (Manuel, sept 2026: no cerrar sin asistencia, sin responsable
+    // de los oficios vencidos ni sin recorrer la agenda). Lo que se conserva es
+    // el resto de la decisión: `avisosCierreComite` sigue siendo solo texto, y
+    // los bloqueos viven en su propia función.
+    const r = resumenCierreComite(entradaEconomico())
+    expect(avisosCierreComite(r, 'economico').length).toBeGreaterThan(0)
+    expect(Object.keys(consola).filter(k => /bloqueo/i.test(k))).toEqual(['bloqueosCierreComite'])
+  })
+})
+
+// ── Bloqueos del cierre ──────────────────────────────────────────────────────
+
+describe('bloqueosCierreComite', () => {
+  const entrada = (over: Partial<Parameters<typeof bloqueosCierreComite>[0]> = {}) => ({
+    instancia: 'economico' as const,
+    asistencia: { presentes: 3, total: 5 },
+    organismosSinSeguimiento: [] as string[],
+    faltanVisitar: [] as { ref: ZonaRef; label: string }[],
+    ...over,
+  })
+
+  it('con todo en orden no bloquea nada', () => {
+    expect(bloqueosCierreComite(entrada())).toEqual([])
+  })
+
+  // Los otros comités son de Diego: el cierre nuevo es del Económico y no se
+  // les cambia de rebote.
+  it('no toca a los otros comités', () => {
+    for (const instancia of ['eje', 'infraestructura'] as const) {
+      expect(bloqueosCierreComite(entrada({
+        instancia,
+        asistencia: { presentes: 0, total: 5 },
+        organismosSinSeguimiento: ['DGA'],
+        faltanVisitar: [{ ref: { zona: 'nuevos' }, label: 'Compromisos nuevos' }],
+      }))).toEqual([])
+    }
+  })
+
+  it('bloquea sin nadie presente, y manda a Asistencia', () => {
+    const [b] = bloqueosCierreComite(entrada({ asistencia: { presentes: 0, total: 5 } }))
+    expect(b.texto).toBe('Nadie quedó registrado como presente')
+    expect(b.ir).toEqual({ zona: 'asistencia' })
+  })
+
+  it('bloquea el organismo vencido sin seguimiento, y manda a Compromisos', () => {
+    const [b] = bloqueosCierreComite(entrada({ organismosSinSeguimiento: ['DGA, Región de Los Lagos'] }))
+    expect(b.texto).toBe('DGA, Región de Los Lagos tiene oficios vencidos y nadie a cargo del seguimiento')
+    expect(b.ir).toEqual({ zona: 'nuevos' })
+  })
+
+  // Quince nombres en un renglón no se leen; el número sin ninguno no dice por
+  // dónde empezar.
+  it('con muchos organismos nombra tres y cuenta el resto', () => {
+    const [b] = bloqueosCierreComite(entrada({
+      organismosSinSeguimiento: ['DGA', 'SAG', 'CONAF', 'CONADI', 'SERNAGEOMIN'],
+    }))
+    expect(b.texto).toBe('5 organismos con oficios vencidos y nadie a cargo: DGA, SAG, CONAF y 2 más')
+  })
+
+  it('bloquea las secciones sin visitar y manda a la primera', () => {
+    const [b] = bloqueosCierreComite(entrada({
+      faltanVisitar: [
+        { ref: { zona: 'seguimiento', inst: 'oficios' }, label: 'Seguimiento · Oficios' },
+        { ref: { zona: 'nuevos' }, label: 'Compromisos nuevos' },
+      ],
+    }))
+    expect(b.texto).toBe('Falta pasar por Seguimiento · Oficios, Compromisos nuevos')
+    expect(b.ir).toEqual({ zona: 'seguimiento', inst: 'oficios' })
+  })
+
+  it('los tres bloqueos conviven', () => {
+    expect(bloqueosCierreComite(entrada({
+      asistencia: { presentes: 0, total: 5 },
+      organismosSinSeguimiento: ['DGA'],
+      faltanVisitar: [{ ref: { zona: 'nuevos' }, label: 'Compromisos nuevos' }],
+    })).map(b => b.ir)).toEqual([{ zona: 'asistencia' }, { zona: 'nuevos' }, { zona: 'nuevos' }])
   })
 })

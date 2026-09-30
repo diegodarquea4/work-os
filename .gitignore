@@ -45,5 +45,6 @@ supabase/.temp/
 # artefactos locales para revisar, no parte de la app.
 /entregables/
 
-# Datos de trabajo que no van al repo (Excel del SEIA, sondas).
+# Datos de trabajo: el Excel del SEIA, sondas de parseo y demás insumos
+# para diseñar. No se commitean — son material de trabajo, no del producto.
 /tmp-datos/

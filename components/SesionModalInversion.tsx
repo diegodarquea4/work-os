@@ -4,6 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
 import { MESA_EMPLEO_HABILITADA } from '@/lib/sesiones/helpers'
+import {
+  estaAtrasado, esParaLaProximaSesion,
+} from '@/lib/oficiosSeia'
+import {
+  agruparPorOaeca, claveOaeca, descripcionSeguimiento, type GrupoOaeca,
+} from '@/lib/oficiosSeguimiento'
+import OficiosSeguimientoBloque, { ChevronPlegado } from './OficiosSeguimientoBloque'
+import BotonActualizarOficios from './BotonActualizarOficios'
+import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type {
@@ -16,7 +25,8 @@ import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 import FilterPopover, { type FilterOption } from './FilterPopover'
 import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import {
-  railParaSesion, resumenAsistencia, vecinos, etiquetaZona,
+  railParaSesion, resumenAsistencia, vecinos, etiquetaZona, claveZona, ordenRecorrido,
+  bloqueosCierreComite,
   type ZonaKey, type ZonaRef,
 } from '@/lib/sesiones/consola'
 import ConsolaSesionShell, { soltarFoco } from './sesiones/ConsolaSesionShell'
@@ -71,6 +81,25 @@ type V2Proyecto = {
   inversion: number | null
   moneda: string | null
   etapa: string | null
+}
+
+/**
+ * Un oficio del SEIA (automatico = true). Es un subconjunto de columnas: la
+ * sesión solo necesita saber qué organismo debe responder, sobre qué proyecto
+ * y para cuándo.
+ */
+type OficioSeiaFila = {
+  id: number
+  nombre_proyecto: string | null
+  ministerio: string | null
+  oaeca_nombre: string | null
+  oaeca_sea: string | null
+  tipo_oficio: string | null
+  fecha_limite: string | null
+  url_oficio: string | null
+  url_proyecto: string | null
+  proyecto_privado_id: number | null
+  estado: 'pendiente' | 'resuelto'
 }
 
 type SesionOficioConNombres = SesionOficioTratado & {
@@ -291,8 +320,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [compNuevos, setCompNuevos]         = useState<SesionCompromiso[]>([])
 
   const [oficiosAnteriores, setOficiosAnteriores]         = useState<SesionOficioConNombres[]>([])
+  // Los que vienen del SEIA (automatico = true). No son compromisos del
+  // comité: son el estado del expediente, y se muestran para saber qué hay
+  // que apurar. Van aparte de los de arriba, que sí los levantó una sesión.
+  const [oficiosSeia, setOficiosSeia]                     = useState<OficioSeiaFila[]>([])
   const [oficiosTratadosSesion, setOficiosTratadosSesion] = useState<SesionOficioConNombres[]>([])
   const [oficioNotaDraft, setOficioNotaDraft]             = useState<Record<number, string>>({})
+  // El alta manual de oficios arranca plegada: con los del SEIA llegando
+  // solos, levantar uno a mano es la excepción.
+  const [altaOficioAbierta, setAltaOficioAbierta]         = useState(false)
 
   const [oaecaList, setOaecaList]           = useState<Oaeca[]>([])
 
@@ -303,6 +339,9 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const [proyectosPrivados, setProyectosPrivados] = useState<ComiteEconomicoProyecto[]>([])
   const [pickerVista, setPickerVista]         = useState<'privado' | 'publico'>('privado')
   const [fichaPrivadoId, setFichaPrivadoId]   = useState<number | null>(null)
+  // Con qué pestaña abre la ficha. Quien llega desde un oficio quiere verlo
+  // en su proyecto, no aterrizar en Avances y tener que buscarlo.
+  const [fichaTab, setFichaTab] = useState<'avances' | 'oficios'>('avances')
   // Picker privado — mismos filtros que ComiteEconomicoProyectosPanel.tsx.
   // Priorizado arranca en {'Si'} para que el pool de "a tratar" abra ya
   // acotado a los priorizados; se puede limpiar como cualquier otro filtro.
@@ -364,6 +403,15 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // Consola: en qué zona está parado el usuario y si está en la sala o en la
   // pantalla de cierre. Arranca en Integrantes, que es la zona 1 de este comité.
   const [activa, setActiva] = useState<ZonaRef>({ zona: 'asistencia' })
+  /**
+   * Secciones que ya se abrieron en esta apertura de la consola.
+   *
+   * Es de sesión y no de base a propósito: lo que se quiere garantizar es que
+   * la reunión RECORRIÓ la agenda, no que alguien alguna vez hizo clic. Si se
+   * cierra la consola y se vuelve a entrar, se vuelve a recorrer — y eso es
+   * justo lo que pasa cuando la sesión se retoma otro día.
+   */
+  const [visitadas, setVisitadas] = useState<Set<string>>(() => new Set([claveZona({ zona: 'asistencia' })]))
   const [fase, setFase]     = useState<'sala' | 'cierre'>('sala')
   // Lo pone CierreSesionComite mientras hay un cierre en vuelo: bloquea Escape
   // y la ✕ para no desmontar la consola a medio camino.
@@ -420,7 +468,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const OFICIO_SELECT = '*, oaeca:oaeca(nombre), proyecto:v2_proyectos_inversion(nombre)'
     const [
       nominaRes, asisRes, compRes, nuevosRes, oficiosAntRes, oficiosTratRes,
-      oaecaRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
+      oaecaRes, oficiosSeiaRes, proyPrivadosRes, proyRes, metaRegionRes, metaSesionRes,
       subRegionRes, subSesionRes,
     ] = await Promise.all([
       sb.from('sesion_nomina').select('*')
@@ -439,11 +487,22 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       // sin sellar — mismo criterio que compromisos).
       sb.from('sesion_oficios_tratados').select(OFICIO_SELECT)
         .eq('region_cod', region.cod)
+        // Explícito y no por efecto colateral: un oficio importado tiene
+        // sesion_origen_id NULL y el .neq de abajo ya lo dejaría fuera, pero
+        // depender de eso es frágil. Los del SEIA viven en su propio bloque.
+        .eq('automatico', false)
         .neq('sesion_origen_id', s.id)
         .or('estado.eq.pendiente,and(estado.eq.resuelto,resuelto_en_sesion_id.is.null)')
         .order('created_at'),
       sb.from('sesion_oficios_tratados').select(OFICIO_SELECT).eq('sesion_origen_id', s.id).order('created_at'),
       sb.from('oaeca').select('*').order('nombre'),
+      // Oficios del SEIA pendientes en esta región, los más urgentes primero.
+      sb.from('sesion_oficios_tratados')
+        .select('id, nombre_proyecto, ministerio, oaeca_nombre, oaeca_sea, tipo_oficio, fecha_limite, url_oficio, url_proyecto, proyecto_privado_id, estado')
+        .eq('region_cod', region.cod)
+        .eq('automatico', true)
+        .eq('estado', 'pendiente')
+        .order('fecha_limite', { ascending: true, nullsFirst: false }),
       sb.from('comite_economico_proyecto').select('*').eq('region_cod', region.cod).order('nombre'),
       sb.from('sesion_proyectos').select('*').eq('sesion_id', s.id),
       sb.from('region_meta_empleo').select('*').eq('region_cod', region.cod).maybeSingle(),
@@ -459,6 +518,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     setOficiosAnteriores((oficiosAntRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOficiosTratadosSesion((oficiosTratRes.data ?? []) as unknown as SesionOficioConNombres[])
     setOaecaList((oaecaRes.data ?? []) as Oaeca[])
+    setOficiosSeia((oficiosSeiaRes.data ?? []) as OficioSeiaFila[])
     setProyectosPrivados((proyPrivadosRes.data ?? []) as ComiteEconomicoProyecto[])
     setMetaEmpleoRegion((metaRegionRes.data as RegionMetaEmpleo | null) ?? null)
     const metaSesion = (metaSesionRes.data as SesionMetaEmpleoValor | null) ?? null
@@ -743,10 +803,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   // iniciativa pública) referenciado desde cualquier lado de la sesión —
   // proyectos tratados, oficios, compromisos: los tres comparten esta misma
   // forma (proyecto_privado_id / prioridad_id) desde mig 094/095/097.
+  /** Desde un oficio: abre la ficha del proyecto directo en sus Oficios. */
+  function abrirProyectoDeOficio(id: number) {
+    setFichaTab('oficios')
+    setFichaPrivadoId(id)
+  }
+
   function abrirFichaCartera(
     row: { proyecto_privado_id?: number | null; prioridad_id?: number | null },
   ) {
     if (row.proyecto_privado_id != null) {
+      setFichaTab('avances')
       setFichaPrivadoId(row.proyecto_privado_id)
       return
     }
@@ -787,6 +854,48 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   }
 
   // ── Zona 5: compromisos nuevos ─────────────────────────────────────────────
+
+  /**
+   * Comprometer a alguien de la nómina con perseguir a un organismo.
+   *
+   * Es un compromiso común con `oaeca_objetivo`: así reaparece en la sesión
+   * siguiente por el mecanismo que ya existe para todos los demás, sin nada
+   * nuevo que mantener. La descripción se arma sola —es un hecho, no una
+   * redacción— y queda fija: dentro de dos semanas los números van a ser otros
+   * y lo que se acordó fue esto.
+   */
+  async function comprometerSeguimiento(
+    g: GrupoOaeca,
+    responsable: SesionNomina,
+    plazo: string | null,
+  ) {
+    if (!sesion) return
+    try {
+      const rows = await safeWrite(
+        getSupabase().from('sesion_compromisos').insert({
+          region_cod: region.cod,
+          instancia: 'inversion',
+          sesion_origen_id: sesion.id,
+          descripcion: descripcionSeguimiento(g),
+          responsable_institucion: responsable.institucion,
+          responsable_nombre: responsable.nombre,
+          plazo,
+          seccion: 'oficios',
+          oaeca_objetivo: g.nombre,
+        }),
+        `compromiso seguimiento oaeca=${g.nombre}`,
+      )
+      setCompNuevos(prev => [...prev, rows[0] as SesionCompromiso])
+    } catch (err) {
+      // El choque contra uq_compromiso_oaeca_abierto es el caso real: dos
+      // personas comprometiendo el mismo organismo en paralelo. Decirlo por
+      // su nombre en vez de mostrar el error de Postgres.
+      const msg = (err as Error).message
+      window.alert(/uq_compromiso_oaeca_abierto/.test(msg)
+        ? `${g.nombre} ya tiene un compromiso de seguimiento abierto en esta región. Refrescá la sesión para verlo.`
+        : msg)
+    }
+  }
 
   async function agregarCompromiso(e: React.FormEvent) {
     e.preventDefault()
@@ -840,6 +949,33 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // ── Derivados ─────────────────────────────────────────────────────────────
 
+  // Lo que hay que apurar en esta sesión: lo vencido primero y después lo que
+  // vence antes de la próxima. La ventana cubre el intervalo entre sesiones —
+  // con una más corta quedaría una franja que no se ve en ninguna de las dos.
+  const seiaVencidos = useMemo(
+    () => oficiosSeia.filter(o => estaAtrasado(o, hoyISO())),
+    [oficiosSeia],
+  )
+  const seiaPorVencer = useMemo(
+    () => oficiosSeia.filter(o => !estaAtrasado(o, hoyISO()) && esParaLaProximaSesion(o, hoyISO())),
+    [oficiosSeia],
+  )
+  /** Los dos juntos: el bloque los agrupa por organismo, no por plazo. */
+  const seiaEnVentana = useMemo(
+    () => [...seiaVencidos, ...seiaPorVencer],
+    [seiaVencidos, seiaPorVencer],
+  )
+  /**
+   * Los compromisos de seguimiento de organismo, de esta sesión y de las
+   * anteriores. Van los dos porque uno recién creado tiene que dejar de
+   * ofrecer el botón en el acto, y uno viejo tiene que seguir mostrando quién
+   * lo persigue — la mig 120 garantiza a lo sumo uno abierto por organismo.
+   */
+  const compromisosOaeca = useMemo(
+    () => [...compAnteriores, ...compNuevos].filter(c => c.oaeca_objetivo != null),
+    [compAnteriores, compNuevos],
+  )
+
   const invitados = useMemo(() => asistencia.filter(a => a.nomina_id === null), [asistencia])
   const presentes = useMemo(() => asistencia.filter(a => a.presente).length, [asistencia])
   const iniciativasCER = useMemo(
@@ -867,7 +1003,17 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
 
   // Cambiar de zona vacía primero un onBlur pendiente: hay campos que guardan
   // al salir (nota del oficio, lugar) y el enfocado se va a desmontar.
-  const irA = useCallback((ref: ZonaRef) => { soltarFoco(); setActiva(ref) }, [])
+  const irA = useCallback((ref: ZonaRef) => {
+    soltarFoco()
+    setActiva(ref)
+    setVisitadas(prev => {
+      const k = claveZona(ref)
+      if (prev.has(k)) return prev
+      const next = new Set(prev)
+      next.add(k)
+      return next
+    })
+  }, [])
 
   const { anterior, siguiente } = vecinos(rail, activa)
   const navAnterior  = anterior  ? { label: etiquetaZona(rail, anterior),  onClick: () => irA(anterior) }  : null
@@ -878,6 +1024,40 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
   const subSeguimiento = activa.zona === 'seguimiento'
     ? (activa.inst === 'oficios' ? 'oficios' : activa.inst === 'mesa_empleo' ? 'mesa_empleo' : 'proyectos')
     : 'proyectos'
+
+  /**
+   * Organismos con oficios VENCIDOS y sin compromiso de seguimiento abierto.
+   * Es lo que no se puede dejar sin dueño al cerrar: alguien ya falló un plazo
+   * y nadie quedó a cargo de reclamarlo.
+   */
+  const organismosSinSeguimiento = useMemo(() => {
+    const conSeguimiento = new Set(
+      compromisosOaeca
+        .filter(c => c.estado !== 'cumplido' && c.oaeca_objetivo)
+        .map(c => claveOaeca(c.oaeca_objetivo!)),
+    )
+    return agruparPorOaeca(seiaVencidos, hoyISO())
+      .filter(g => !conSeguimiento.has(g.clave))
+      .map(g => g.nombre)
+  }, [seiaVencidos, compromisosOaeca])
+
+  /** Secciones del recorrido que todavía no se abrieron. */
+  const faltanVisitar = useMemo(
+    () => ordenRecorrido(rail)
+      .filter(ref => !visitadas.has(claveZona(ref)))
+      .map(ref => ({ ref, label: etiquetaZona(rail, ref) })),
+    [rail, visitadas],
+  )
+
+  const bloqueosCierre = useMemo(
+    () => bloqueosCierreComite({
+      instancia: 'economico',
+      asistencia: asist,
+      organismosSinSeguimiento,
+      faltanVisitar,
+    }),
+    [asist, organismosSinSeguimiento, faltanVisitar],
+  )
 
   const abrirCierre = useCallback(() => { soltarFoco(); setFase('cierre') }, [])
   const navTerminar = { label: 'Terminar sesión', onClick: abrirCierre }
@@ -1033,6 +1213,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
       escapeDeshabilitado={cerrando}
       overlay={fase === 'cierre' && sesion ? (
         <CierreSesionComite
+          bloqueos={bloqueosCierre}
           instancia="economico"
           sesion={sesion}
           nombreInstancia={NOMBRE_COMITE}
@@ -1440,7 +1621,7 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
               {muestra('seguimiento') && subSeguimiento === 'oficios' && (
                   <ZonaCard numero={3} titulo="Seguimiento de la inversión · Oficios"
                     badge={oficiosAnteriores.length + oficiosTratadosSesion.length}
-                    descripcion="Los oficios pendientes de sesiones anteriores se verifican acá; abajo se levantan los nuevos."
+                    accion={<BotonActualizarOficios regionCod={region.cod} onActualizado={() => { if (sesion) void loadAll(sesion) }} />}
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
                         {/* Oficios anteriores */}
@@ -1504,13 +1685,63 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                           </div>
                         </div>
 
-                        {/* Oficios tratados nuevos */}
+                        {/* ── Del SEIA ─────────────────────────────────────
+                            Estos NO los levantó el comité: son el estado real
+                            del expediente, importados del SEIA, y se muestran
+                            sin botones de estado porque el comité no los
+                            cierra — los cierra el organismo cuando responde.
+
+                            Van en dos tramos y en este orden porque son dos
+                            conversaciones distintas. Un oficio VENCIDO ya se
+                            vio en una sesión anterior estando por vencer, así
+                            que lo que toca hoy es pedir cuentas. Uno que
+                            todavía no vence es aviso: se mira para que no
+                            llegue vencido a la próxima. Por eso un oficio que
+                            la vez pasada estaba por vencer y sigue sin vencer
+                            NO sube de tramo: no pasó nada nuevo con él. */}
+                        <OficiosSeguimientoBloque
+                          oficios={seiaVencidos}
+                          compromisos={compromisosOaeca}
+                          hoy={hoyISO()}
+                          titulo="Vencidos en el SEIA"
+                          subtitulo="vienen de sesiones anteriores"
+                          onAbrirProyecto={abrirProyectoDeOficio}
+                        />
+
+                        <OficiosSeguimientoBloque
+                          oficios={seiaPorVencer}
+                          compromisos={compromisosOaeca}
+                          hoy={hoyISO()}
+                          titulo="Pendientes en el SEIA"
+                          subtitulo="por vencer antes de la próxima sesión"
+                          onAbrirProyecto={abrirProyectoDeOficio}
+                        />
+
+                        {/* Oficios tratados nuevos — plegado por defecto.
+                            Es el alta manual, y con los oficios del SEIA
+                            llegando solos pasó a ser la excepción: lo que se
+                            levanta a mano es lo que el archivo no trae. Que
+                            ocupe una línea hasta que haga falta. */}
                         <div className="pt-3 border-t border-gray-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h5 className="text-[10px] font-semibold text-gray-500">Oficios tratados nuevos</h5>
-                            <span className="text-xs text-gray-400 ml-auto">{oficiosTratadosSesion.length}</span>
-                          </div>
-                          <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setAltaOficioAbierta(v => !v)}
+                            aria-expanded={altaOficioAbierta}
+                            className="w-full flex items-center gap-2 mb-2 text-left"
+                          >
+                            <span className="text-[10px] font-semibold text-violet-700">
+                              {altaOficioAbierta ? 'Agregar oficio nuevo' : '+ Agregar oficio nuevo'}
+                            </span>
+                            {oficiosTratadosSesion.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {oficiosTratadosSesion.length} en esta sesión
+                              </span>
+                            )}
+                            <span className="ml-auto">
+                              <ChevronPlegado abierto={altaOficioAbierta} />
+                            </span>
+                          </button>
+                          <div className="space-y-2" hidden={!altaOficioAbierta}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <ComboboxOaeca
                                 oaecaList={oaecaList}
@@ -1721,6 +1952,22 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                       </button>
                     </div>
                   </form>
+
+                  {/* El seguimiento de oficios va ABAJO: arriba está lo que la
+                      sesión ya comprometió y el alta libre, que es lo que se
+                      redacta en la reunión. Esto es una lista de pendientes que
+                      el archivo del SEIA trajo, y se resuelve al final. */}
+                  {sesion?.estado === 'borrador' && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <CompromisosOaecaSugeridos
+                        oficios={seiaEnVentana}
+                        compromisos={compromisosOaeca}
+                        nomina={nomina}
+                        hoy={hoyISO()}
+                        onComprometer={comprometerSeguimiento}
+                      />
+                    </div>
+                  )}
                 </div>
               </ZonaCard>
               )}
@@ -1733,9 +1980,11 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
         puedeOperar={true}
         currentUserEmail={currentUserEmail}
         sesionId={sesion?.id ?? null}
+        tabInicial={fichaTab}
         onClose={() => setFichaPrivadoId(null)}
       />
     )}
     </>
   )
 }
+
