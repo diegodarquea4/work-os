@@ -228,16 +228,26 @@ export function esRespuesta(tipo: string): boolean {
  * sin que nadie pueda hacer nada al respecto.
  */
 export function cierraRonda(tipo: string): boolean {
-  return /informe consolidado/i.test(tipo)
-    // Cierres del EXPEDIENTE entero, no de una ronda. Sin ellos, los
-    // organismos que nunca alcanzaron a pronunciarse quedan debiendo un oficio
-    // de un proyecto que ya no existe — y no hay nada que puedan hacer.
-    //
-    // El «Término Anticipado» no es un caso de borde: de los 27 oficios que el
-    // scraper inventó en la primera corrida contra el Excel, los 5 expedientes
-    // involucrados estaban cerrados así, con plazos vencidos hacía uno y dos
-    // años. Era 5 de 5.
-    || /t[ée]rmino anticipado/i.test(tipo)
+  return /informe consolidado/i.test(tipo) || cierraExpediente(tipo)
+}
+
+/**
+ * Cierra el EXPEDIENTE entero, no una ronda: después de esto no hay Adenda que
+ * reabra nada y el oficio no se va a responder nunca.
+ *
+ * Sale de `cierraRonda` porque la diferencia decide el MOTIVO con que se cierra
+ * un oficio (mig 122) y por lo tanto si su atraso cuenta o no. Un informe
+ * consolidado cierra la ronda y el organismo puede haber respondido; una RCA o
+ * un término anticipado matan el proyecto, y cobrarle ese atraso al organismo es
+ * falso — no había a quién responderle.
+ *
+ * El «Término Anticipado» no es un caso de borde: de los 27 oficios que el
+ * scraper inventó en la primera corrida contra el Excel, los 5 expedientes
+ * involucrados estaban cerrados así, con plazos vencidos hacía uno y dos años.
+ * Era 5 de 5.
+ */
+export function cierraExpediente(tipo: string): boolean {
+  return /t[ée]rmino anticipado/i.test(tipo)
     || /desistimiento/i.test(tipo)
     || /resoluci[óo]n de calificaci[óo]n ambiental/i.test(tipo)
 }

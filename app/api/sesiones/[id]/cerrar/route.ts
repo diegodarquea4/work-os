@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { sesionIdSchema } from '@/lib/schemas'
 import { aplicarValorMetrica, puedeCerrar, bloqueosCierreGabineteV2, cierreV2Habilitado, COMITES_CON_ESCALAMIENTO } from '@/lib/sesiones/helpers'
 import { generarActa } from '@/lib/sesiones/generarActa'
+import { tomarFotoOficios } from '@/lib/oficiosFotoServer'
 import type { EjeSesion, SesionValor } from '@/lib/types'
 
 /**
@@ -301,6 +302,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq('region_cod', sesion!.region_cod)
       .eq('estado', 'resuelto')
       .is('resuelto_en_sesion_id', null)
+
+    // ── La foto del stock de oficios (mig 122) ─────────────────────────────
+    //
+    // Acá y no en un cron aparte: la base guarda el estado de HOY, así que la
+    // evolución solo existe si se va anotando, y el momento en que el número
+    // significa algo es el cierre de la sesión — «así estábamos cuando nos
+    // juntamos». Cada quince días, que es el ritmo del comité, dan las cuatro
+    // fotos de dos meses que el control de gestión necesita.
+    //
+    // Va DESPUÉS del sellado para que los oficios que se marcaron resueltos en
+    // esta misma sesión ya estén fuera del stock retratado.
+    //
+    // No abortante, como el snapshot de iniciativas: se pierde un punto de la
+    // serie, que se nota y se repara; tumbar un cierre por esto sería peor.
+    const foto = await tomarFotoOficios(db, sesion!.region_cod, {
+      origen: 'sesion', sesionId,
+    })
+    if (!foto.ok) {
+      console.error('[sesiones/cerrar] no se pudo sacar la foto de oficios', { sesionId, error: foto.error })
+    }
   }
 
   // ── Mesa Empleo: sumar el valor digitado en la sesión al acumulado ────────
