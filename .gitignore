@@ -45,6 +45,6 @@ supabase/.temp/
 # artefactos locales para revisar, no parte de la app.
 /entregables/
 
-# Archivos de muestra para diseñar parseos (Excel del SEIA, etc.).
-# No se commitean: son insumo de trabajo, no del producto.
+# Datos de trabajo: el Excel del SEIA, sondas de parseo y demás insumos
+# para diseñar. No se commitean — son material de trabajo, no del producto.
 /tmp-datos/

@@ -38,22 +38,28 @@ const TABS: { key: TabKey; label: string; ready: boolean }[] = [
   { key: 'gabinete',       label: 'Gabinete Regional',                   ready: true  },
 ]
 
-// Comité Económico: activo en estas regiones; en el resto se muestra "Pronto".
-// Tarapacá fue la marcha blanca; las demás se sumaron cuando el módulo quedó
-// listo para usarse de verdad. El desarrollo completo siempre estuvo vivo —
-// esto solo gatea su visibilidad por región. Se suma una región cuando su
-// SEREMI de Economía ya tiene cuenta: si no, el comité aparece y nadie lo abre.
-const ECONOMICO_ACTIVO: readonly string[] = [
-  'I',     // Tarapacá
-  'III',   // Atacama
-  'V',     // Valparaíso
-  'RM',    // Metropolitana
-  'VII',   // Maule
-  'XVI',   // Ñuble
-  'VIII',  // Biobío
-  'IX',    // La Araucanía
-  'X',     // Los Lagos
-]
+// El Comité Económico ya NO se gatea por región: está en las 16.
+//
+// La marcha blanca empezó en Tarapacá y fue sumando regiones de a una, con una
+// regla: solo entraba la que tuviera a alguien capaz de CONDUCIR el comité con
+// cuenta creada, para que no apareciera una instancia que nadie abre. Llegó a
+// 10 de 16.
+//
+// Esa regla dejó de aplicar (Manuel, 2026-09-29). Lo que la sostenía era que
+// sin conductor el comité no mostraba nada; desde los oficios del SEIA eso ya
+// no es cierto: los oficios pendientes de la región llegan solos, tres veces
+// por semana, y se leen sin abrir una sesión. Una región sin conductor ve su
+// situación aunque todavía no sesione — que es mejor punto de partida que un
+// cartel de "Pronto".
+//
+// Medido el día del cambio, en las 6 regiones que entran: O'Higgins abre con
+// 85 oficios pendientes, Antofagasta con 55 y Coquimbo con 39; Magallanes con
+// 2, Los Ríos con 1 y Aysén con 0. Las tres primeras tienen material para una
+// sesión desde el primer día. Aysén va a ver una pantalla vacía, y eso es
+// correcto: no tiene oficios pendientes.
+//
+// El permiso sigue siendo por región (`comite.economico.operar`): que la
+// pestaña exista no habilita a nadie a operar donde no le corresponde.
 
 // Comité de Infraestructura en marcha blanca: visible solo en estas regiones;
 // en el resto se muestra "Pronto" (mismo trato que Económico). El desarrollo
@@ -111,10 +117,6 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
   // El Comité Policial se ancla al eje con sesiones habilitadas.
   const comitePolicialEje = regionEjes.find(e => e.sesiones_habilitadas) ?? null
 
-  // Económico en marcha blanca: solo Tarapacá lo tiene activo; en el resto
-  // muestra "Pronto" (mismo trato que Infraestructura).
-  const economicoActivo = ECONOMICO_ACTIVO.includes(region.cod)
-
   // Infraestructura en marcha blanca: solo Los Lagos lo tiene activo; en el
   // resto muestra "Pronto".
   const infraestructuraActivo = INFRAESTRUCTURA_ACTIVO.includes(region.cod)
@@ -130,10 +132,9 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-3">
         {tabsVisibles.map(t => {
           const isActive = activa === t.key
-          // Económico e Infraestructura heredan su estado "listo" de la región
-          // (marcha blanca); el resto es fijo.
+          // Solo Infraestructura hereda su estado "listo" de la región
+          // (sigue en marcha blanca); el resto es fijo.
           const ready =
-            t.key === 'inversion' ? economicoActivo :
             t.key === 'infraestructura' ? infraestructuraActivo :
             t.ready
           return (
@@ -172,14 +173,7 @@ export default function ComitesRegionalesSection({ region, regionEjes, ejesLoadi
       ) : activa === 'politico' ? (
         <ComitePoliticoPanel region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
       ) : activa === 'inversion' ? (
-        economicoActivo ? (
-          <ComiteInversionPanel region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} />
-        ) : (
-          <Placeholder
-            titulo="Comité Económico — en desarrollo"
-            texto="Esta instancia estará disponible próximamente."
-          />
-        )
+        <ComiteInversionPanel region={region} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onUpdatePrioridad={onUpdatePrioridad} />
       ) : activa === 'gabinete' ? (
         <GabineteRegionalTab region={region} regionEjes={regionEjes} iniciativas={iniciativas} onAbrirIniciativa={onAbrirIniciativa} onIrAPreparacion={onIrAPreparacion} />
       ) : (

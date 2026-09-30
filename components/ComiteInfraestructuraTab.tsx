@@ -16,7 +16,7 @@ import AgregarACarteraModal from './AgregarACarteraModal'
 import CarteraInfraestructuraPanel from './CarteraInfraestructuraPanel'
 import FilaCarteraInfra from './FilaCarteraInfra'
 import { EmptyState } from '@/components/ui'
-import { moverEnCartera } from '@/lib/comiteInfraestructuraClient'
+import { moverEnCartera } from '@/lib/comitesCarteraClient'
 
 /**
  * Tab "Comité de Infraestructura" de la sección Comités y Gabinete Regional
@@ -112,7 +112,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
 
     setQuitandoId(p.id)
     try {
-      const tags = await moverEnCartera({ prioridadId: p.id, accion: 'quitar', tag })
+      const tags = await moverEnCartera({ comite: 'infraestructura', prioridadId: p.id, accion: 'quitar', tag })
       onUpdatePrioridad(p.n, { tags })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
@@ -341,6 +341,7 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
       )}
       {agregarOpen && (
         <AgregarACarteraModal
+          comite="infraestructura"
           region={region}
           iniciativas={iniciativas}
           tag={tag}

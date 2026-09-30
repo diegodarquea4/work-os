@@ -4,18 +4,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '@/components/ui'
 import { SEMAFORO_CONFIG } from '@/lib/config'
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y'
-import { moverEnCartera } from '@/lib/comiteInfraestructuraClient'
+import { moverEnCartera } from '@/lib/comitesCarteraClient'
+import type { Comite } from '@/lib/comitesCartera'
 import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 
 /**
- * "Sumar a la cartera" del Comité de Infraestructura: busca una iniciativa de
- * la región y le pone la etiqueta del comité.
+ * "Sumar a la cartera": busca una iniciativa de la región y le pone la etiqueta
+ * del comité. Lo comparten los dos comités con cartera pública — Nudos Críticos
+ * (etiqueta de region_config) y Económico (etiqueta fija CER) —; `comite` viaja
+ * al servidor, que es quien decide las reglas de cada uno.
  *
- * La escritura va por /api/comite-infraestructura/cartera, no por el navegador:
- * `tags` es columna definicional y solo admin/editor la mueven desde acá (ver
- * lib/comiteInfraestructura.ts). Hasta esta pantalla, la delegación que lleva
- * el comité dependía de un admin para armar su propia cartera.
+ * La escritura va por /api/comites/cartera, no por el navegador: `tags` es
+ * columna definicional y solo admin/editor la mueven desde acá (ver
+ * lib/comitesCartera.ts). Hasta esta pantalla, quien llevaba el comité dependía
+ * de un admin para armar su propia cartera.
  *
  * El modal NO se cierra al sumar una: armar la cartera es agregar varias
  * seguidas, y la fila desaparece sola de la lista cuando el estado de arriba
@@ -28,6 +31,8 @@ import type { Iniciativa } from '@/lib/projects'
  */
 
 type Props = {
+  /** Qué comité arma su cartera — decide las reglas server-side. */
+  comite: Comite
   region: Region
   iniciativas: Iniciativa[]
   tag: string
@@ -39,7 +44,7 @@ type Props = {
 
 const MAX_VISIBLES = 60
 
-export default function AgregarACarteraModal({ region, iniciativas, tag, onClose, onAgregada }: Props) {
+export default function AgregarACarteraModal({ comite, region, iniciativas, tag, onClose, onAgregada }: Props) {
   const [busqueda, setBusqueda] = useState('')
   const [guardandoId, setGuardandoId] = useState<number | null>(null)
   const [sumadas, setSumadas] = useState<number>(0)
@@ -93,7 +98,7 @@ export default function AgregarACarteraModal({ region, iniciativas, tag, onClose
   async function handleSumar(p: Iniciativa) {
     setGuardandoId(p.id)
     try {
-      const tags = await moverEnCartera({ prioridadId: p.id, accion: 'sumar', tag })
+      const tags = await moverEnCartera({ comite, prioridadId: p.id, accion: 'sumar', tag })
       onAgregada(p, tags)
       setSumadas(n => n + 1)
     } catch (err) {

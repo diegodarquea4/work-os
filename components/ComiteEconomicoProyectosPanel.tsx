@@ -13,6 +13,8 @@ import ActiveFiltersBar, { setChip } from './ActiveFiltersBar'
 import NuevoProyectoEconomicoModal from './NuevoProyectoEconomicoModal'
 import ProyectoEconomicoFichaModal from './ProyectoEconomicoFichaModal'
 import PasCatalogoModal from './PasCatalogoModal'
+import AgregarACarteraModal from './AgregarACarteraModal'
+import { moverEnCartera } from '@/lib/comitesCarteraClient'
 import ConsolaSesionShell from './sesiones/ConsolaSesionShell'
 
 /**
@@ -56,16 +58,27 @@ type Props = {
    * no—, pero quién entra y quién sale lo decide quien conduce el comité.
    */
   puedeGestionarCartera?: boolean
+  /**
+   * Propaga al estado global el cambio de etiquetas al sumar o sacar una
+   * iniciativa PÚBLICA de la cartera, para que el resto de las vistas se entere
+   * sin recargar. Sin esto la lista de acá no se actualizaría sola: las
+   * públicas viven en el estado de WorkOSApp, no en este componente.
+   */
+  onUpdatePrioridad?: (n: number, patch: Partial<Iniciativa>) => void
 }
 
 export default function ComiteEconomicoProyectosPanel({
   region, iniciativas, onAbrirIniciativa, modo = 'completo', onVerTodos, onClose, onIrASesion,
-  puedeGestionarCartera = true,
+  puedeGestionarCartera = true, onUpdatePrioridad,
 }: Props) {
   const puedeOperar = useCan('comite.economico.operar', region.cod)
   const userEmail = useCurrentUserEmail()
 
   const [vista, setVista] = useState<'privado' | 'publico'>('privado')
+  // Alta y baja de iniciativas PÚBLICAS (etiqueta CER) — el equivalente al
+  // «+ Nuevo proyecto» de la vista privada.
+  const [sumarOpen, setSumarOpen]   = useState(false)
+  const [quitandoId, setQuitandoId] = useState<number | null>(null)
   const [proyectos, setProyectos] = useState<ComiteEconomicoProyecto[]>([])
   const [loading, setLoading] = useState(true)
   const [nuevoOpen, setNuevoOpen] = useState(false)
@@ -123,6 +136,31 @@ export default function ComiteEconomicoProyectosPanel({
     () => iniciativas.filter(p => (p.tags ?? []).includes(TAG_ECONOMICO)),
     [iniciativas],
   )
+
+  // Sacar una pública de la cartera = quitarle la etiqueta. La iniciativa sigue
+  // existiendo con toda su ficha; solo deja de mirarla este comité.
+  //
+  // Sin update optimista, a diferencia del resto del panel: la escritura la
+  // hace el servidor y se propaga recién con la respuesta. Sin optimismo no hay
+  // revert que pueda quedar a medias, y el POST es corto.
+  async function handleQuitarPublica(p: Iniciativa) {
+    const ok = window.confirm(
+      `¿Sacar "${p.nombre}" de la cartera del comité?
+
+` +
+      `Se le quita la etiqueta "${TAG_ECONOMICO}". La iniciativa y su ficha no se tocan, y se puede volver a sumar cuando quieras.`,
+    )
+    if (!ok) return
+    setQuitandoId(p.id)
+    try {
+      const tags = await moverEnCartera({ comite: 'economico', prioridadId: p.id, accion: 'quitar', tag: TAG_ECONOMICO })
+      onUpdatePrioridad?.(p.n, { tags })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setQuitandoId(null)
+    }
+  }
 
   // Lo que esta región ya trajo del catálogo (mig 106). El importador los
   // esconde: agregar dos veces el mismo expediente es el error obvio de una
@@ -353,6 +391,22 @@ export default function ComiteEconomicoProyectosPanel({
             )}
           </div>
         )}
+
+        {/* La vista pública tiene su propia alta, en el mismo lugar y con el
+            mismo peso que «+ Nuevo proyecto»: son la misma acción —meter un
+            proyecto a la cartera—. Lo que cambia es de dónde sale: acá ya
+            existe como iniciativa y se elige, no se crea. */}
+        {vista === 'publico' && puedeGestionarCartera && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSumarOpen(true)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-violet-700 text-white font-semibold hover:bg-violet-800"
+              title="Buscar una iniciativa de la región y sumarla a la cartera del comité"
+            >
+              + Sumar iniciativa
+            </button>
+          </div>
+        )}
       </div>
 
       {vista === 'privado' ? (
@@ -439,13 +493,45 @@ export default function ComiteEconomicoProyectosPanel({
             <span className="text-[10px] text-gray-400 ml-auto">{iniciativasCER.length}</span>
           </div>
           {iniciativasCER.length === 0 ? (
-            <p className="text-xs text-gray-500 text-center py-6 border border-dashed border-gray-200 rounded-lg">
-              Ninguna iniciativa tiene la etiqueta &quot;{TAG_ECONOMICO}&quot; todavía — agrégala desde su ficha.
-            </p>
+            puedeGestionarCartera ? (
+              <button
+                onClick={() => setSumarOpen(true)}
+                className="w-full text-xs text-gray-500 hover:text-violet-700 text-center py-6 border border-dashed border-gray-200 hover:border-violet-300 rounded-lg transition-colors"
+              >
+                Ninguna iniciativa tiene la etiqueta &quot;{TAG_ECONOMICO}&quot; todavía — súmale la primera.
+              </button>
+            ) : (
+              <p className="text-xs text-gray-500 text-center py-6 border border-dashed border-gray-200 rounded-lg">
+                Ninguna iniciativa tiene la etiqueta &quot;{TAG_ECONOMICO}&quot; todavía.
+              </p>
+            )
           ) : (
             <div className="space-y-1 overflow-y-auto max-h-[65vh] -mx-1 px-1">
               {iniciativasCER.map(p => (
-                <IniciativaCard key={p.id} p={p} onClick={() => onAbrirIniciativa(p)} />
+                <div key={p.id} className="flex items-center gap-1">
+                  <div className="flex-1 min-w-0">
+                    <IniciativaCard p={p} onClick={() => onAbrirIniciativa(p)} />
+                  </div>
+                  {/* Fuera de la card, nunca adentro: es un <button> completo y
+                      un botón anidado dentro de otro es HTML inválido. */}
+                  {puedeGestionarCartera && (
+                    <button
+                      onClick={() => handleQuitarPublica(p)}
+                      disabled={quitandoId === p.id}
+                      aria-label={`Sacar ${p.nombre} de la cartera del comité`}
+                      title="Sacar de la cartera del comité"
+                      className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                    >
+                      {quitandoId === p.id ? (
+                        <span className="text-[10px] font-semibold text-gray-400">···</span>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                          <path d="M5 5l10 10M15 5L5 15"/>
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -472,6 +558,16 @@ export default function ComiteEconomicoProyectosPanel({
       )}
       {catalogoOpen && (
         <PasCatalogoModal currentUserEmail={userEmail} onClose={() => setCatalogoOpen(false)} />
+      )}
+      {sumarOpen && (
+        <AgregarACarteraModal
+          comite="economico"
+          region={region}
+          iniciativas={iniciativas}
+          tag={TAG_ECONOMICO}
+          onClose={() => setSumarOpen(false)}
+          onAgregada={(p, tags) => onUpdatePrioridad?.(p.n, { tags })}
+        />
       )}
     </div>
     </ConsolaSesionShell>
