@@ -25,9 +25,11 @@ import {
 import { useCensoRegiones, type CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 import { useUltimaActualizacionMetricas, fmtUltimaActualizacion } from '@/lib/hooks/useUltimaActualizacionMetricas'
 import { getSupabase } from '@/lib/supabase'
+import { useCan } from '@/lib/context/UserContext'
+import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
 
 // ── Tipos ──────────────────────────────────────────────────────
-type ModuleId = 'resumen' | 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen'
+type ModuleId = 'resumen' | 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen' | 'economico'
 type SegTab   = 'resumen' | 'evolucion' | 'operativo' | 'dmcs'
 type PibTab   = 'evolucion' | 'sectores' | 'nacional'
 type EmpTab   = 'resumen' | 'evolucion' | 'ranking'
@@ -161,12 +163,17 @@ const MODULES: { id: ModuleId; label: string }[] = [
   { id: 'censo',     label: '🏘 Censo 2024' },
   { id: 'empleo',    label: '💼 Empleo' },
   { id: 'casen',     label: '🏠 CASEN 2024' },
+  { id: 'economico', label: '🏗 Comité Económico Regional' },
 ]
 
 function ModuleNav({ active, onSelect }: { active: ModuleId; onSelect: (m: ModuleId) => void }) {
+  // El Comité Económico Regional se ve con la capacidad del comité en alguna
+  // región: los datos son de sesiones y oficios, no indicadores públicos. Lo
+  // que muestra dentro lo acota la RLS a las regiones de cada uno.
+  const veEconomico = useCan('comite.economico.operar')
   return (
     <nav className="bg-slate-900 flex overflow-x-auto px-4 border-b-2 border-sky-600/30">
-      {MODULES.map(m => (
+      {MODULES.filter(m => m.id !== 'economico' || veEconomico).map(m => (
         <button key={m.id} onClick={() => onSelect(m.id)}
           className={`px-5 py-3 text-xs font-semibold tracking-wide whitespace-nowrap border-b-2 -mb-0.5 transition-colors shrink-0 ${
             active === m.id ? 'text-white border-sky-400' : 'text-slate-400 border-transparent hover:text-white'
@@ -2812,7 +2819,8 @@ export default function MetricasView({ initialRegionNombre }: { initialRegionNom
         <h1 className="text-sm font-semibold text-white tracking-wide">📊 Dashboard Regional · Chile</h1>
       </div>
       <ModuleNav active={activeModule} onSelect={setActiveModule} />
-      <UltimaActualizacionBar />
+      {/* El módulo económico trae su propia fecha: la de los oficios, no la de los indicadores. */}
+      {activeModule !== 'economico' && <UltimaActualizacionBar />}
       <div className="flex-1 overflow-auto">
         {activeModule === 'resumen'   && <ResumenModule initialRegionNombre={initialRegionNombre} />}
         {activeModule === 'seguridad' && <SeguridadModule />}
@@ -2820,6 +2828,7 @@ export default function MetricasView({ initialRegionNombre }: { initialRegionNom
         {activeModule === 'censo'     && <CensoModule />}
         {activeModule === 'empleo'    && <EmpleoModule />}
         {activeModule === 'casen'     && <CasenModule />}
+        {activeModule === 'economico' && <SeguimientoInversionSeia />}
       </div>
     </div>
   )

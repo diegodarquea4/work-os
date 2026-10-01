@@ -174,6 +174,18 @@ FROM sync_status ORDER BY last_run_at DESC;
 
 **Marca de ventana del sync SEIA (`visto_en_ventana_at`):** se acuña por PASADA, no por invocación — viaja en el cursor de `sync_status.notes`. Una corrida nacional se trocea en varias invocaciones; si cada una estampara su propio timestamp, las filas de la primera quedarían "viejas" frente a las de la última y la detección de RCA vencidas (que compara contra la marca más reciente) las daría por salidas de la ventana estando vigentes. Pasó de verdad: 1.179 filas con una marca y 848 con otra, cuatro minutos después. **Corolario para verificar**: una query con `= max(visto_en_ventana_at)` solo ve el último tramo — contar por marca antes de concluir que faltan filas.
 
+## Seguimiento de la inversión en el SEIA (Métricas → «Comité Económico Regional», oct 2026)
+
+Módulo de `MetricasView` (`components/metricas/SeguimientoInversionSeia.tsx`), visible con `comite.economico.operar` en alguna región; lo que muestra lo acota la RLS (`lib/hooks/useSeguimientoSeia.ts` lee todo con el cliente del navegador). Lógica pura y testeada en `lib/seguimientoSeia.ts`. Cuatro pestañas: **Nacional** (matriz fila × ministerio; clic en fila, columna o cruce abre abajo los oficios por proyecto → organismo, como en la sesión), **Regional** (por ministerio u organismo, cuatro KPI que también filtran/ordenan), **Comparativa** (región contra región + «Evolutivo» con rango y cantidad de fechas) y **Cartera** (tres totales, la cartera del comité y abajo lo demás en calificación del SEIA).
+
+Reglas que no son obvias:
+- **El foco es el atraso.** Un oficio entra solo si está vencido o le faltan ≤ 15 días (`DIAS_PENDIENTE`); con más holgura no es tema. Rojo = vencido; pendiente va en gris.
+- **Más de un año de atraso sale de TODO el análisis** (`ATRASO_MAXIMO_DIAS`), no solo del promedio: si contara en gestionados y no en vencidos las columnas no cuadrarían. Lo motivó un oficio de 2022 al GORE Tarapacá que llevaba el promedio regional a 400 días.
+- **Filas de la matriz** (`filaDeOrganismo`): municipios → región del proyecto (columna Independiente); zonales («Zona Sur», «Subdirección Nacional Norte») → Interregional; los que nombran región → esa región; regionales sin región en el nombre → la del proyecto; el resto → Nacional. El filtro de regiones filtra por región del PROYECTO, no por fila.
+- **«Última actualización» = la región MENOS al día de las que se muestran**, sacada del `importado_at` máximo de cada región. Una región sin oficios no tiene fecha porque el scraper solo recorre expedientes vinculados a la cartera — no está atrasada, no tiene qué traer. Caveat: si el scrape corre y no cambia nada, `importado_at` puede no moverse y la región se vería atrasada; si molesta, guardar la fecha por región aparte.
+- **El botón de actualizar** llama `/api/oficios-seia/scrape?region=` de a una región (las atrasadas de las que se muestran) y se apaga cuando todas están al día (candado diario de la ruta).
+- **El evolutivo se RECONSTRUYE** desde las fechas de cada oficio (`medirRegion(r, fecha)`): cada fecha de corte vale por la última sesión del tramo si la hubo (punto violeta) o por el corte mismo. Lo respondido antes de que el panel siguiera el proyecto no existe en la tabla, así que los primeros cortes quedan cortos. `oficios_foto_oaeca` (mig 122) es la fuente que debería reemplazarlo cuando junte fotos.
+
 ## Environment variables
 
 | Variable | Required in |
