@@ -90,15 +90,18 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
               </button>
               )}
+              {/* El tablero de oficios de la región va como botón grande: es lo
+                  que se mira antes de sesionar. La cartera completa quedó en la
+                  franja de abajo y en el encabezado de los priorizados. */}
               <button
-                onClick={() => setProyectosOpen(true)}
+                onClick={() => setTableroOpen(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
-                title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
+                title="Tablero de seguimiento de la inversión en el SEIA: vencidos, pendientes y comparativa entre regiones"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 3.5h10M2 7h10M2 10.5h6"/>
+                  <path d="M1.5 11.5l3.5-4 2.5 2.5 5-6"/><path d="M1.5 12.5h11"/>
                 </svg>
-                Ver todos los proyectos
+                Seguimiento SEIA
               </button>
             </>
           )}
@@ -167,14 +170,12 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 Oficios
               </button>
               <span className="text-violet-200">|</span>
-              {/* El mismo tablero de Métricas, abierto en esta región: la vista
-                  de arriba de lo que «Oficios» lista proyecto por proyecto. */}
               <button
-                onClick={() => setTableroOpen(true)}
+                onClick={() => setProyectosOpen(true)}
                 className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
-                title="Tablero de seguimiento de la inversión en el SEIA: vencidos, pendientes y comparativa entre regiones"
+                title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
               >
-                Seguimiento SEIA
+                Ver todos los proyectos
               </button>
               <span className="text-violet-200">|</span>
               <button

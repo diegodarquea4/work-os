@@ -34,6 +34,14 @@ import { ChevronPlegado, type CompromisoAbierto } from './OficiosSeguimientoBloq
  * Un organismo ya comprometido no aparece: la mig 120 admite un solo
  * compromiso abierto por organismo y región, porque lo que tiene que
  * reaparecer en quince días es ESE, con su historia, y no uno nuevo.
+ *
+ * ── Obligatorios y opcionales, separados ──────────────────────────────────
+ *
+ * Solo los organismos con oficios VENCIDOS impiden cerrar la sesión (ver
+ * `bloqueosCierreComite`); los que solo tienen por vencer son aviso. Mezclados
+ * bajo un mismo «sin seguimiento» parecían todos obligatorios — Manuel pidió
+ * justamente que lo por vencer no fuera indispensable, y ya no lo era: lo que
+ * faltaba era que la lista lo dijera.
  */
 
 type Props = {
@@ -66,6 +74,9 @@ export default function CompromisosOaecaSugeridos({
 
   if (sugeridos.length === 0) return null
 
+  const obligatorios = sugeridos.filter(g => g.vencidos > 0)
+  const opcionales = sugeridos.filter(g => g.vencidos === 0)
+
   return (
     <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 space-y-2">
       <button
@@ -78,7 +89,13 @@ export default function CompromisosOaecaSugeridos({
           Seguimiento de oficios
         </span>
         <span className="text-[10px] text-gray-500">
-          {sugeridos.length} organismo{sugeridos.length === 1 ? '' : 's'} sin seguimiento
+          {obligatorios.length > 0 && (
+            <span className="text-red-700 font-semibold">
+              {obligatorios.length} necesario{obligatorios.length === 1 ? '' : 's'} para cerrar
+            </span>
+          )}
+          {obligatorios.length > 0 && opcionales.length > 0 && ' · '}
+          {opcionales.length > 0 && `${opcionales.length} opcional${opcionales.length === 1 ? '' : 'es'}`}
         </span>
         <span className="ml-auto">
           <ChevronPlegado abierto={abierto} />
@@ -86,10 +103,27 @@ export default function CompromisosOaecaSugeridos({
       </button>
 
       {abierto && (
-        <div className="space-y-1.5">
-          {sugeridos.map(g => (
-            <Sugerido key={g.clave} g={g} nomina={nomina} onComprometer={onComprometer} />
-          ))}
+        <div className="space-y-3">
+          {obligatorios.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-red-700">
+                Con oficios vencidos — hay que dejarlos con responsable para cerrar la sesión
+              </p>
+              {obligatorios.map(g => (
+                <Sugerido key={g.clave} g={g} nomina={nomina} onComprometer={onComprometer} />
+              ))}
+            </div>
+          )}
+          {opcionales.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-gray-500">
+                Solo por vencer — opcional, no impide cerrar
+              </p>
+              {opcionales.map(g => (
+                <Sugerido key={g.clave} g={g} nomina={nomina} onComprometer={onComprometer} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
