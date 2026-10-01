@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { useCanEditAny } from '@/lib/context/UserContext'
+import { esDeHoyEnChile } from '@/lib/fechaChile'
 
 /**
  * «Actualizado hace N · Renovar» — trae del SEIA los oficios pendientes de
@@ -14,12 +16,24 @@ import { getSupabase } from '@/lib/supabase'
  * al lado se aprieta cuando hace falta: el cron corre lunes, miércoles y
  * viernes, así que casi siempre la respuesta es «ya está al día».
  *
- * ── De dónde sale ──────────────────────────────────────────────────────────
+ * ── Por qué se apaga cuando ya se actualizó hoy ────────────────────────────
+ *
+ * Porque consultar el SEIA cuesta ~5 s por expediente y en el mismo día casi
+ * nunca cambia nada: publica en horario de oficina. La ruta ya no lo consulta
+ * («candado diario», ver app/api/oficios-seia/scrape/route.ts), así que un
+ * botón habilitado prometería un trabajo que no va a pasar. Decirlo es mejor
+ * que hacer como si.
+ *
+ * Admin y editor conservan «forzar»: a veces alguien sabe algo que el panel no
+ * —«el SEREMI dice que respondió recién»— y ahí sí vale volver a preguntar.
+ *
+ * ── De dónde sale la fecha ─────────────────────────────────────────────────
  *
  * Del `importado_at` más reciente de los oficios automáticos de la región, y
  * no de `sync_status`, que es nacional: lo que importa acá es cuándo se
  * actualizó ESTA región, y el botón por región no escribe el estado nacional
- * a propósito (pisaría el cursor del cron).
+ * a propósito (pisaría el cursor del cron). Es la misma marca que usa el
+ * candado del servidor, así que la pantalla y la ruta no pueden discrepar.
  */
 
 type Props = {
@@ -34,6 +48,7 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
   const [ultima, setUltima]   = useState<string | null>(null)
   const [corriendo, setCorriendo] = useState(false)
   const [resultado, setResultado] = useState<string | null>(null)
+  const puedeForzar = useCanEditAny()
 
   const leerUltima = useCallback(async () => {
     const { data } = await getSupabase()
@@ -50,12 +65,14 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
 
   useEffect(() => { void leerUltima() }, [leerUltima])
 
-  async function actualizar() {
+  const alDiaHoy = esDeHoyEnChile(ultima)
+
+  async function actualizar(forzando = false) {
     setCorriendo(true)
     setResultado(null)
     try {
       const res = await fetch(
-        `/api/oficios-seia/scrape?region=${encodeURIComponent(regionCod)}`,
+        `/api/oficios-seia/scrape?region=${encodeURIComponent(regionCod)}${forzando ? '&forzar=1' : ''}`,
         { method: 'POST' },
       )
       const texto = await res.text()
@@ -73,6 +90,8 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
       const resueltos  = Number(json.resueltos ?? 0)
       const vinculados = Number(json.vinculados ?? 0)
       const fallados   = Number(json.fallados ?? 0)
+      const saltados   = Number(json.saltados ?? 0)
+      const procesados = Number(json.procesados ?? 0)
 
       // Corto y en la misma barra, sin alert: esto se aprieta en medio de una
       // reunión y un diálogo modal corta la conversación.
@@ -81,7 +100,11 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
       if (resueltos > 0)  partes.push(`${resueltos} resuelto${resueltos === 1 ? '' : 's'}`)
       if (vinculados > 0) partes.push(`${vinculados} enganchado${vinculados === 1 ? '' : 's'}`)
       if (fallados > 0)   partes.push(`${fallados} sin respuesta del SEIA`)
-      setResultado(partes.length > 0 ? partes.join(' · ') : 'sin cambios')
+      setResultado(
+        partes.length > 0 ? partes.join(' · ')
+        : procesados > 0 && saltados === procesados ? 'ya estaba al día hoy'
+        : 'sin cambios',
+      )
 
       await leerUltima()
       onActualizado?.()
@@ -99,15 +122,36 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
           {resultado ?? (ultima ? `Actualizado ${haceCuanto(ultima)}` : 'Nunca actualizado')}
         </span>
       )}
-      <button
-        type="button"
-        onClick={actualizar}
-        disabled={corriendo}
-        title="Traer del SEIA los oficios pendientes de esta región y pegarlos a la cartera"
-        className="text-[11px] font-semibold text-violet-700 hover:text-violet-900 disabled:opacity-50"
-      >
-        {corriendo ? 'Renovando…' : 'Renovar'}
-      </button>
+      {alDiaHoy && !corriendo ? (
+        <>
+          <span
+            className="text-[11px] font-semibold text-slate-400"
+            title="Los oficios de esta región ya se consultaron hoy en el SEIA. El SEIA publica en horario de oficina: volver a preguntarle el mismo día tarda lo mismo y trae lo mismo."
+          >
+            Al día hoy
+          </span>
+          {puedeForzar && (
+            <button
+              type="button"
+              onClick={() => actualizar(true)}
+              title="Volver a consultar el SEIA aunque ya se haya consultado hoy. Tarda unos segundos por proyecto."
+              className="text-[11px] font-semibold text-slate-400 hover:text-violet-700 underline decoration-dotted"
+            >
+              forzar
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => actualizar(false)}
+          disabled={corriendo}
+          title="Traer del SEIA los oficios pendientes de esta región y pegarlos a la cartera"
+          className="text-[11px] font-semibold text-violet-700 hover:text-violet-900 disabled:opacity-50"
+        >
+          {corriendo ? 'Renovando…' : 'Renovar'}
+        </button>
+      )}
     </span>
   )
 }
