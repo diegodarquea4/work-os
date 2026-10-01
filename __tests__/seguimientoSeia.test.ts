@@ -138,8 +138,12 @@ describe('evolutivo', () => {
 })
 
 describe('selloDeActualizacion', () => {
-  it('muestra la más antigua, separa las que no tienen datos y lista las atrasadas', () => {
+  it('muestra la más antigua, separa las que no tienen proyectos y lista las atrasadas', () => {
     const s = selloDeActualizacion(['X', 'XVI', 'XI'], { X: '2026-10-01', XVI: '2026-09-29' }, HOY)
-    expect(s).toEqual({ fecha: '2026-09-29', sinDatos: ['XI'], atrasadas: ['XVI'] })
+    expect(s).toEqual({ fecha: '2026-09-29', sinProyectos: ['XI'], atrasadas: ['XVI'] })
+  })
+  it('una región vinculada al SEIA sin oficios está en cero, no «sin proyectos»', () => {
+    const s = selloDeActualizacion(['X', 'XVI'], { X: '2026-10-01' }, HOY, new Set(['XVI']))
+    expect(s).toEqual({ fecha: '2026-10-01', sinProyectos: [], atrasadas: [] })
   })
 })

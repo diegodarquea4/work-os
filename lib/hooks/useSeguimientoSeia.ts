@@ -58,6 +58,12 @@ export type DatosSeguimientoSeia = {
   inversionPorExpediente: Map<string, number>
   /** Día chileno de la última actualización de cada región con oficios. */
   actualizado: Record<string, string>
+  /**
+   * Regiones que el tablero puede medir: tienen oficios guardados o algún
+   * proyecto de la cartera vinculado a un expediente del SEIA (que es lo que
+   * recorre el scraper). Una vinculada sin oficios está en cero, no sin datos.
+   */
+  medibles: Set<string>
 }
 
 const PAGINA = 1000
@@ -119,6 +125,11 @@ export function useSeguimientoSeia() {
           if (!actualizado[o.region_cod] || d > actualizado[o.region_cod]) actualizado[o.region_cod] = d
         }
 
+        const medibles = new Set<string>(Object.keys(actualizado))
+        for (const c of cartera) {
+          if (c.seia_expediente_id != null || c.origen_id?.startsWith('seia_')) medibles.add(c.region_cod)
+        }
+
         if (cancelado) return
         setDatos({
           hoy: diaChile(),
@@ -133,6 +144,7 @@ export function useSeguimientoSeia() {
           })),
           inversionPorExpediente,
           actualizado,
+          medibles,
         })
         setError(null)
       } catch (err) {

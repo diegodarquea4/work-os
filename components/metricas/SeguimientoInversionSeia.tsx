@@ -107,7 +107,7 @@ export default function SeguimientoInversionSeia() {
  * diario y apretarlo no traería nada.
  */
 function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia; regiones: string[]; onActualizado: () => void }) {
-  const s = selloDeActualizacion(regiones, datos.actualizado, datos.hoy)
+  const s = selloDeActualizacion(regiones, datos.actualizado, datos.hoy, datos.medibles)
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -159,9 +159,9 @@ function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia
       <div className="leading-tight">
         <p className="text-[11.5px] text-gray-400">{progreso ? `Actualizando ${progreso.hechas} de ${progreso.total}…` : 'Última actualización'}</p>
         <p className="text-sm font-bold text-slate-900 tabular-nums">{fmtF(s.fecha)}</p>
-        {(aviso || s.sinDatos.length > 0) && (
+        {(aviso || s.sinProyectos.length > 0) && (
           <p className="text-[11px] text-gray-400 max-w-[260px]" title="Regiones sin proyectos de la cartera vinculados a un expediente del SEIA: no hay oficios que traer.">
-            {aviso ?? `${s.sinDatos.length <= 2 ? s.sinDatos.map(c => NOMBRE_REGION[c]).join(' y ') : `${s.sinDatos.length} regiones`} sin proyectos en el SEIA`}
+            {aviso ?? `${s.sinProyectos.length <= 2 ? s.sinProyectos.map(c => NOMBRE_REGION[c]).join(' y ') : `${s.sinProyectos.length} regiones`} sin proyectos en el SEIA`}
           </p>
         )}
       </div>
@@ -396,7 +396,7 @@ function VistaNacional({ datos, oficios, onRegiones }: { datos: DatosSeguimiento
           <tbody>
             {filas.map((f, i) => {
               const especial = f === 'NAC' || f === 'INTER'
-              const sinDatos = !especial && !datos.actualizado[f]
+              const sinDatos = !especial && !datos.medibles.has(f)
               const sel = fila === f
               const borde = f === 'INTER' || i === 1 ? 'border-t border-gray-200' : ''
               return (
@@ -468,7 +468,7 @@ function Kpi({ activo, onClick, valor, texto, rojo = false }: { activo: boolean;
 
 
 function VistaRegional({ datos, oficios, onRegiones }: { datos: DatosSeguimientoSeia; oficios: Oficio[]; onRegiones: (r: string[]) => void }) {
-  const conDatos = COD_REGIONES.filter(c => datos.actualizado[c])
+  const conDatos = COD_REGIONES.filter(c => datos.medibles.has(c))
   // Arranca en la región con más vencidos: es la que hay que mirar primero.
   const [region, setRegion] = useState(() => {
     const venc = (c: string) => oficios.filter(o => o.region === c && o.estado === 'v').length
@@ -507,7 +507,7 @@ function VistaRegional({ datos, oficios, onRegiones }: { datos: DatosSeguimiento
       <div className="mt-4 flex items-center gap-2.5 flex-wrap">
         <select value={region} onChange={e => { setRegion(e.target.value); setAbierto(null) }}
           className="text-[13px] bg-white border border-gray-300 rounded-[9px] px-2.5 py-1.5">
-          {REGIONS.map(r => <option key={r.cod} value={r.cod} disabled={!datos.actualizado[r.cod]}>{r.nombre}{datos.actualizado[r.cod] ? '' : ' (sin proyectos en el SEIA)'}</option>)}
+          {REGIONS.map(r => <option key={r.cod} value={r.cod} disabled={!datos.medibles.has(r.cod)}>{r.nombre}{datos.medibles.has(r.cod) ? '' : ' (sin proyectos en el SEIA)'}</option>)}
         </select>
         <Segmentos<'min' | 'org'> valor={vista} onCambio={v => { setVista(v); setAbierto(null) }} opciones={[['min', 'Por ministerio'], ['org', 'Por organismo']]} />
         <div className="ml-auto flex items-center gap-3.5 text-xs text-slate-500">
@@ -618,8 +618,7 @@ function VistaComparativa({ datos, oficios, onRegiones }: { datos: DatosSeguimie
   const cods = COD_REGIONES.filter(c => regs.has(c))
   useEffect(() => { onRegiones(cods) }, [regs]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const conDatos = useMemo(() => new Set(Object.keys(datos.actualizado)), [datos])
-  const base = useMemo(() => ({ oficios, sesiones: datos.sesiones, cartera: datos.carteraAltas, conDatos }), [oficios, datos, conDatos])
+  const base = useMemo(() => ({ oficios, sesiones: datos.sesiones, cartera: datos.carteraAltas, conDatos: datos.medibles }), [oficios, datos])
   const ahora = useMemo(() => Object.fromEntries(COD_REGIONES.map(r => [r, medirRegion(r, datos.hoy, base)])), [base, datos.hoy])
   const filas = cods.map(c => ahora[c])
 
@@ -703,7 +702,7 @@ function VistaComparativa({ datos, oficios, onRegiones }: { datos: DatosSeguimie
                 return (
                   <tr key={c} className="hover:bg-stone-50">
                     <td className="sticky left-0 bg-white border-t border-gray-200 px-3 py-1.5 font-semibold whitespace-nowrap"
-                      title={datos.actualizado[c] ? `Actualizado ${fmtF(datos.actualizado[c])}` : 'Sin proyectos de la cartera vinculados al SEIA'}>
+                      title={datos.actualizado[c] ? `Actualizado ${fmtF(datos.actualizado[c])}` : datos.medibles.has(c) ? 'Sin oficios pendientes registrados' : 'Sin proyectos de la cartera vinculados al SEIA'}>
                       {NOMBRE_REGION[c]}
                     </td>
                     {ITEMS.map(it => {

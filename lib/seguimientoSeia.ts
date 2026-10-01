@@ -359,15 +359,19 @@ export function evaluacionDelCorte(sesionesRegion: Sesion[], cortes: string[], i
 /**
  * La fecha de lo que se está mostrando es la de la región MENOS al día: si
  * Los Lagos se actualizó hoy y Ñuble hace dos días, lo que se ve está al día
- * solo hasta hace dos días. `actualizado` va por región, en día chileno; una
- * región sin entrada no tiene proyectos vinculados al SEIA y no cuenta.
+ * solo hasta hace dos días. `actualizado` va por región, en día chileno.
+ *
+ * Una región sin fecha puede ser dos cosas. Si tiene proyectos de la cartera
+ * vinculados al SEIA (`vinculadas`), se revisó y no tenía nada pendiente: el
+ * scraper solo escribe oficios, así que no deja rastro — no está atrasada,
+ * está en cero. Si no tiene ninguno, no hay qué traer: `sinProyectos`.
  */
-export function selloDeActualizacion(regiones: string[], actualizado: Record<string, string>, hoy: string) {
+export function selloDeActualizacion(regiones: string[], actualizado: Record<string, string>, hoy: string, vinculadas: Set<string> = new Set()) {
   const conFecha = regiones.filter(r => actualizado[r])
   const fechas = conFecha.map(r => actualizado[r]).sort()
   return {
     fecha: fechas[0] ?? null,
-    sinDatos: regiones.filter(r => !actualizado[r]),
+    sinProyectos: regiones.filter(r => !actualizado[r] && !vinculadas.has(r)),
     /** Las que se pueden actualizar hoy (la ruta tiene candado diario). */
     atrasadas: conFecha.filter(r => actualizado[r] < hoy),
   }
