@@ -25,9 +25,12 @@
  *     Métricas «Seguimiento de la inversión en el SEIA», que tiene que ser la
  *     foto del país y no solo de lo que cada comité cargó. Son ~350
  *     expedientes: no entra en una invocación, y para eso está el cursor.
- *   · La corrida de UNA región (`?region=`, el botón) recorre solo los
- *     proyectos PRIORIZADOS de la cartera de esa región. Es el refresco rápido
- *     de lo que el comité está empujando; el resto lo pone al día el cron.
+ *   · La corrida de UNA región (`?region=`, el botón) recorre lo mismo pero
+ *     solo de esa región. Medido el 2026-10-01: ~1 s por expediente desde
+ *     Santiago (unas 3 veces más desde Vercel), y casi todas las regiones
+ *     tienen menos de 60 — entre medio minuto y dos. Atacama, con 172 por su
+ *     cartera, no entra en una invocación: por eso la región también tiene
+ *     cursor (ver `nombreSync`).
  *
  * Los ya guardados entran a la nacional porque, sin refrescarlos, un oficio de
  * un proyecto que salió de calificación quedaría congelado: su plazo envejece
@@ -59,7 +62,7 @@ import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import { inicioDelDiaChile } from '@/lib/fechaChile'
-import { INE_INVERSE } from '@/lib/regions'
+import { INE_CODE, INE_INVERSE } from '@/lib/regions'
 import { atrasoAlCerrar, type MotivoCierre } from '@/lib/oficiosFotos'
 import { regionesQueNecesitanRespaldo, tomarFotoOficios } from '@/lib/oficiosFotoServer'
 import {
@@ -426,8 +429,17 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
 
 // ── Cursor ───────────────────────────────────────────────────────────────────
 
-async function leerCursor(db: Db): Promise<Cursor> {
-  const { data } = await db.from('sync_status').select('notes').eq('name', SYNC_NAME).maybeSingle()
+/**
+ * El nombre en sync_status: el nacional, o uno por región. Separados para que
+ * apretar el botón de una región no pise el avance del cron. /api/health solo
+ * monitorea el nacional; los de región son cursor y nada más.
+ */
+function nombreSync(region: string | null): string {
+  return region ? `${SYNC_NAME}:${region}` : SYNC_NAME
+}
+
+async function leerCursor(db: Db, nombre: string): Promise<Cursor> {
+  const { data } = await db.from('sync_status').select('notes').eq('name', nombre).maybeSingle()
   if (!data?.notes) return { idx: 0 }
   try {
     const c = JSON.parse(data.notes as string) as Partial<Cursor>
@@ -479,11 +491,12 @@ export async function POST(request: Request) {
    * Con `?region=<cod>` recorre UNA región; sin él, las 16. La diferencia no
    * es solo de alcance:
    *
-   *   · Una región recorre solo sus proyectos priorizados (ver arriba), así
-   *     que entra de sobra en el presupuesto de tiempo y NO usa cursor. Tocarlo sería peor que inútil:
-   *     pisaría el avance de la corrida nacional del cron, que es lo que
-   *     garantiza que ninguna región se quede sin actualizar. Mismo criterio
-   *     que /api/seia-sync-v2 con su `?region=`.
+   *   · Una región usa SU PROPIO cursor (`oficios-seia-scrape:<cod>` en
+   *     sync_status): casi siempre termina en una invocación, pero Atacama no,
+   *     y sin cursor cada reintento volvería a empezar por los expedientes sin
+   *     oficios (que el candado diario no ve, porque no dejan filas). Nunca
+   *     toca el cursor nacional: pisaría el avance del cron, que es lo que
+   *     garantiza que ninguna región se quede sin actualizar.
    *   · Y la puede apretar quien conduce ESE comité, no solo un admin: es su
    *     región y su cartera.
    *
@@ -532,7 +545,7 @@ export async function POST(request: Request) {
   // ── La cartera, que define qué expedientes se miran ──────────────────────
   const { data: carteraRows, error: carteraErr } = await db
     .from('comite_economico_proyecto')
-    .select('id, region_cod, nombre, priorizado, origen_sistema, origen_id, seia_expediente_id')
+    .select('id, region_cod, nombre, origen_sistema, origen_id, seia_expediente_id')
     .or('origen_sistema.eq.seia,seia_expediente_id.not.is.null')
 
   if (carteraErr) {
@@ -548,10 +561,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Por región, solo los priorizados: es el refresco rápido de lo que el
-  // comité empuja. La nacional se lleva la cartera entera.
   const deCartera: ProyectoAScrapear[] = (carteraRows ?? [])
-    .filter(r => !soloRegion || (r.region_cod === soloRegion && r.priorizado === true))
+    .filter(r => !soloRegion || r.region_cod === soloRegion)
     .map(r => {
       const exp = expedienteDeProyecto(r as unknown as ProyectoCartera)
       return exp == null ? null : {
@@ -568,9 +579,8 @@ export async function POST(request: Request) {
   // Se identifican por su expediente y NO tienen proyecto: `id` va en negativo
   // para que no colisione con un id de cartera en el orden, y
   // `proyecto_privado_id` queda nulo — lo que escriban sigue sin proyecto,
-  // que es lo correcto: nadie los sumó. Solo en la nacional: la corrida por
-  // región es solo de priorizados.
-  const q = db
+  // que es lo correcto: nadie los sumó.
+  let q = db
     .from('sesion_oficios_tratados')
     .select('id_expediente, region_cod, nombre_proyecto')
     .eq('automatico', true)
@@ -578,24 +588,27 @@ export async function POST(request: Request) {
     .is('proyecto_privado_id', null)
     .not('id_expediente', 'is', null)
     .limit(5000)
-  const { data: huerfanosRows } = soloRegion ? { data: [] } : await q
+  if (soloRegion) q = q.eq('region_cod', soloRegion)
+  const { data: huerfanosRows } = await q
 
   const yaEnCartera = new Set(deCartera.map(p => p.expediente))
 
-  // ── Todo lo que está en calificación en el SEIA (solo la nacional) ──────
+  // ── Todo lo que está en calificación en el SEIA ─────────────────────────
   //
   // Sale del catálogo (`v2_proyectos_inversion`, que el sync del SEIA renueva
   // los lunes), con la región que le asigna el SEIA. Como los sueltos, va sin
   // proyecto: lo que escriba queda con `proyecto_privado_id` nulo hasta que
   // alguien lo sume a la cartera, y ahí la revinculación lo engancha.
   const enCalificacion = new Map<number, ProyectoAScrapear>()
-  if (!soloRegion) {
-    const { data: catalogo, error: catErr } = await db
+  {
+    let qc = db
       .from('v2_proyectos_inversion')
       .select('id, region_id, nombre')
       .eq('sistema_origen', 'seia')
       .eq('estado', 'En Calificación')
       .limit(5000)
+    if (soloRegion && INE_CODE[soloRegion] != null) qc = qc.eq('region_id', INE_CODE[soloRegion])
+    const { data: catalogo, error: catErr } = await qc
     // Sin catálogo se trabaja con menos, no mal: cartera y sueltos igual van.
     if (catErr) console.error('[oficios-seia/scrape] no se pudo leer el catálogo:', catErr.message)
     for (const r of catalogo ?? []) {
@@ -641,17 +654,14 @@ export async function POST(request: Request) {
       ok: true,
       partial: false,
       proyectos: 0,
-      mensaje: soloRegion
-        ? 'Esta región no tiene proyectos priorizados con expediente del SEIA.'
-        : 'No hay proyectos en calificación ni en la cartera con expediente del SEIA.',
+      mensaje: 'No hay proyectos en calificación ni en la cartera con expediente del SEIA.',
     })
   }
 
   const vistosHoy = forzar ? new Set<number>() : await expedientesVistosHoy(db, soloRegion)
 
-  // Sin región se retoma el cursor nacional; con región se empieza de cero y
-  // no se escribe ninguno.
-  const cursor = soloRegion ? { idx: 0 } : await leerCursor(db)
+  // Cada corrida retoma SU cursor: el nacional o el de la región.
+  const cursor = await leerCursor(db, nombreSync(soloRegion))
   const desde = cursor.idx < proyectos.length ? cursor.idx : 0
 
   let i = desde
@@ -769,11 +779,11 @@ export async function POST(request: Request) {
 
   // Cadena vacía y no null: es lo que `leerCursor` entiende como «empezar de
   // cero», y es como el sync del catálogo limpia el suyo.
-  // La corrida por región NO toca el cursor nacional: si lo hiciera, apretar
-  // el botón de una región borraría el avance del cron y las demás quedarían
-  // sin actualizar sin que nadie se entere.
-  if (!soloRegion) {
-    await recordSyncStatus(SYNC_NAME, {
+  // Cada corrida escribe SU nombre: la de una región nunca toca el cursor
+  // nacional — si lo hiciera, apretar el botón de una región borraría el
+  // avance del cron y las demás quedarían sin actualizar sin que nadie se entere.
+  {
+    await recordSyncStatus(nombreSync(soloRegion), {
       status:     !termino || fallados > 0 ? 'partial' : 'ok',
       durationMs: Date.now() - t0,
       rows:       escritos,

@@ -28,7 +28,7 @@ import { diaChile } from '@/lib/fechaChile'
  * de malo y va en gris.
  */
 
-type Pestana = 'nacional' | 'regional' | 'comparativa' | 'cartera'
+export type Pestana = 'nacional' | 'regional' | 'comparativa' | 'cartera'
 
 const NOMBRE_REGION = Object.fromEntries(REGIONS.map(r => [r.cod, r.nombre]))
 const fmtN = (n: number) => Math.round(n).toLocaleString('es-CL')
@@ -48,9 +48,13 @@ function calor(valor: number, max: number, tono: 'rojo' | 'gris'): React.CSSProp
   }
 }
 
-export default function SeguimientoInversionSeia() {
+export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', regionInicial }: {
+  /** Desde el Comité Económico de una región se abre en «Regional», en esa región. */
+  pestanaInicial?: Pestana
+  regionInicial?: string
+} = {}) {
   const { datos, error, cargando, recargar } = useSeguimientoSeia()
-  const [pestana, setPestana] = useState<Pestana>('nacional')
+  const [pestana, setPestana] = useState<Pestana>(pestanaInicial)
   // Lo que se está mostrando, para el sello: cada pestaña lo informa.
   const [enPantalla, setEnPantalla] = useState<string[]>(COD_REGIONES)
 
@@ -86,7 +90,7 @@ export default function SeguimientoInversionSeia() {
       </nav>
 
       {pestana === 'nacional'    && <VistaNacional datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
-      {pestana === 'regional'    && <VistaRegional datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
+      {pestana === 'regional'    && <VistaRegional datos={datos} oficios={oficios} onRegiones={setEnPantalla} regionInicial={regionInicial} />}
       {pestana === 'comparativa' && <VistaComparativa datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
       {pestana === 'cartera'     && <VistaCartera datos={datos} onRegiones={setEnPantalla} />}
 
@@ -104,9 +108,8 @@ export default function SeguimientoInversionSeia() {
 /**
  * La fecha es la del oficio menos al día entre las regiones que se muestran.
  * El cron nacional (día por medio) recorre todo lo que está en calificación;
- * el botón es el refresco rápido: actualiza los proyectos PRIORIZADOS de las
- * regiones mostradas, de a una, y se apaga cuando ya están al día hoy (la
- * ruta tiene candado diario y apretarlo no traería nada).
+ * el botón hace lo mismo con las regiones mostradas que no están al día, de a
+ * una, y se apaga cuando ya están todas (la ruta tiene candado diario).
  */
 function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia; regiones: string[]; onActualizado: () => void }) {
   const s = selloDeActualizacion(regiones, datos.actualizado, datos.hoy, datos.medibles, r => datos.refrescables.has(r))
@@ -121,9 +124,9 @@ function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia
     for (let i = 0; i < cola.length; i++) {
       const r = cola[i]
       try {
-        // Una región grande puede cortar a medias (`partial`); el candado
-        // diario hace que reintentar siga donde quedó.
-        for (let intento = 0; intento < 3; intento++) {
+        // Una región grande (Atacama) corta a medias: `partial`, y la ruta
+        // guarda dónde quedó para seguir en el reintento.
+        for (let intento = 0; intento < 6; intento++) {
           const res = await fetch(`/api/oficios-seia/scrape?region=${encodeURIComponent(r)}`, { method: 'POST' })
           if (res.status === 403) { sinPermiso.push(r); break }
           const json = await res.json().catch(() => null) as { partial?: boolean; error?: string } | null
@@ -145,9 +148,9 @@ function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia
 
   const alDia = s.atrasadas.length === 0
   const titulo = progreso ? `Actualizando ${progreso.hechas} de ${progreso.total}…`
-    : alDia ? 'Los proyectos priorizados ya se actualizaron hoy (o no hay priorizados con expediente del SEIA). El resto lo actualiza el cron nacional día por medio.'
-    : s.atrasadas.length === 1 ? `Actualizar desde el SEIA los proyectos priorizados de ${NOMBRE_REGION[s.atrasadas[0]]}`
-    : `Actualizar desde el SEIA los proyectos priorizados de ${s.atrasadas.length} regiones`
+    : alDia ? 'Ya se actualizó hoy. Se puede volver a actualizar mañana.'
+    : s.atrasadas.length === 1 ? `Actualizar ${NOMBRE_REGION[s.atrasadas[0]]} desde el SEIA (entre medio minuto y dos)`
+    : `Actualizar desde el SEIA las ${s.atrasadas.length} regiones que no están al día (de a una; unos minutos)`
 
   return (
     <div className="ml-auto flex items-center gap-2.5 text-right">
@@ -469,10 +472,12 @@ function Kpi({ activo, onClick, valor, texto, rojo = false }: { activo: boolean;
 }
 
 
-function VistaRegional({ datos, oficios, onRegiones }: { datos: DatosSeguimientoSeia; oficios: Oficio[]; onRegiones: (r: string[]) => void }) {
+function VistaRegional({ datos, oficios, onRegiones, regionInicial }: { datos: DatosSeguimientoSeia; oficios: Oficio[]; onRegiones: (r: string[]) => void; regionInicial?: string }) {
   const conDatos = COD_REGIONES.filter(c => datos.medibles.has(c))
-  // Arranca en la región con más vencidos: es la que hay que mirar primero.
+  // Arranca en la región pedida o, si no, en la con más vencidos: es la que
+  // hay que mirar primero.
   const [region, setRegion] = useState(() => {
+    if (regionInicial && COD_REGIONES.includes(regionInicial)) return regionInicial
     const venc = (c: string) => oficios.filter(o => o.region === c && o.estado === 'v').length
     return [...conDatos].sort((a, b) => venc(b) - venc(a))[0] ?? COD_REGIONES[0]
   })

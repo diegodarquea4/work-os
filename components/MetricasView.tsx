@@ -25,7 +25,6 @@ import {
 import { useCensoRegiones, type CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 import { useUltimaActualizacionMetricas, fmtUltimaActualizacion } from '@/lib/hooks/useUltimaActualizacionMetricas'
 import { getSupabase } from '@/lib/supabase'
-import { useCan } from '@/lib/context/UserContext'
 import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
 
 // ── Tipos ──────────────────────────────────────────────────────
@@ -167,13 +166,9 @@ const MODULES: { id: ModuleId; label: string }[] = [
 ]
 
 function ModuleNav({ active, onSelect }: { active: ModuleId; onSelect: (m: ModuleId) => void }) {
-  // El Comité Económico Regional se ve con la capacidad del comité en alguna
-  // región: los datos son de sesiones y oficios, no indicadores públicos. Lo
-  // que muestra dentro lo acota la RLS a las regiones de cada uno.
-  const veEconomico = useCan('comite.economico.operar')
   return (
     <nav className="bg-slate-900 flex overflow-x-auto px-4 border-b-2 border-sky-600/30">
-      {MODULES.filter(m => m.id !== 'economico' || veEconomico).map(m => (
+      {MODULES.map(m => (
         <button key={m.id} onClick={() => onSelect(m.id)}
           className={`px-5 py-3 text-xs font-semibold tracking-wide whitespace-nowrap border-b-2 -mb-0.5 transition-colors shrink-0 ${
             active === m.id ? 'text-white border-sky-400' : 'text-slate-400 border-transparent hover:text-white'

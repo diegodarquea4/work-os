@@ -13,6 +13,7 @@ import MetaEmpleoModal from './MetaEmpleoModal'
 import OaecaModal from './OaecaModal'
 import OficiosRegionModal from './OficiosRegionModal'
 import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
+import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
 
 /**
  * Panel del tab "Comité Económico" en ComitesRegionalesSection.
@@ -52,6 +53,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [metaEmpleoOpen, setMetaEmpleoOpen] = useState(false)
   const [oaecaOpen, setOaecaOpen]         = useState(false)
   const [oficiosOpen, setOficiosOpen]     = useState(false)
+  const [tableroOpen, setTableroOpen]     = useState(false)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
@@ -165,6 +167,16 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 Oficios
               </button>
               <span className="text-violet-200">|</span>
+              {/* El mismo tablero de Métricas, abierto en esta región: la vista
+                  de arriba de lo que «Oficios» lista proyecto por proyecto. */}
+              <button
+                onClick={() => setTableroOpen(true)}
+                className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                title="Tablero de seguimiento de la inversión en el SEIA: vencidos, pendientes y comparativa entre regiones"
+              >
+                Seguimiento SEIA
+              </button>
+              <span className="text-violet-200">|</span>
               <button
                 onClick={() => setHistorialOpen(true)}
                 className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
@@ -243,6 +255,23 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       )}
       {oaecaOpen && (
         <OaecaModal currentUserEmail={userEmail} onClose={() => setOaecaOpen(false)} />
+      )}
+      {tableroOpen && (
+        <div className="fixed inset-x-0 bottom-0 top-20 z-30 bg-gray-50 flex flex-col">
+          <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+            <h2 className="text-sm font-semibold text-slate-900">Seguimiento de la inversión en el SEIA · {region.nombre}</h2>
+            <button
+              onClick={() => setTableroOpen(false)}
+              className="text-xs font-medium text-slate-500 hover:text-slate-800"
+              aria-label="Cerrar el tablero y volver al Comité Económico"
+            >
+              Cerrar ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <SeguimientoInversionSeia pestanaInicial="regional" regionInicial={region.cod} />
+          </div>
+        </div>
       )}
       {oficiosOpen && (
         <OficiosRegionModal
