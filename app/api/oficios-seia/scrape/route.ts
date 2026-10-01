@@ -19,7 +19,8 @@
  *
  * Depende de quién llama (Manuel, 2026-10-01):
  *
- *   · La corrida NACIONAL (el cron, día por medio) recorre TODO lo que está
+ *   · La corrida NACIONAL (el cron: lunes, miércoles y viernes, con respaldo
+ *     martes y jueves si la anterior no corrió) recorre TODO lo que está
  *     en calificación en el SEIA, esté o no en la cartera, más la cartera y
  *     los que ya tienen oficios guardados. Es lo que alimenta el tablero de
  *     Métricas «Seguimiento de la inversión en el SEIA», que tiene que ser la
@@ -61,7 +62,7 @@ import { NextResponse } from 'next/server'
 import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
-import { inicioDelDiaChile } from '@/lib/fechaChile'
+import { diaChile, inicioDelDiaChile } from '@/lib/fechaChile'
 import { INE_CODE, INE_INVERSE } from '@/lib/regions'
 import { atrasoAlCerrar, type MotivoCierre } from '@/lib/oficiosFotos'
 import { regionesQueNecesitanRespaldo, tomarFotoOficios } from '@/lib/oficiosFotoServer'
@@ -537,6 +538,23 @@ export async function POST(request: Request) {
     )
   }
   const forzar = pidioForzar && puedeForzar
+
+  // ── Respaldo del cron (martes y jueves) ──────────────────────────────────
+  //
+  // Con `?solo_si_falta=1` la corrida nacional se hace solo si NO hubo una
+  // el día anterior (día chileno). GitHub se salta corridas programadas cuando
+  // está cargado; esto las recupera al día siguiente sin duplicar las que sí
+  // corrieron. «Corrió» = escribió su fila en sync_status, que la nacional
+  // hace en cada invocación (también las que cortan a medias).
+  if (params.get('solo_si_falta') === '1' && !soloRegion) {
+    const { data: ultima } = await getSupabaseAdmin()
+      .from('sync_status').select('last_run_at').eq('name', SYNC_NAME).maybeSingle()
+    const ayer = diaChile(new Date(Date.now() - 86_400_000))
+    const ultimaVez = (ultima?.last_run_at as string | null) ?? null
+    if (ultimaVez && diaChile(new Date(ultimaVez)) >= ayer) {
+      return NextResponse.json({ ok: true, partial: false, omitido: true, ultima_corrida: ultimaVez })
+    }
+  }
 
   const db = getSupabaseAdmin()
   const t0 = Date.now()

@@ -38,11 +38,14 @@ export const runtime = 'nodejs'
 // Atención: estos valores son días entre corridas esperadas (NO días desde la
 // última corrida). El cálculo de atraso suma ese valor + margen.
 const EXPECTED_DAYS: Record<string, { intervalDays: number; cron: string; descripcion: string }> = {
-  // Oficios del SEIA: día por medio, todo lo que está en calificación. No
+  // Oficios del SEIA: lunes, miércoles y viernes (con respaldo martes y
+  // jueves), todo lo que está en calificación. Intervalo 3 = el hueco normal
+  // viernes→lunes; la alarma salta a los 4,5 días, o sea solo si se perdieron
+  // la corrida Y su respaldo. No
   // estaba monitoreado y por eso nadie notó que la corrida del miércoles
   // 2026-09-30 no ocurrió. Solo el nacional: los `oficios-seia-scrape:<región>`
   // son el cursor del botón por región, no un sync con calendario.
-  'oficios-seia-scrape': { intervalDays: 2, cron: 'Día por medio 11:30 UTC', descripcion: 'SEIA — oficios pendientes de todo lo que está en calificación' },
+  'oficios-seia-scrape': { intervalDays: 3, cron: 'Lun/Mié/Vie 11:30 UTC (+ respaldo Mar/Jue)', descripcion: 'SEIA — oficios pendientes de todo lo que está en calificación' },
   ine:            { intervalDays:  7, cron: 'Lun 07:00 UTC',     descripcion: 'BCCh — desocupación, PIB, ventas regionales' },
   // SEIA volvió a tener cron (PR #13 retiró el botón manual del Comité de
   // Inversión sin dejar otro disparador) — vuelve también al monitoreo.

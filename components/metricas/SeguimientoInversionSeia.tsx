@@ -107,7 +107,7 @@ export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', 
 
 /**
  * La fecha es la del oficio menos al día entre las regiones que se muestran.
- * El cron nacional (día por medio) recorre todo lo que está en calificación;
+ * El cron nacional (lunes, miércoles y viernes) recorre todo lo que está en calificación;
  * el botón hace lo mismo con las regiones mostradas que no están al día, de a
  * una, y se apaga cuando ya están todas (la ruta tiene candado diario).
  */
