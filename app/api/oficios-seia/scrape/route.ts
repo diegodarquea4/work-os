@@ -17,19 +17,24 @@
  *
  * ── Qué recorre ────────────────────────────────────────────────────────────
  *
- * Dos conjuntos, unidos:
+ * Depende de quién llama (Manuel, 2026-10-01):
  *
- *   · Los expedientes de la CARTERA, que es lo que el comité sigue.
- *   · Los que YA tienen oficios guardados, estén o no en la cartera.
+ *   · La corrida NACIONAL (el cron, día por medio) recorre TODO lo que está
+ *     en calificación en el SEIA, esté o no en la cartera, más la cartera y
+ *     los que ya tienen oficios guardados. Es lo que alimenta el tablero de
+ *     Métricas «Seguimiento de la inversión en el SEIA», que tiene que ser la
+ *     foto del país y no solo de lo que cada comité cargó. Son ~350
+ *     expedientes: no entra en una invocación, y para eso está el cursor.
+ *   · La corrida de UNA región (`?region=`, el botón) recorre solo los
+ *     proyectos PRIORIZADOS de la cartera de esa región. Es el refresco rápido
+ *     de lo que el comité está empujando; el resto lo pone al día el cron.
  *
- * El segundo existe porque el archivo del SEIA era nacional y dejó 465 oficios
- * de proyectos que nadie sigue. Sin refrescarlos quedan congelados: su plazo
- * envejece solo y con los meses aparecen como atrasos gravísimos cuando la
- * mayoría ya fue respondida. Se midió: son 51 expedientes más, o sea que
- * mantenerlos al día es barato — y mentir sobre ellos, gratis pero caro.
+ * Los ya guardados entran a la nacional porque, sin refrescarlos, un oficio de
+ * un proyecto que salió de calificación quedaría congelado: su plazo envejece
+ * solo y con los meses aparece como un atraso gravísimo que ya fue respondido.
  *
- * Lo que NO se hace es recorrer el catálogo entero del SEIA: son miles de
- * expedientes y traerían oficios que nadie pidió ver.
+ * Lo que NO se recorre es el catálogo entero (aprobados, rechazados…): son
+ * miles de expedientes cerrados que no tienen oficios vivos.
  *
  * ── Cuánto tarda, y por qué ────────────────────────────────────────────────
  *
@@ -54,6 +59,7 @@ import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import { inicioDelDiaChile } from '@/lib/fechaChile'
+import { INE_INVERSE } from '@/lib/regions'
 import { atrasoAlCerrar, type MotivoCierre } from '@/lib/oficiosFotos'
 import { regionesQueNecesitanRespaldo, tomarFotoOficios } from '@/lib/oficiosFotoServer'
 import {
@@ -473,8 +479,8 @@ export async function POST(request: Request) {
    * Con `?region=<cod>` recorre UNA región; sin él, las 16. La diferencia no
    * es solo de alcance:
    *
-   *   · Una región entra de sobra en el presupuesto de tiempo (son ~15
-   *     proyectos), así que NO usa cursor. Tocarlo sería peor que inútil:
+   *   · Una región recorre solo sus proyectos priorizados (ver arriba), así
+   *     que entra de sobra en el presupuesto de tiempo y NO usa cursor. Tocarlo sería peor que inútil:
    *     pisaría el avance de la corrida nacional del cron, que es lo que
    *     garantiza que ninguna región se quede sin actualizar. Mismo criterio
    *     que /api/seia-sync-v2 con su `?region=`.
@@ -526,7 +532,7 @@ export async function POST(request: Request) {
   // ── La cartera, que define qué expedientes se miran ──────────────────────
   const { data: carteraRows, error: carteraErr } = await db
     .from('comite_economico_proyecto')
-    .select('id, region_cod, nombre, origen_sistema, origen_id, seia_expediente_id')
+    .select('id, region_cod, nombre, priorizado, origen_sistema, origen_id, seia_expediente_id')
     .or('origen_sistema.eq.seia,seia_expediente_id.not.is.null')
 
   if (carteraErr) {
@@ -542,8 +548,10 @@ export async function POST(request: Request) {
     )
   }
 
+  // Por región, solo los priorizados: es el refresco rápido de lo que el
+  // comité empuja. La nacional se lleva la cartera entera.
   const deCartera: ProyectoAScrapear[] = (carteraRows ?? [])
-    .filter(r => !soloRegion || r.region_cod === soloRegion)
+    .filter(r => !soloRegion || (r.region_cod === soloRegion && r.priorizado === true))
     .map(r => {
       const exp = expedienteDeProyecto(r as unknown as ProyectoCartera)
       return exp == null ? null : {
@@ -560,8 +568,9 @@ export async function POST(request: Request) {
   // Se identifican por su expediente y NO tienen proyecto: `id` va en negativo
   // para que no colisione con un id de cartera en el orden, y
   // `proyecto_privado_id` queda nulo — lo que escriban sigue sin proyecto,
-  // que es lo correcto: nadie los sumó.
-  let q = db
+  // que es lo correcto: nadie los sumó. Solo en la nacional: la corrida por
+  // región es solo de priorizados.
+  const q = db
     .from('sesion_oficios_tratados')
     .select('id_expediente, region_cod, nombre_proyecto')
     .eq('automatico', true)
@@ -569,14 +578,43 @@ export async function POST(request: Request) {
     .is('proyecto_privado_id', null)
     .not('id_expediente', 'is', null)
     .limit(5000)
-  if (soloRegion) q = q.eq('region_cod', soloRegion)
-  const { data: huerfanosRows } = await q
+  const { data: huerfanosRows } = soloRegion ? { data: [] } : await q
 
   const yaEnCartera = new Set(deCartera.map(p => p.expediente))
+
+  // ── Todo lo que está en calificación en el SEIA (solo la nacional) ──────
+  //
+  // Sale del catálogo (`v2_proyectos_inversion`, que el sync del SEIA renueva
+  // los lunes), con la región que le asigna el SEIA. Como los sueltos, va sin
+  // proyecto: lo que escriba queda con `proyecto_privado_id` nulo hasta que
+  // alguien lo sume a la cartera, y ahí la revinculación lo engancha.
+  const enCalificacion = new Map<number, ProyectoAScrapear>()
+  if (!soloRegion) {
+    const { data: catalogo, error: catErr } = await db
+      .from('v2_proyectos_inversion')
+      .select('id, region_id, nombre')
+      .eq('sistema_origen', 'seia')
+      .eq('estado', 'En Calificación')
+      .limit(5000)
+    // Sin catálogo se trabaja con menos, no mal: cartera y sueltos igual van.
+    if (catErr) console.error('[oficios-seia/scrape] no se pudo leer el catálogo:', catErr.message)
+    for (const r of catalogo ?? []) {
+      const exp = Number(String(r.id).replace(/^seia_/, ''))
+      const region = r.region_id != null ? INE_INVERSE[r.region_id as number] : undefined
+      if (!Number.isFinite(exp) || !region || region === 'NAC' || yaEnCartera.has(exp)) continue
+      enCalificacion.set(exp, {
+        id: -exp,
+        region_cod: region,
+        nombre: (r.nombre as string) ?? 'Proyecto sin nombre',
+        expediente: exp,
+      })
+    }
+  }
+
   const sueltos = new Map<number, ProyectoAScrapear>()
   for (const r of huerfanosRows ?? []) {
     const exp = r.id_expediente as number
-    if (yaEnCartera.has(exp) || sueltos.has(exp)) continue
+    if (yaEnCartera.has(exp) || enCalificacion.has(exp) || sueltos.has(exp)) continue
     sueltos.set(exp, {
       id: -exp,
       region_cod: r.region_cod as string,
@@ -591,6 +629,7 @@ export async function POST(request: Request) {
   // afuera, no lo propio.
   const proyectos: ProyectoAScrapear[] = [
     ...deCartera.sort((a, b) => a.id - b.id),
+    ...[...enCalificacion.values()].sort((a, b) => a.expediente - b.expediente),
     ...[...sueltos.values()].sort((a, b) => a.expediente - b.expediente),
   ]
 
@@ -602,7 +641,9 @@ export async function POST(request: Request) {
       ok: true,
       partial: false,
       proyectos: 0,
-      mensaje: 'Ningún proyecto de la cartera tiene expediente del SEIA cargado.',
+      mensaje: soloRegion
+        ? 'Esta región no tiene proyectos priorizados con expediente del SEIA.'
+        : 'No hay proyectos en calificación ni en la cartera con expediente del SEIA.',
     })
   }
 

@@ -142,6 +142,11 @@ describe('selloDeActualizacion', () => {
     const s = selloDeActualizacion(['X', 'XVI', 'XI'], { X: '2026-10-01', XVI: '2026-09-29' }, HOY)
     expect(s).toEqual({ fecha: '2026-09-29', sinProyectos: ['XI'], atrasadas: ['XVI'] })
   })
+  it('el botón actualiza lo que diga `refrescable`, no lo que tenga fecha vieja', () => {
+    const s = selloDeActualizacion(['X', 'XVI'], { X: '2026-09-28', XVI: '2026-09-29' }, HOY, new Set(), r => r === 'XVI')
+    expect(s.atrasadas).toEqual(['XVI'])
+    expect(s.fecha).toBe('2026-09-28')
+  })
   it('una región vinculada al SEIA sin oficios está en cero, no «sin proyectos»', () => {
     const s = selloDeActualizacion(['X', 'XVI'], { X: '2026-10-01' }, HOY, new Set(['XVI']))
     expect(s).toEqual({ fecha: '2026-10-01', sinProyectos: [], atrasadas: [] })

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
-import { useSeguimientoSeia, type DatosSeguimientoSeia } from '@/lib/hooks/useSeguimientoSeia'
+import { useSeguimientoSeia, expedienteDeCartera, type DatosSeguimientoSeia } from '@/lib/hooks/useSeguimientoSeia'
+import TablaProyectosFiltrable, { type FilaProyecto } from './TablaProyectosFiltrable'
 import {
   COD_REGIONES, FILAS_MATRIZ, MINISTERIOS, ATRASO_MAXIMO_DIAS, DIAS_PENDIENTE,
   nombreFila, ministerioCorto, ministerioLargo, prepararOficios, pasaModo, armarMatriz, claveCelda,
@@ -101,13 +102,14 @@ export default function SeguimientoInversionSeia() {
 // ══ Sello: última actualización + botón ═════════════════════════════════════
 
 /**
- * La fecha es la de la región menos al día entre las que se están mostrando.
- * El botón actualiza esas mismas regiones, de a una (cada una tarda ~15 s en
- * el SEIA), y se apaga cuando ya están todas al día: la ruta tiene candado
- * diario y apretarlo no traería nada.
+ * La fecha es la del oficio menos al día entre las regiones que se muestran.
+ * El cron nacional (día por medio) recorre todo lo que está en calificación;
+ * el botón es el refresco rápido: actualiza los proyectos PRIORIZADOS de las
+ * regiones mostradas, de a una, y se apaga cuando ya están al día hoy (la
+ * ruta tiene candado diario y apretarlo no traería nada).
  */
 function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia; regiones: string[]; onActualizado: () => void }) {
-  const s = selloDeActualizacion(regiones, datos.actualizado, datos.hoy, datos.medibles)
+  const s = selloDeActualizacion(regiones, datos.actualizado, datos.hoy, datos.medibles, r => datos.refrescables.has(r))
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -143,9 +145,9 @@ function Sello({ datos, regiones, onActualizado }: { datos: DatosSeguimientoSeia
 
   const alDia = s.atrasadas.length === 0
   const titulo = progreso ? `Actualizando ${progreso.hechas} de ${progreso.total}…`
-    : alDia ? 'Ya se actualizó hoy. Se puede volver a actualizar mañana.'
-    : s.atrasadas.length === 1 ? `Actualizar ${NOMBRE_REGION[s.atrasadas[0]]} desde el SEIA`
-    : `Actualizar desde el SEIA las ${s.atrasadas.length} regiones que no están al día`
+    : alDia ? 'Los proyectos priorizados ya se actualizaron hoy (o no hay priorizados con expediente del SEIA). El resto lo actualiza el cron nacional día por medio.'
+    : s.atrasadas.length === 1 ? `Actualizar desde el SEIA los proyectos priorizados de ${NOMBRE_REGION[s.atrasadas[0]]}`
+    : `Actualizar desde el SEIA los proyectos priorizados de ${s.atrasadas.length} regiones`
 
   return (
     <div className="ml-auto flex items-center gap-2.5 text-right">
@@ -818,10 +820,18 @@ function Tile({ valor, unidad, texto, nota }: { valor: string; unidad?: string; 
   )
 }
 
+/** Nombre para la columna Región: los interregionales del SEIA no son de ninguna. */
+const nombreRegionCartera = (c: string) => c === 'INTER' ? 'Interregional' : NOMBRE_REGION[c] ?? c
+
+/**
+ * Mi cartera y, abajo, lo demás que está en calificación — con las MISMAS
+ * columnas, para poder leer una tabla contra la otra. Lo de la cartera
+ * vinculado al SEIA toma de ahí titular, tipo, comuna, vía, inversión e
+ * ingreso; lo cargado a mano (65 de 276 hoy) no los tiene y muestra su monto
+ * en su propia moneda, sin convertir.
+ */
 function VistaCartera({ datos, onRegiones }: { datos: DatosSeguimientoSeia; onRegiones: (r: string[]) => void }) {
   const [sel, setSel] = useState<string>('*')
-  const [todosMia, setTodosMia] = useState(false)
-  const [todosOtros, setTodosOtros] = useState(false)
   const cods = sel === '*' ? [...COD_REGIONES, 'INTER'] : [sel]
   useEffect(() => { onRegiones(sel === '*' ? COD_REGIONES : [sel]) }, [sel, onRegiones])
 
@@ -829,22 +839,30 @@ function VistaCartera({ datos, onRegiones }: { datos: DatosSeguimientoSeia; onRe
   const inversion = calif.reduce((s, p) => s + (p.inversion ?? 0), 0)
   const mia = datos.cartera.filter(p => cods.includes(p.region_cod))
   const manoObra = mia.reduce((s, p) => s + Number(p.mano_obra_directa ?? 0) + Number(p.mano_obra_indirecta ?? 0), 0)
+
+  const filasMia: FilaProyecto[] = mia.map(p => {
+    const exp = expedienteDeCartera(p)
+    const f = exp ? datos.catalogo.get(exp) : undefined
+    return {
+      id: `c${p.id}`, region: p.region_cod, nombre: p.nombre, url: f?.url ?? null,
+      titular: f?.titular ?? null, tipo: f?.tipo ?? null, comuna: f?.comuna ?? null, via: f?.via ?? null,
+      inversion: f?.inversion ?? null,
+      inversionTexto: !f && p.inversion_monto != null ? `${p.inversion_monto.toLocaleString('es-CL')}${p.inversion_moneda ? ` ${p.inversion_moneda}` : ''}` : null,
+      ingreso: f?.ingreso ?? null,
+    }
+  })
   // «Los otros»: lo que está en calificación y no está en la cartera.
-  const enCartera = new Set(datos.cartera.flatMap(p => [
-    p.seia_expediente_id != null ? String(p.seia_expediente_id) : null,
-    p.origen_id ? p.origen_id.replace(/^seia_/, '') : null,
-  ]).filter(Boolean) as string[])
-  const otros = calif.filter(p => !enCartera.has(p.id.replace(/^seia_/, ''))).sort((a, b) => (b.inversion ?? 0) - (a.inversion ?? 0))
-  const LIM = 25
+  const enCartera = new Set(datos.cartera.map(expedienteDeCartera).filter((e): e is string => e != null))
+  const filasOtros: FilaProyecto[] = calif
+    .filter(p => !enCartera.has(p.id.replace(/^seia_/, '')))
+    .map(p => ({ ...p, inversionTexto: null }))
+
   const varias = cods.length > 1
-  const th = 'px-2.5 py-2 text-[11px] uppercase tracking-wide font-semibold text-gray-400 whitespace-nowrap'
-  const td = 'border-t border-gray-200 px-2.5 py-2 whitespace-nowrap'
-  const no = <span className="text-gray-400">No</span>
 
   return (
     <section>
       <div className="mt-4">
-        <select value={sel} onChange={e => { setSel(e.target.value); setTodosMia(false); setTodosOtros(false) }}
+        <select value={sel} onChange={e => setSel(e.target.value)}
           className="text-[13px] bg-white border border-gray-300 rounded-[9px] px-2.5 py-1.5">
           <option value="*">Todas las regiones</option>
           {REGIONS.map(r => <option key={r.cod} value={r.cod}>{r.nombre}</option>)}
@@ -857,76 +875,18 @@ function VistaCartera({ datos, onRegiones }: { datos: DatosSeguimientoSeia; onRe
         <Tile valor={fmtN(manoObra)} texto="Mano de obra (directa + indirecta)" nota="Cartera del comité · el SEIA no la desglosa" />
       </div>
 
-      <h3 className="mt-6 text-[15px] font-bold flex items-baseline gap-2">Mi cartera <span className="text-[13px] text-gray-400 font-semibold tabular-nums">{mia.length}</span></h3>
-      {mia.length === 0 ? (
-        <div className="mt-2.5 p-5 text-center text-[13px] text-gray-400 border border-dashed border-gray-300 rounded-xl">Sin proyectos en la cartera.</div>
-      ) : (
-        <>
-          <div className="mt-2.5 bg-white border border-gray-200 rounded-xl overflow-x-auto">
-            <table className="w-full min-w-[860px] text-[12.5px] text-left">
-              <thead><tr>
-                <th className={th}>Nombre</th>{varias && <th className={th}>Región</th>}<th className={th}>Plazo</th><th className={th}>Priorizado</th>
-                <th className={th}>SEREMI líder</th><th className={`${th} text-right`}>Inversión</th><th className={`${th} text-right`}>M.O. directa</th>
-                <th className={`${th} text-right`}>M.O. indirecta</th><th className={th}>Estado actual</th><th className={th}>Riesgo</th>
-              </tr></thead>
-              <tbody>
-                {(todosMia ? mia : mia.slice(0, LIM)).map(p => (
-                  <tr key={p.id} className="hover:bg-stone-50">
-                    <td className={`${td} font-semibold max-w-[300px] truncate`} title={p.nombre}>{p.nombre}</td>
-                    {varias && <td className={td}>{NOMBRE_REGION[p.region_cod] ?? p.region_cod}</td>}
-                    <td className={td}>{p.plazo ?? '—'}</td>
-                    <td className={td}>{p.priorizado ? <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Sí</span> : no}</td>
-                    <td className={`${td} max-w-[190px] truncate text-slate-600`}>{p.seremi_lider ?? '—'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{p.inversion_monto != null ? `${p.inversion_monto.toLocaleString('es-CL')}${p.inversion_moneda ? ` ${p.inversion_moneda}` : ''}` : '—'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{p.mano_obra_directa != null ? fmtN(p.mano_obra_directa) : '—'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{p.mano_obra_indirecta != null ? fmtN(p.mano_obra_indirecta) : '—'}</td>
-                    <td className={`${td} max-w-[190px] truncate text-slate-600`}>{p.estado_actual ?? '—'}</td>
-                    <td className={td}>{p.riesgo ? <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sí</span> : no}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!todosMia && mia.length > LIM && <button onClick={() => setTodosMia(true)} className="mt-2 text-[12.5px] font-semibold text-violet-700 hover:underline">Ver {mia.length - LIM} {pl(mia.length - LIM, 'proyecto')} más</button>}
-        </>
-      )}
+      <h3 className="mt-6 text-[15px] font-bold flex items-baseline gap-2">
+        Mi cartera <span className="text-[13px] text-gray-400 font-semibold tabular-nums">{filasMia.length}</span>
+      </h3>
+      <TablaProyectosFiltrable key={`mia-${sel}`} filas={filasMia} conRegion={varias} nombreRegion={nombreRegionCartera}
+        vacio="Sin proyectos en la cartera." />
 
       <h3 className="mt-6 text-[15px] font-bold flex items-baseline gap-2 flex-wrap">
-        Otros proyectos en calificación <span className="text-[13px] text-gray-400 font-semibold tabular-nums">{otros.length}</span>
+        Otros proyectos en calificación <span className="text-[13px] text-gray-400 font-semibold tabular-nums">{filasOtros.length}</span>
         <small className="text-xs text-gray-400 font-normal">SEIA · no están en la cartera</small>
       </h3>
-      {otros.length === 0 ? (
-        <div className="mt-2.5 p-5 text-center text-[13px] text-gray-400 border border-dashed border-gray-300 rounded-xl">No hay otros proyectos en calificación.</div>
-      ) : (
-        <>
-          <div className="mt-2.5 bg-white border border-gray-200 rounded-xl overflow-x-auto">
-            <table className="w-full min-w-[860px] text-[12.5px] text-left">
-              <thead><tr>
-                <th className={th}>Nombre</th>{varias && <th className={th}>Región</th>}<th className={th}>Titular</th><th className={th}>Tipo</th>
-                <th className={th}>Comuna</th><th className={th}>Vía</th><th className={`${th} text-right`}>Inversión (MMUSD)</th><th className={`${th} text-right`}>Ingreso</th>
-              </tr></thead>
-              <tbody>
-                {(todosOtros ? otros : otros.slice(0, LIM)).map(p => (
-                  <tr key={p.id} className="hover:bg-stone-50">
-                    <td className={`${td} font-semibold max-w-[300px] truncate`} title={p.nombre}>
-                      {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">{p.nombre}</a> : p.nombre}
-                    </td>
-                    {varias && <td className={td}>{p.region === 'INTER' ? 'Interregional' : NOMBRE_REGION[p.region] ?? p.region}</td>}
-                    <td className={`${td} max-w-[190px] truncate text-slate-600`} title={p.titular ?? undefined}>{p.titular ?? '—'}</td>
-                    <td className={`${td} max-w-[190px] truncate text-slate-600`} title={p.tipo ?? undefined}>{p.tipo ?? '—'}</td>
-                    <td className={`${td} max-w-[160px] truncate text-slate-600`}>{p.comuna ?? '—'}</td>
-                    <td className={td}>{p.via ?? '—'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{p.inversion ? fmtN(mmusd(p.inversion)) : '—'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{fmtF(p.ingreso)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!todosOtros && otros.length > LIM && <button onClick={() => setTodosOtros(true)} className="mt-2 text-[12.5px] font-semibold text-violet-700 hover:underline">Ver {otros.length - LIM} {pl(otros.length - LIM, 'proyecto')} más</button>}
-        </>
-      )}
+      <TablaProyectosFiltrable key={`otros-${sel}`} filas={filasOtros} conRegion={varias} nombreRegion={nombreRegionCartera}
+        vacio="No hay otros proyectos en calificación." />
     </section>
   )
 }
-

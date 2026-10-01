@@ -366,13 +366,18 @@ export function evaluacionDelCorte(sesionesRegion: Sesion[], cortes: string[], i
  * scraper solo escribe oficios, así que no deja rastro — no está atrasada,
  * está en cero. Si no tiene ninguno, no hay qué traer: `sinProyectos`.
  */
-export function selloDeActualizacion(regiones: string[], actualizado: Record<string, string>, hoy: string, vinculadas: Set<string> = new Set()) {
+export function selloDeActualizacion(
+  regiones: string[], actualizado: Record<string, string>, hoy: string,
+  vinculadas: Set<string> = new Set(),
+  /** Si se omite: las que tienen fecha anterior a hoy. */
+  refrescable?: (region: string) => boolean,
+) {
   const conFecha = regiones.filter(r => actualizado[r])
   const fechas = conFecha.map(r => actualizado[r]).sort()
   return {
     fecha: fechas[0] ?? null,
     sinProyectos: regiones.filter(r => !actualizado[r] && !vinculadas.has(r)),
-    /** Las que se pueden actualizar hoy (la ruta tiene candado diario). */
-    atrasadas: conFecha.filter(r => actualizado[r] < hoy),
+    /** Las que el botón puede actualizar ahora (la ruta tiene candado diario). */
+    atrasadas: refrescable ? regiones.filter(refrescable) : conFecha.filter(r => actualizado[r] < hoy),
   }
 }
