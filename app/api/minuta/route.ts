@@ -560,6 +560,21 @@ export async function POST(request: Request) {
   //   - 'kit_viaje'  → KitDeViajeAIContent    (Fase A del rediseño)
   // Rows del cache guardadas con tipo='ficha' quedan huérfanas y no se leen
   // más — el lookup usa canonTipo='kit_viaje'. Se pueden borrar en cleanup.
+  /**
+   * Motivo por el que la minuta sale SIN redacción de IA, o null si sale entera.
+   *
+   * Antes, quedarse sin créditos devolvía 503 y la descarga se caía: la decisión
+   * era no entregar «un PDF vacío-sospechoso». El problema es que los datos no
+   * dependen del modelo —cifras, tablas y fuentes las arma el assembler—, así que
+   * se perdía todo por culpa de lo accesorio.
+   *
+   * Ahora sale la versión cruda y el PDF lo dice en una franja arriba: la misma
+   * preocupación, resuelta de otro modo. Nadie puede confundirla con la completa.
+   * Y NO se cachea —el `if (sbRef && aiContent)` de más abajo no corre sin
+   * contenido—, así que el próximo que la pida recibe la buena si ya hay créditos.
+   */
+  let sinIA: 'no_credits' | 'auth' | null = null
+
   let aiContent: unknown
   if (cachedAiContent) {
     console.log(`[minuta] cache HIT ${body.region.cod}/${canonTipo}`)
@@ -604,19 +619,14 @@ export async function POST(request: Request) {
       }
     } catch (err) {
       if (err instanceof KitViajeAiHardError) {
-        // Créditos agotados o auth rota — corta acá con 503 + mensaje humano
-        // en vez de generar un PDF vacío-sospechoso.
-        console.error(`[minuta] AI hard error (${err.code}): ${err.detail}`)
-        return new Response(
-          JSON.stringify({
-            error: err.message,
-            code: `ai_${err.code}`,
-            hint: 'Regenerar el Kit de Viaje una vez que se restablezca el servicio de AI.',
-          }),
-          { status: 503, headers: { 'Content-Type': 'application/json' } },
-        )
+        // Sin créditos o auth rota: se sigue sin redacción en vez de no entregar
+        // nada. `aiContent` queda sin asignar y el assembler pinta lo estructural,
+        // igual que ante un timeout — el «soft fail» que ya existía.
+        console.error(`[minuta] AI hard error (${err.code}): ${err.detail} — sigue en versión cruda`)
+        sinIA = err.code
+      } else {
+        throw err
       }
-      throw err
     }
     if (sbRef && aiContent) {
       const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
@@ -653,7 +663,9 @@ export async function POST(request: Request) {
     // Store in cache. Awaited: en serverless, escrituras fire-and-forget se
     // pierden cuando el contenedor se congela tras Response (ver O-04 en
     // CLAUDE.md — mismo síntoma que dejó a SEIA 53 días sin telemetría).
-    if (sbRef) {
+    // Solo si hay contenido: guardar un null deja la región en cache HIT con
+    // la minuta cruda para siempre, y la franja que lo avisa no se cachea.
+    if (sbRef && aiContent) {
       const { error: cacheErr } = await sbRef.from('minuta_cache').upsert({
         region_cod:   body.region.cod,
         tipo:         canonTipo,
@@ -681,17 +693,13 @@ export async function POST(request: Request) {
       if (j) justificacionesEjes = j
     } catch (err) {
       if (err instanceof KitViajeAiHardError) {
-        console.error(`[minuta] justif ejes AI hard error (${err.code}): ${err.detail}`)
-        return new Response(
-          JSON.stringify({
-            error: err.message,
-            code: `ai_${err.code}`,
-            hint: 'Regenerar la minuta una vez que se restablezca el servicio de AI.',
-          }),
-          { status: 503, headers: { 'Content-Type': 'application/json' } },
-        )
+        // Mismo criterio que arriba: la minuta sale sin la justificación de ejes
+        // —el componente ya pinta su disclaimer cuando no la tiene— y marcada.
+        console.error(`[minuta] justif ejes AI hard error (${err.code}): ${err.detail} — sigue en versión cruda`)
+        sinIA = err.code
+      } else {
+        console.error('[minuta] justif ejes fallo suave:', err)
       }
-      console.error('[minuta] justif ejes fallo suave:', err)
     }
   }
 
@@ -730,6 +738,7 @@ export async function POST(request: Request) {
         logoDataUrl: LOGO_DATA_URL ?? '',
         footerBannerDataUrl: FOOTER_BANNER_DATA_URL ?? '',
         aiFresh: !cachedAiContent,
+        sinIA,
         hasAutoridadesFicha: !!autoridadesFichaBuffer,
         hasConflictos: !!conflictosBuffer,
       })
@@ -766,6 +775,7 @@ export async function POST(request: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const element = React.createElement(MinutaEjecutiva as any, {
         region: body.region,
+        sinIA,
         projects,
         seiaProjects,
         mopProjects,
@@ -810,6 +820,9 @@ export async function POST(request: Request) {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="minuta-${regionSlug}${suffix}.pdf"`,
+      // Para que la pantalla pueda decirlo. El PDF ya lo trae impreso, pero
+      // quien aprieta el botón merece enterarse sin tener que abrirlo.
+      ...(sinIA ? { 'X-Minuta-Sin-IA': sinIA } : {}),
     },
   })
 }

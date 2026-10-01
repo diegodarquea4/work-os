@@ -64,6 +64,14 @@ describe('buildKitDeViajeData — meta y branding', () => {
     expect(buildKitDeViajeData(inputs({ aiFresh: false })).meta.ai_fresh).toBe(false)
   })
 
+  it('sin_ia guarda el motivo, y por defecto no hubo', () => {
+    // El PDF sale igual cuando la IA no está: lo que no puede pasar es que
+    // salga sin decirlo, porque se confunde con una minuta pobre.
+    expect(buildKitDeViajeData(inputs()).meta.sin_ia).toBeNull()
+    expect(buildKitDeViajeData(inputs({ sinIA: 'no_credits' })).meta.sin_ia).toBe('no_credits')
+    expect(buildKitDeViajeData(inputs({ sinIA: 'auth' })).meta.sin_ia).toBe('auth')
+  })
+
   it('schema_version = 1', () => {
     expect(buildKitDeViajeData(inputs()).meta.schema_version).toBe(1)
   })
