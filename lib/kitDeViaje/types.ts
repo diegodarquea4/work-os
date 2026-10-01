@@ -182,6 +182,15 @@ export interface KitDeViajeMeta {
   generado_en: string             // ISO timestamp
   /** True si el AI produjo contenido nuevo en este request (false = cache hit). */
   ai_fresh: boolean
+  /**
+   * Por qué este PDF salió SIN la redacción de la IA. `null` = salió completo.
+   *
+   * Existe para que el documento lo diga. Antes, quedarse sin créditos cortaba
+   * la descarga con un 503 y nadie se llevaba nada. Ahora sale la versión cruda
+   * —los datos están todos; lo que falta es la prosa— y el PDF lleva la marca,
+   * porque un Kit de Viaje sin párrafos que no avise se confunde con uno pobre.
+   */
+  sin_ia: 'no_credits' | 'auth' | null
 }
 
 export interface KitDeViajeBranding {

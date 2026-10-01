@@ -380,6 +380,11 @@ type Props = {
   mopProjects?: MopProject[] | null
   fecha: string
   aiContent?: MinutaEjecutivaContent | null | unknown
+  /**
+   * Motivo por el que no hubo redacción de IA. Cuando viene, el PDF sale igual
+   * —los datos no dependen del modelo— pero con una franja que lo dice.
+   */
+  sinIA?: 'no_credits' | 'auth' | null
   /** Ejes de la región (region_ejes). Usados en el bloque "Del diagnóstico a la priorización". */
   ejes?: RegionEje[]
   /** Mapa {numero_eje_como_string: justificación} extraída del PDF del PREGO por AI. */
@@ -392,7 +397,7 @@ type Props = {
 }
 
 export default function MinutaEjecutiva({
-  region, projects, seiaProjects, mopProjects, fecha, aiContent,
+  region, projects, seiaProjects, mopProjects, fecha, aiContent, sinIA = null,
   ejes = [], justificacionesEjes = {}, planPdfState = 'missing', capasLabel = null,
 }: Props) {
   const ai = (aiContent && typeof aiContent === 'object' && 'avances_relevantes' in aiContent)
@@ -441,6 +446,24 @@ export default function MinutaEjecutiva({
         <PH region={region} fecha={fecha} capasLabel={capasLabel} />
 
         <View style={s.body}>
+          {/* Versión sin redacción: la IA no estuvo disponible y el documento
+              sale igual, porque los datos no dependen del modelo. Va arriba de
+              todo —quien lo abre tiene que saber qué tiene en la mano antes de
+              leerlo, no después— y en el amarillo de los avisos, no en el verde
+              de las cajas de IA, que es justo lo que acá falta. */}
+          {sinIA && (
+            <View style={{ backgroundColor: '#fff8e1', borderLeftWidth: 2.5, borderLeftColor: '#d4a017',
+                           paddingHorizontal: 7, paddingVertical: 5, marginBottom: 8 }}>
+              <Text style={{ fontSize: 7.5, color: C.navy, lineHeight: 1.4 }}>
+                <Text style={{ fontFamily: 'Carlito', fontWeight: 'bold' }}>Versión sin redacción. </Text>
+                Se generó con todos sus datos pero sin los párrafos de análisis, porque
+                {sinIA === 'no_credits'
+                  ? ' la cuenta de IA se quedó sin créditos.'
+                  : ' falló la autenticación con el servicio de IA.'}
+                {' '}Las cifras y tablas son las mismas que en la versión completa.
+              </Text>
+            </View>
+          )}
           {/* Bloque "Del diagnóstico a la priorización" — arriba de todo,
               ancho completo. Explica por qué se eligieron los ejes del PREGO
               en esta región. Justificación extraída con AI del PDF del Plan

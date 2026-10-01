@@ -108,6 +108,8 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
   // blob que también se reutiliza para el botón Descargar (sin segundo POST).
   const [minutaPreview, setMinutaPreview] = useState<{
     tipo: 'ejecutiva' | 'ficha'; url: string; generatedAt: string | null; generatedBy: string | null
+    /** Motivo por el que salió sin redacción de IA. null = salió entera. */
+    sinIA: 'no_credits' | 'auth' | null
   } | null>(null)
   // Solo admin genera/regenera; el resto solo previsualiza/descarga lo guardado.
   const isAdmin = profile?.role === 'admin'
@@ -360,7 +362,10 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
       const generatedBy = genero
         ? (profile?.full_name || profile?.email || null)
         : minutaCache[tipo].generated_by
-      setMinutaPreview({ tipo, url, generatedAt, generatedBy })
+      // Cabecera que pone el server cuando la IA no estuvo disponible y la
+      // minuta salió igual, cruda. Ver app/api/minuta/route.ts.
+      const sinIA = res.headers.get('X-Minuta-Sin-IA') as 'no_credits' | 'auth' | null
+      setMinutaPreview({ tipo, url, generatedAt, generatedBy, sinIA })
       setMinutaCache(prev => ({ ...prev, [tipo]: { cached: true, generated_at: generatedAt, generated_by: generatedBy } }))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -1115,6 +1120,18 @@ export default function VistaRegional({ iniciativas, profile, activeRegionName, 
                     ? `Generada el ${new Date(minutaPreview.generatedAt).toLocaleString('es-CL', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${minutaPreview.generatedBy ? ` · ${minutaPreview.generatedBy}` : ''}`
                     : 'Versión guardada'}
                 </p>
+                {/* La minuta salió sin los párrafos de la IA. El PDF ya lo trae
+                    impreso, pero quien la abre acá no debería tener que buscarlo
+                    adentro para enterarse. */}
+                {minutaPreview.sinIA && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5 leading-snug">
+                    <b>Versión sin redacción.</b> Trae todos los datos, pero no los párrafos de análisis:
+                    {minutaPreview.sinIA === 'no_credits'
+                      ? ' la cuenta de IA se quedó sin créditos.'
+                      : ' falló la autenticación con el servicio de IA.'}
+                    {' '}Regenerala cuando se restablezca.
+                  </p>
+                )}
               </div>
               <button
                 onClick={closeMinutaPreview}

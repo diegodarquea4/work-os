@@ -101,6 +101,8 @@ export interface AssemblerInputs {
   logoDataUrl: string
   footerBannerDataUrl: string
   aiFresh: boolean
+  /** Motivo de la falta de IA, si la hubo. Opcional: por defecto no la hubo. */
+  sinIA?: 'no_credits' | 'auth' | null
   /**
    * True cuando el bucket `autoridades-fichas` tiene el PDF oficial para la
    * región. En ese caso el route post-procesa el Kit con pdf-lib y anexa las
@@ -465,6 +467,7 @@ export function buildKitDeViajeData(inputs: AssemblerInputs): KitDeViajeData {
       schema_version: 1,
       generado_en: new Date().toISOString(),
       ai_fresh: inputs.aiFresh,
+      sin_ia: inputs.sinIA ?? null,
     },
     region: {
       cod: inputs.region.cod,

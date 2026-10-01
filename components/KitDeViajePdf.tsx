@@ -570,6 +570,30 @@ function SeccionV({ data }: { data: KitDeViajeData }) {
 
 // ── Root ────────────────────────────────────────────────────────────────────
 
+/**
+ * La franja que dice que este PDF salió sin la redacción de la IA.
+ *
+ * Va arriba de todo y no al pie: el documento se lee de arriba hacia abajo y
+ * quien lo abre tiene que saber qué tiene en la mano ANTES de leerlo, no
+ * después. Las cifras son las mismas que en la versión completa —salen del
+ * assembler, no del modelo—; lo que falta son los párrafos.
+ */
+function AvisoSinIA({ motivo }: { motivo: NonNullable<KitDeViajeData['meta']['sin_ia']> }) {
+  const causa = motivo === 'no_credits'
+    ? 'la cuenta de IA se quedó sin créditos'
+    : 'falló la autenticación con el servicio de IA'
+  return (
+    <View style={s.disclaimerBox}>
+      <Text style={s.disclaimerText}>
+        <Text style={{ fontWeight: 'bold' }}>Versión sin redacción. </Text>
+        Este documento se generó con todos sus datos pero sin los párrafos de análisis, porque {causa}.
+        Las cifras, tablas y fuentes son las mismas que en la versión completa. Para obtener la redacción,
+        regenerar la minuta una vez restablecido el servicio.
+      </Text>
+    </View>
+  )
+}
+
 export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
   return (
     <Document
@@ -582,6 +606,7 @@ export default function KitDeViajePdf({ data }: { data: KitDeViajeData }) {
         <PageFooter data={data} />
 
         <EncabezadoMinuta data={data} />
+        {data.meta.sin_ia && <AvisoSinIA motivo={data.meta.sin_ia} />}
         <SeccionI data={data} />
         <SeccionII data={data} />
         <SeccionIII data={data} />
