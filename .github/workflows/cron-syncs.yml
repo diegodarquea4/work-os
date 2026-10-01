@@ -26,10 +26,16 @@ on:
     - cron: '30 8 * * 1'          # seia-sync-v2 (antes de mop-sync)
     - cron: '0 9 * * 1'           # mop-sync
     # Oficios pendientes del SEIA: reemplaza la subida manual del Excel de
-    # seia-abierto.cl. Lunes, miércoles y viernes — el comité sesiona cada 15
-    # días y con una sola corrida semanal un oficio puede vencer y volverse
-    # atraso sin que nadie lo haya visto venir.
+    # seia-abierto.cl. Lunes, miércoles y viernes, a nivel nacional: recorre
+    # TODO lo que está en calificación (~350 expedientes), no solo la cartera —
+    # alimenta el tablero de Métricas.
     - cron: '30 11 * * 1,3,5'     # oficios-seia/scrape
+    # Respaldo martes y jueves: corre SOLO si la del día anterior no corrió.
+    # GitHub se salta corridas programadas cuando está cargado (la primera de
+    # oficios, el miércoles 2026-09-30, nunca se disparó) y sin esto el hueco
+    # llegaba a una semana. Si la del día anterior corrió, la ruta responde
+    # «omitido» en un segundo sin tocar el SEIA (`?solo_si_falta=1`).
+    - cron: '30 11 * * 2,4'       # oficios-seia/scrape (respaldo)
     - cron: '0 10 * * 3'          # stop-sync (miércoles)
     - cron: '0 11 * * 1'          # pib-sync
     - cron: '0 12 * * 1'          # external-sync
@@ -74,7 +80,9 @@ env:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 70 y no 30: la corrida nacional de oficios son ~12 invocaciones de hasta
+    # 5 minutos (ver el loop de reanudables).
+    timeout-minutes: 70
     concurrency:
       group: sync-${{ github.event.schedule || inputs.endpoint }}
       cancel-in-progress: false
@@ -89,6 +97,7 @@ jobs:
             '30 8 * * 1')         ENDPOINTS="seia-sync-v2" ;;
             '0 9 * * 1')          ENDPOINTS="mop-sync" ;;
             '30 11 * * 1,3,5')    ENDPOINTS="oficios-seia/scrape" ;;
+            '30 11 * * 2,4')      ENDPOINTS="oficios-seia/scrape"; RESPALDO=1 ;;
             '0 10 * * 3')         ENDPOINTS="stop-sync" ;;
             '0 11 * * 1')         ENDPOINTS="pib-sync" ;;
             '0 12 * * 1')         ENDPOINTS="external-sync" ;;
@@ -111,11 +120,13 @@ jobs:
               ;;
           esac
           echo "endpoints=$ENDPOINTS" >> "$GITHUB_OUTPUT"
+          echo "respaldo=${RESPALDO:-0}" >> "$GITHUB_OUTPUT"
           echo "→ Disparando: $ENDPOINTS"
 
       - name: POST a producción
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RESPALDO: ${{ steps.resolve.outputs.respaldo }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::Falta el secret CRON_SECRET en este repo. Settings → Secrets and variables → Actions."
@@ -134,12 +145,22 @@ jobs:
             # cortan por presupuesto de tiempo y devuelven partial:true con el
             # cursor siguiente. Se reinvoca hasta que digan que terminaron.
             if [ "$ep" = "seia-sync-v2" ] || [ "$ep" = "oficios-seia/scrape" ]; then
+              # Oficios recorre ~500 expedientes (en calificación + cartera +
+              # guardados) a 1-3 s cada uno: hasta ~25 min, unas 7 invocaciones
+              # de 240 s. 12 deja margen para un SEIA lento.
+              max_intentos=6
+              [ "$ep" = "oficios-seia/scrape" ] && max_intentos=12
               intento=1
-              while [ "$intento" -le 6 ]; do
+              while [ "$intento" -le "$max_intentos" ]; do
                 echo "-- intento $intento --"
+                # El respaldo pregunta SOLO en la primera invocación: apenas
+                # arranca, la corrida estampa su hora y las siguientes se
+                # creerían «ya corrió ayer».
+                query=""
+                if [ "$RESPALDO" = "1" ] && [ "$intento" = "1" ]; then query="?solo_si_falta=1"; fi
                 HTTP_CODE=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
                   --max-time 300 \
-                  -X POST "$BASE_URL/api/$ep" \
+                  -X POST "$BASE_URL/api/$ep$query" \
                   -H "Authorization: Bearer $CRON_SECRET" \
                   -H "Content-Type: application/json" \
                   || echo "000")
@@ -156,8 +177,8 @@ jobs:
                 fi
                 intento=$((intento + 1))
               done
-              if [ "$intento" -gt 6 ] && grep -q '"partial":true' /tmp/body.json; then
-                echo "::warning::$ep no terminó en 6 intentos — el SEIA es flaky; el próximo cron retoma el cursor donde quedó."
+              if [ "$intento" -gt "$max_intentos" ] && grep -q '"partial":true' /tmp/body.json; then
+                echo "::warning::$ep no terminó en $max_intentos intentos — el SEIA es flaky; el próximo cron retoma el cursor donde quedó."
               fi
               echo "::endgroup::"
               continue

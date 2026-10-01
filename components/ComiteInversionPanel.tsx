@@ -13,6 +13,7 @@ import MetaEmpleoModal from './MetaEmpleoModal'
 import OaecaModal from './OaecaModal'
 import OficiosRegionModal from './OficiosRegionModal'
 import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
+import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
 
 /**
  * Panel del tab "Comité Económico" en ComitesRegionalesSection.
@@ -52,6 +53,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [metaEmpleoOpen, setMetaEmpleoOpen] = useState(false)
   const [oaecaOpen, setOaecaOpen]         = useState(false)
   const [oficiosOpen, setOficiosOpen]     = useState(false)
+  const [tableroOpen, setTableroOpen]     = useState(false)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
@@ -88,15 +90,18 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
               </button>
               )}
+              {/* El tablero de oficios de la región va como botón grande: es lo
+                  que se mira antes de sesionar. La cartera completa quedó en la
+                  franja de abajo y en el encabezado de los priorizados. */}
               <button
-                onClick={() => setProyectosOpen(true)}
+                onClick={() => setTableroOpen(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
-                title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
+                title="Tablero de seguimiento de la inversión en el SEIA: vencidos, pendientes y comparativa entre regiones"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 3.5h10M2 7h10M2 10.5h6"/>
+                  <path d="M1.5 11.5l3.5-4 2.5 2.5 5-6"/><path d="M1.5 12.5h11"/>
                 </svg>
-                Ver todos los proyectos
+                Seguimiento SEIA
               </button>
             </>
           )}
@@ -163,6 +168,14 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 title="Todos los oficios del SEIA de la región, agrupados por proyecto"
               >
                 Oficios
+              </button>
+              <span className="text-violet-200">|</span>
+              <button
+                onClick={() => setProyectosOpen(true)}
+                className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+                title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
+              >
+                Ver todos los proyectos
               </button>
               <span className="text-violet-200">|</span>
               <button
@@ -243,6 +256,23 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       )}
       {oaecaOpen && (
         <OaecaModal currentUserEmail={userEmail} onClose={() => setOaecaOpen(false)} />
+      )}
+      {tableroOpen && (
+        <div className="fixed inset-x-0 bottom-0 top-20 z-30 bg-gray-50 flex flex-col">
+          <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+            <h2 className="text-sm font-semibold text-slate-900">Seguimiento de la inversión en el SEIA · {region.nombre}</h2>
+            <button
+              onClick={() => setTableroOpen(false)}
+              className="text-xs font-medium text-slate-500 hover:text-slate-800"
+              aria-label="Cerrar el tablero y volver al Comité Económico"
+            >
+              Cerrar ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <SeguimientoInversionSeia pestanaInicial="regional" regionInicial={region.cod} />
+          </div>
+        </div>
       )}
       {oficiosOpen && (
         <OficiosRegionModal

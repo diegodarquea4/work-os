@@ -25,9 +25,10 @@ import {
 import { useCensoRegiones, type CensoRegionData } from '@/lib/hooks/useCensoRegiones'
 import { useUltimaActualizacionMetricas, fmtUltimaActualizacion } from '@/lib/hooks/useUltimaActualizacionMetricas'
 import { getSupabase } from '@/lib/supabase'
+import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
 
 // ── Tipos ──────────────────────────────────────────────────────
-type ModuleId = 'resumen' | 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen'
+type ModuleId = 'resumen' | 'seguridad' | 'pib' | 'censo' | 'empleo' | 'casen' | 'economico'
 type SegTab   = 'resumen' | 'evolucion' | 'operativo' | 'dmcs'
 type PibTab   = 'evolucion' | 'sectores' | 'nacional'
 type EmpTab   = 'resumen' | 'evolucion' | 'ranking'
@@ -161,6 +162,7 @@ const MODULES: { id: ModuleId; label: string }[] = [
   { id: 'censo',     label: '🏘 Censo 2024' },
   { id: 'empleo',    label: '💼 Empleo' },
   { id: 'casen',     label: '🏠 CASEN 2024' },
+  { id: 'economico', label: '🏗 Comité Económico Regional' },
 ]
 
 function ModuleNav({ active, onSelect }: { active: ModuleId; onSelect: (m: ModuleId) => void }) {
@@ -2812,7 +2814,8 @@ export default function MetricasView({ initialRegionNombre }: { initialRegionNom
         <h1 className="text-sm font-semibold text-white tracking-wide">📊 Dashboard Regional · Chile</h1>
       </div>
       <ModuleNav active={activeModule} onSelect={setActiveModule} />
-      <UltimaActualizacionBar />
+      {/* El módulo económico trae su propia fecha: la de los oficios, no la de los indicadores. */}
+      {activeModule !== 'economico' && <UltimaActualizacionBar />}
       <div className="flex-1 overflow-auto">
         {activeModule === 'resumen'   && <ResumenModule initialRegionNombre={initialRegionNombre} />}
         {activeModule === 'seguridad' && <SeguridadModule />}
@@ -2820,6 +2823,7 @@ export default function MetricasView({ initialRegionNombre }: { initialRegionNom
         {activeModule === 'censo'     && <CensoModule />}
         {activeModule === 'empleo'    && <EmpleoModule />}
         {activeModule === 'casen'     && <CasenModule />}
+        {activeModule === 'economico' && <SeguimientoInversionSeia />}
       </div>
     </div>
   )

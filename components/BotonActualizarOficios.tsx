@@ -146,7 +146,7 @@ export default function BotonActualizarOficios({ regionCod, onActualizado, compa
           type="button"
           onClick={() => actualizar(false)}
           disabled={corriendo}
-          title="Traer del SEIA los oficios pendientes de esta región y pegarlos a la cartera"
+          title="Traer del SEIA los oficios pendientes de todo lo que esta región tiene en calificación y en su cartera"
           className="text-[11px] font-semibold text-violet-700 hover:text-violet-900 disabled:opacity-50"
         >
           {corriendo ? 'Renovando…' : 'Renovar'}

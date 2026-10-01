@@ -258,6 +258,18 @@ export default function ComiteEconomicoProyectosPanel({
           <span className="text-[11px] text-gray-400 ml-auto tabular-nums">
             {priorizados.length} de {proyectos.length}
           </span>
+          {onVerTodos && (
+            <button
+              onClick={onVerTodos}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-violet-200 text-violet-700 text-xs font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+              title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 3.5h10M2 7h10M2 10.5h6"/>
+              </svg>
+              Ver todos los proyectos
+            </button>
+          )}
         </div>
         <div className="px-4 pb-4">
           {loading ? (
