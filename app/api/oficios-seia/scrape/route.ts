@@ -54,7 +54,10 @@ import { requireAuth, requireCan } from '@/lib/apiAuth'
 import { getSupabaseAdmin } from '@/lib/supabaseServer'
 import { recordSyncStatus } from '@/lib/syncStatus'
 import { inicioDelDiaChile } from '@/lib/fechaChile'
+import { atrasoAlCerrar, type MotivoCierre } from '@/lib/oficiosFotos'
+import { regionesQueNecesitanRespaldo, tomarFotoOficios } from '@/lib/oficiosFotoServer'
 import {
+  cierraExpediente,
   claveOrganismo,
   esSolicitud,
   parsearDestinatarios,
@@ -173,11 +176,22 @@ type OficioParaEscribir = {
   automatico: true
 }
 
-async function scrapearExpediente(p: ProyectoAScrapear, bajar: Bajar): Promise<OficioParaEscribir[]> {
+type Scrapeo = {
+  oficios: OficioParaEscribir[]
+  /**
+   * El expediente está muerto: hay RCA, término anticipado o desistimiento. Lo
+   * que deje de figurar pendiente acá NO es un organismo que respondió — es un
+   * proyecto que se acabó, y su atraso no se le puede cobrar a nadie (mig 122).
+   */
+  cerrado: boolean
+}
+
+async function scrapearExpediente(p: ProyectoAScrapear, bajar: Bajar): Promise<Scrapeo> {
   const docs = parsearDocumentos(
     await bajar(`${BASE}/expediente/documentos.php?id_expediente=${p.expediente}`),
   )
-  if (docs.length === 0) return []
+  if (docs.length === 0) return { oficios: [], cerrado: false }
+  const cerrado = docs.some(d => cierraExpediente(d.tipo))
 
   // La presentación sale del tipo de las solicitudes del propio expediente:
   // «Solicitud de evaluación de Adenda» no la dice, y de ella dependen 11 o 16
@@ -212,7 +226,7 @@ async function scrapearExpediente(p: ProyectoAScrapear, bajar: Bajar): Promise<O
 
   const urlProyecto = `${BASE}/expediente/expediente.php?id_expediente=${p.expediente}`
 
-  return pendientesDelExpediente(conDest, docs, presentacion).map(o => ({
+  const oficios = pendientesDelExpediente(conDest, docs, presentacion).map(o => ({
     region_cod: p.region_cod,
     proyecto_privado_id: p.id > 0 ? p.id : null,
     id_expediente: p.expediente,
@@ -237,6 +251,8 @@ async function scrapearExpediente(p: ProyectoAScrapear, bajar: Bajar): Promise<O
     region_seia: null,
     automatico: true as const,
   }))
+
+  return { oficios, cerrado }
 }
 
 // ── Lo que se escribe de un expediente ───────────────────────────────────────
@@ -250,17 +266,21 @@ type Resultado = {
   errores: string[]
 }
 
-const NADA: Resultado = { escritos: 0, resueltos: 0, fallado: false, errores: [] }
+// Congelado porque se devuelve POR REFERENCIA al saltear un expediente: sin
+// esto, cualquier código futuro que le empujara un error se lo empujaría a
+// todos los saltados de la corrida.
+const NADA: Resultado = Object.freeze({ escritos: 0, resueltos: 0, fallado: false, errores: [] as string[] })
 
 async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): Promise<Resultado> {
-  let vivos: OficioParaEscribir[]
+  let scrapeo: Scrapeo
   try {
-    vivos = await scrapearExpediente(p, bajar)
+    scrapeo = await scrapearExpediente(p, bajar)
   } catch (err) {
     // El expediente que falla se reintenta en la corrida siguiente.
     return { ...NADA, fallado: true, errores: [`${p.expediente}: ${(err as Error).message}`] }
   }
 
+  const vivos = scrapeo.oficios
   const ahora = new Date().toISOString()
 
   // ── Escribir, comparando contra lo guardado DE ESTE EXPEDIENTE ───────────
@@ -272,7 +292,9 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
   // es más simple de razonar que la llave de columnas.
   const { data: guardados, error: leerErr } = await db
     .from('sesion_oficios_tratados')
-    .select('id, oaeca_sea, oaeca_nombre, estado, id_documento, plazo_estimado')
+    // `fecha_limite` se lee aunque no se escriba: es lo que permite congelar el
+    // atraso del que se está cerrando en esta misma pasada (mig 122).
+    .select('id, oaeca_sea, oaeca_nombre, estado, id_documento, plazo_estimado, fecha_limite')
     .eq('automatico', true)
     .eq('id_expediente', p.expediente)
 
@@ -355,17 +377,42 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
   const aResolver = (guardados ?? [])
     .filter(g => g.estado === 'pendiente')
     .filter(g => !clavesVivas.has(claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))))
-    .map(g => g.id as number)
 
   if (aResolver.length > 0) {
     // Sin `resuelto_en_sesion_id` ni email: no lo cerró una persona ni una
-    // reunión — el organismo respondió y el SEIA dejó de listarlo.
-    const { error } = await db
-      .from('sesion_oficios_tratados')
-      .update({ estado: 'resuelto', estado_updated_at: ahora, importado_at: ahora })
-      .in('id', aResolver)
-      .eq('automatico', true)
-    if (!error) resueltos += aResolver.length
+    // reunión — el SEIA dejó de listarlo.
+    //
+    // El MOTIVO sale del expediente, no del oficio: si el proyecto tiene RCA,
+    // término anticipado o desistimiento, estos organismos no respondieron —
+    // se quedaron sin a quién responderle. Cobrarles ese atraso era el bug que
+    // daba 855 días de promedio (mig 122).
+    const motivo: MotivoCierre = scrapeo.cerrado ? 'expediente_cerrado' : 'respondio'
+
+    // Agrupado por atraso: cada fila tiene su fecha límite, pero muchas
+    // comparten el valor resultante y así son uno o dos UPDATE en vez de N.
+    const porAtraso = new Map<number | null, number[]>()
+    for (const g of aResolver) {
+      const atraso = atrasoAlCerrar(g.fecha_limite as string | null, ahora)
+      const ids = porAtraso.get(atraso)
+      if (ids) ids.push(g.id as number)
+      else porAtraso.set(atraso, [g.id as number])
+    }
+
+    for (const [atraso, ids] of porAtraso) {
+      const { error } = await db
+        .from('sesion_oficios_tratados')
+        .update({
+          estado: 'resuelto',
+          estado_updated_at: ahora,
+          importado_at: ahora,
+          dias_atraso_al_cerrar: atraso,
+          motivo_cierre: motivo,
+        })
+        .in('id', ids)
+        .eq('automatico', true)
+      if (!error) resueltos += ids.length
+      else if (errores.length < 20) errores.push(`${p.expediente}: ${error.message}`)
+    }
   }
 
   return { escritos, resueltos, fallado: false, errores }
@@ -655,6 +702,30 @@ export async function POST(request: Request) {
     }
   }
 
+  // ── Foto de respaldo, si una región lleva 20 días sin ninguna ─────────────
+  //
+  // La foto buena la saca el cierre de la sesión (mig 122). Esto es la red: si
+  // la región no sesionó —se postergó la reunión, vacaciones— la serie quedaría
+  // con un hueco y a los dos meses no habría qué comparar.
+  //
+  // Solo al terminar una corrida nacional: recién ahí los pendientes están al
+  // día en todas las regiones, y retratar datos a medio actualizar sería
+  // guardar un número falso para siempre. La corrida por región no saca foto
+  // —cualquiera puede apretar «Renovar» diez veces y eso no es un hito.
+  let fotos = 0
+  if (termino && !soloRegion) {
+    try {
+      for (const cod of await regionesQueNecesitanRespaldo(db)) {
+        const f = await tomarFotoOficios(db, cod, { origen: 'respaldo' })
+        if (f.ok) fotos++
+        else console.error(`[oficios-seia/scrape] foto de respaldo ${cod}:`, f.error)
+      }
+    } catch (err) {
+      // No invalida el scraping, que ya está escrito.
+      console.error('[oficios-seia/scrape] fotos de respaldo fallaron:', err)
+    }
+  }
+
   // Cadena vacía y no null: es lo que `leerCursor` entiende como «empezar de
   // cero», y es como el sync del catálogo limpia el suyo.
   // La corrida por región NO toca el cursor nacional: si lo hiciera, apretar
@@ -687,6 +758,8 @@ export async function POST(request: Request) {
     // Cuántos de los procesados no se consultaron porque ya se habían
     // consultado hoy. Igual a `procesados` = no se tocó el SEIA.
     saltados,
+    // Fotos de respaldo sacadas en esta corrida (mig 122).
+    fotos,
     desde,
     hasta: i,
     pendientes_escritos: escritos,
