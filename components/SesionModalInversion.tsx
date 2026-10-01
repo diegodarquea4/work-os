@@ -10,6 +10,7 @@ import {
 import {
   agruparPorOaeca, claveOaeca, descripcionSeguimiento, type GrupoOaeca,
 } from '@/lib/oficiosSeguimiento'
+import { atrasoAlCerrar } from '@/lib/oficiosFotos'
 import OficiosSeguimientoBloque, { ChevronPlegado } from './OficiosSeguimientoBloque'
 import BotonActualizarOficios from './BotonActualizarOficios'
 import CompromisosOaecaSugeridos from './CompromisosOaecaSugeridos'
@@ -693,11 +694,20 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
     const prevEstado = o.estado
     setOficiosAnteriores(prev => prev.map(x => x.id === o.id ? { ...x, estado } : x))
     try {
+      const ahora = new Date().toISOString()
+      // Al marcarlo resuelto se congela cuántos días de atraso llevaba en ESTE
+      // momento (mig 122). Si vuelve a pendiente se borran las dos: el oficio
+      // sigue abierto y un atraso «al cerrar» de algo que no está cerrado es
+      // basura que después nadie puede distinguir de un dato bueno.
+      const cierre = estado === 'resuelto'
+        ? { dias_atraso_al_cerrar: atrasoAlCerrar(o.fecha_limite, ahora), motivo_cierre: 'cerrado_a_mano' }
+        : { dias_atraso_al_cerrar: null, motivo_cierre: null }
       await safeWrite(
         getSupabase().from('sesion_oficios_tratados').update({
           estado,
-          estado_updated_at: new Date().toISOString(),
+          estado_updated_at: ahora,
           estado_updated_by_email: currentUserEmail || null,
+          ...cierre,
         }).eq('id', o.id),
         `sesion_oficios_tratados estado id=${o.id}`,
       )
