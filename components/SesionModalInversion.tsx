@@ -1617,10 +1617,16 @@ export default function SesionModalInversion({ region, borradorId, currentUserEm
                   </ZonaCard>
               )}
 
-              {/* ── Zona 3b: oficios — anteriores (verificación) + nuevos (alta) ── */}
+              {/* ── Zona 3b: oficios — anteriores (verificación) + nuevos (alta) ──
+
+                  Única zona SIN badge. El que tenía contaba los oficios de sesiones
+                  anteriores más los levantados a mano, así que marcaba 0 con cuatro
+                  pendientes del SEIA en pantalla. Y es la única que además lleva
+                  acción: el número quedaba pegado a ella y se leía «0 sin cambios Al
+                  día hoy forzar», como una sola frase. Los conteos que importan ya
+                  están adentro, en la cabecera de cada bloque. */}
               {muestra('seguimiento') && subSeguimiento === 'oficios' && (
                   <ZonaCard numero={3} titulo="Seguimiento de la inversión · Oficios"
-                    badge={oficiosAnteriores.length + oficiosTratadosSesion.length}
                     accion={<BotonActualizarOficios regionCod={region.cod} onActualizado={() => { if (sesion) void loadAll(sesion) }} />}
                     anterior={navAnterior} siguiente={navSiguiente}>
                       <div className="space-y-4">
