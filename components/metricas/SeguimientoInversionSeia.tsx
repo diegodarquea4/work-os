@@ -52,7 +52,7 @@ function calor(valor: number, max: number, tono: 'rojo' | 'gris'): React.CSSProp
 }
 
 export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', regionInicial }: {
-  /** Desde el Comité Económico de una región se abre en «Regional», en esa región. */
+  /** Desde una región (su Comité Económico o sus Métricas), Regional y Cartera vienen en esa región. */
   pestanaInicial?: Pestana
   regionInicial?: string
 } = {}) {
@@ -101,7 +101,7 @@ export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', 
       {pestana === 'nacional'    && <VistaNacional datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
       {pestana === 'regional'    && <VistaRegional datos={datos} oficios={oficios} onRegiones={setEnPantalla} regionInicial={regionInicial} />}
       {pestana === 'comparativa' && <VistaComparativa datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
-      {pestana === 'cartera'     && <VistaCartera datos={datos} onRegiones={setEnPantalla} />}
+      {pestana === 'cartera'     && <VistaCartera datos={datos} onRegiones={setEnPantalla} regionInicial={regionInicial} />}
       {pestana === 'calendario' && veCalendario && <CalendarioComites instancia="inversion" />}
 
       {pestana !== 'calendario' && (
@@ -805,8 +805,8 @@ const nombreRegionCartera = (c: string) => c === 'INTER' ? 'Interregional' : NOM
  * ingreso; lo cargado a mano (65 de 276 hoy) no los tiene y muestra su monto
  * en su propia moneda, sin convertir.
  */
-function VistaCartera({ datos, onRegiones }: { datos: DatosSeguimientoSeia; onRegiones: (r: string[]) => void }) {
-  const [sel, setSel] = useState<string>('*')
+function VistaCartera({ datos, onRegiones, regionInicial }: { datos: DatosSeguimientoSeia; onRegiones: (r: string[]) => void; regionInicial?: string }) {
+  const [sel, setSel] = useState<string>(regionInicial && COD_REGIONES.includes(regionInicial) ? regionInicial : '*')
   const cods = sel === '*' ? [...COD_REGIONES, 'INTER'] : [sel]
   useEffect(() => { onRegiones(sel === '*' ? COD_REGIONES : [sel]) }, [sel, onRegiones])
 
