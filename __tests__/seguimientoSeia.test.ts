@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   filaDeOrganismo, estadoEn, prepararOficios, armarMatriz, agruparPorProyecto, medirRegion,
-  regionesSinSesionar, fechasDeCorte, evaluacionDelCorte, selloDeActualizacion, claveCelda,
+  regionesSinSesionar, fechasDeCorte, evaluacionDelCorte, selloDeActualizacion, fechaSinPendientes, claveCelda,
   type OficioFila,
 } from '@/lib/seguimientoSeia'
 
@@ -150,5 +150,17 @@ describe('selloDeActualizacion', () => {
   it('una región vinculada al SEIA sin oficios está en cero, no «sin proyectos»', () => {
     const s = selloDeActualizacion(['X', 'XVI'], { X: '2026-10-01' }, HOY, new Set(['XVI']))
     expect(s).toEqual({ fecha: '2026-10-01', sinProyectos: [], atrasadas: [] })
+  })
+})
+
+describe('fecha de una región sin oficios pendientes', () => {
+  it('vale la corrida completa más reciente, la suya o la nacional', () => {
+    expect(fechaSinPendientes({ '*': '2026-10-01', XVI: '2026-10-02' }, 'XVI')).toBe('2026-10-02')
+    expect(fechaSinPendientes({ '*': '2026-10-02', XVI: '2026-09-30' }, 'XVI')).toBe('2026-10-02')
+    expect(fechaSinPendientes({ '*': '2026-10-01' }, 'XI')).toBe('2026-10-01')
+  })
+  it('sin ninguna corrida completa no hay fecha', () => {
+    expect(fechaSinPendientes({}, 'XI')).toBeNull()
+    expect(fechaSinPendientes(undefined, 'XI')).toBeNull()
   })
 })

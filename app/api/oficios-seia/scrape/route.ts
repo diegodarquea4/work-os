@@ -485,22 +485,45 @@ async function leerCursor(db: Db, nombre: string): Promise<Cursor> {
  * solicitud nueva y no hay nada que permita afirmar que ya se miró.
  */
 async function expedientesVistosHoy(db: Db, soloRegion: string | null): Promise<Set<number>> {
-  let q = db
-    .from('sesion_oficios_tratados')
-    .select('id_expediente')
-    .eq('automatico', true)
-    .not('id_expediente', 'is', null)
-    .gte('importado_at', inicioDelDiaChile().toISOString())
-    .limit(20_000)
-  if (soloRegion) q = q.eq('region_cod', soloRegion)
-
-  const { data, error } = await q
-  if (error) {
-    // Sin candado se trabaja más, no mal: se scrapea todo, como antes.
-    console.error('[oficios-seia/scrape] no se pudo leer el candado diario:', error.message)
-    return new Set()
+  const hoy = inicioDelDiaChile().toISOString()
+  // De a 1.000, que es el tope de PostgREST: con un `limit` más alto igual
+  // devuelve mil y el candado quedaba corto sin avisar.
+  const leer = async (rezagados: boolean): Promise<number[] | null> => {
+    const out: number[] = []
+    for (let desde = 0; ; desde += 1000) {
+      let q = db
+        .from('sesion_oficios_tratados')
+        .select('id_expediente')
+        .eq('automatico', true)
+        .not('id_expediente', 'is', null)
+      q = rezagados ? q.eq('estado', 'pendiente').lt('importado_at', hoy) : q.gte('importado_at', hoy)
+      if (soloRegion) q = q.eq('region_cod', soloRegion)
+      const { data, error } = await q.order('id').range(desde, desde + 999)
+      if (error) {
+        console.error('[oficios-seia/scrape] no se pudo leer el candado diario:', error.message)
+        return null
+      }
+      out.push(...(data ?? []).map(r => r.id_expediente as number))
+      if (!data || data.length < 1000) return out
+    }
   }
-  return new Set((data ?? []).map(r => r.id_expediente as number))
+
+  const [tocados, rezagados] = await Promise.all([leer(false), leer(true)])
+  // Sin candado se trabaja más, no mal: se scrapea todo, como antes.
+  if (!tocados || !rezagados) return new Set()
+
+  /**
+   * Visto hoy = se tocó hoy Y no le queda ningún pendiente de antes.
+   *
+   * Con «alguna fila de hoy» alcanzaba para saltarlo, y un expediente que una
+   * corrida dejó a medias —un organismo que falló al escribirse— quedaba
+   * dado por visto hasta el día siguiente. Pasó el 2026-10-02 con la
+   * Desaladora de La Serena: 18 de sus 20 oficios se renovaron en la mañana
+   * y la corrida de después, ya corregida, la saltó sin llegar a los otros 2.
+   */
+  const vistos = new Set(tocados)
+  for (const e of rezagados) vistos.delete(e)
+  return vistos
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────

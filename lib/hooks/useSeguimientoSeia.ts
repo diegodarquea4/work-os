@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { diaChile } from '@/lib/fechaChile'
 import { INE_INVERSE } from '@/lib/regions'
 import type { OficioFila, Sesion, CarteraAlta } from '@/lib/seguimientoSeia'
+import * as seguimiento from '@/lib/seguimientoSeia'
 
 /**
  * Lo que necesita el tablero «Seguimiento de la inversión en el SEIA».
@@ -56,15 +57,14 @@ export type DatosSeguimientoSeia = {
   inversionPorExpediente: Map<string, number>
   /**
    * Por región, el día (Chile) en que se revisó por última vez el oficio
-   * pendiente MENOS al día. El scraper re-estampa `importado_at` en cada
+   * pendiente MENOS al día; sin pendientes, el de su última corrida completa. El scraper re-estampa `importado_at` en cada
    * pendiente que vuelve a ver, así que el mínimo dice hasta cuándo está al día
    * TODO lo que se muestra.
    */
   actualizado: Record<string, string>
   /**
    * Regiones que el botón puede refrescar: las que el cron recorre y no están
-   * al día hoy. Una sin oficios pendientes no tiene fecha y se ofrece siempre
-   * (no hay cómo saber si se revisó hoy); revisarla tarda segundos.
+   * al día hoy.
    */
   refrescables: Set<string>
   /**
@@ -103,6 +103,8 @@ type Crudo = {
   cartera: ProyectoCarteraFila[]
   enCalificacion: FilaSeia[]
   otrasFichas: FilaSeia[]
+  /** Día de la última corrida completa del scraper: '*' = nacional, o por región. */
+  corridas?: Record<string, string>
 }
 
 /** Arma lo derivado. Separado del fetch para que se lea de corrido. */
@@ -126,6 +128,14 @@ function armar(c: Crudo): DatosSeguimientoSeia {
   for (const p of c.enCalificacion) {
     const r = p.region_id != null ? INE_INVERSE[p.region_id] : undefined
     if (r && r !== 'NAC') medibles.add(r)
+  }
+
+  // Una región sin oficios pendientes no tiene oficio que le dé fecha: vale la
+  // de la última corrida completa que la recorrió (la suya o la nacional).
+  for (const r of medibles) {
+    if (actualizado[r]) continue
+    const d = seguimiento.fechaSinPendientes(c.corridas, r)
+    if (d) actualizado[r] = d
   }
 
   return {
