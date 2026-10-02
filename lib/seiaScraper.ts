@@ -406,3 +406,51 @@ export function pendientesDelExpediente(
 
   return out.sort((a, b) => (a.fechaLimite ?? '9999').localeCompare(b.fechaLimite ?? '9999'))
 }
+
+/**
+ * Empareja lo que el SEIA lista HOY en un expediente con lo guardado de ese
+ * expediente. Cada guardado se usa a lo sumo una vez; dentro del mismo
+ * organismo gana primero el del MISMO documento, y si no hay, el primer
+ * pendiente.
+ *
+ * Por qué el documento primero: la llave única (mig 118/121) incluye
+ * `id_documento`. Si un organismo tiene dos filas —un oficio general y uno
+ * específico, como la Gobernación Marítima en la Desaladora de La Serena— y se
+ * tomaba «la primera» para pasarla al documento de la otra, el UPDATE chocaba
+ * con la llave: no se actualizaba ninguna y la fecha del tablero quedaba
+ * pegada (2026-10-02).
+ *
+ * `sobrantes` son los pendientes que no se emparejaron: o su organismo ya no
+ * figura, o es un duplicado del mismo organismo que el SEIA ya no lista. En
+ * los dos casos dejaron de estar pendientes.
+ */
+export function emparejarOficios<
+  V extends { id_documento: number | null; clave: string },
+  G extends { id: number; estado: string; id_documento: number | null; clave: string },
+>(vivos: V[], guardados: G[]): { nuevos: V[]; pares: [V, G][]; sobrantes: G[] } {
+  const porClave = new Map<string, G[]>()
+  for (const g of guardados) porClave.set(g.clave, [...(porClave.get(g.clave) ?? []), g])
+  // Dentro de cada organismo, los pendientes adelante: reabrir uno resuelto
+  // solo si no queda otro.
+  for (const lista of porClave.values()) lista.sort((a, b) => Number(b.estado === 'pendiente') - Number(a.estado === 'pendiente'))
+
+  const usados = new Set<number>()
+  const nuevos: V[] = []
+  const pares: [V, G][] = []
+  // Primero los que calzan por documento, para que ninguno le quite su fila a otro.
+  const pendientesDeFila: V[] = []
+  for (const v of vivos) {
+    const g = v.id_documento == null ? undefined
+      : (porClave.get(v.clave) ?? []).find(c => !usados.has(c.id) && c.id_documento === v.id_documento)
+    if (g) { usados.add(g.id); pares.push([v, g]) } else pendientesDeFila.push(v)
+  }
+  for (const v of pendientesDeFila) {
+    const cands = (porClave.get(v.clave) ?? []).filter(c => !usados.has(c.id))
+    // Pasar una fila a un documento que ya tiene OTRA fila del organismo choca
+    // con la llave; esas quedan fuera.
+    const g = cands.find(c => !cands.some(o => o !== c && v.id_documento != null && o.id_documento === v.id_documento))
+    if (g) { usados.add(g.id); pares.push([v, g]) } else nuevos.push(v)
+  }
+  const sobrantes = guardados.filter(g => g.estado === 'pendiente' && !usados.has(g.id))
+  return { nuevos, pares, sobrantes }
+}

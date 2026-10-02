@@ -69,6 +69,7 @@ import { regionesQueNecesitanRespaldo, tomarFotoOficios } from '@/lib/oficiosFot
 import {
   cierraExpediente,
   claveOrganismo,
+  emparejarOficios,
   esSolicitud,
   parsearDestinatarios,
   parsearDocumentos,
@@ -88,6 +89,22 @@ export const maxDuration = 300
 const SYNC_NAME = 'oficios-seia-scrape'
 /** 80% del maxDuration, igual que el sync del catálogo. */
 const PRESUPUESTO_MS = 240_000
+/**
+ * Ninguna consulta puede terminar después de esto, contado desde el inicio de
+ * la invocación: deja 10 s para escribir sync_status antes de que Vercel corte
+ * a los 300.
+ */
+const TOPE_MS = 290_000
+/** Una consulta normal al SEIA. */
+const ESPERA_MS = 20_000
+/**
+ * La lista de documentos de un expediente grande tarda más: Condominios Santa
+ * Gema (RM, 134 documentos) responde en 24 s, y con 20 s de corte se saltaba
+ * en todas las corridas y su fecha quedaba pegada en el tablero (2026-10-02).
+ * Va sin reintento: si tarda tanto es por pesada, no por un tropiezo, y un
+ * segundo intento de 50 s no cabe en el presupuesto.
+ */
+const ESPERA_LISTA_MS = 50_000
 const BASE = 'https://seia.sea.gob.cl'
 const UA = 'work-os DCI panel (Ministerio del Interior, Chile)'
 
@@ -145,16 +162,20 @@ type Bajar = (url: string) => Promise<string>
  * El SEIA responde en ISO-8859-1 y es flaky: un reintento corto alcanza, y lo
  * que no, queda para la reinvocación siguiente vía cursor.
  */
-function crearBajar(limitar: ReturnType<typeof crearLimitador>): Bajar {
+function crearBajar(limitar: ReturnType<typeof crearLimitador>, t0: number): Bajar {
   return (url: string) => limitar(async () => {
+    const lista = url.includes('/expediente/documentos.php')
+    // Nunca más allá del tope de la invocación.
+    const espera = () => Math.max(1_000, Math.min(lista ? ESPERA_LISTA_MS : ESPERA_MS, t0 + TOPE_MS - Date.now()))
     const pedir = () => fetch(url, {
       headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(espera()),
     })
     let res: Response
     try {
       res = await pedir()
-    } catch {
+    } catch (err) {
+      if (lista) throw err
       await new Promise(r => setTimeout(r, 2_000))
       res = await pedir()
     }
@@ -316,21 +337,22 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
   let escritos = 0
   let resueltos = 0
 
-  type Guardado = { id: number; estado: string; id_documento: number | null; plazo_estimado: boolean }
-  const porOrganismo = new Map<string, Guardado>()
-  for (const g of guardados ?? []) {
-    const k = claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))
-    // Si el Excel dejó dos filas del mismo organismo, gana la primera y la
-    // otra queda para resolverse abajo.
-    if (!porOrganismo.has(k)) porOrganismo.set(k, {
+  // Un organismo puede tener más de una fila (oficio general + uno específico,
+  // o lo que dejó el Excel): ver `emparejarOficios`.
+  const emparejados = emparejarOficios(
+    vivos.map(v => ({ v, id_documento: v.id_documento, clave: claveOrganismo(v.oaeca_sea) })),
+    (guardados ?? []).map(g => ({
       id: g.id as number,
       estado: g.estado as string,
       id_documento: (g.id_documento as number | null) ?? null,
       plazo_estimado: (g.plazo_estimado as boolean) ?? false,
-    })
-  }
-
-  const nuevas = vivos.filter(v => !porOrganismo.has(claveOrganismo(v.oaeca_sea)))
+      fecha_limite: g.fecha_limite as string | null,
+      clave: claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string)),
+    })),
+  )
+  const nuevas = emparejados.nuevos.map(w => w.v)
+  const pares = emparejados.pares.map(([w, g]) => [w.v, g] as const)
+  const sobrantes = emparejados.sobrantes
   if (nuevas.length > 0) {
     const { error } = await db
       .from('sesion_oficios_tratados')
@@ -342,9 +364,7 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
   // Los que ya estaban: se refresca el plazo y se los devuelve a pendiente
   // si el SEIA los volvió a listar (una Adenda reabre el pedido al mismo
   // organismo). No se toca `estado_updated_by_email`: nadie los tocó.
-  for (const v of vivos) {
-    const g = porOrganismo.get(claveOrganismo(v.oaeca_sea))
-    if (!g) continue
+  for (const [v, g] of pares) {
 
     /**
      * Una fecha OFICIAL le gana a una estimada, para el MISMO oficio.
@@ -380,13 +400,11 @@ async function procesarExpediente(p: ProyectoAScrapear, bajar: Bajar, db: Db): P
     if (error) errores.push(`${p.expediente}: ${error.message}`)
   }
 
-  // Lo que YA NO está pendiente: estaba guardado y el SEIA ya no lo lista.
-  // Es la regla del Excel —el archivo es la lista completa de lo que falta—
+  // Lo que YA NO está pendiente: estaba guardado y el SEIA ya no lo lista
+  // (su organismo no figura, o es un duplicado que quedó sin pareja). Es la
+  // regla del Excel —el archivo es la lista completa de lo que falta—
   // aplicada a un expediente.
-  const clavesVivas = new Set(vivos.map(v => claveOrganismo(v.oaeca_sea)))
-  const aResolver = (guardados ?? [])
-    .filter(g => g.estado === 'pendiente')
-    .filter(g => !clavesVivas.has(claveOrganismo((g.oaeca_sea as string) ?? (g.oaeca_nombre as string))))
+  const aResolver = sobrantes
 
   if (aResolver.length > 0) {
     // Sin `resuelto_en_sesion_id` ni email: no lo cerró una persona ni una
@@ -558,7 +576,7 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin()
   const t0 = Date.now()
-  const bajar = crearBajar(crearLimitador(MAX_EN_VUELO))
+  const bajar = crearBajar(crearLimitador(MAX_EN_VUELO), t0)
 
   // ── La cartera, que define qué expedientes se miran ──────────────────────
   const { data: carteraRows, error: carteraErr } = await db
