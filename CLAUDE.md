@@ -188,6 +188,20 @@ Reglas que no son obvias:
 - **El botón de actualizar** refresca, de a una, las regiones mostradas que no están al día (`refrescables`) y se apaga cuando no queda ninguna; reintenta hasta 6 veces una región que corta a medias.
 - **El evolutivo se RECONSTRUYE** desde las fechas de cada oficio (`medirRegion(r, fecha)`): cada fecha de corte vale por la última sesión del tramo si la hubo (punto violeta) o por el corte mismo. Lo respondido antes de que el panel siguiera el proyecto no existe en la tabla, así que los primeros cortes quedan cortos. `oficios_foto_oaeca` (mig 122) es la fuente que debería reemplazarlo cuando junte fotos.
 
+## Calendarización de las sesiones de los comités (mig 123, oct 2026)
+
+Toda sesión de los cinco comités (Policial, Político, Económico, Nudos Críticos, Gabinete) nace en el calendario. Estados en `eje_sesiones.estado`: **programada → borrador (abierta) → cerrada**, y **anulada**. «No realizada» NO se guarda: es una programada cuya fecha pasó sin abrirse, derivada al leer (`lib/sesiones/calendario.ts:estadoAgenda`, pura y testeada), así no hay cron que la marque. Columnas nuevas: `agenda` (`ordinaria` = agendada antes; `extraordinaria` = abierta el mismo día; `registrada` = cargada después de hecha; NULL = anterior al calendario), `fecha_original` + `motivo_cambio` (al mover o anular) y `serie_id` (las recurrentes agendadas juntas).
+
+Reglas (trigger `eje_sesiones_reglas_agenda`, mig 123):
+- **Hasta DOS sesiones abiertas por comité** (Manuel, 2026-10-01). Reemplazó a los índices UNIQUE parciales de «un borrador» de las mig 044/046/050/059/060; un UNIQUE no cuenta hasta dos, así que el trigger cuenta bajo un advisory lock por comité. La llave del comité es la de los índices viejos: región, instancia, eje, provincia y —solo en el Económico— tipo_comite. `useSesionesResumen.borradorId` es la abierta MÁS ANTIGUA (la que toman la Preparación y la Consola del gabinete); `abiertas` cuenta cuántas hay.
+- **Anular** solo una programada y solo antes de su fecha: pasada la fecha ya es «no realizada», y anularla borraría un incumplimiento. Una anulada no revive.
+
+Flujo: «Nueva sesión» abre un selector (`components/sesiones/AgendaSesiones.tsx`) — reanudar una abierta, abrir una programada, abrir una extraordinaria hoy o registrar una ya hecha con fecha pasada — y le pasa el id al modal del comité como `borradorId`. El Calendario de cada comité es una vista de mes con «+ Agendar» (fecha, lugar y «Recurrente»: cada semana, cada 2 semanas o cada mes en el mismo n-ésimo día de la semana, con los feriados fuera de la propuesta). El Gabinete no tiene «Nueva sesión»: `iniciarPreparacionGabinete` reusa la abierta o abre la próxima programada antes de crear una extraordinaria. Los historiales leen solo `borrador`/`cerrada`; todo lo demás que lee sesiones ya filtraba por estado (actas, cierre, métricas, tablero SEIA).
+
+Símbolo del estado por el LLENADO del círculo, sin color (`MarcaSesion`): vacío = programada, medio = abierta, lleno = realizada, tachado = no realizada. En el calendario de Mi Región va en el amarillo de «Comités y Gabinetes».
+
+Vista de todas las regiones (`components/metricas/CalendarioComites.tsx`): en Métricas → «Calendario de comités» (con selector de comité) y en Seguimiento SEIA → pestaña «Calendario» (fijo en el Económico, pensada para el Ministerio de Economía). **Cada uno ve los comités que puede operar, en sus regiones** (Manuel, 2026-10-01): se lee con el cliente del navegador porque la RLS de `eje_sesiones` ya entrega eso, y se acota por `can(cap, región)`; la pestaña del SEIA pide además `useConduceEconomico`. **Cumplimiento** = de las ORDINARIAS cuya fecha ya pasó, cuántas se cerraron; extraordinarias, registradas y lo anterior al calendario cuentan como realizadas pero no entran al porcentaje.
+
 ## Environment variables
 
 | Variable | Required in |

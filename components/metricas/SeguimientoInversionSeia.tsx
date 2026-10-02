@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { REGIONS } from '@/lib/regions'
 import { useSeguimientoSeia, expedienteDeCartera, type DatosSeguimientoSeia } from '@/lib/hooks/useSeguimientoSeia'
 import TablaProyectosFiltrable, { type FilaProyecto } from './TablaProyectosFiltrable'
+import FiltroRegiones from './FiltroRegiones'
+import CalendarioComites, { useVeCalendario } from './CalendarioComites'
+import { useConduceEconomico } from '@/lib/context/UserContext'
 import {
   COD_REGIONES, FILAS_MATRIZ, MINISTERIOS, ATRASO_MAXIMO_DIAS, DIAS_PENDIENTE,
   nombreFila, ministerioCorto, ministerioLargo, prepararOficios, pasaModo, armarMatriz, claveCelda,
@@ -28,7 +31,7 @@ import { diaChile } from '@/lib/fechaChile'
  * de malo y va en gris.
  */
 
-export type Pestana = 'nacional' | 'regional' | 'comparativa' | 'cartera'
+export type Pestana = 'nacional' | 'regional' | 'comparativa' | 'cartera' | 'calendario'
 
 const NOMBRE_REGION = Object.fromEntries(REGIONS.map(r => [r.cod, r.nombre]))
 const fmtN = (n: number) => Math.round(n).toLocaleString('es-CL')
@@ -57,6 +60,11 @@ export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', 
   const [pestana, setPestana] = useState<Pestana>(pestanaInicial)
   // Lo que se está mostrando, para el sello: cada pestaña lo informa.
   const [enPantalla, setEnPantalla] = useState<string[]>(COD_REGIONES)
+  // El calendario del comité, para quien lo conduce en alguna región (el
+  // tablero de oficios lo ven todos; las sesiones, no). Un SEREMI de Economía
+  // con las 16 regiones ve las 16.
+  const conduce = useConduceEconomico()
+  const veCalendario = useVeCalendario('inversion') && conduce
 
   const oficios = useMemo(
     () => datos ? prepararOficios(datos.oficios, datos.hoy, iso => diaChile(new Date(iso))) : [],
@@ -81,7 +89,8 @@ export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', 
       </header>
 
       <nav className="mt-5 inline-flex gap-0.5 p-[3px] rounded-[11px] bg-stone-100 max-w-full overflow-x-auto">
-        {([['nacional', 'Nacional'], ['regional', 'Regional'], ['comparativa', 'Comparativa regional'], ['cartera', 'Cartera de proyectos']] as const).map(([k, t]) => (
+        {([['nacional', 'Nacional'], ['regional', 'Regional'], ['comparativa', 'Comparativa regional'], ['cartera', 'Cartera de proyectos'], ['calendario', 'Calendario']] as const)
+          .filter(([k]) => k !== 'calendario' || veCalendario).map(([k, t]) => (
           <button key={k} onClick={() => setPestana(k)}
             className={`px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap ${pestana === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             {t}
@@ -93,12 +102,15 @@ export default function SeguimientoInversionSeia({ pestanaInicial = 'nacional', 
       {pestana === 'regional'    && <VistaRegional datos={datos} oficios={oficios} onRegiones={setEnPantalla} regionInicial={regionInicial} />}
       {pestana === 'comparativa' && <VistaComparativa datos={datos} oficios={oficios} onRegiones={setEnPantalla} />}
       {pestana === 'cartera'     && <VistaCartera datos={datos} onRegiones={setEnPantalla} />}
+      {pestana === 'calendario' && veCalendario && <CalendarioComites instancia="inversion" />}
 
+      {pestana !== 'calendario' && (
       <footer className="mt-7 pt-3 border-t border-gray-200 text-[11.5px] text-gray-400 space-y-0.5">
         <p>Las fechas pueden tener un margen de error de un día.</p>
         <p>Se consideran pendientes los oficios a los que les faltan {DIAS_PENDIENTE} días o menos para el vencimiento de su pronunciamiento.</p>
         <p>Se excluyen del análisis los oficios con más de un año ({ATRASO_MAXIMO_DIAS} días) de atraso.</p>
       </footer>
+      )}
     </div>
   )
 }
@@ -190,48 +202,6 @@ function Segmentos<T extends string>({ opciones, valor, onCambio }: { opciones: 
 }
 
 /** Multiselección de regiones. Nunca queda vacía: sin región no habría nada que mostrar. */
-function FiltroRegiones({ seleccion, onCambio, compacto = false }: { seleccion: Set<string>; onCambio: (s: Set<string>) => void; compacto?: boolean }) {
-  const [abierto, setAbierto] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!abierto) return
-    const cerrar = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setAbierto(false) }
-    document.addEventListener('mousedown', cerrar)
-    return () => document.removeEventListener('mousedown', cerrar)
-  }, [abierto])
-  const todas = seleccion.size === COD_REGIONES.length
-  const resumen = todas ? 'Todas las regiones' : seleccion.size === 1 ? NOMBRE_REGION[[...seleccion][0]] : `${seleccion.size} regiones`
-  const alternar = (c: string) => {
-    const s = new Set(seleccion)
-    if (s.has(c)) { if (s.size > 1) s.delete(c) } else s.add(c)
-    onCambio(s)
-  }
-  return (
-    <div className="relative" ref={ref}>
-      <button onClick={() => setAbierto(a => !a)}
-        className={compacto
-          ? `text-[11px] uppercase tracking-wide font-semibold ${todas ? 'text-gray-400' : 'text-violet-700'} hover:text-slate-800`
-          : `text-[13px] font-semibold text-slate-800 bg-white border rounded-[9px] px-3 py-1.5 ${abierto ? 'border-violet-500' : 'border-gray-300'}`}>
-        {compacto ? `Región${todas ? '' : ` (${seleccion.size})`}` : resumen} <span className="text-gray-400">▾</span>
-      </button>
-      {abierto && (
-        <div className="absolute z-30 left-0 top-[calc(100%+6px)] w-60 max-h-80 overflow-y-auto bg-white border border-gray-300 rounded-xl shadow-xl p-1.5 text-left normal-case tracking-normal">
-          <label className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-semibold text-slate-800 border-b border-gray-100 cursor-pointer hover:bg-gray-50">
-            <input type="checkbox" className="accent-violet-700" checked={todas}
-              onChange={e => onCambio(e.target.checked ? new Set(COD_REGIONES) : new Set([COD_REGIONES[0]]))} />
-            Todas
-          </label>
-          {REGIONS.map(r => (
-            <label key={r.cod} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] font-normal text-slate-800 cursor-pointer hover:bg-gray-50">
-              <input type="checkbox" className="accent-violet-700" checked={seleccion.has(r.cod)} onChange={() => alternar(r.cod)} />
-              {r.nombre}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /** Los oficios por proyecto → organismo → oficio, igual que en la sesión del comité. */
 function TarjetasProyectos({ oficios, datos, mostrarRegion = false }: { oficios: Oficio[]; datos: DatosSeguimientoSeia; mostrarRegion?: boolean }) {

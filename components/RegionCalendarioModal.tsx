@@ -20,6 +20,9 @@ import type { Region } from '@/lib/regions'
 import { getSupabase } from '@/lib/supabase'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { Modal } from '@/components/ui'
+import { useCan } from '@/lib/context/UserContext'
+import { estadoAgenda, ETIQUETA_ESTADO } from '@/lib/sesiones/calendario'
+import { MarcaSesion } from '@/components/sesiones/MarcaSesion'
 
 type Props = {
   open: boolean
@@ -94,6 +97,16 @@ export default function RegionCalendarioModal({ open, onClose, region, iniciativ
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   const { config: regionConfig } = useRegionConfig(region.cod)
+  // Cada uno ve el calendario de los comités que puede operar (Manuel,
+  // 2026-10-01). La RLS deja a un regional leer todos los de su región; acá se
+  // acota a los que opera.
+  const opera = [
+    useCan('comite.policial.operar', region.cod) && 'eje',
+    useCan('comite.politico.operar', region.cod) && 'politico',
+    useCan('comite.economico.operar', region.cod) && 'inversion',
+    useCan('comite.gabinete.operar', region.cod) && 'gabinete',
+    useCan('comite.infraestructura.operar', region.cod) && 'infraestructura',
+  ].filter(Boolean).join(',')
 
   // Reset al abrir — que cada apertura arranque en el mes actual, no donde
   // se quedó la vez anterior (podría confundir "hoy" con "donde navegué antes").
@@ -144,11 +157,12 @@ export default function RegionCalendarioModal({ open, onClose, region, iniciativ
     }
     if (show.comite) {
       for (const s of sesiones) {
+        if (s.estado === 'anulada' || !opera.split(',').includes(s.instancia)) continue
         list.push({
           tipo: 'comite',
           fecha: s.fecha,
           titulo: instanciaLabel(s, regionConfig?.gabinete_nombre, regionConfig?.infraestructura_nombre),
-          subtitulo: s.estado === 'borrador' ? 'Borrador' : null,
+          subtitulo: ETIQUETA_ESTADO[estadoAgenda(s, toISO(new Date()))],
           hora: null,
           lugar: s.lugar,
           sesion: s,
@@ -156,7 +170,7 @@ export default function RegionCalendarioModal({ open, onClose, region, iniciativ
       }
     }
     return list
-  }, [seguimientos, sesiones, show, iniciativas, regionConfig])
+  }, [seguimientos, sesiones, show, iniciativas, regionConfig, opera])
 
   const byDate = useMemo(() => {
     const m: Record<string, CalItem[]> = {}
@@ -270,7 +284,11 @@ export default function RegionCalendarioModal({ open, onClose, region, iniciativ
                   )}
                 </span>
                 <div className="flex flex-wrap gap-0.5 mt-0.5">
-                  {dayItems.slice(0, 4).map((it, j) => (
+                  {dayItems.slice(0, 4).map((it, j) => it.sesion ? (
+                    <span key={j} title={`${it.titulo}: ${it.subtitulo}`} className="text-amber-500 leading-none">
+                      <MarcaSesion estado={estadoAgenda(it.sesion, today)} size={9} />
+                    </span>
+                  ) : (
                     <span
                       key={j}
                       title={`${TIPO_CONFIG[it.tipo].label.replace(/s$/, '')}: ${it.titulo}`}
@@ -310,7 +328,9 @@ export default function RegionCalendarioModal({ open, onClose, region, iniciativ
                       {...(onClick ? { onClick } : {})}
                       className={`w-full flex gap-3 items-start p-2.5 rounded-lg bg-gray-50 text-left ${onClick ? 'hover:bg-gray-100 transition-colors cursor-pointer' : ''}`}
                     >
-                      <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot}`} />
+                      {it.sesion
+                        ? <span className="mt-0.5 text-amber-500"><MarcaSesion estado={estadoAgenda(it.sesion, today)} /></span>
+                        : <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${cfg.dot}`} />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${cfg.badge}`}>

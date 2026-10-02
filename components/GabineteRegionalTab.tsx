@@ -5,12 +5,13 @@ import type { Region } from '@/lib/regions'
 import type { Iniciativa } from '@/lib/projects'
 import type { RegionEje } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
-import { useCan } from '@/lib/context/UserContext'
+import { useCan, useCurrentUserEmail } from '@/lib/context/UserContext'
 import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import HistorialSesionesModal from './HistorialSesionesModal'
 import NominaModal from './NominaModal'
 import ConsolaSesionGabinete from './gabinete/ConsolaSesionGabinete'
+import AgendaSesiones, { type VistaAgenda } from './sesiones/AgendaSesiones'
 
 /**
  * Tab "Gabinete Regional" de la sección Comités y Gabinete Regional
@@ -58,6 +59,11 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
   const [consolaOpen, setConsolaOpen]     = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
   const [nominaOpen, setNominaOpen]       = useState(false)
+  // Calendario del gabinete (mig 123). La sesión sigue naciendo en
+  // Preparación: abrir una programada lleva allá, y la Preparación toma la
+  // próxima programada en vez de crear una con fecha de hoy.
+  const [agendaVista, setAgendaVista]     = useState<VistaAgenda>(null)
+  const userEmail = useCurrentUserEmail()
   const { resumen, refresh: refreshResumen } = useSesionesResumen(
     region.cod, { instancia: 'gabinete' }, gabineteOn,
   )
@@ -194,6 +200,13 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
           </button>
           <span className="text-violet-200">|</span>
           <button
+            onClick={() => setAgendaVista('calendario')}
+            className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
+          >
+            Calendario
+          </button>
+          <span className="text-violet-200">|</span>
+          <button
             onClick={() => setHistorialOpen(true)}
             className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
           >
@@ -218,6 +231,16 @@ export default function GabineteRegionalTab({ region, iniciativas, onAbrirInicia
           onClose={() => { setConsolaOpen(false); refreshResumen() }}
         />
       )}
+
+      <AgendaSesiones
+        vista={agendaVista}
+        onVista={v => { setAgendaVista(v); if (!v) refreshResumen() }}
+        regionCod={region.cod}
+        filtro={{ instancia: 'gabinete' }}
+        nombreComite={gabineteNombre}
+        email={userEmail}
+        onAbrir={() => { refreshResumen(); onIrAPreparacion(region.nombre) }}
+      />
 
       {/* Modales (solo montan con el gate activo) */}
       {historialOpen && (

@@ -66,7 +66,8 @@ export default function HistorialSesionesModal({ region, instancia, eje, nombreI
       .select('*, sesion_asistencia(count)')
       .eq('region_cod', region.cod)
     q = instancia === 'eje' ? q.eq('eje_id', eje!.id) : q.eq('instancia', instancia)
-    const { data } = await q
+    // Lo programado o anulado vive en el Calendario (mig 123).
+    const { data } = await q.in('estado', ['borrador', 'cerrada'])
       .order('fecha', { ascending: false })
       .order('id',    { ascending: false })
     setSesiones((data ?? []) as SesionResumen[])

@@ -9,6 +9,7 @@ import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModalPolitico, { type DestinoCompromiso } from './SesionModalPolitico'
 import HistorialSesionesPoliticoModal from './HistorialSesionesPoliticoModal'
+import AgendaSesiones, { type VistaAgenda } from './sesiones/AgendaSesiones'
 
 /**
  * Panel del tab "Comité Político" en ComitesRegionalesSection. Es la instancia
@@ -35,6 +36,9 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
 
   const [sesionOpen, setSesionOpen]       = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
+  // Toda sesión se abre desde la agenda (mig 123): el selector entrega el id.
+  const [agendaVista, setAgendaVista] = useState<VistaAgenda>(null)
+  const [sesionId, setSesionId] = useState<number | null>(null)
 
   const { resumen, refresh: refreshResumen } = useSesionesResumen(
     region.cod, { instancia: 'politico' }, puedeOperar,
@@ -67,17 +71,30 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
         <>
           {/* Acción principal */}
           <div className="px-4 pt-4 pb-2">
-            <button
-              onClick={() => setSesionOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
-              title={resumen.borradorId ? 'Continuar el borrador de sesión' : `Nueva sesión de ${NOMBRE_COMITE}`}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="10" height="9" rx="1.5"/>
-                <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
-              </svg>
-              {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAgendaVista('nueva')}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
+                title={resumen.abiertas ? 'Continuar una sesión abierta o abrir otra' : `Nueva sesión de ${NOMBRE_COMITE}`}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+                  <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
+                </svg>
+                {resumen.abiertas ? 'Continuar sesión' : 'Nueva sesión'}
+              </button>
+              <button
+                onClick={() => setAgendaVista('calendario')}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+                title="Sesiones agendadas, abiertas y realizadas del comité"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+                  <path d="M2 6h10M5 1.5V4M9 1.5V4M5 8.5h1M8 8.5h1"/>
+                </svg>
+                Calendario
+              </button>
+            </div>
           </div>
 
           {/* Strip resumen */}
@@ -109,12 +126,9 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
             <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
               Sesiones de {NOMBRE_COMITE}
             </span>
-            <button
-              onClick={() => setHistorialOpen(true)}
-              className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
-            >
-              Ver historial →
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setHistorialOpen(true)} className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline">Ver historial →</button>
+            </div>
           </div>
         </>
       )}
@@ -122,17 +136,27 @@ export default function ComitePoliticoPanel({ region, regionEjes, iniciativas, o
       {sesionOpen && (
         <SesionModalPolitico
           region={region}
-          borradorId={resumen.borradorId}
+          borradorId={sesionId ?? resumen.borradorId}
           currentUserEmail={userEmail}
           iniciativas={iniciativas}
           destinos={destinos}
           onAbrirIniciativa={onAbrirIniciativa}
           onClose={() => {
             setSesionOpen(false)
+            setSesionId(null)
             refreshResumen()
           }}
         />
       )}
+      <AgendaSesiones
+        vista={agendaVista}
+        onVista={v => { setAgendaVista(v); if (!v) refreshResumen() }}
+        regionCod={region.cod}
+        filtro={{ instancia: 'politico' }}
+        nombreComite={NOMBRE_COMITE}
+        email={userEmail}
+        onAbrir={id => { setSesionId(id); setSesionOpen(true) }}
+      />
       {historialOpen && (
         <HistorialSesionesPoliticoModal region={region} onClose={() => setHistorialOpen(false)} />
       )}
