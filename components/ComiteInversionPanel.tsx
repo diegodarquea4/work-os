@@ -108,8 +108,8 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
               </button>
               )}
               {/* El tablero de oficios de la región va como botón grande: es lo
-                  que se mira antes de sesionar. La cartera completa quedó en la
-                  franja de abajo y en el encabezado de los priorizados. */}
+                  que se mira antes de sesionar. La cartera completa se abre desde
+                  el encabezado de los priorizados. */}
               <button
                 onClick={() => setTableroOpen(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
@@ -189,14 +189,6 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 title="Todos los oficios del SEIA de la región, agrupados por proyecto"
               >
                 Oficios
-              </button>
-              <span className="text-violet-200">|</span>
-              <button
-                onClick={() => setProyectosOpen(true)}
-                className="text-xs text-violet-700 hover:text-violet-900 font-medium hover:underline"
-                title="Abrir la cartera completa: filtros, Excel y alta de proyectos"
-              >
-                Ver todos los proyectos
               </button>
               <span className="text-violet-200">|</span>
               <button

@@ -163,7 +163,7 @@ const MODULES: { id: ModuleId; label: string }[] = [
   { id: 'censo',     label: '🏘 Censo 2024' },
   { id: 'empleo',    label: '💼 Empleo' },
   { id: 'casen',     label: '🏠 CASEN 2024' },
-  { id: 'economico', label: '🏗 Comité Económico Regional' },
+  { id: 'economico', label: '🏗 Seguimiento SEIA' },
   { id: 'calendario', label: '📅 Calendario de comités' },
 ]
 
@@ -2825,7 +2825,10 @@ export default function MetricasView({ initialRegionNombre }: { initialRegionNom
         {activeModule === 'censo'     && <CensoModule />}
         {activeModule === 'empleo'    && <EmpleoModule />}
         {activeModule === 'casen'     && <CasenModule />}
-        {activeModule === 'economico' && <SeguimientoInversionSeia />}
+        {activeModule === 'economico' && (
+          // Desde una región, Regional y Cartera vienen ya en esa región.
+          <SeguimientoInversionSeia regionInicial={REGIONS.find(r => r.nombre === initialRegionNombre)?.cod} />
+        )}
         {activeModule === 'calendario' && <CalendarioComites />}
       </div>
     </div>
