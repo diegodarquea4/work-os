@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { esCompromisoAbierto } from '@/lib/sesiones/helpers'
+import { diaChile } from '@/lib/fechaChile'
 
 /**
  * Hooks de datos del módulo Sesiones (comités mig 044 + gabinete mig 046).
@@ -29,9 +30,14 @@ export type SesionesResumen = {
   trabasEscaladas: number
   // Fecha (YYYY-MM-DD) de la última sesión CERRADA. null = nunca ha habido.
   ultimaSesionFecha: string | null
-  // id del borrador vivo de esta (región, instancia[, eje]) si existe —
-  // "Nueva sesión" lo reabre (UNIQUE parcial de la mig 046: a lo más uno).
+  // La sesión abierta más antigua de esta (región, instancia[, eje]), si hay.
+  // Desde la mig 123 puede haber hasta dos abiertas; las piezas que trabajan
+  // sobre «la» sesión en curso (preparación del gabinete, consola) toman esta.
   borradorId: number | null
+  // Cuántas sesiones abiertas tiene el comité (a lo más 2, mig 123).
+  abiertas: number
+  // Fecha de la próxima sesión programada (hoy o después), si hay.
+  proximaProgramada: string | null
 }
 
 const RESUMEN_VACIO: SesionesResumen = {
@@ -39,6 +45,8 @@ const RESUMEN_VACIO: SesionesResumen = {
   trabasEscaladas: 0,
   ultimaSesionFecha: null,
   borradorId: null,
+  abiertas: 0,
+  proximaProgramada: null,
 }
 
 export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, enabled: boolean) {
@@ -59,7 +67,7 @@ export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, en
     // dinámicos para no duplicar cada query en tres ramas.
     const [colInst, valInst]: [string, string | number] =
       instancia === 'eje' ? ['eje_id', ejeId!] : ['instancia', instancia]
-    const [compRes, cerradaRes, borradorRes, escaladasRes] = await Promise.all([
+    const [compRes, cerradaRes, borradorRes, escaladasRes, programadaRes] = await Promise.all([
       sb.from('sesion_compromisos')
         .select('id, estado')
         .eq('region_cod', regionCod)
@@ -76,7 +84,8 @@ export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, en
         .eq('region_cod', regionCod)
         .eq(colInst, valInst)
         .eq('estado', 'borrador')
-        .limit(1),
+        .order('fecha')
+        .order('id'),
       // Trabas escaladas abiertas — solo tiene sentido para el gabinete.
       instancia === 'gabinete'
         ? sb.from('sesion_compromisos')
@@ -85,12 +94,22 @@ export function useSesionesResumen(regionCod: string, filtro: SesionesFiltro, en
             .eq('escalado_a_gabinete', true)
             .in('estado', ['pendiente', 'en_curso'])
         : Promise.resolve({ data: [] as { id: number }[] }),
+      sb.from('eje_sesiones')
+        .select('fecha')
+        .eq('region_cod', regionCod)
+        .eq(colInst, valInst)
+        .eq('estado', 'programada')
+        .gte('fecha', diaChile())
+        .order('fecha')
+        .limit(1),
     ])
     setResumen({
       compromisosAbiertos: (compRes.data ?? []).filter(c => esCompromisoAbierto(c as { estado: 'pendiente' | 'en_curso' | 'cumplido' })).length,
       trabasEscaladas:     (escaladasRes.data ?? []).length,
       ultimaSesionFecha:   cerradaRes.data?.[0]?.fecha ?? null,
       borradorId:          borradorRes.data?.[0]?.id ?? null,
+      abiertas:            (borradorRes.data ?? []).length,
+      proximaProgramada:   programadaRes.data?.[0]?.fecha ?? null,
     })
     setLoading(false)
   }, [regionCod, instancia, ejeId, enabled])

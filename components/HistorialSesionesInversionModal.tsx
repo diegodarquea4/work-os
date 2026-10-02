@@ -62,6 +62,8 @@ export default function HistorialSesionesInversionModal({ region, onClose, initi
       .select('*, sesion_asistencia(count)')
       .eq('region_cod', region.cod)
       .eq('instancia', 'inversion')
+      // Lo programado o anulado vive en el Calendario (mig 123).
+      .in('estado', ['borrador', 'cerrada'])
       .order('fecha', { ascending: false })
       .order('id',    { ascending: false })
     setSesiones((data ?? []) as SesionResumen[])

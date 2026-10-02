@@ -595,7 +595,12 @@ export type EjeSesion = {
   fecha: string                  // date puro YYYY-MM-DD
   lugar: string | null
   tipo_comite: TipoComiteInfraestructura | null
-  estado: 'borrador' | 'cerrada'
+  // programada/anulada: calendario (mig 123). La mayoría del código solo ve
+  // borrador y cerrada porque filtra por estado al leer.
+  estado: 'programada' | 'borrador' | 'cerrada' | 'anulada'
+  agenda?: 'ordinaria' | 'extraordinaria' | 'registrada' | null
+  fecha_original?: string | null
+  motivo_cambio?: string | null
   // Idempotencia del cierre: true tras completar el core del cierre (en
   // comité: aplicar suma/pulso; en gabinete no hay métricas pero el flag se
   // setea igual — puedeRegenerarActa lo exige como marcador de cierre).

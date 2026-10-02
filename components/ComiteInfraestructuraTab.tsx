@@ -9,6 +9,7 @@ import { useRegionConfig } from '@/lib/hooks/useRegionConfig'
 import { useSesionesResumen } from '@/lib/hooks/useSesionesEje'
 import SesionModal from './SesionModal'
 import HistorialSesionesModal from './HistorialSesionesModal'
+import AgendaSesiones, { type VistaAgenda } from './sesiones/AgendaSesiones'
 import NominaModal from './NominaModal'
 import MegaproyectosModal from './MegaproyectosModal'
 import MegaproyectoGroup from './MegaproyectoGroup'
@@ -68,6 +69,9 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
 
   const [sesionOpen, setSesionOpen]             = useState(false)
   const [historialOpen, setHistorialOpen]       = useState(false)
+  // Toda sesión se abre desde la agenda (mig 123): el selector entrega el id.
+  const [agendaVista, setAgendaVista] = useState<VistaAgenda>(null)
+  const [sesionId, setSesionId] = useState<number | null>(null)
   const [nominaOpen, setNominaOpen]             = useState(false)
   const [megaproyectosOpen, setMegaproyectosOpen] = useState(false)
   const [agregarOpen, setAgregarOpen]           = useState(false)
@@ -156,17 +160,30 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Acciones */}
       <div className="px-4 pt-4 pb-2">
-        <button
-          onClick={() => setSesionOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
-          title={resumen.borradorId ? 'Continuar el borrador de sesión' : `Nueva sesión de ${nombreComite}`}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3" width="10" height="9" rx="1.5"/>
-            <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
-          </svg>
-          {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAgendaVista('nueva')}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
+            title={resumen.abiertas ? 'Continuar una sesión abierta o abrir otra' : `Nueva sesión de ${nombreComite}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+              <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
+            </svg>
+            {resumen.abiertas ? 'Continuar sesión' : 'Nueva sesión'}
+          </button>
+          <button
+            onClick={() => setAgendaVista('calendario')}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+            title="Sesiones agendadas, abiertas y realizadas del comité"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+              <path d="M2 6h10M5 1.5V4M9 1.5V4M5 8.5h1M8 8.5h1"/>
+            </svg>
+            Calendario
+          </button>
+        </div>
       </div>
 
       {/* Strip resumen (patrón del drawer del comité) */}
@@ -304,14 +321,24 @@ export default function ComiteInfraestructuraTab({ region, iniciativas, onAbrirI
           tag={tag}
           iniciativas={iniciativas}
           onAbrirIniciativa={onAbrirIniciativa}
-          borradorId={resumen.borradorId}
+          borradorId={sesionId ?? resumen.borradorId}
           currentUserEmail={userEmail}
           onClose={() => {
             setSesionOpen(false)
+            setSesionId(null)
             refreshResumen()
           }}
         />
       )}
+      <AgendaSesiones
+        vista={agendaVista}
+        onVista={v => { setAgendaVista(v); if (!v) refreshResumen() }}
+        regionCod={region.cod}
+        filtro={{ instancia: 'infraestructura' }}
+        nombreComite={nombreComite}
+        email={userEmail}
+        onAbrir={id => { setSesionId(id); setSesionOpen(true) }}
+      />
       {historialOpen && (
         <HistorialSesionesModal
           region={region}

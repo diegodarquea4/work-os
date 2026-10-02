@@ -14,6 +14,7 @@ import OaecaModal from './OaecaModal'
 import OficiosRegionModal from './OficiosRegionModal'
 import ComiteEconomicoProyectosPanel from './ComiteEconomicoProyectosPanel'
 import SeguimientoInversionSeia from './metricas/SeguimientoInversionSeia'
+import AgendaSesiones, { type VistaAgenda } from './sesiones/AgendaSesiones'
 
 /**
  * Panel del tab "Comité Económico" en ComitesRegionalesSection.
@@ -54,6 +55,9 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
   const [oaecaOpen, setOaecaOpen]         = useState(false)
   const [oficiosOpen, setOficiosOpen]     = useState(false)
   const [tableroOpen, setTableroOpen]     = useState(false)
+  // Toda sesión se abre desde la agenda (mig 123): el selector entrega el id.
+  const [agendaVista, setAgendaVista]     = useState<VistaAgenda>(null)
+  const [sesionId, setSesionId]           = useState<number | null>(null)
   // La preview vive montada abajo; al volver de la cartera completa (donde se
   // pueden crear o editar proyectos) se remonta para releer.
   const [carteraVersion, setCarteraVersion] = useState(0)
@@ -79,15 +83,28 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
             <>
               {conduce && (
               <button
-                onClick={() => setSesionOpen(true)}
+                onClick={() => setAgendaVista('nueva')}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-700 text-white text-sm font-semibold rounded-lg hover:bg-violet-800 transition-colors"
-                title={resumen.borradorId ? 'Continuar el borrador de sesión' : `Nueva sesión de ${NOMBRE_COMITE}`}
+                title={resumen.abiertas ? 'Continuar una sesión abierta o abrir otra' : `Nueva sesión de ${NOMBRE_COMITE}`}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="10" height="9" rx="1.5"/>
                   <path d="M2 6h10M5 1.5V4M9 1.5V4"/>
                 </svg>
-                {resumen.borradorId ? 'Continuar sesión' : 'Nueva sesión'}
+                {resumen.abiertas ? 'Continuar sesión' : 'Nueva sesión'}
+              </button>
+              )}
+              {conduce && (
+              <button
+                onClick={() => setAgendaVista('calendario')}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+                title="Sesiones agendadas, abiertas y realizadas del comité"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="10" height="9" rx="1.5"/>
+                  <path d="M2 6h10M5 1.5V4M9 1.5V4M5 8.5h1M8 8.5h1"/>
+                </svg>
+                Calendario
               </button>
               )}
               {/* El tablero de oficios de la región va como botón grande: es lo
@@ -128,6 +145,10 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
                 {resumen.ultimaSesionFecha
                   ? `última sesión ${fmtFechaCorta(resumen.ultimaSesionFecha)}`
                   : 'sin sesiones cerradas aún'}
+                {resumen.proximaProgramada && <>
+                  <span className="text-violet-300"> · </span>
+                  próxima {fmtFechaCorta(resumen.proximaProgramada)}
+                </>}
               </span>
             </span>
             <div className="flex items-center gap-2">
@@ -217,7 +238,8 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           onIrASesion={() => {
             setProyectosOpen(false)
             setCarteraVersion(v => v + 1)
-            setSesionOpen(true)
+            if (resumen.borradorId) setSesionOpen(true)
+            else setAgendaVista('nueva')
           }}
         />
       )}
@@ -225,7 +247,7 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
       {sesionOpen && (
         <SesionModalInversion
           region={region}
-          borradorId={resumen.borradorId}
+          borradorId={sesionId ?? resumen.borradorId}
           currentUserEmail={userEmail}
           iniciativas={iniciativas}
           onAbrirIniciativa={onAbrirIniciativa}
@@ -236,11 +258,21 @@ export default function ComiteInversionPanel({ region, iniciativas, onAbrirInici
           }}
           onClose={() => {
             setSesionOpen(false)
+            setSesionId(null)
             refreshResumen()
             setCarteraVersion(v => v + 1)
           }}
         />
       )}
+      <AgendaSesiones
+        vista={agendaVista}
+        onVista={v => { setAgendaVista(v); if (!v) refreshResumen() }}
+        regionCod={region.cod}
+        filtro={{ instancia: 'inversion' }}
+        nombreComite={NOMBRE_COMITE}
+        email={userEmail}
+        onAbrir={id => { setSesionId(id); setSesionOpen(true) }}
+      />
       {historialOpen && (
         <HistorialSesionesInversionModal region={region} onClose={() => setHistorialOpen(false)} />
       )}

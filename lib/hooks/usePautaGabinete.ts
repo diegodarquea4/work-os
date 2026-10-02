@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { safeWrite, safeDelete } from '@/lib/dbWrite'
+import { diaChile } from '@/lib/fechaChile'
 import type { GabineteTema } from '@/lib/types'
 
 /**
@@ -58,14 +59,29 @@ export async function iniciarPreparacionGabinete(
   email: string | null,
 ): Promise<number> {
   const sb = getSupabase()
-  // ¿Ya hay borrador? (lo reusa — a lo más uno por región+instancia)
+  // ¿Ya hay una abierta? La reusa (la más antigua: desde la mig 123 puede
+  // haber dos).
   const { data: existente } = await sb
     .from('eje_sesiones').select('id')
     .eq('region_cod', regionCod).eq('instancia', 'gabinete').eq('estado', 'borrador')
+    .order('fecha').order('id')
     .limit(1)
   if (existente?.[0]?.id) return existente[0].id as number
 
-  const hoy = new Date().toISOString().slice(0, 10)
+  // Si no, abre la próxima programada del calendario (mig 123).
+  const hoy = diaChile()
+  const { data: programada } = await sb
+    .from('eje_sesiones').select('id')
+    .eq('region_cod', regionCod).eq('instancia', 'gabinete').eq('estado', 'programada')
+    .gte('fecha', hoy).order('fecha').limit(1)
+  if (programada?.[0]?.id) {
+    await safeWrite(
+      sb.from('eje_sesiones').update({ estado: 'borrador', formato_acta: 2 }).eq('id', programada[0].id).eq('estado', 'programada'),
+      'abrir sesión programada del gabinete',
+    )
+    return programada[0].id as number
+  }
+
   const { data, error } = await sb
     .from('eje_sesiones')
     .insert({
@@ -74,6 +90,7 @@ export async function iniciarPreparacionGabinete(
       eje_id: null,
       fecha: hoy,
       formato_acta: 2,          // v2: la Preparación estrena el formato de pauta
+      agenda: 'extraordinaria', // no estaba en el calendario
       created_by_email: email || null,
     })
     .select('id')
@@ -83,6 +100,7 @@ export async function iniciarPreparacionGabinete(
   const { data: retry } = await sb
     .from('eje_sesiones').select('id')
     .eq('region_cod', regionCod).eq('instancia', 'gabinete').eq('estado', 'borrador')
+    .order('fecha').order('id')
     .limit(1)
   if (retry?.[0]?.id) return retry[0].id as number
   throw new Error(error?.message ?? 'No se pudo iniciar la preparación de la sesión.')

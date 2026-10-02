@@ -110,6 +110,11 @@ export function useCan(key: CapabilityKey, region?: string): boolean {
   return can(useContext(UserCtx).capabilities, key, region)
 }
 
+/** Todas las capacidades del usuario, para chequear varias regiones a la vez. */
+export function useCapabilities(): UserCapability[] {
+  return useContext(UserCtx).capabilities
+}
+
 /**
  * ¿Conduce el Comité Económico? Abrir/cerrar sesiones, sumar y sacar proyectos
  * de la cartera, configurar la meta de empleo. Presupone la capacidad: úsese
