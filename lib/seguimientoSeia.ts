@@ -366,6 +366,17 @@ export function evaluacionDelCorte(sesionesRegion: Sesion[], cortes: string[], i
  * scraper solo escribe oficios, así que no deja rastro — no está atrasada,
  * está en cero. Si no tiene ninguno, no hay qué traer: `sinProyectos`.
  */
+/**
+ * La fecha de una región SIN oficios pendientes: el día de la última corrida
+ * completa que la recorrió, la suya (`corridas[region]`) o la nacional
+ * (`corridas['*']`), la más reciente.
+ */
+export function fechaSinPendientes(corridas: Record<string, string> | undefined, region: string): string | null {
+  const suya = corridas?.[region], nacional = corridas?.['*']
+  if (suya && nacional) return suya > nacional ? suya : nacional
+  return suya ?? nacional ?? null
+}
+
 export function selloDeActualizacion(
   regiones: string[], actualizado: Record<string, string>, hoy: string,
   vinculadas: Set<string> = new Set(),

@@ -47,7 +47,7 @@ export async function GET() {
 
   const db = getSupabaseAdmin()
   try {
-    const [oficios, sesiones, cartera, enCalificacion] = await Promise.all([
+    const [oficios, sesiones, cartera, enCalificacion, corridasRes] = await Promise.all([
       todas((a, b) => db.from('sesion_oficios_tratados').select(COLUMNAS_OFICIO)
         .eq('automatico', true).order('id').range(a, b)),
       // Solo las sesiones TERMINADAS (Manuel, 2026-10-01): una abierta o en
@@ -57,7 +57,18 @@ export async function GET() {
       todas((a, b) => db.from('comite_economico_proyecto').select(COLUMNAS_CARTERA).order('nombre').range(a, b)),
       todas((a, b) => db.from('v2_proyectos_inversion').select(COLUMNAS_SEIA)
         .eq('sistema_origen', 'seia').eq('estado', 'En Calificación').order('id').range(a, b)),
+      // Las corridas COMPLETAS del scraper: la nacional y la de cada región.
+      db.from('sync_status').select('name, last_run_at').like('name', 'oficios-seia-scrape%').eq('last_status', 'ok'),
     ])
+
+    // Día (Chile) de la última corrida completa: '*' = nacional, o el código de
+    // la región. Es la fecha de una región que no tiene oficios pendientes: sin
+    // esto no tenía ninguna, y el botón la ofrecía para siempre.
+    const corridas: Record<string, string> = {}
+    for (const c of (corridasRes.data ?? []) as { name: string; last_run_at: string | null }[]) {
+      if (!c.last_run_at) continue
+      corridas[c.name.includes(':') ? c.name.split(':')[1] : '*'] = diaChile(new Date(c.last_run_at))
+    }
 
     // La ficha del SEIA de lo que el tablero nombra y no está en calificación:
     // proyectos de la cartera ya aprobados, o con oficios recién resueltos.
@@ -75,7 +86,7 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      { hoy: diaChile(), oficios, sesiones, cartera, enCalificacion, otrasFichas },
+      { hoy: diaChile(), oficios, sesiones, cartera, enCalificacion, otrasFichas, corridas },
       { headers: { 'Cache-Control': 'private, no-store' } },
     )
   } catch (err) {
