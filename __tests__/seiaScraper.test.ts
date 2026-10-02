@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   cierraRonda,
   claveOrganismo,
+  emparejarOficios,
   contarDestinatarios,
   esOaecaConsultable,
   esRespuesta,
@@ -355,5 +356,42 @@ describe('claveOrganismo', () => {
   })
   it('no junta dos regiones del mismo organismo', () => {
     expect(claveOrganismo('DGA, Región de Los Lagos')).not.toBe(claveOrganismo('DGA, Región de Los Ríos'))
+  })
+})
+
+describe('emparejarOficios', () => {
+  const v = (clave: string, id_documento: number | null) => ({ clave, id_documento })
+  const g = (id: number, clave: string, id_documento: number | null, estado = 'pendiente') => ({ id, clave, id_documento, estado })
+
+  it('dos filas del mismo organismo: actualiza la del documento vigente y cierra la otra (Desaladora La Serena)', () => {
+    // 264 = oficio general (…158), 276 = oficio específico (…706); el SEIA lista el …706.
+    const r = emparejarOficios([v('gob maritima', 706)], [g(264, 'gob maritima', 158), g(276, 'gob maritima', 706)])
+    expect(r.pares.map(([, x]) => x.id)).toEqual([276])
+    expect(r.sobrantes.map(x => x.id)).toEqual([264])
+    expect(r.nuevos).toEqual([])
+  })
+
+  it('una sola fila con documento nuevo (Adenda): se reusa la fila', () => {
+    const r = emparejarOficios([v('dga', 900)], [g(1, 'dga', 100)])
+    expect(r.pares.map(([, x]) => x.id)).toEqual([1])
+    expect(r.sobrantes).toEqual([])
+  })
+
+  it('organismo que ya no figura queda sobrante; uno nuevo se inserta; un resuelto no sobra', () => {
+    const r = emparejarOficios([v('sag', 5)], [g(1, 'conaf', 5), g(2, 'seremi salud', 5, 'resuelto')])
+    expect(r.nuevos.map(x => x.clave)).toEqual(['sag'])
+    expect(r.sobrantes.map(x => x.id)).toEqual([1])
+  })
+
+  it('reabre un resuelto solo si no hay un pendiente del mismo organismo', () => {
+    const r = emparejarOficios([v('dga', 9)], [g(1, 'dga', 7, 'resuelto'), g(2, 'dga', 8)])
+    expect(r.pares.map(([, x]) => x.id)).toEqual([2])
+  })
+
+  it('nunca pasa una fila a un documento que ya tiene otra fila del organismo', () => {
+    // El …706 está en una fila resuelta: se reabre esa, no se pisa la pendiente.
+    const r = emparejarOficios([v('gob maritima', 706)], [g(264, 'gob maritima', 158), g(276, 'gob maritima', 706, 'resuelto')])
+    expect(r.pares.map(([, x]) => x.id)).toEqual([276])
+    expect(r.sobrantes.map(x => x.id)).toEqual([264])
   })
 })
