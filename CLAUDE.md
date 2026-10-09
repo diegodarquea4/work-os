@@ -205,6 +205,24 @@ Símbolo del estado por el LLENADO del círculo, sin color (`MarcaSesion`): vac�
 
 Vista de todas las regiones (`components/metricas/CalendarioComites.tsx`): en Métricas → «Calendario de comités» (con selector de comité) y en Seguimiento SEIA → pestaña «Calendario» (fijo en el Económico, pensada para el Ministerio de Economía). **Cada uno ve los comités que puede operar, en sus regiones** (Manuel, 2026-10-01): se lee con el cliente del navegador porque la RLS de `eje_sesiones` ya entrega eso, y se acota por `can(cap, región)`; la pestaña del SEIA pide además `useConduceEconomico`. **Cumplimiento** = de las ORDINARIAS cuya fecha ya pasó, cuántas se cerraron; extraordinarias, registradas y lo anterior al calendario cuentan como realizadas pero no entran al porcentaje.
 
+## Seguimiento del Comité Policial (oct 2026)
+
+Tablero de lo que cada región reporta por institución en sus sesiones, sesión a sesión (`components/metricas/SeguimientoPolicial.tsx`). Se abre desde el Comité Policial de cada región, que quedó con la misma fila de botones del Económico: **Nueva/Continuar sesión | Calendario | Seguimiento**. Lógica pura y testeada en `lib/seguimientoPolicial.ts`; el gráfico de líneas (SVG, sin librería) en `components/metricas/GraficoLineas.tsx`.
+
+**Lo ven solo quienes operan el Comité Policial, en sus regiones** (Manuel, 2026-10-08): son métricas operativas de las policías, no información pública como los oficios del SEIA. Por eso —al revés del Seguimiento SEIA— lee con el cliente del navegador (`useSeguimientoPolicial`): la RLS de `eje_sesiones` y `sesion_comite_valor` ya entrega solo lo visible, y se acota además por `comite.policial.operar`. No hay ruta con service role ni cambio de RLS.
+
+**«Nacional» solo aparece a quien opera el comité en dos o más regiones** (Manuel, 2026-10-09); con una sola el tablero parte en «Regional». Cada uno ve únicamente los datos de sus regiones, en todas las pestañas.
+
+Cinco pestañas: **Nacional** (matriz región × indicador de una institución; clic en un indicador = gráfico de líneas con todas las regiones que lo reportan, clic en un dato = la evolución de ese indicador en esa región), **Regional** (cada métrica con su gráfico, el valor escrito en cada punto), **Comparativa regional** (un gráfico por indicador, filtros de regiones, institución e indicador), **Comité policial** (región contra región: sesiones, último comité, días sin sesionar, cobertura) y **Calendario** (`CalendarioComites` fijo en `eje`).
+
+Reglas que no son obvias:
+- **Solo sesiones CERRADAS**: lo cargado en una sesión abierta todavía puede cambiar.
+- **Qué se compara entre regiones**: las métricas del catálogo estándar (mig 079). Una métrica regional cuenta como estándar si está vinculada (`estandar_id`) **o si se llama igual** en la misma institución (`armarSeries`): Valparaíso cargó las 24 con el nombre del catálogo y sin vínculo, y sin esto quedaba fuera de toda comparación (medido el 2026-10-08: 96 valores vinculados, 158 más solo por nombre, 89 propios). Lo que no calza es métrica PROPIA de la región y se ve solo en su vista Regional.
+- **Dos sesiones cerradas el mismo día**: queda el último valor del día.
+- **Colores de las líneas = los del mapa** (`lib/regionColors.ts`). Varios se parecen (Arica y Tarapacá son dos naranjos), así que el gráfico grande rotula cada línea al final y la leyenda destaca la serie al pasar el mouse.
+- **Los compromisos no van acá** (Manuel: no interesan en este seguimiento); siguen en el panel del comité.
+- **Sesiones históricas de Tarapacá (cargadas el 2026-10-08)**: las 31 sesiones del 13-01 al 07-09 de 2026 se cargaron desde las actas con `origen = 'historica'` y `agenda = 'registrada'`, cerradas y **sin acta en PDF** (el Historial las muestra como «Acta pendiente»; el acta se puede generar desde ahí con lo cargado). Los desgloses del acta (armas por tipo, población penal por recinto) van en el `desglose` de su total, no como métricas aparte, así que no tienen gráfico propio. Una cifra que el acta da como texto («más de 4.800») quedó en `observaciones` con `valor_num` nulo: no se dibuja. Dos métricas estándar de Tarapacá son CALCULADAS y lo dicen en `observaciones`: «Armas de fuego decomisadas» sale del desglose de armas del acta, y «Homicidios (semana)» de la PDI es la diferencia del acumulado del año (Manuel: semana 1 = el acumulado; después, acumulado menos el anterior). Las actas traen el acumulado con saltos hacia atrás (17 → 12 → 17 → 16 → 13), así que antes de restar se corrige: una cifra mayor que una posterior vale la posterior. Así ninguna semana queda negativa y la suma calza con el último acumulado (13).
+
 ## Environment variables
 
 | Variable | Required in |
