@@ -12,6 +12,7 @@ import HistorialSesionesModal from './HistorialSesionesModal'
 import AgendaSesiones, { type VistaAgenda } from './sesiones/AgendaSesiones'
 import NominaModal from './NominaModal'
 import MetricasComiteModal from './MetricasComiteModal'
+import SeguimientoPolicial from './metricas/SeguimientoPolicial'
 
 /**
  * Tab "Comité Policial" de la sección Comités y Gabinete Regional (Mi Región).
@@ -44,6 +45,7 @@ export default function ComitePolicialTab({ region, eje }: Props) {
   const [sesionId, setSesionId] = useState<number | null>(null)
   const [nominaOpen, setNominaOpen]       = useState(false)
   const [metricasModal, setMetricasModal] = useState(false)
+  const [seguimientoOpen, setSeguimientoOpen] = useState(false)
   const [inst, setInst]                   = useState<string>('carabineros')
   const [seriesKey, setSeriesKey]         = useState(0)   // bump tras cerrar sesión
 
@@ -86,7 +88,7 @@ export default function ComitePolicialTab({ region, eje }: Props) {
           </button>
           <button
             onClick={() => setAgendaVista('calendario')}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
             title="Sesiones agendadas, abiertas y realizadas del comité"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -94,6 +96,18 @@ export default function ComitePolicialTab({ region, eje }: Props) {
               <path d="M2 6h10M5 1.5V4M9 1.5V4M5 8.5h1M8 8.5h1"/>
             </svg>
             Calendario
+          </button>
+          {/* El tablero de lo que se reporta sesión a sesión: es lo que se
+              mira antes de sesionar, igual que el Seguimiento SEIA. */}
+          <button
+            onClick={() => setSeguimientoOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-violet-200 text-violet-700 text-sm font-semibold rounded-lg hover:bg-violet-50 transition-colors"
+            title="Evolución de las métricas que reporta el comité, por región e institución"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1.5 11.5l3.5-4 2.5 2.5 5-6"/><path d="M1.5 12.5h11"/>
+            </svg>
+            Seguimiento
           </button>
         </div>
       </div>
@@ -234,6 +248,23 @@ export default function ComitePolicialTab({ region, eje }: Props) {
           onClose={() => setMetricasModal(false)}
           onSaved={() => { refreshInstituciones(); refreshCatalogo() }}
         />
+      )}
+      {seguimientoOpen && (
+        <div className="fixed inset-x-0 bottom-0 top-20 z-30 bg-gray-50 flex flex-col">
+          <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+            <h2 className="text-sm font-semibold text-slate-900">Seguimiento · {nombreInstancia} · {region.nombre}</h2>
+            <button
+              onClick={() => setSeguimientoOpen(false)}
+              className="text-xs font-medium text-slate-500 hover:text-slate-800"
+              aria-label="Cerrar el seguimiento y volver al comité"
+            >
+              Cerrar ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <SeguimientoPolicial pestanaInicial="regional" regionInicial={region.cod} />
+          </div>
+        </div>
       )}
     </div>
   )
